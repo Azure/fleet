@@ -13,6 +13,24 @@ GOLANGCI_LINT := $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER)
 GO_INSTALL := ./hack/go-install.sh
 
 ## --------------------------------------
+## Style checks
+## --------------------------------------
+
+.PHONY: staticchecktool
+staticchecktool:
+ifeq (, $(shell which staticcheck))
+	@{ \
+	set -e ;\
+	echo 'installing honnef.co/go/tools/cmd/staticcheck ' ;\
+	GO111MODULE=auto go get honnef.co/go/tools/cmd/staticcheck@2022.1 ;\
+	}
+STATICCHECK=$(GOBIN)/staticcheck
+else
+STATICCHECK=$(shell which staticcheck)
+endif
+
+
+## --------------------------------------
 ## Tooling Binaries
 ## --------------------------------------
 
