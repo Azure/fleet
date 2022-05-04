@@ -1,0 +1,9 @@
+{
+    "LABEL": {
+      "name": "title-needs-formatting",
+      "color": "EEEEEE"
+    },
+    "CHECKS": {
+      "prefixes": [ "[WIP] ", "Feat: ", "Test: ", "Fix: ", "Docs: ", "Style: ", "Interface: ", "Util: ", "Chore: ", "CI: ", "Perf: ", "Refactor: ", "Revert: " ]
+    }
+  }
