@@ -23,6 +23,9 @@ lint-full: $(GOLANGCI_LINT) ## Run slower linters to detect possible issues
 ## Development
 ## --------------------------------------
 
+staticcheck: staticchecktool
+	$(STATICCHECK) ./...
+
 .PHONY: fmt
 fmt:  goimports ## Run go fmt against code.
 	go fmt ./...
@@ -35,5 +38,8 @@ vet: ## Run go vet against code.
 .PHONY: test
 test: envtest## Run tests.
 	go test ./... -coverprofile cover.out
+
+reviewable: fmt vet lint staticcheck
+	go mod tidy
 
 ## TODO: make run/install/manifest
