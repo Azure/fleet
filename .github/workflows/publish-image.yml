@@ -1,0 +1,49 @@
+name: publish_images
+
+on:
+  create:
+     # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+ REGISTRY: ghcr.io
+ IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  export-registry:
+    runs-on: ubuntu-20.04
+    outputs:
+      registry: ${{ steps.export.outputs.registry }}
+    steps:
+      - id: export
+        run: |
+          # registry must be in lowercase
+          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
+  publish-images:
+    needs: export-registry
+    env:
+      REGISTRY: ${{ needs.export-registry.outputs.registry }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Build ${{ env.IMAGE_NAME}}
+        run: |
+          make docker-build
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME}}
+          IMAGE_VERSION: ${{ env.RELEASE_VERSION }}

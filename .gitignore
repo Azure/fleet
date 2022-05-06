@@ -17,3 +17,6 @@
 # binary output
 bin/
 hack/tools/bin/
+
+# cover profile
+coverage.xml

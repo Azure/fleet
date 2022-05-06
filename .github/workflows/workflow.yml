@@ -31,7 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
-
     steps:
       - name: Set up Go
         uses: actions/setup-go@v2
@@ -41,18 +40,13 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Get dependencies
-        run: go get -v -t -d ./...
-
       - name: Run tests & Generate coverage
         run: make test
 
       - name: Upload report
-        uses: codecov/codecov-action@v2.1.0
+        uses: codecov/codecov-action@v2
         with:
-          ## Repository upload token - get it from codecov.io. Required only for private repositories
+           ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
-          files: ./cover.out
-          flags: ci-tests
-          name: codecov-umbrella
+          files: ./coverage.xml
