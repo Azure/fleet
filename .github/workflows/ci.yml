@@ -53,6 +53,4 @@ jobs:
           ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
-          files: ./cover.out
-          flags: ci-tests
-          name: codecov-umbrella
+          files: ./coverage.txt

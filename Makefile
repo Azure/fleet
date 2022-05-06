@@ -1,5 +1,9 @@
 include makefiles/dependency.mk
 
+REGISTRY ?= ghcr.io
+IMAGE_NAME := Azure/fleet
+IMAGE_VERSION ?= v0.1.0
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -37,9 +41,34 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: envtest## Run tests.
-	go test ./... -coverprofile cover.out
+	CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.txt -covermode=atomic -v
 
 reviewable: fmt vet lint staticcheck
 	go mod tidy
 
 ## TODO: make run/install/manifest
+
+## --------------------------------------
+## Images
+## --------------------------------------
+
+OUTPUT_TYPE ?= type=registry
+BUILDX_BUILDER_NAME ?= img-builder
+QEMU_VERSION ?= 5.2.0-2
+
+.PHONY: docker-buildx-builder
+docker-buildx-builder:
+	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
+		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		docker buildx create --name $(BUILDX_BUILDER_NAME) --use; \
+		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
+	fi
+
+.PHONY: docker-build
+docker-build: docker-buildx-builder
+	docker buildx build \
+		--file Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="linux/amd64" \
+		--pull \
+		--tag $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_VERSION) .
