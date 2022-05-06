@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/Azure/fleet)](https://goreportcard.com/report/Azure/fleet)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/Azure/fleet)
 [![CircleCI](https://circleci.com/gh/virtual-kubelet/azure-aci.svg?style=svg)](https://circleci.com/gh/virtual-kubelet/azure-aci)
-[![codecov](https://codecov.io/gh/Azure/fleet/branch/master/graph/badge.svg)](https://codecov.io/gh/Azure/fleet)
+[![codecov](https://codecov.io/gh/Azure/fleet/branch/main/graph/badge.svg?token=D3mtbzACjC)](https://codecov.io/gh/Azure/fleet)
 
 ## Contributing
 

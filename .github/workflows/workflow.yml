@@ -44,9 +44,9 @@ jobs:
         run: make test
 
       - name: Upload report
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v2
         with:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
-          files: ./coverage.txt
+          files: ./coverage.xml

@@ -41,7 +41,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: envtest## Run tests.
-	CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.txt -covermode=atomic -v
+	CGO_ENABLED=1 go test ./... -race -coverprofile=coverage.xml -covermode=atomic -v
 
 reviewable: fmt vet lint staticcheck
 	go mod tidy
