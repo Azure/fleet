@@ -13,7 +13,6 @@ Fixes #
 
 I have:
 
-- [ ] Read and followed fleet's [Code of conduct](https://raw.githubusercontent.com/Azure/fleet/main/CODE_OF_CONDUCT.md?token=GHSAT0AAAAAABJRBVWGUU3D4ALR4SIDQP7AYTVRV4Q).
 - [ ] Run `make reviewable` to ensure this PR is ready for review.
 
 ### How has this code been tested
