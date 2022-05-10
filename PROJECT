@@ -1,0 +1,4 @@
+domain: fleet.azure.com
+projectName: fleet
+repo: github.com/Azure/fleet
+version: "3"
