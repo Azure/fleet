@@ -7,6 +7,6 @@ resources:
   domain: azure.com
   group: fleet
   kind: MemberCluster
-  path: github.com/Azure/fleet/api/v1alpha1
+  path: github.com/Azure/fleet/apis/v1alpha1
   version: v1alpha1
 version: "3"
