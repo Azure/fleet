@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hub-agent-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "get", "list", "watch"]
+  - apiGroups: ["fleet.azure.com"]
+    resources: ["memberclusters"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["fleet.azure.com"]
+    resources: ["internalmemberclusters"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: hub-agent-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hub-agent-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hub-agent.fullname" . }}
+    namespace: {{ .Values.namespace }}

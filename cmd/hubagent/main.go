@@ -67,7 +67,7 @@ func main() {
 	if err = (&hubinternalmembercluster.HubReconciler{
 		HubClient: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "internalMemberCluster_hub")
+		klog.Error(err, "unable to create controller", "controller", "InternalMemberCluster for Hub")
 		os.Exit(1)
 	}
 
@@ -77,7 +77,6 @@ func main() {
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.Error(err, "unable to set up ready check")
-
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
