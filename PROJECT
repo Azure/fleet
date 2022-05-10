@@ -1,0 +1,12 @@
+domain: azure.com
+repo: github.com/Azure/fleet
+resources:
+- api:
+    crdVersion: v1
+  controller: true
+  domain: azure.com
+  group: fleet
+  kind: MemberCluster
+  path: github.com/Azure/fleet/apis/v1alpha1
+  version: v1alpha1
+version: "3"
