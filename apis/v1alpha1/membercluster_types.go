@@ -27,13 +27,11 @@ type MemberCluster struct {
 	Status MemberClusterStatus `json:"status,omitempty"`
 }
 
-type ClusterState string
-
 // MemberClusterSpec defines the desired state of MemberCluster.
 type MemberClusterSpec struct {
 	// State indicates the desired state of the member cluster.
 
-	// +kubebuilder:validation:Enum=Join;Leave;Upgrade
+	// +kubebuilder:validation:Enum=Join;Leave
 	// +required
 	State ClusterState `json:"state"`
 
