@@ -1,4 +1,4 @@
-# Build the manager binary
+# Build the hubagent binary
 FROM golang:1.17 as builder
 
 WORKDIR /workspace
@@ -10,17 +10,18 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/main.go main.go
-# TODO COPY pgk/apis
-# Build
-ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o manager main.go
+COPY cmd/hubagent/main.go hubagent/main.go
 
-# Use distroless as minimal base image to package the manager binary
+ARG TARGETARCH
+
+# Build
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o hubagent hubagent/main.go
+
+# Use distroless as minimal base image to package the hubagent binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/hubagent .
 USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/hubagent"]

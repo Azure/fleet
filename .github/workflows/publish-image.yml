@@ -10,8 +10,11 @@ permissions:
   packages: write
 
 env:
- REGISTRY: ghcr.io
- IMAGE_NAME: ${{ github.repository }}
+ REGISTRY: ghcr.io/azure
+ HUB_AGENT_IMAGE_NAME : hub-agent
+ HUB_AGENT_IMAGE_VERSION: v0.1.0
+ MEMBER_AGENT_MIMAGE_NAME: member-agent
+ MEMBER_AGENT_IMAGE_VERSION: v0.1.0
 
 jobs:
   export-registry:
@@ -39,11 +42,15 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-      - name: Build ${{ env.IMAGE_NAME}}
+      - name: Build ${{ env.HUB_AGENT_IMAGE_NAME}}
         run: |
-          make docker-build
+          make docker-build-hub-agent
         env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME}}
-          IMAGE_VERSION: ${{ env.RELEASE_VERSION }}
+          IMAGE_NAME: ${{ env.HUB_AGENT_IMAGE_NAME}}
+          IMAGE_VERSION: ${{ env.HUB_AGENT_IMAGE_VERSION }}
+      - name: Build ${{ env.MEMBER_AGENT_MIMAGE_NAME}}
+        run: |
+          make docker-build-member-agent
+        env:
+          IMAGE_NAME: ${{ env.MEMBER_AGENT_MIMAGE_NAME}}
+          IMAGE_VERSION: ${{ env.MEMBER_AGENT_MIMAGE_VERSION }}

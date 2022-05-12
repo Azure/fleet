@@ -12,7 +12,10 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
+
+# Kubernetes Generated files - skip generated files, except for vendored files
+!vendor/**/zz_generated.*
 
 # binary output
 bin/
@@ -20,3 +23,11 @@ hack/tools/bin/
 
 # cover profile
 coverage.xml
+
+# editor and IDE paraphernalia
+.idea
+*.swp
+*.swo
+*~
+
+.vscode/

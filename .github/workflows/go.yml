@@ -47,18 +47,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Cache Go Dependencies
-        uses: actions/cache@v2
-        with:
-          path: .work/pkg
-          key: ${{ runner.os }}-pkg-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-pkg-
-
-      - name: Install StaticCheck
-        run: GO111MODULE=auto go get honnef.co/go/tools/cmd/staticcheck@2022.1
-
-      - name: Static Check
-        run: staticcheck ./...
+      - name: StaticCheck
+        run: GO111MODULE=auto make staticcheck
 
   lint:
     name: "Lint"
