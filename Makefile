@@ -1,6 +1,8 @@
-REGISTRY ?= ghcr.io
-IMAGE_NAME := Azure/fleet
-IMAGE_VERSION ?= v0.1.0
+REGISTRY ?= ghcr.io/azure
+HUB_AGENT_IMAGE_NAME := hub-agent
+HUB_AGENT_IMAGE_VERSION ?= v0.1.0
+MEMBER_AGENT_MIMAGE_NAME := member-agent
+MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -148,14 +150,23 @@ docker-buildx-builder:
 		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
 	fi
 
-.PHONY: docker-build
-docker-build: docker-buildx-builder
+.PHONY: docker-build-hub-agent
+docker-build-hub-agent: docker-buildx-builder
 	docker buildx build \
-		--file Dockerfile \
+		--file docker/$(HUB_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
 		--platform="linux/amd64" \
 		--pull \
-		--tag $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_VERSION) .
+		--tag $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION) .
+
+.PHONY: docker-build-member-agent
+docker-build-member-agent: docker-buildx-builder
+	docker buildx build \
+		--file docker/$(MEMBER_AGENT_MIMAGE_NAME).Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="linux/amd64" \
+		--pull \
+		--tag $(REGISTRY)/$(MEMBER_AGENT_MIMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) .
 
 ## --------------------------------------
 ## Deployment
