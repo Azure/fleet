@@ -48,7 +48,6 @@ spec:
             type: object
           spec:
             description: MemberClusterSpec defines the desired state of MemberCluster.
-              This is updated through the hub fleet api.
             properties:
               identity:
                 description: Identity used by the member cluster to contact the hub

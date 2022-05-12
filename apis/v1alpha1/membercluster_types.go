@@ -29,7 +29,7 @@ type MemberCluster struct {
 
 type ClusterState string
 
-// MemberClusterSpec defines the desired state of MemberCluster. This is updated through the hub fleet api.
+// MemberClusterSpec defines the desired state of MemberCluster.
 type MemberClusterSpec struct {
 	// State indicates the desired state of the member cluster.
 
@@ -49,16 +49,6 @@ type MemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 
-const (
-	// ConditionTypeMemberClusterJoin is used to track the join state of the memberCluster
-	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
-	ConditionTypeMemberClusterJoin string = "Joined"
-
-	// ConditionTypeMemberClusterHealthy is used to track the Health state of the MemberCluster
-	// its conditionStatus can be "True" == Healthy, "Unknown" == Health degraded, "False" == UnHealthy
-	ConditionTypeMemberClusterHealth string = "Healthy"
-)
-
 // MemberClusterStatus defines the observed state of MemberCluster.
 type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for this member cluster.
@@ -76,6 +66,16 @@ type MemberClusterStatus struct {
 	// +required
 	Allocatable v1.ResourceList `json:"allocatable"`
 }
+
+const (
+	// ConditionTypeMemberClusterJoin is used to track the join state of the memberCluster.
+	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
+	ConditionTypeMemberClusterJoin string = "Joined"
+
+	// ConditionTypeMemberClusterHealthy is used to track the Health state of the MemberCluster.
+	// its conditionStatus can be "True" == Healthy, "Unknown" == Health degraded, "False" == UnHealthy
+	ConditionTypeMemberClusterHealth string = "Healthy"
+)
 
 //+kubebuilder:object:root=true
 
