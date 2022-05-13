@@ -8,6 +8,9 @@ package memberinternalmembercluster
 import (
 	"context"
 
+	"go.goms.io/fleet/pkg/controllers/memberinternalmembercluster/utils"
+	v1 "k8s.io/api/core/v1"
+
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -39,7 +42,9 @@ func NewMemberReconciler(hubClient client.Client, memberClient client.Client,
 func (r *MemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// TODO (mng): This is placeholder for implementation of GetConfigWithSecret
+	var secret v1.Secret
+	_, _ = utils.GetConfigWithSecret(secret)
 
 	return ctrl.Result{}, nil
 }
