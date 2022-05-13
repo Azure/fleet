@@ -1,6 +1,13 @@
 name: publish_images
 
-on:
+on: 
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+    - main
+
   create:
      # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
