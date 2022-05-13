@@ -11,6 +11,8 @@ RUN go mod download
 
 # Copy the go source
 COPY cmd/hubagent/main.go hubagent/main.go
+COPY apis/ apis/
+COPY pkg/ pkg/
 
 ARG TARGETARCH
 

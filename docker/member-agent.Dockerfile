@@ -11,6 +11,8 @@ RUN go mod download
 
 # Copy the go source
 COPY cmd/memberagent/main.go memberagent/main.go
+COPY apis/ apis/
+COPY pkg/ pkg/
 
 ARG TARGETARCH
 
