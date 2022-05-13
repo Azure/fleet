@@ -20,3 +20,8 @@ resources:
     memory: 4Gi
 tolerations: []
 affinity: {}
+namespace: "default"
+clusterIdentity: ""
+authenticationPreference: "ManagedIdentity"
+
+
