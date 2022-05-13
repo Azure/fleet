@@ -1,6 +1,6 @@
 apiVersion: v2
-name: demofleet
-description: Demo install fleet using helm chart
+name: member-agent
+description: Helm chart for member agent.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
