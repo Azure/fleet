@@ -9,6 +9,8 @@ import (
 	"flag"
 	"os"
 
+	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
+	"go.goms.io/fleet/pkg/controllers/membership"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers/membercluster"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -65,7 +66,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&membercluster.Reconciler{
+	if err = (&membership.Reconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MemberCluster")
+		os.Exit(1)
+	}
+	if err = (&internalmembercluster.MemberReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
