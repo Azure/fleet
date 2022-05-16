@@ -1,0 +1,24 @@
+# permissions for end users to edit memberships.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: membership-editor-role
+rules:
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - memberships
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - memberships/status
+  verbs:
+  - get

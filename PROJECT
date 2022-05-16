@@ -9,4 +9,22 @@ resources:
   kind: MemberCluster
   path: github.com/Azure/fleet/apis/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: azure.com
+  group: fleet
+  kind: Membership
+  path: github.com/Azure/fleet/apis/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: azure.com
+  group: fleet
+  kind: InternalMemberCluster
+  path: github.com/Azure/fleet/apis/v1alpha1
+  version: v1alpha1
 version: "3"
