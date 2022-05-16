@@ -19,13 +19,13 @@ func TestGetMSIToken(t *testing.T) {
 
 	testCases := map[string]struct {
 		provideAzCredentialsFn func(options *azidentity.ManagedIdentityCredentialOptions) (*azidentity.ManagedIdentityCredential, error)
-		provideTokenFn         func(c *azidentity.ManagedIdentityCredential, ctx context.Context, policy policy.TokenRequestOptions) (*azcore.AccessToken, error)
+		provideTokenFn         func(ctx context.Context, c *azidentity.ManagedIdentityCredential, policy policy.TokenRequestOptions) (*azcore.AccessToken, error)
 		wantError              error
 		wantToken              *azcore.AccessToken
 	}{
 		"happy path": {
 			provideAzCredentialsFn: azidentity.NewManagedIdentityCredential,
-			provideTokenFn: func(c *azidentity.ManagedIdentityCredential, ctx context.Context, policy policy.TokenRequestOptions) (*azcore.AccessToken, error) {
+			provideTokenFn: func(ctx context.Context, c *azidentity.ManagedIdentityCredential, policy policy.TokenRequestOptions) (*azcore.AccessToken, error) {
 				return &tokenHappyPath, nil
 			},
 			wantError: nil,
@@ -41,7 +41,7 @@ func TestGetMSIToken(t *testing.T) {
 		},
 		"error getting token": {
 			provideAzCredentialsFn: azidentity.NewManagedIdentityCredential,
-			provideTokenFn: func(c *azidentity.ManagedIdentityCredential, ctx context.Context, policy policy.TokenRequestOptions) (*azcore.AccessToken, error) {
+			provideTokenFn: func(ctx context.Context, c *azidentity.ManagedIdentityCredential, policy policy.TokenRequestOptions) (*azcore.AccessToken, error) {
 				return nil, errGettingToken
 			},
 			wantError: errGettingToken,
@@ -50,7 +50,7 @@ func TestGetMSIToken(t *testing.T) {
 	}
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			token, err := AzureMSIToken(testCase.provideAzCredentialsFn, "", context.Background(), testCase.provideTokenFn)
+			token, err := AzureMSIToken(context.Background(), testCase.provideAzCredentialsFn, "", testCase.provideTokenFn)
 			assert.Equalf(t, testCase.wantToken, token, "Test case %s", testName)
 			assert.Equalf(t, testCase.wantError, err, "Test case %s", testName)
 		})

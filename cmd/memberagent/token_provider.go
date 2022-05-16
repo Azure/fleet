@@ -10,21 +10,18 @@ import (
 
 const AKSScope = "6dae42f8-4368-4678-94ff-3960e28e3630"
 
-func ProvideAzureToken(c *azidentity.ManagedIdentityCredential, ctx context.Context, policy policy.TokenRequestOptions) (*azcore.AccessToken, error) {
+func ProvideAzureToken(ctx context.Context, c *azidentity.ManagedIdentityCredential, policy policy.TokenRequestOptions) (*azcore.AccessToken, error) {
 	return c.GetToken(ctx, policy)
 }
 
-func AzureMSIToken(azCredentialsFn func(options *azidentity.ManagedIdentityCredentialOptions) (*azidentity.ManagedIdentityCredential, error),
-	clientID string, ctx context.Context,
-	provideAZTokenFn func(c *azidentity.ManagedIdentityCredential, ctx context.Context, policy policy.TokenRequestOptions) (*azcore.AccessToken, error)) (*azcore.AccessToken, error) {
-
+func AzureMSIToken(ctx context.Context, azCredentialsFn func(options *azidentity.ManagedIdentityCredentialOptions) (*azidentity.ManagedIdentityCredential, error), clientID string, provideAzureTokenFn func(ctx context.Context, c *azidentity.ManagedIdentityCredential, policy policy.TokenRequestOptions) (*azcore.AccessToken, error)) (*azcore.AccessToken, error) {
 	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(clientID)}
 	cred, err := azCredentialsFn(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := provideAZTokenFn(cred, ctx, policy.TokenRequestOptions{
+	token, err := provideAzureTokenFn(ctx, cred, policy.TokenRequestOptions{
 		Scopes: []string{AKSScope},
 	})
 	if err != nil {
