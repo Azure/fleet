@@ -6,19 +6,17 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.0
   creationTimestamp: null
-  name: memberclusters.fleet.azure.com
+  name: memberships.fleet.azure.com
 spec:
   group: fleet.azure.com
   names:
     categories:
     - fleet
-    kind: MemberCluster
-    listKind: MemberClusterList
-    plural: memberclusters
-    shortNames:
-    - cluster
-    singular: membercluster
-  scope: Cluster
+    kind: Membership
+    listKind: MembershipList
+    plural: memberships
+    singular: membership
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
     - jsonPath: .status.conditions[?(@.type=="ConditionTypeJoined")].status
@@ -27,9 +25,6 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .metadata.label[fleet.azure.com/clusterHealth]
-      name: HealthStatus
-      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -47,71 +42,31 @@ spec:
           metadata:
             type: object
           spec:
-            description: MemberClusterSpec defines the desired state of MemberCluster.
+            description: MembershipSpec defines the desired state of the member agent
+              installed in the member cluster.
             properties:
-              identity:
-                description: Identity used by the member cluster to contact the hub
-                  cluster. The hub cluster will create the minimal required permission
-                  for this identity.
-                properties:
-                  apiGroup:
-                    description: APIGroup holds the API group of the referenced subject.
-                      Defaults to "" for ServiceAccount subjects. Defaults to "rbac.authorization.k8s.io"
-                      for User and Group subjects.
-                    type: string
-                  kind:
-                    description: Kind of object being referenced. Values defined by
-                      this API group are "User", "Group", and "ServiceAccount". If
-                      the Authorizer does not recognized the kind value, the Authorizer
-                      should report an error.
-                    type: string
-                  name:
-                    description: Name of the object being referenced.
-                    type: string
-                  namespace:
-                    description: Namespace of the referenced object.  If the object
-                      kind is non-namespace, such as "User" or "Group", and this value
-                      is not empty the Authorizer should report an error.
-                    type: string
-                required:
-                - kind
-                - name
-                type: object
-              leaseDurationSeconds:
-                default: 60
-                format: int32
-                type: integer
+              hubUrl:
+                description: HubURL is the url of apiserver endpoint of the hub cluster
+                  for the member agent to contact
+                type: string
+              memberClusterName:
+                type: string
               state:
                 enum:
                 - Join
                 - Leave
                 type: string
             required:
-            - identity
+            - hubUrl
+            - memberClusterName
             - state
             type: object
           status:
-            description: MemberClusterStatus defines the observed state of MemberCluster.
+            description: MembershipStatus defines the observed state of Membership.
             properties:
-              allocatable:
-                additionalProperties:
-                  anyOf:
-                  - type: integer
-                  - type: string
-                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                  x-kubernetes-int-or-string: true
-                description: ResourceList is a set of (resource name, quantity) pairs.
-                type: object
-              capacity:
-                additionalProperties:
-                  anyOf:
-                  - type: integer
-                  - type: string
-                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                  x-kubernetes-int-or-string: true
-                description: ResourceList is a set of (resource name, quantity) pairs.
-                type: object
               conditions:
+                description: Conditions is an array of current observed conditions
+                  for this member cluster.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct
@@ -181,8 +136,6 @@ spec:
                   type: object
                 type: array
             required:
-            - allocatable
-            - capacity
             - conditions
             type: object
         required:

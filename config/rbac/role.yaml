@@ -9,6 +9,32 @@ rules:
 - apiGroups:
   - fleet.azure.com
   resources:
+  - internalmemberclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - internalmemberclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - internalmemberclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - fleet.azure.com
+  resources:
   - memberclusters
   verbs:
   - create
@@ -28,6 +54,32 @@ rules:
   - fleet.azure.com
   resources:
   - memberclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - memberships
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - memberships/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - fleet.azure.com
+  resources:
+  - memberships/status
   verbs:
   - get
   - patch

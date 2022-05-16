@@ -6,30 +6,24 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.0
   creationTimestamp: null
-  name: memberclusters.fleet.azure.com
+  name: internalmemberclusters.fleet.azure.com
 spec:
   group: fleet.azure.com
   names:
     categories:
     - fleet
-    kind: MemberCluster
-    listKind: MemberClusterList
-    plural: memberclusters
+    kind: InternalMemberCluster
+    listKind: InternalMemberClusterList
+    plural: internalmemberclusters
     shortNames:
-    - cluster
-    singular: membercluster
-  scope: Cluster
+    - internalcluster
+    singular: internalmembercluster
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="ConditionTypeJoined")].status
-      name: Joined
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    - jsonPath: .metadata.label[fleet.azure.com/clusterHealth]
-      name: HealthStatus
-      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
