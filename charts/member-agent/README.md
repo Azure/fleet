@@ -33,7 +33,6 @@ helm upgrade -n member-agent member-agent/
 | affinity                 | The node affinity to use for pod scheduling                                                                                                                                                  | `{}`                                            |
 | tolerations              | The toleration to use for pod scheduling                                                                                                                                                     | `[]`                                            |
 | resources                | The resource request/limits for the container image                                                                                                                                          | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
-| clusterIdentity          | Identity of the cluster that member-agent being installed on. It would authenticate calls from this cluster to the hub cluster if the chosen authentication preference is `Managed Identity` | `""`                                            |
 | authenticationPreference | Flow that the cluster, on which this member agent is being installed, would be authenticated. Currently supported authentication flows are `Managed Identity` and `Secret`                   | `"Managed Identity"`                            |
 
 ## Contributing Changes

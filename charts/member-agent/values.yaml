@@ -17,6 +17,6 @@ resources:
 tolerations: []
 affinity: {}
 clusterIdentity: ""
-namespace: member-agent
-authenticationPreference: ManagedIdentity
+namespace: "member-agent"
+authenticationPreference: "ManagedIdentity"
 

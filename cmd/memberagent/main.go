@@ -9,9 +9,10 @@ import (
 	"flag"
 	"os"
 
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membership"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
