@@ -11,7 +11,7 @@ helm repo update
 
 ```console
 # Helm install
-helm install -n member-agent [RELEASE_NAME] member-agent/
+helm install -n member-agent member-agent/
 ```
 
 _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documentation._
@@ -19,7 +19,7 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 ## Upgrade Chart
 
 ```console
-helm upgrade -n member-agent [RELEASE_NAME] member-agent/
+helm upgrade -n member-agent member-agent/
 ```
 
 ## Parameters

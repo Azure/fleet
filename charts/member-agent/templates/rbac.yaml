@@ -1,24 +1,26 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: member-agent-crd
+  name: member-agent
+  namespace: {{.Values.namespace}}
 rules:
-  - apiGroups: ["fleet.azure.com"]
-    resources: ["internalmemberclusters"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["namespace"]
+    verbs: ["get", "watch", "list"]
   - apiGroups: [ "fleet.azure.com" ]
-    resources: [ "memberships" ]
-    verbs: [ "get", "list", "watch", "create", "delete"]
+    resources: [ internalmemberclusters, memberships ]
+    verbs: [ "get", "list", "watch", "create", "delete" ]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: member-agent-crd
+  name: member-agent
+  namespace: {{.Values.namespace}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: member-agent-crd
+  name: member-agent
 subjects:
   - kind: ServiceAccount
-    name: member-agent
-    namespace: default
+    name: {{.Values.serviceAccount.name}}
+    namespace: {{.Values.namespace}}
