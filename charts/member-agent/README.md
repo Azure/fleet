@@ -11,15 +11,17 @@ helm repo update
 
 ```console
 # Helm install
-helm install member-agent member-agent/ --namespace <NAME_SPACE>
+helm install member-agent member-agent/ --namespace member-agent
 ```
+
+**Note**: If you want to use a different value for namespace other than `member-agent`, you need to set `namespace` params to your desired namespace value. 
 
 _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documentation._
 
 ## Upgrade Chart
 
 ```console
-helm upgrade member-agent member-agent/ --namespace <NAME_SPACE>
+helm upgrade member-agent member-agent/ --namespace member-agent
 ```
 
 ## Parameters
@@ -35,7 +37,7 @@ helm upgrade member-agent member-agent/ --namespace <NAME_SPACE>
 | affinity                 | The node affinity to use for pod scheduling                                                                                                                                | `{}`                                            |
 | tolerations              | The toleration to use for pod scheduling                                                                                                                                   | `[]`                                            |
 | resources                | The resource request/limits for the container image                                                                                                                        | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
-| namespace                | Namespace that this chart would be installed on. It needs to be the same as the namespace that this helm chart is installed on.                                            | `member-agent`                                  |
+| namespace                | Namespace that this Helm chart is installed on.                                                                                                                            | `member-agent`                                  |
 | authenticationPreference | Flow that the cluster, on which this member agent is being installed, would be authenticated. Currently supported authentication flows are `Managed Identity` and `Secret` | `Managed Identity`                              |
 
 ## Contributing Changes
