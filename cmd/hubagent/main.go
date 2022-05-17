@@ -27,8 +27,8 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	probeAddr            = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
-		"Enable leader election for controllers membership and internalmembercluster. "+
-			"Enabling this will ensure there is only one active controllers membership and internalmembercluster.")
+		"Enable leader election for controller manager."+
+			"Enabling this will ensure there is only one active controller manager.")
 )
 
 func init() {
@@ -55,7 +55,7 @@ func main() {
 		LeaderElectionID:       "994838fa.fleet.azure.com",
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start controllers membership and internalmembercluster.")
+		setupLog.Error(err, "unable to start controller manager.")
 		os.Exit(1)
 	}
 
