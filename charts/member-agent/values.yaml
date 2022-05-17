@@ -4,8 +4,6 @@ image:
   pullPolicy: IfNotPresent
   tag: v0.1.0
 serviceAccount:
-  create: true
-  annotations: {}
   name: "member-agent-service-account"
 resources:
   requests:

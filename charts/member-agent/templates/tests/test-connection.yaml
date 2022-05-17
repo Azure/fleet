@@ -6,9 +6,3 @@ metadata:
     {{- include "member-agent.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test
-spec:
-  containers:
-    - name: wget
-      image: busybox
-      command: ['wget']
-  restartPolicy: Never
