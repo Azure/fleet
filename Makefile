@@ -80,7 +80,7 @@ staticcheck: $(STATICCHECK)
 .PHONY: fmt
 fmt:  $(GOIMPORTS) ## Run go fmt against code.
 	go fmt ./...
-	$(GOIMPORTS) -local go.goms.io/fleet -w $$(go list -f {{.Dir}} ./...)
+	$(GOIMPORTS) -local github.com/Azure/fleet -w $$(go list -f {{.Dir}} ./...)
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -120,12 +120,18 @@ generate: $(CONTROLLER_GEN)
 ## --------------------------------------
 
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+build: generate fmt vet ## Build agent binaries.
+	go build -o bin/hubagent cmd/hubagent/main.go
+	go build -o bin/memberagent cmd/memberagent/main.go
 
-.PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+.PHONY: run-hubagent
+run-hubagent: manifests generate fmt vet ## Run a controllers from your host.
+	go run ./cmd/hubagent/main.go
+
+.PHONY: run-memberagent
+run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
+	go run ./cmd/memberagent/main.go
+
 
 ## --------------------------------------
 ## Images
@@ -168,3 +174,4 @@ docker-build-member-agent: docker-buildx-builder
 .PHONY: clean-bin
 clean-bin: ## Remove all generated binaries
 	rm -rf $(TOOLS_BIN_DIR)
+	rm -rf ./bin
