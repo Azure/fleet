@@ -6,14 +6,14 @@ Licensed under the MIT license.
 package main
 
 import (
+	"flag"
+	"os"
+
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
 	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
 	"github.com/Azure/fleet/pkg/controllers/membership"
 
 	"github.com/Azure/fleet/pkg/logger"
-
-	"flag"
-	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
