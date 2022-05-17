@@ -11,7 +11,7 @@ helm repo update
 
 ```console
 # Helm install
-helm install -n member-agent member-agent/
+helm install member-agent member-agent/ --namespace <NAME_SPACE>
 ```
 
 _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documentation._
@@ -19,7 +19,7 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 ## Upgrade Chart
 
 ```console
-helm upgrade -n member-agent member-agent/
+helm upgrade member-agent member-agent/ --namespace <NAME_SPACE>
 ```
 
 ## Parameters
@@ -35,7 +35,7 @@ helm upgrade -n member-agent member-agent/
 | affinity                 | The node affinity to use for pod scheduling                                                                                                                                | `{}`                                            |
 | tolerations              | The toleration to use for pod scheduling                                                                                                                                   | `[]`                                            |
 | resources                | The resource request/limits for the container image                                                                                                                        | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
-| namespace                | Namespace that this chart would be installed on                                                                                                                            | `member-agent`                                  |
+| namespace                | Namespace that this chart would be installed on. It needs to be the same as the namespace that this helm chart is installed on.                                            | `member-agent`                                  |
 | authenticationPreference | Flow that the cluster, on which this member agent is being installed, would be authenticated. Currently supported authentication flows are `Managed Identity` and `Secret` | `Managed Identity`                              |
 
 ## Contributing Changes

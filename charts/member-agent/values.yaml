@@ -17,4 +17,3 @@ tolerations: []
 affinity: {}
 namespace: "member-agent"
 authenticationPreference: "ManagedIdentity"
-
