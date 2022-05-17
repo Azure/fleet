@@ -35,7 +35,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	//Retrieve Member cluster object
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &mc); err != nil {
-		klog.Error(err, "cannot get member cluster")
+		klog.Errorf("cannot get member cluster: %+v", req.Name, err)
 		return ctrl.Result{}, nil
 	}
 
@@ -47,6 +47,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
+// checkAndCreateNamespace checks to see if the namespace exists for given memberClusterName
+// if the namespace doesn't exist it creates it.
 func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberClusterName string) (*corev1.Namespace, error) {
 	var namespace corev1.Namespace
 	// Namespace name is created using member cluster name.
@@ -54,6 +56,7 @@ func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberClusterN
 	// Check to see if namespace exists, if it doesn't exist create it.
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &namespace); err != nil {
 		if apierrors.IsNotFound(err) {
+			klog.Infof("namespace doesn't exist for for %+v", memberClusterName)
 			namespace := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: namespaceName,
@@ -62,7 +65,8 @@ func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberClusterN
 			if err := r.Client.Create(ctx, &namespace); err != nil {
 				return nil, err
 			}
-			klog.Info("namespace was successfully created")
+			klog.Infof("namespace was successfully created for %+v", memberClusterName)
+			return &namespace, nil
 		}
 		return nil, err
 	}
