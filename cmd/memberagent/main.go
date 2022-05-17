@@ -92,9 +92,12 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
+	membershipChan := make(chan fleetv1alpha1.ClusterState)
+	internalMemberClusterChan := make(chan fleetv1alpha1.ClusterState)
+
 	if err = memberinternalmembercluster.NewMemberReconciler(
-		hubMrg.GetClient(), memberMgr.GetClient(),
-		restMapper).SetupWithManager(hubMrg); err != nil {
+		hubMrg.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
+		membershipChan).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
 
@@ -109,8 +112,10 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	if err = (&membership.Reconciler{
-		Client: memberMgr.GetClient(),
-		Scheme: memberMgr.GetScheme(),
+		Client:                    memberMgr.GetClient(),
+		Scheme:                    memberMgr.GetScheme(),
+		MembershipChan:            membershipChan,
+		InternalMemberClusterChan: internalMemberClusterChan,
 	}).SetupWithManager(memberMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller membership")
 	}

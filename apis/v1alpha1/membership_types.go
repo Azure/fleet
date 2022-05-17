@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -22,6 +23,11 @@ type Membership struct {
 
 	Spec   MembershipSpec   `json:"spec"`
 	Status MembershipStatus `json:"status,omitempty"`
+}
+
+// GetCondition implements Conditioned
+func (m *Membership) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 // MembershipSpec defines the desired state of the member agent installed in the member cluster.
@@ -53,6 +59,13 @@ const (
 	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
 	ConditionTypeMembershipJoin string = "Joined"
 )
+
+// SetConditions implements Conditioned.
+func (m *Membership) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
 
 //+kubebuilder:object:root=true
 

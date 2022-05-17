@@ -1,0 +1,9 @@
+apiVersion: fleet.azure.com/v1alpha1
+kind: Membership
+metadata:
+  name: demohelm
+  namespace: fleet-system
+spec:
+  memberClusterName: "demohelm"
+  hubUrl: ""
+  state: "Join"
