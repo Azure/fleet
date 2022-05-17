@@ -1,8 +1,8 @@
 replicaCount: 1
 image:
-  repository: demohelmmemberagentacr.azurecr.io/member-agent
+  repository: ghcr.io/azure/azure/fleet/member-agent
   pullPolicy: IfNotPresent
-  tag: v1.1
+  tag: v0.1.0
 serviceAccount:
   create: true
   name: "member-agent-service-account"
