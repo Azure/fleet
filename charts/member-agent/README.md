@@ -11,17 +11,17 @@ helm repo update
 
 ```console
 # Helm install
-helm install member-agent member-agent/ --namespace member-agent
+helm install member-agent member-agent/ --namespace fleet-system --create-namespace
 ```
 
-**Note**: If you want to use a different value for namespace other than `member-agent`, you need to set `namespace` params to your desired namespace value. 
+**Note**: If you want to use a different value for namespace other than `fleet-system`, you need to set `namespace` params to your desired namespace value. 
 
 _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documentation._
 
 ## Upgrade Chart
 
 ```console
-helm upgrade member-agent member-agent/ --namespace member-agent
+helm upgrade member-agent member-agent/ --namespace fleet-system
 ```
 
 ## Parameters
@@ -37,7 +37,7 @@ helm upgrade member-agent member-agent/ --namespace member-agent
 | affinity                 | The node affinity to use for pod scheduling                                                                                                                                | `{}`                                            |
 | tolerations              | The toleration to use for pod scheduling                                                                                                                                   | `[]`                                            |
 | resources                | The resource request/limits for the container image                                                                                                                        | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
-| namespace                | Namespace that this Helm chart is installed on.                                                                                                                            | `member-agent`                                  |
+| namespace                | Namespace that this Helm chart is installed on.                                                                                                                            | `fleet-system`                                  |
 | authenticationPreference | Flow that the cluster, on which this member agent is being installed, would be authenticated. Currently supported authentication flows are `Managed Identity` and `Secret` | `Managed Identity`                              |
 
 ## Contributing Changes

@@ -15,5 +15,5 @@ resources:
     memory: 4Gi
 tolerations: []
 affinity: {}
-namespace: "member-agent"
+namespace: "fleet-system"
 authenticationPreference: "ManagedIdentity"
