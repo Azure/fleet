@@ -10,6 +10,8 @@ helm repo update
 ## Install Chart
 
 ```console
+# Go to `charts` folder inside the repo
+cd <REPO_DIRECTORY>/fleet/charts
 # Helm install
 helm install member-agent member-agent/ --namespace fleet-system --create-namespace
 ```
@@ -21,6 +23,9 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 ## Upgrade Chart
 
 ```console
+# Go to `charts` folder inside the repo
+cd <REPO_DIRECTORY>/fleet/charts
+# Helm upgrade
 helm upgrade member-agent member-agent/ --namespace fleet-system
 ```
 
