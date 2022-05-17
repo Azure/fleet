@@ -33,7 +33,7 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var mc fleetv1alpha1.MemberCluster
 
-	//Retrieve Member cluster object
+	// Retrieve member cluster object
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &mc); err != nil {
 		klog.Errorf("cannot get member cluster: %+v", req.Name, err)
 		return ctrl.Result{}, nil
