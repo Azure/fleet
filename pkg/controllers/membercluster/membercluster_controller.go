@@ -7,6 +7,7 @@ package membercluster
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,6 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
+)
+
+const (
+	namespaceNameFormat = "fleet-%s"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -52,7 +57,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, mcName string) (*corev1.Namespace, error) {
 	var namespace corev1.Namespace
 	// Namespace name is created using member cluster name.
-	nsName := mcName + "-namespace"
+	nsName := fmt.Sprintf(namespaceNameFormat, mcName)
 	// Check to see if namespace exists, if it doesn't exist create it.
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: nsName}, &namespace); err != nil {
 		if apierrors.IsNotFound(err) {

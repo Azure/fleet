@@ -32,10 +32,10 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 	memberClusterName2 := "mc2"
 	memberClusterName3 := "mc3"
 	memberClusterName4 := "mc4"
-	namespace1 := "mc1-namespace"
-	namespace2 := "mc2-namespace"
-	namespace3 := "mc3-namespace"
-	namespace4 := "mc4-namespace"
+	namespace1 := "fleet-mc1"
+	namespace2 := "fleet-mc2"
+	namespace3 := "fleet-mc3"
+	namespace4 := "fleet-mc4"
 
 	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 		if key.Name == namespace2 || key.Name == namespace3 {
