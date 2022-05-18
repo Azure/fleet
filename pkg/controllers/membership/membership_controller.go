@@ -53,7 +53,6 @@ func NewReconciler(hubClient client.Client, internalMemberClusterChan <-chan fle
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile reconciles membership Custom Resource on member cluster.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -89,15 +88,6 @@ func (r *Reconciler) getInternalMemberClusterState() fleetv1alpha1.ClusterState 
 	return r.internalMemberClusterState
 }
 
-func (r *Reconciler) watchInternalMemberClusterChan() {
-	for internalMemberClusterState := range r.internalMemberClusterChan {
-		klog.InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
-		r.clusterStateLock.Lock()
-		r.internalMemberClusterState = internalMemberClusterState
-		r.clusterStateLock.Unlock()
-	}
-}
-
 func (r *Reconciler) markMembershipJoinSucceed(membership apis.ConditionedObj) {
 	klog.InfoS("mark membership joined",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
@@ -129,6 +119,15 @@ func (r *Reconciler) markMembershipJoinUnknown(membership apis.ConditionedObj, e
 		Message: errMsg,
 	}
 	membership.SetConditions(joinUnknownCondition, common.ReconcileErrorCondition(err))
+}
+
+func (r *Reconciler) watchInternalMemberClusterChan() {
+	for internalMemberClusterState := range r.internalMemberClusterChan {
+		klog.InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
+		r.clusterStateLock.Lock()
+		r.internalMemberClusterState = internalMemberClusterState
+		r.clusterStateLock.Unlock()
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
