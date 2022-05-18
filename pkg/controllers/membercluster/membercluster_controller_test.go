@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package membercluster
 
 import (
@@ -13,13 +18,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
 )
 
 const (
 	namespaceCreationError = "namespace cannot be created"
 	namespaceGetError      = "namespace cannot be retrieved"
+	// TestCaseMsg is used in the table driven test
+	TestCaseMsg string = "\nTest case:  %s"
 )
 
 func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
@@ -122,7 +127,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			if !tt.wantedError(t, err, fmt.Sprintf("checkAndCreateNamespace member cluster name = %+v", tt.memberClusterName)) {
 				return
 			}
-			assert.Equalf(t, tt.wantedNamespace, got, fleetv1alpha1.TestCaseMsg, testName)
+			assert.Equalf(t, tt.wantedNamespace, got, TestCaseMsg, testName)
 		})
 	}
 }

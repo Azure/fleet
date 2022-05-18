@@ -33,15 +33,15 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var mc fleetv1alpha1.MemberCluster
 
-	// Retrieve member cluster object
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &mc); err != nil {
-		klog.Errorf("cannot get member cluster: %+v", req.Name, err)
-		return ctrl.Result{}, nil
+	// TODO: Reconcile method is under development. The retrieved member cluster and namespace will be used in the following task to setup RBAC.
+	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
+		klog.InfoS("failed to get the member cluster", "memberCluster", klog.KRef(req.Namespace, req.Name), "error", err)
+		return ctrl.Result{}, err
 	}
 
 	if _, err := r.checkAndCreateNamespace(ctx, mc.Name); err != nil {
-		klog.Error(err)
-		return ctrl.Result{}, nil
+		klog.InfoS("failed to check and create namespace", "memberCluster", klog.KRef(req.Namespace, req.Name), "error", err)
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -49,23 +49,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // checkAndCreateNamespace checks to see if the namespace exists for given memberClusterName
 // if the namespace doesn't exist it creates it.
-func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberClusterName string) (*corev1.Namespace, error) {
+func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, mcName string) (*corev1.Namespace, error) {
 	var namespace corev1.Namespace
 	// Namespace name is created using member cluster name.
-	namespaceName := memberClusterName + "-namespace"
+	nsName := mcName + "-namespace"
 	// Check to see if namespace exists, if it doesn't exist create it.
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &namespace); err != nil {
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: nsName}, &namespace); err != nil {
 		if apierrors.IsNotFound(err) {
-			klog.Infof("namespace %+v doesn't exist for %+v", namespaceName, memberClusterName)
+			klog.InfoS("namespace doesn't exist for member cluster", "namespace", nsName, "memberCluster", mcName)
 			namespace = corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: namespaceName,
+					Name: nsName,
 				},
 			}
 			if err = r.Client.Create(ctx, &namespace); err != nil {
 				return nil, err
 			}
-			klog.Infof("namespace %+v was successfully created for member cluster %+v", namespaceName, memberClusterName)
+			klog.InfoS("namespace was successfully created for member cluster", "namespace", nsName, "memberCluster", mcName)
 			return &namespace, nil
 		}
 		return nil, err
