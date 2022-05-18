@@ -56,16 +56,16 @@ func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberClusterN
 	// Check to see if namespace exists, if it doesn't exist create it.
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &namespace); err != nil {
 		if apierrors.IsNotFound(err) {
-			klog.Infof("namespace %+v doesn't exist for for %+v", namespaceName, memberClusterName)
-			namespace := corev1.Namespace{
+			klog.Infof("namespace %+v doesn't exist for %+v", namespaceName, memberClusterName)
+			namespace = corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: namespaceName,
 				},
 			}
-			if err := r.Client.Create(ctx, &namespace); err != nil {
+			if err = r.Client.Create(ctx, &namespace); err != nil {
 				return nil, err
 			}
-			klog.Infof("namespace %+v was successfully created for %+v", namespaceName, memberClusterName)
+			klog.Infof("namespace %+v was successfully created for member cluster %+v", namespaceName, memberClusterName)
 			return &namespace, nil
 		}
 		return nil, err
