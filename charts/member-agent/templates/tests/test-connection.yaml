@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "{{ include "member-agent.fullname" . }}-test-connection"
-  labels:
-    {{- include "member-agent.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": test
