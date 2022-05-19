@@ -37,7 +37,6 @@ var (
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	hubKubeconfig = flag.String("hub-kubeconfig", "", "Paths to a kubeconfig connect to the hub cluster.")
 )
 
 func init() {
@@ -48,6 +47,8 @@ func init() {
 }
 
 func main() {
+	//TODO to be replaced with get token impl
+	var hubKubeconfig string
 	flag.Parse()
 
 	// Set the Klog format, as the Serialize format shouldn't be used anymore.
@@ -63,7 +64,7 @@ func main() {
 		Port:               9443,
 	}
 
-	hubConfig, err := getKubeConfig(*hubKubeconfig)
+	hubConfig, err := getKubeConfig(hubKubeconfig)
 	if err != nil {
 		klog.Error(err, "error reading kubeconfig to connect to hub")
 		os.Exit(1)
