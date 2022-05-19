@@ -25,7 +25,6 @@ var (
 	scheme               = runtime.NewScheme()
 	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	probeAddr            = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager."+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -48,11 +47,10 @@ func main() {
 	ctrl.SetLogger(klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     *metricsAddr,
-		Port:                   9446,
-		HealthProbeBindAddress: *probeAddr,
-		LeaderElection:         *enableLeaderElection,
+		Scheme:             scheme,
+		MetricsBindAddress: *metricsAddr,
+		Port:               9446,
+		LeaderElection:     *enableLeaderElection,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start controller manager.")
