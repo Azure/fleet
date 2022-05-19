@@ -6,22 +6,27 @@ Licensed under the MIT license.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
-	"github.com/Azure/fleet/pkg/controllers/membership"
+	"github.com/Azure/fleet/pkg/controllers"
 
-	"github.com/Azure/fleet/pkg/logger"
-
+	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/klog"
+	"k8s.io/klog/v2/klogr"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -33,6 +38,7 @@ var (
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	hubKubeconfig = flag.String("hub-kubeconfig", "", "Paths to a kubeconfig connect to the hub cluster.")
 )
 
 func init() {
@@ -45,53 +51,54 @@ func init() {
 func main() {
 	flag.Parse()
 
-	if err := logger.Configure(); err != nil {
-		setupLog.Error(err, "unable to configure logger")
-		os.Exit(1)
+	// Set the Klog format, as the Serialize format shouldn't be used anymore.
+	// This makes sure that the logs are formatted correctly, i.e.:
+	// * JSON logging format: msg isn't serialized twice
+	// * text logging format: values are formatted with their .String() func.
+	ctrl.SetLogger(klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)))
+
+	opts := ctrl.Options{
+		Scheme:             scheme,
+		MetricsBindAddress: *metricsAddr,
+		LeaderElection:     *enableLeaderElection,
+		Port:               9443,
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     *metricsAddr,
-		Port:                   9443,
-		HealthProbeBindAddress: *probeAddr,
-		LeaderElection:         *enableLeaderElection,
-		LeaderElectionID:       "984738fa.fleet.azure.com",
-	})
+	hubConfig, err := getKubeConfig(*hubKubeconfig)
 	if err != nil {
-		setupLog.Error(err, "unable to start manager.")
+		klog.Error(err, "error reading kubeconfig to connect to hub")
 		os.Exit(1)
 	}
 
-	setupLog.Info("setup membership and internalmembercluster controllers")
-	if err = (&membership.Reconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MemberCluster")
-		os.Exit(1)
-	}
-	if err = (&internalmembercluster.MemberReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "InternalMemberCluster for Hub")
-		os.Exit(1)
-	}
 	//+kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
+	klog.Info("starting memebragent")
+	if err := controllers.Start(ctrl.SetupSignalHandler(), hubConfig, ctrl.GetConfigOrDie(), setupLog, opts); err != nil {
+		klog.Error(err, "problem running controllers")
 		os.Exit(1)
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+}
+
+func getKubeConfig(hubKubeconfig string) (*restclient.Config, error) {
+	hubClientSet, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create the spoke client")
 	}
 
-	setupLog.Info("starting memberagent")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+	secret, err := hubClientSet.CoreV1().Secrets("work").Get(context.Background(), hubKubeconfig, metav1.GetOptions{})
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot find kubeconfig secrete")
 	}
+
+	kubeConfigData, ok := secret.Data["kubeconfig"]
+	if !ok || len(kubeConfigData) == 0 {
+		return nil, fmt.Errorf("wrong formatted kube config")
+	}
+
+	kubeConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeConfigData)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create the rest client")
+	}
+
+	return kubeConfig, nil
 }
