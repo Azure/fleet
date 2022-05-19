@@ -7,7 +7,6 @@ package controllers
 
 import (
 	"context"
-	"os"
 
 	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
 	"github.com/Azure/fleet/pkg/controllers/membership"
@@ -24,8 +23,7 @@ import (
 func Start(ctx context.Context, hubCfg, memberCfg *rest.Config, setupLog logr.Logger, opts ctrl.Options) error {
 	hubMgr, err := ctrl.NewManager(hubCfg, opts)
 	if err != nil {
-		klog.Error(err, "unable to start hub manager")
-		os.Exit(1)
+		return errors.Wrap(err, "unable to start hub manager")
 	}
 
 	memberOpts := ctrl.Options{
@@ -36,42 +34,36 @@ func Start(ctx context.Context, hubCfg, memberCfg *rest.Config, setupLog logr.Lo
 	}
 	memberMgr, err := ctrl.NewManager(memberCfg, memberOpts)
 	if err != nil {
-		klog.Error(err, "unable to start member manager")
-		os.Exit(1)
+		return errors.Wrap(err, "unable to start member manager")
 	}
 
 	restMapper, err := apiutil.NewDynamicRESTMapper(memberCfg, apiutil.WithLazyDiscovery)
 	if err != nil {
-		klog.Error(err, "unable to start member manager")
-		os.Exit(1)
+		return errors.Wrap(err, "unable to start member manager")
 	}
 
 	if err = internalmembercluster.NewMemberInternalMemberReconciler(
 		hubMgr.GetClient(), memberMgr.GetClient(), restMapper).SetupWithManager(memberMgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "internalMemberCluster_member")
-		return err
+		return errors.Wrap(err, "unable to create controller internalMemberCluster_member")
 	}
 
 	if err = (&membership.Reconciler{
 		Client: memberMgr.GetClient(),
 		Scheme: memberMgr.GetScheme(),
 	}).SetupWithManager(memberMgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "membership")
-		os.Exit(1)
+		return errors.Wrap(err, "unable to create controller membership")
 	}
 
-	go func() error {
-		klog.Info("starting hub manager")
-		defer klog.Info("shutting down hub manager")
-		if err := hubMgr.Start(ctx); err != nil {
-			return errors.Wrap(err, "problem running hub manager")
-		}
-		return nil
-	}()
+	klog.Info("starting hub manager")
+	defer klog.Info("shutting down hub manager")
+	if err := hubMgr.Start(ctx); err != nil {
+		return errors.Wrap(err, "problem running hub manager")
+	}
 
+	klog.Info("starting member manager")
+	defer klog.Info("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
-		klog.Error(err, "problem running member manager")
-		return err
+		return errors.Wrap(err, "problem running member manager")
 	}
 	return nil
 }
