@@ -47,8 +47,7 @@ func init() {
 }
 
 func main() {
-	//TODO to be replaced with get token impl
-	var hubKubeconfig string
+
 	flag.Parse()
 
 	// Set the Klog format, as the Serialize format shouldn't be used anymore.
@@ -64,41 +63,11 @@ func main() {
 		Port:               9443,
 	}
 
-	hubConfig, err := getKubeConfig(hubKubeconfig)
-	if err != nil {
-		klog.Error(err, "error reading kubeconfig to connect to hub")
-		os.Exit(1)
-	}
-
 	//+kubebuilder:scaffold:builder
 
 	klog.Info("starting memebragent")
-	if err := controllers.Start(ctrl.SetupSignalHandler(), hubConfig, ctrl.GetConfigOrDie(), setupLog, opts); err != nil {
+	if err := controllers.Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), setupLog, opts); err != nil {
 		klog.Error(err, "problem running controllers")
 		os.Exit(1)
 	}
-}
-
-func getKubeConfig(hubKubeconfig string) (*restclient.Config, error) {
-	hubClientSet, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot create the spoke client")
-	}
-
-	secret, err := hubClientSet.CoreV1().Secrets("work").Get(context.Background(), hubKubeconfig, metav1.GetOptions{})
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot find kubeconfig secrete")
-	}
-
-	kubeConfigData, ok := secret.Data["kubeconfig"]
-	if !ok || len(kubeConfigData) == 0 {
-		return nil, fmt.Errorf("wrong formatted kube config")
-	}
-
-	kubeConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeConfigData)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot create the rest client")
-	}
-
-	return kubeConfig, nil
 }

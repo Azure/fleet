@@ -19,8 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
-// Start the controllers with the supplied config
-func Start(ctx context.Context, hubCfg, memberCfg *rest.Config, setupLog logr.Logger, opts ctrl.Options) error {
+// Start Start the member controllers with the supplied config
+func Start(ctx context.Context, memberCfg *rest.Config, setupLog logr.Logger, opts ctrl.Options) error {
+	//TODO: Call getMSI to get Hub config
+	var hubCfg *rest.Config = ctrl.GetConfigOrDie()
+
 	hubMgr, err := ctrl.NewManager(hubCfg, opts)
 	if err != nil {
 		return errors.Wrap(err, "unable to start hub manager")
