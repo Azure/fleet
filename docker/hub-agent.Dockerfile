@@ -10,14 +10,14 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/hubagent/main.go hubagent/main.go
+COPY cmd/hubagent/main.go main.go
 COPY apis/ apis/
 COPY pkg/ pkg/
 
 ARG TARGETARCH
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o hubagent hubagent/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o hubagent main.go
 
 # Use distroless as minimal base image to package the hubagent binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

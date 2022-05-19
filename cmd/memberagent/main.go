@@ -8,25 +8,27 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers"
 
-	"github.com/pkg/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"github.com/go-logr/logr"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
+	"github.com/Azure/fleet/pkg/controllers/membership"
+	"github.com/pkg/errors"
+
+	"k8s.io/client-go/rest"
+
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -47,7 +49,6 @@ func init() {
 }
 
 func main() {
-
 	flag.Parse()
 
 	// Set the Klog format, as the Serialize format shouldn't be used anymore.
@@ -66,8 +67,62 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	klog.Info("starting memebragent")
-	if err := controllers.Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), setupLog, opts); err != nil {
+	if err := Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), setupLog, opts); err != nil {
 		klog.Error(err, "problem running controllers")
 		os.Exit(1)
 	}
+}
+
+// Start Start the member controllers with the supplied config
+func Start(ctx context.Context, membershipCfg *rest.Config, setupLog logr.Logger, opts ctrl.Options) error {
+	internalMemberMrg, err := ctrl.NewManager(membershipCfg, opts)
+	if err != nil {
+		return errors.Wrap(err, "unable to start internalMember manager")
+	}
+
+	memberOpts := ctrl.Options{
+		Scheme:             opts.Scheme,
+		LeaderElection:     opts.LeaderElection,
+		MetricsBindAddress: ":4848",
+		Port:               8443,
+	}
+	membershipMgr, err := ctrl.NewManager(membershipCfg, memberOpts)
+	if err != nil {
+		return errors.Wrap(err, "unable to start membership manager")
+	}
+
+	restMapper, err := apiutil.NewDynamicRESTMapper(membershipCfg, apiutil.WithLazyDiscovery)
+	if err != nil {
+		return errors.Wrap(err, "unable to start membership manager")
+	}
+
+	if err = internalmembercluster.NewMemberInternalMemberReconciler(
+		internalMemberMrg.GetClient(), membershipMgr.GetClient(), restMapper).SetupWithManager(membershipMgr); err != nil {
+		return errors.Wrap(err, "unable to create controller internalMemberCluster_member")
+	}
+
+	if err = (&membership.Reconciler{
+		Client: membershipMgr.GetClient(),
+		Scheme: membershipMgr.GetScheme(),
+	}).SetupWithManager(membershipMgr); err != nil {
+		return errors.Wrap(err, "unable to create controller membership")
+	}
+
+	klog.Info("starting internalMember manager")
+	startErr := make(chan error)
+	go func() {
+		klog.Info("shutting down internalMember manager")
+		err := internalMemberMrg.Start(ctx)
+		if err != nil {
+			startErr <- errors.Wrap(err, "problem running internalMember manager")
+			return
+		}
+	}()
+
+	klog.Info("starting membership manager")
+	defer klog.Info("shutting down member manager")
+	if err := membershipMgr.Start(ctx); err != nil {
+		return errors.Wrap(err, "problem running member manager")
+	}
+	return nil
 }
