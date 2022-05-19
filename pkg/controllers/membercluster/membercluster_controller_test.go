@@ -18,13 +18,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	test2 "github.com/Azure/fleet/pkg/utils/test"
 )
 
 const (
 	namespaceCreationError = "namespace cannot be created"
 	namespaceGetError      = "namespace cannot be retrieved"
-	// TestCaseMsg is used in the table driven test
-	TestCaseMsg string = "\nTest case:  %s"
 )
 
 func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
@@ -127,7 +127,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			if !tt.wantedError(t, err, fmt.Sprintf("checkAndCreateNamespace member cluster name = %+v", tt.memberClusterName)) {
 				return
 			}
-			assert.Equalf(t, tt.wantedNamespace, got, TestCaseMsg, testName)
+			assert.Equalf(t, tt.wantedNamespace, got, test2.TestCaseMsg, testName)
 		})
 	}
 }
