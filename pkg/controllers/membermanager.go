@@ -11,6 +11,7 @@ import (
 
 	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
 	"github.com/Azure/fleet/pkg/controllers/membership"
+	"github.com/pkg/errors"
 
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/rest"
@@ -63,8 +64,7 @@ func Start(ctx context.Context, hubCfg, memberCfg *rest.Config, setupLog logr.Lo
 		klog.Info("starting hub manager")
 		defer klog.Info("shutting down hub manager")
 		if err := hubMgr.Start(ctx); err != nil {
-			klog.Error(err, "problem running hub manager")
-			return err
+			return errors.Wrap(err, "problem running hub manager")
 		}
 		return nil
 	}()
