@@ -83,7 +83,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		klog.Error(err, "problem running manager")
+		klog.Error(err, "problem starting manager")
 		os.Exit(1)
 	}
 }

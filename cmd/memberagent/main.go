@@ -131,7 +131,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		defer klog.Info("shutting down hub manager")
 		err := hubMrg.Start(ctx)
 		if err != nil {
-			startErr <- errors.Wrap(err, "problem running hub manager")
+			startErr <- errors.Wrap(err, "problem starting hub manager")
 			return
 		}
 	}()
@@ -139,7 +139,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	klog.Info("starting member manager")
 	defer klog.Info("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
-		return errors.Wrap(err, "problem running member manager")
+		return errors.Wrap(err, "problem starting member manager")
 	}
 	return nil
 }
