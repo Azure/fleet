@@ -56,7 +56,7 @@ func main() {
 		Port:                   8443,
 		HealthProbeBindAddress: *hubProbeAddr,
 		LeaderElection:         *enableLeaderElection,
-		LeaderElectionID:       "984738fa.member.hub.fleet.azure.com",
+		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
 	}
 
 	//+kubebuilder:scaffold:builder
