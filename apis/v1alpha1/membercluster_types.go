@@ -8,6 +8,7 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -82,6 +83,16 @@ type MemberClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []MemberCluster `json:"items"`
+}
+
+func (m *MemberCluster) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
+
+func (m *MemberCluster) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {

@@ -7,6 +7,7 @@ package v1alpha1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -74,6 +75,16 @@ type InternalMemberClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []InternalMemberCluster `json:"items"`
+}
+
+func (m *InternalMemberCluster) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
+
+func (m *InternalMemberCluster) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {

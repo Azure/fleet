@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/hubinternalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
 	//+kubebuilder:scaffold:imports
 )
@@ -61,13 +60,6 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "MemberCluster")
-		os.Exit(1)
-	}
-
-	if err = (&hubinternalmembercluster.HubReconciler{
-		HubClient: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "InternalMemberCluster for Hub")
 		os.Exit(1)
 	}
 

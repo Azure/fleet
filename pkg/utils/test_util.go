@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package utils
 
 import (
@@ -12,6 +17,7 @@ const (
 	TestCaseMsg string = "\nTest case:  %s"
 )
 
+// NewFakeRecorder makes a new fake event recorder that prints the object.
 func NewFakeRecorder(bufferSize int) *record.FakeRecorder {
 	recorder := record.NewFakeRecorder(bufferSize)
 	recorder.IncludeObject = true

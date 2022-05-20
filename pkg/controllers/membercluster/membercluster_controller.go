@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,19 +20,25 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
-	RoleKind           = "Role"
-	RoleBindingKind    = "RoleBinding"
-	NamespaceCreated   = "NamespaceCreated"
-	RoleCreated        = "RoleCreated"
-	RoleUpdated        = "RoleUpdated"
-	RoleBindingCreated = "RoleBindingCreated"
-	RoleBindingUpdated = "RoleBindingUpdated"
+	namespaceCreated             = "NamespaceCreated"
+	roleCreated                  = "RoleCreated"
+	roleUpdated                  = "RoleUpdated"
+	roleBindingCreated           = "RoleBindingCreated"
+	roleBindingUpdated           = "RoleBindingUpdated"
+	internalMemberClusterCreated = "InternalMemberClusterCreated"
+)
+
+var (
+	InternalMemberClusterKind = fleetv1alpha1.GroupVersion.WithKind("InternalMemberCluster")
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -49,29 +54,35 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var mc fleetv1alpha1.MemberCluster
-
-	// TODO: Reconcile method is still under development.
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
-		klog.ErrorS(err, "memberCluster", klog.KRef(req.Namespace, req.Name))
-		return ctrl.Result{}, errors.Wrapf(client.IgnoreNotFound(err), "failed to get the member cluster %s in hub agent", req.Name)
+		klog.ErrorS(err, "failed to get the member cluster in hub agent", "memberCluster", req.Name)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	// TODO: The current condition is for the Join workflow, another condition for Leave needs to be added.
+	if mc.Spec.State == fleetv1alpha1.ClusterStateJoin {
+		namespaceName, err := r.checkAndCreateNamespace(ctx, &mc)
+		if err != nil {
+			klog.ErrorS(err, "failed to check and create namespace for member cluster in hub agent", "memberCluster", mc.Name, "namespace", namespaceName)
+			return ctrl.Result{}, err
+		}
 
-	namespaceName, err := r.checkAndCreateNamespace(ctx, &mc)
-	if err != nil {
-		klog.ErrorS(err, "memberCluster", klog.KRef(req.Namespace, req.Name))
-		return ctrl.Result{}, errors.Wrapf(err, "failed to check and create namespace for member cluster %s in hub agent", req.Name)
-	}
+		roleName, err := r.checkAndCreateRole(ctx, &mc, namespaceName)
+		if err != nil {
+			klog.ErrorS(err, "failed to check and create role for member cluster in hub agent", "memberCluster", mc.Name, "role", roleName)
+			return ctrl.Result{}, err
+		}
 
-	roleName, err := r.checkAndCreateRole(ctx, &mc, namespaceName)
-	if err != nil {
-		klog.ErrorS(err, "memberCluster", klog.KRef(req.Namespace, req.Name), "namespace", namespaceName)
-		return ctrl.Result{}, errors.Wrapf(err, "failed to check and create role for member cluster %s in hub agent", req.Name)
-	}
+		err = r.checkAndCreateRoleBinding(ctx, &mc, namespaceName, roleName, mc.Spec.Identity)
+		if err != nil {
+			klog.ErrorS(err, "failed to check and create role binding for member cluster in hub agent", "memberCluster", mc.Name, "roleBinding", fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name))
+			return ctrl.Result{}, err
+		}
 
-	err = r.checkAndCreateRoleBinding(ctx, &mc, namespaceName, roleName, mc.Spec.Identity)
-	if err != nil {
-		klog.ErrorS(err, "memberCluster", klog.KRef(req.Namespace, req.Name), "namespace", namespaceName, "role", roleName)
-		return ctrl.Result{}, errors.Wrapf(err, "failed to check and create role binding for member cluster %s in hub agent", req.Name)
+		err = r.checkAndCreateInternalMemberCluster(ctx, &mc, namespaceName)
+		if err != nil {
+			klog.ErrorS(err, "failed to check and create internal member cluster %s in hub agent", "memberCluster", mc.Name, "internalMemberCluster", mc.Name)
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, nil
 }
@@ -94,7 +105,7 @@ func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberCluster 
 			if err = r.Client.Create(ctx, &namespace); err != nil {
 				return "", err
 			}
-			r.recorder.Event(memberCluster, corev1.EventTypeNormal, NamespaceCreated, "Namespace was created")
+			r.recorder.Event(memberCluster, corev1.EventTypeNormal, namespaceCreated, "Namespace was created")
 			klog.InfoS("namespace was successfully created for member cluster", "namespace", nsName, "memberCluster", memberCluster.Name)
 			return namespace.Name, nil
 		}
@@ -117,7 +128,7 @@ func (r *Reconciler) checkAndCreateRole(ctx context.Context, memberCluster *flee
 			if err = r.Client.Create(ctx, &role); err != nil {
 				return "", err
 			}
-			r.recorder.Event(memberCluster, corev1.EventTypeNormal, RoleCreated, "role was created")
+			r.recorder.Event(memberCluster, corev1.EventTypeNormal, roleCreated, "role was created")
 			klog.InfoS("role was successfully created for member cluster", "role", roleName, "memberCluster", memberCluster.Name)
 			return role.Name, nil
 		}
@@ -130,12 +141,12 @@ func (r *Reconciler) checkAndCreateRole(ctx context.Context, memberCluster *flee
 			klog.ErrorS(err, "cannot update role for member cluster", "memberCluster", memberCluster.Name, "role", roleName)
 			return "", err
 		}
-		r.recorder.Event(memberCluster, corev1.EventTypeNormal, RoleUpdated, "role was updated")
+		r.recorder.Event(memberCluster, corev1.EventTypeNormal, roleUpdated, "role was updated")
 	}
 	return role.Name, nil
 }
 
-// checkAndCreateRolebinding checks to see if the Role binding exists for given memberClusterName
+// checkAndCreateRolebinding checks to see if the Role binding exists for given memberClusterName and namespaceName
 // if the Role binding doesn't exist it creates it.
 func (r *Reconciler) checkAndCreateRoleBinding(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster, namespaceName string, roleName string, identity rbacv1.Subject) error {
 	var rb rbacv1.RoleBinding
@@ -149,7 +160,7 @@ func (r *Reconciler) checkAndCreateRoleBinding(ctx context.Context, memberCluste
 			if err = r.Client.Create(ctx, &rb); err != nil {
 				return err
 			}
-			r.recorder.Event(memberCluster, corev1.EventTypeNormal, RoleBindingCreated, "role binding was created")
+			r.recorder.Event(memberCluster, corev1.EventTypeNormal, roleBindingCreated, "role binding was created")
 			klog.InfoS("role binding was successfully created for member cluster", "roleBinding", roleBindingName, "memberCluster", memberCluster.Name)
 			return nil
 		}
@@ -162,7 +173,39 @@ func (r *Reconciler) checkAndCreateRoleBinding(ctx context.Context, memberCluste
 			klog.ErrorS(err, "cannot update role binding for member cluster", "memberCluster", memberCluster.Name, "roleBinding", roleBindingName)
 			return err
 		}
-		r.recorder.Event(memberCluster, corev1.EventTypeNormal, RoleBindingUpdated, "role binding was updated")
+		r.recorder.Event(memberCluster, corev1.EventTypeNormal, roleBindingUpdated, "role binding was updated")
+	}
+	return nil
+}
+
+// checkAndCreateInternalMemberCluster checks to see if the internal member cluster exists for given memberClusterName and namespaceName
+// if the internal member cluster doesn't exist it creates it.
+func (r *Reconciler) checkAndCreateInternalMemberCluster(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster, namespaceName string) error {
+	var imc fleetv1alpha1.InternalMemberCluster
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.InfoS("internal member cluster doesn't exist for member cluster", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
+			imc := fleetv1alpha1.InternalMemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       InternalMemberClusterKind.Kind,
+					APIVersion: InternalMemberClusterKind.GroupVersion().Version,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      memberCluster.Name,
+					Namespace: namespaceName,
+				},
+				Spec: fleetv1alpha1.InternalMemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateJoin,
+				},
+			}
+			if err = r.Client.Create(ctx, &imc); err != nil {
+				return err
+			}
+			r.recorder.Event(memberCluster, corev1.EventTypeNormal, internalMemberClusterCreated, "Internal member cluster was created")
+			klog.InfoS("internal member cluster was created successfully", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
+			return nil
+		}
+		return err
 	}
 	return nil
 }
@@ -181,7 +224,7 @@ func createRole(roleName, namespaceName string) rbacv1.Role {
 	}
 	role := rbacv1.Role{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       RoleKind,
+			Kind:       "Role",
 			APIVersion: rbacv1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -197,12 +240,12 @@ func createRole(roleName, namespaceName string) rbacv1.Role {
 func createRoleBinding(roleName, roleBindingName, namespaceName string, identity rbacv1.Subject) rbacv1.RoleBinding {
 	roleRef := rbacv1.RoleRef{
 		APIGroup: rbacv1.GroupName,
-		Kind:     RoleKind,
+		Kind:     "Role",
 		Name:     roleName,
 	}
 	rb := rbacv1.RoleBinding{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       RoleBindingKind,
+			Kind:       "RoleBinding",
 			APIVersion: rbacv1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -218,7 +261,16 @@ func createRoleBinding(roleName, roleBindingName, namespaceName string, identity
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.MemberCluster{}).
-		Complete(r)
+	c, err := controller.New("memberClusterController", mgr, controller.Options{Reconciler: r, RecoverPanic: true})
+
+	if err != nil {
+		klog.Errorf("cannot create member cluster controller %+v", err)
+		return err
+	}
+
+	if err = c.Watch(&source.Kind{Type: &fleetv1alpha1.MemberCluster{}}, &handler.EnqueueRequestForObject{}); err != nil {
+		klog.Errorf("cannot watch member cluster in member cluster controller %+v", err)
+		return err
+	}
+	return nil
 }
