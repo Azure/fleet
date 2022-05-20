@@ -15,8 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// HubInternalMemberReconciler reconciles a InternalMemberCluster object in the hub cluster.
-type HubInternalMemberReconciler struct {
+// HubReconciler reconciles a InternalMemberCluster object in the hub cluster.
+type HubReconciler struct {
 	HubClient client.Client
 }
 
@@ -24,7 +24,7 @@ type HubInternalMemberReconciler struct {
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/finalizers,verbs=update
 
-func (r *HubInternalMemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *HubReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -33,7 +33,7 @@ func (r *HubInternalMemberReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *HubInternalMemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *HubReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)

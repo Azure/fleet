@@ -16,16 +16,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// MemberInternalMemberReconciler reconciles a InternalMemberCluster object in the member cluster.
-type MemberInternalMemberReconciler struct {
+// MemberReconciler reconciles a InternalMemberCluster object in the member cluster.
+type MemberReconciler struct {
 	hubClient    client.Client
 	memberClient client.Client
 	restMapper   meta.RESTMapper
 }
 
-func NewMemberInternalMemberReconciler(hubClient client.Client, memberClient client.Client,
-	restMapper meta.RESTMapper) *MemberInternalMemberReconciler {
-	return &MemberInternalMemberReconciler{
+func NewMemberReconciler(hubClient client.Client, memberClient client.Client,
+	restMapper meta.RESTMapper) *MemberReconciler {
+	return &MemberReconciler{
 		hubClient:    hubClient,
 		memberClient: memberClient,
 		restMapper:   restMapper,
@@ -36,7 +36,7 @@ func NewMemberInternalMemberReconciler(hubClient client.Client, memberClient cli
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/finalizers,verbs=update
 
-func (r *MemberInternalMemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -45,7 +45,7 @@ func (r *MemberInternalMemberReconciler) Reconcile(ctx context.Context, req ctrl
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *MemberInternalMemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)

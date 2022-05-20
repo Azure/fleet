@@ -64,7 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&internalmembercluster.HubInternalMemberReconciler{
+	if err = (&internalmembercluster.HubReconciler{
 		HubClient: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "internalMemberCluster_hub")
