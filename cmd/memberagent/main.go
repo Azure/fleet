@@ -11,12 +11,10 @@ import (
 	"os"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-
-	"github.com/pkg/errors"
-
-	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
+	"github.com/Azure/fleet/pkg/controllers/memberinternalmembercluster"
 	"github.com/Azure/fleet/pkg/controllers/membership"
 
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -94,7 +92,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	if err = internalmembercluster.NewMemberReconciler(
+	if err = memberinternalmembercluster.NewMemberReconciler(
 		hubMrg.GetClient(), memberMgr.GetClient(),
 		restMapper).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")

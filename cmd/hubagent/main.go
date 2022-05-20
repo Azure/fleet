@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
+	"github.com/Azure/fleet/pkg/controllers/hubinternalmembercluster"
 	"github.com/Azure/fleet/pkg/controllers/membercluster"
 	//+kubebuilder:scaffold:imports
 )
@@ -64,7 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&internalmembercluster.HubReconciler{
+	if err = (&hubinternalmembercluster.HubReconciler{
 		HubClient: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "internalMemberCluster_hub")
