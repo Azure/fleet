@@ -8,7 +8,7 @@ package membercluster
 import (
 	"context"
 	"fmt"
-
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +22,9 @@ import (
 )
 
 const (
-	namespaceNameFormat = "fleet-%s"
+	namespaceNameFormat        = "fleet-%s"
+	errGetMemberCluster        = "failed to get the member cluster %s in hub agent"
+	errCheckAndCreateNamespace = "failed to check and create namespace for member cluster %s in hub agent"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -41,12 +43,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// TODO: Reconcile method is under development. The retrieved member cluster and namespace will be used in the following task to setup RBAC.
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.InfoS("failed to get the member cluster", "memberCluster", klog.KRef(req.Namespace, req.Name), "error", err)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(client.IgnoreNotFound(err), errGetMemberCluster, req.Name)
 	}
 
 	if _, err := r.checkAndCreateNamespace(ctx, mc.Name); err != nil {
 		klog.InfoS("failed to check and create namespace", "memberCluster", klog.KRef(req.Namespace, req.Name), "error", err)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, errors.Wrapf(err, errCheckAndCreateNamespace, req.Name)
 	}
 
 	return ctrl.Result{}, nil
