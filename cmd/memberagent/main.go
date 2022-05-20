@@ -94,7 +94,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	if err = internalmembercluster.NewMemberInternalMemberReconciler(
+	if err = internalmembercluster.NewMemberReconciler(
 		hubMrg.GetClient(), memberMgr.GetClient(),
 		restMapper).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
