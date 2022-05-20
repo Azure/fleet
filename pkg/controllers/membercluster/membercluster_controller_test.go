@@ -7,8 +7,8 @@ package membercluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -75,7 +75,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 		r                 *Reconciler
 		memberClusterName string
 		wantedNamespace   *corev1.Namespace
-		wantedError       assert.ErrorAssertionFunc
+		wantedError       error
 	}{
 		"namespace exists": {
 			r: &Reconciler{
@@ -83,7 +83,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			},
 			memberClusterName: memberClusterName1,
 			wantedNamespace:   &expectedNamespace1,
-			wantedError:       assert.NoError,
+			wantedError:       nil,
 		},
 		"namespace doesn't exist": {
 			r: &Reconciler{
@@ -91,7 +91,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			},
 			memberClusterName: memberClusterName2,
 			wantedNamespace:   &expectedNamespace2,
-			wantedError:       assert.NoError,
+			wantedError:       nil,
 		},
 		"namespace create error": {
 			r: &Reconciler{
@@ -99,12 +99,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			},
 			memberClusterName: memberClusterName3,
 			wantedNamespace:   nil,
-			wantedError: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
-				if !strings.Contains(err.Error(), namespaceCreationError) {
-					return assert.Fail(t, fmt.Sprintf("Received unexpected error:\n%+v", err), msgAndArgs...)
-				}
-				return true
-			},
+			wantedError:       errors.New(namespaceCreationError),
 		},
 		"namespace get error": {
 			r: &Reconciler{
@@ -112,21 +107,14 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			},
 			memberClusterName: memberClusterName4,
 			wantedNamespace:   nil,
-			wantedError: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
-				if !strings.Contains(err.Error(), namespaceGetError) {
-					return assert.Fail(t, fmt.Sprintf("Received unexpected error:\n%+v", err), msgAndArgs...)
-				}
-				return true
-			},
+			wantedError:       errors.New(namespaceGetError),
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			got, err := tt.r.checkAndCreateNamespace(context.Background(), tt.memberClusterName)
-			if !tt.wantedError(t, err, fmt.Sprintf("checkAndCreateNamespace member cluster name = %+v", tt.memberClusterName)) {
-				return
-			}
+			assert.Equal(t, tt.wantedError, err, test2.TestCaseMsg, testName)
 			assert.Equalf(t, tt.wantedNamespace, got, test2.TestCaseMsg, testName)
 		})
 	}
