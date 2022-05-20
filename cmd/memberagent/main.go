@@ -12,9 +12,10 @@ import (
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
 
+	"github.com/pkg/errors"
+
 	"github.com/Azure/fleet/pkg/controllers/internalmembercluster"
 	"github.com/Azure/fleet/pkg/controllers/membership"
-	"github.com/pkg/errors"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -61,6 +62,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	klog.Info("starting memebragent")
+	// TODO: to hook MSI token to get hub config
 	if err := Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), hubOpts); err != nil {
 		klog.Error(err, "problem running controllers")
 		os.Exit(1)
