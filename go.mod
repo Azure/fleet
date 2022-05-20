@@ -4,9 +4,52 @@ go 1.17
 
 require (
 	k8s.io/apimachinery v0.23.0
+	k8s.io/apiserver v0.23.0
 	k8s.io/client-go v0.23.0
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/controller-runtime v0.11.0
+)
+
+require (
+	github.com/NYTimes/gziphandler v1.1.1 // indirect
+	github.com/PuerkitoBio/purell v1.1.1 // indirect
+	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
+	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
+	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
+	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/go-openapi/jsonpointer v0.19.5 // indirect
+	github.com/go-openapi/jsonreference v0.19.5 // indirect
+	github.com/go-openapi/swag v0.19.14 // indirect
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/josharian/intern v1.0.0 // indirect
+	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/spf13/cobra v1.2.1 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.0 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.0 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.0 // indirect
+	go.opentelemetry.io/contrib v0.20.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.20.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.20.0 // indirect
+	go.opentelemetry.io/otel v0.20.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp v0.20.0 // indirect
+	go.opentelemetry.io/otel/metric v0.20.0 // indirect
+	go.opentelemetry.io/otel/sdk v0.20.0 // indirect
+	go.opentelemetry.io/otel/sdk/export/metric v0.20.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v0.20.0 // indirect
+	go.opentelemetry.io/otel/trace v0.20.0 // indirect
+	go.opentelemetry.io/proto/otlp v0.7.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/zap v1.19.1 // indirect
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
+	google.golang.org/genproto v0.0.0-20210831024726-fe130286e0e2 // indirect
+	google.golang.org/grpc v1.40.0 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.25 // indirect
 )
 
 require (
@@ -34,7 +77,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.28.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.5
 	golang.org/x/net v0.0.0-20210825183410-e898025ed96a // indirect
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f // indirect
 	golang.org/x/sys v0.0.0-20211029165221-6e7872819dc8 // indirect

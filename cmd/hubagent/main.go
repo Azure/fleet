@@ -6,27 +6,23 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	"github.com/spf13/pflag"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers/hubinternalmembercluster"
-	"github.com/Azure/fleet/pkg/controllers/membercluster"
+	"github.com/Azure/fleet/cmd/hubagent/server"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
-	scheme               = runtime.NewScheme()
-	probeAddr            = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	enableLeaderElection = flag.Bool("leader-elect", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -39,51 +35,13 @@ func init() {
 }
 
 func main() {
+	options := server.NewRunOptions()
+
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	flag.Parse()
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     *metricsAddr,
-		Port:                   9446,
-		HealthProbeBindAddress: *probeAddr,
-		LeaderElection:         *enableLeaderElection,
-		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
-	})
-	if err != nil {
-		klog.Error(err, "unable to start controller manager.")
-		os.Exit(1)
-	}
-
-	klog.Info("starting hubagent")
-
-	if err = (&membercluster.Reconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "MemberCluster")
-		os.Exit(1)
-	}
-
-	if err = (&hubinternalmembercluster.HubReconciler{
-		HubClient: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "internalMemberCluster_hub")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check")
-
-		os.Exit(1)
-	}
-	//+kubebuilder:scaffold:builder
-
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		klog.Error(err, "problem starting manager")
+	if err := server.Run(options); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
