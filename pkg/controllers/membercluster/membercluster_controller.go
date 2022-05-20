@@ -8,12 +8,12 @@ package membercluster
 import (
 	"context"
 
+	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
 )
 
 // Reconciler reconciles a MemberCluster object
