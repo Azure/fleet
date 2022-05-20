@@ -28,12 +28,12 @@ import (
 )
 
 var (
-	scheme                           = runtime.NewScheme()
-	internalMemberClusterProbeAddr   = flag.String("internalMemberCluster-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	internalMemberClusterMetricsAddr = flag.String("internalMemberCluster-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	probeAddr                        = flag.String("health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
-	metricsAddr                      = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
-	enableLeaderElection             = flag.Bool("leader-elect", false,
+	scheme               = runtime.NewScheme()
+	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	probeAddr            = flag.String("health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
+	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
+	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 )
 
@@ -49,37 +49,37 @@ func init() {
 func main() {
 	flag.Parse()
 
-	internalMemberClusterOpts := ctrl.Options{
+	hubOpts := ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     *internalMemberClusterMetricsAddr,
+		MetricsBindAddress:     *hubMetricsAddr,
 		Port:                   8443,
-		HealthProbeBindAddress: *internalMemberClusterProbeAddr,
+		HealthProbeBindAddress: *hubProbeAddr,
 		LeaderElection:         *enableLeaderElection,
-		LeaderElectionID:       "984738fa.member.internalMemberCluster.fleet.azure.com",
+		LeaderElectionID:       "984738fa.member.hub.fleet.azure.com",
 	}
 
 	//+kubebuilder:scaffold:builder
 
 	klog.Info("starting memebragent")
-	if err := Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), internalMemberClusterOpts); err != nil {
+	if err := Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), hubOpts); err != nil {
 		klog.Error(err, "problem running controllers")
 		os.Exit(1)
 	}
 }
 
 // Start Start the member controllers with the supplied config
-func Start(ctx context.Context, internalMemberClusterCfg *rest.Config, internalMemberClusterOpts ctrl.Options) error {
-	internalMemberClusterMrg, err := ctrl.NewManager(internalMemberClusterCfg, internalMemberClusterOpts)
+func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error {
+	hubMrg, err := ctrl.NewManager(hubCfg, hubOpts)
 	if err != nil {
-		return errors.Wrap(err, "unable to start internalMemberCluster manager")
+		return errors.Wrap(err, "unable to start hub manager")
 	}
 
 	memberOpts := ctrl.Options{
-		Scheme:                 internalMemberClusterOpts.Scheme,
+		Scheme:                 hubOpts.Scheme,
 		MetricsBindAddress:     *metricsAddr,
 		Port:                   8446,
 		HealthProbeBindAddress: *probeAddr,
-		LeaderElection:         internalMemberClusterOpts.LeaderElection,
+		LeaderElection:         hubOpts.LeaderElection,
 		LeaderElectionID:       "984738fa.member.fleet.azure.com",
 	}
 	memberMgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), memberOpts)
@@ -87,23 +87,23 @@ func Start(ctx context.Context, internalMemberClusterCfg *rest.Config, internalM
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(internalMemberClusterCfg, apiutil.WithLazyDiscovery)
+	restMapper, err := apiutil.NewDynamicRESTMapper(hubCfg, apiutil.WithLazyDiscovery)
 	if err != nil {
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
 	if err = internalmembercluster.NewMemberInternalMemberReconciler(
-		internalMemberClusterMrg.GetClient(), memberMgr.GetClient(),
-		restMapper).SetupWithManager(internalMemberClusterMrg); err != nil {
-		return errors.Wrap(err, "unable to create controller internalMemberCluster_member")
+		hubMrg.GetClient(), memberMgr.GetClient(),
+		restMapper).SetupWithManager(hubMrg); err != nil {
+		return errors.Wrap(err, "unable to create controller hub_member")
 	}
 
-	if err := internalMemberClusterMrg.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check for internalMemberCluster manager")
+	if err := hubMrg.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		klog.Error(err, "unable to set up health check for hub manager")
 		os.Exit(1)
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check for internalMemberCluster manager")
+		klog.Error(err, "unable to set up ready check for hub manager")
 
 		os.Exit(1)
 	}
@@ -125,13 +125,13 @@ func Start(ctx context.Context, internalMemberClusterCfg *rest.Config, internalM
 		os.Exit(1)
 	}
 
-	klog.Info("starting internalMemberCluster manager")
+	klog.Info("starting hub manager")
 	startErr := make(chan error)
 	go func() {
-		defer klog.Info("shutting down internalMemberCluster manager")
-		err := internalMemberClusterMrg.Start(ctx)
+		defer klog.Info("shutting down hub manager")
+		err := hubMrg.Start(ctx)
 		if err != nil {
-			startErr <- errors.Wrap(err, "problem running internalMemberCluster manager")
+			startErr <- errors.Wrap(err, "problem running hub manager")
 			return
 		}
 	}()
