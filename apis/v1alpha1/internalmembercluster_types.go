@@ -40,6 +40,13 @@ type InternalMemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 
+const (
+
+	// ConditionTypeMembershipHeartBeat is used to track the Heartbeat state of the membership.
+	// Its conditionStatus can be "True" == Heartbeat is success, "Unknown" == Heartbeat is timeout, "False" == Heartbeat is Failed
+	ConditionTypeMembershipHeartBeat string = "HeartbeatReceived"
+)
+
 // MemberClusterStatus defines the observed state of MemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
@@ -50,41 +57,6 @@ type InternalMemberClusterStatus struct {
 
 	// Allocatable represents the total allocatable resources on the member cluster.
 	Allocatable v1.ResourceList `json:"allocatable"`
-
-	// ClusterClaims represents cluster information that a member cluster claims,
-	// for example a unique cluster identifier (id.kubernetes.io) and kubernetes version
-	// (kubeversion). Another useful information can be the
-	// name of the cloud provider, region, zone name.
-	// They are written by the member cluster agent. The set of claims is not uniform across a fleet,
-	// some claims can be vendor or version specific and may not be included from all clusters.
-
-	// +optional
-	ClusterClaims []MemberClusterClaim `json:"clusterClaims"`
-}
-
-// +enum
-type ClusterClaimKey string
-
-const (
-	// The version of the Kubenetes running on the member cluster.
-	ClusterClaimKeyKubeversion ClusterClaimKey = "KubeVersion"
-
-	// The unique id of the member cluster.
-	// https://groups.google.com/g/kubernetes-sig-architecture/c/mVGobfD4TpY/m/nkdbkX1iBwAJ?pli=1
-	ClusterClaimKeyClusterID ClusterClaimKey = "id.kubernetes.io"
-
-	// The region that the member cluster is in
-	ClusterClaimKeyRegion ClusterClaimKey = "Region"
-)
-
-type MemberClusterClaim struct {
-	// Key is the name of the claim
-	Key ClusterClaimKey `json:"key"`
-
-	// Value is a claim-dependent string
-	// +kubebuilder:validation:MaxLength=512
-	// +kubebuilder:validation:MinLength=1
-	Value string `json:"value"`
 }
 
 //+kubebuilder:object:root=true

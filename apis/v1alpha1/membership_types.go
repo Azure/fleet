@@ -50,16 +50,8 @@ type MembershipStatus struct {
 
 const (
 	// ConditionTypeMembershipJoin is used to track the join state of the membership.
-	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining, "False" == Leave
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Leave
 	ConditionTypeMembershipJoin string = "Joined"
-
-	// ConditionTypeMembershipLeave is used to track the leave state of the membership.
-	// Its conditionStatus can be "True" == Left, "Unknown" == Leaving
-	ConditionTypeMembershipLeave string = "Left"
-
-	// ConditionTypeMembershipHeartBeat is used to track the HeartBeat state of the membership.
-	// Its conditionStatus can be "True" == HeartBeat success, "Unknown" == HeartBeat timeout, "False" == HeartBeat Failed
-	ConditionTypeMembershipHeartBeat string = "HeartbeatReceived"
 )
 
 //+kubebuilder:object:root=true
