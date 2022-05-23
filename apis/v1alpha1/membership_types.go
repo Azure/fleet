@@ -38,7 +38,7 @@ type MembershipSpec struct {
 
 	// State indicates the desired state of the member cluster.
 
-	// +required
+	// +kubebuilder:validation:Required,Type=ClusterState
 	State ClusterState `json:"state"`
 }
 
@@ -50,7 +50,7 @@ type MembershipStatus struct {
 
 const (
 	// ConditionTypeMembershipJoin is used to track the join state of the membership.
-	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Leave
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
 	ConditionTypeMembershipJoin string = "Joined"
 )
 

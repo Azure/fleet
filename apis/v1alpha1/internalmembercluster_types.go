@@ -29,8 +29,7 @@ type InternalMemberCluster struct {
 type InternalMemberClusterSpec struct {
 	// State indicates the state of the member cluster.
 
-	// +kubebuilder:validation:Enum=Join;Leave
-	// +required
+	// +kubebuilder:validation:Required,Type=ClusterState
 	State ClusterState `json:"state"`
 
 	// HeartbeatPeriodSeconds indicates how often (in seconds) for the member cluster to send a heartbeat. Default to 60 seconds. Minimum value is 1.

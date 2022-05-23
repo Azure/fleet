@@ -49,9 +49,6 @@ spec:
                 format: int32
                 type: integer
               state:
-                enum:
-                - Join
-                - Leave
                 type: string
             required:
             - state

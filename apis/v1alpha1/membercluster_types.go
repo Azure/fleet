@@ -31,8 +31,7 @@ type MemberCluster struct {
 type MemberClusterSpec struct {
 	// State indicates the desired state of the member cluster.
 
-	// +kubebuilder:validation:Enum=Join;Leave
-	// +required
+	// +kubebuilder:validation:Required,Type=ClusterState
 	State ClusterState `json:"state"`
 
 	// Identity used by the member cluster to contact the hub cluster.
@@ -68,7 +67,7 @@ type MemberClusterStatus struct {
 
 const (
 	// ConditionTypeMemberClusterJoin is used to track the join state of the memberCluster.
-	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Leave
+	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
 	ConditionTypeMemberClusterJoin string = "Joined"
 
 	// ConditionTypeMemberClusterHealthy is used to track the Health state of the MemberCluster.
