@@ -42,9 +42,9 @@ type InternalMemberClusterSpec struct {
 
 const (
 
-	// ConditionTypeMembershipHeartBeat is used to track the Heartbeat state of the membership.
+	// ConditionTypeInternalMemberClusterHeartbeat is used to track the Heartbeat state of the membership.
 	// Its conditionStatus can be "True" == Heartbeat is success, "Unknown" == Heartbeat is timeout, "False" == Heartbeat is Failed
-	ConditionTypeMembershipHeartBeat string = "HeartbeatReceived"
+	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
 )
 
 // MemberClusterStatus defines the observed state of MemberCluster.
