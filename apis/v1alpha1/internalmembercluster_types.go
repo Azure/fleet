@@ -40,8 +40,11 @@ type InternalMemberClusterSpec struct {
 }
 
 const (
+	// ConditionTypeInternalMemberClusterJoin is used to track the join state of the InternalMemberCluster.
+	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
+	ConditionTypeInternalMemberClusterJoin string = "Joined"
 
-	// ConditionTypeInternalMemberClusterHeartbeat is used to track the Heartbeat state of the membership.
+	// ConditionTypeInternalMemberClusterHeartbeat is used to track the Heartbeat state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Heartbeat is success, "Unknown" == Heartbeat is timeout, "False" == Heartbeat is Failed
 	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
 )
