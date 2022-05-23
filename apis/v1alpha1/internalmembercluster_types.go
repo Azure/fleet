@@ -21,11 +21,11 @@ type InternalMemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MemberClusterSpec   `json:"spec"`
-	Status MemberClusterStatus `json:"status,omitempty"`
+	Spec   InternalMemberClusterSpec   `json:"spec"`
+	Status InternalMemberClusterStatus `json:"status,omitempty"`
 }
 
-// InternalMemberClusterSpec defines the desired state of MemberCluster for the hub agent.
+// InternalMemberClusterSpec defines the desired state of InternalMemberCluster for the hub agent.
 type InternalMemberClusterSpec struct {
 	// State indicates the state of the member cluster.
 
@@ -47,7 +47,7 @@ const (
 	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
 )
 
-// MemberClusterStatus defines the observed state of MemberCluster.
+// InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
 	Conditions []metav1.Condition `json:"conditions"`

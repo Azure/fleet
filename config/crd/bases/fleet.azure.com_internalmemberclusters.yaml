@@ -41,36 +41,9 @@ spec:
           metadata:
             type: object
           spec:
-            description: MemberClusterSpec defines the desired state of MemberCluster.
+            description: InternalMemberClusterSpec defines the desired state of InternalMemberCluster
+              for the hub agent.
             properties:
-              identity:
-                description: Identity used by the member cluster to contact the hub
-                  cluster. The hub cluster will create the minimal required permission
-                  for this identity.
-                properties:
-                  apiGroup:
-                    description: APIGroup holds the API group of the referenced subject.
-                      Defaults to "" for ServiceAccount subjects. Defaults to "rbac.authorization.k8s.io"
-                      for User and Group subjects.
-                    type: string
-                  kind:
-                    description: Kind of object being referenced. Values defined by
-                      this API group are "User", "Group", and "ServiceAccount". If
-                      the Authorizer does not recognized the kind value, the Authorizer
-                      should report an error.
-                    type: string
-                  name:
-                    description: Name of the object being referenced.
-                    type: string
-                  namespace:
-                    description: Namespace of the referenced object.  If the object
-                      kind is non-namespace, such as "User" or "Group", and this value
-                      is not empty the Authorizer should report an error.
-                    type: string
-                required:
-                - kind
-                - name
-                type: object
               leaseDurationSeconds:
                 default: 60
                 format: int32
@@ -81,11 +54,11 @@ spec:
                 - Leave
                 type: string
             required:
-            - identity
             - state
             type: object
           status:
-            description: MemberClusterStatus defines the observed state of MemberCluster.
+            description: InternalMemberClusterStatus defines the observed state of
+              InternalMemberCluster.
             properties:
               allocatable:
                 additionalProperties:
@@ -94,7 +67,8 @@ spec:
                   - type: string
                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                   x-kubernetes-int-or-string: true
-                description: ResourceList is a set of (resource name, quantity) pairs.
+                description: Allocatable represents the total allocatable resources
+                  on the member cluster.
                 type: object
               capacity:
                 additionalProperties:
@@ -103,9 +77,12 @@ spec:
                   - type: string
                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                   x-kubernetes-int-or-string: true
-                description: ResourceList is a set of (resource name, quantity) pairs.
+                description: Capacity represents the total resource capacity from
+                  all nodeStatuses on the member cluster.
                 type: object
               conditions:
+                description: Conditions field contains the different condition statuses
+                  for this member cluster.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct

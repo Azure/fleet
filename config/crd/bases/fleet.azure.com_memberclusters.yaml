@@ -16,12 +16,12 @@ spec:
     listKind: MemberClusterList
     plural: memberclusters
     shortNames:
-    - cluster
+    - membercluster
     singular: membercluster
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="ConditionTypeJoined")].status
+    - jsonPath: .status.conditions[?(@.type=="ConditionTypeMemberClusterJoin")].status
       name: Joined
       type: string
     - jsonPath: .metadata.creationTimestamp
@@ -50,9 +50,9 @@ spec:
             description: MemberClusterSpec defines the desired state of MemberCluster.
             properties:
               identity:
-                description: Identity used by the member cluster to contact the hub
-                  cluster. The hub cluster will create the minimal required permission
-                  for this identity.
+                description: Subject contains a reference to the object or user identities
+                  a role binding applies to.  This can either hold a direct API object
+                  reference, or a value for non-objects such as user and group names.
                 properties:
                   apiGroup:
                     description: APIGroup holds the API group of the referenced subject.
