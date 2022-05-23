@@ -20,12 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-)
-
-const (
-	namespaceNameFormat        = "fleet-%s"
-	errGetMemberCluster        = "failed to get the member cluster %s in hub agent"
-	errCheckAndCreateNamespace = "failed to check and create namespace for member cluster %s in hub agent"
+	"github.com/Azure/fleet/pkg/utils"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -43,13 +38,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// TODO: Reconcile method is under development. The retrieved member cluster and namespace will be used in the following task to setup RBAC.
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
-		klog.InfoS("failed to get the member cluster", "memberCluster", klog.KRef(req.Namespace, req.Name), "error", err)
-		return ctrl.Result{}, errors.Wrapf(client.IgnoreNotFound(err), errGetMemberCluster, req.Name)
+		klog.ErrorS(err, "memberCluster", klog.KRef(req.Namespace, req.Name))
+		return ctrl.Result{}, errors.Wrapf(client.IgnoreNotFound(err), "failed to get the member cluster %s in hub agent", req.Name)
 	}
 
 	if _, err := r.checkAndCreateNamespace(ctx, mc.Name); err != nil {
-		klog.InfoS("failed to check and create namespace", "memberCluster", klog.KRef(req.Namespace, req.Name), "error", err)
-		return ctrl.Result{}, errors.Wrapf(err, errCheckAndCreateNamespace, req.Name)
+		klog.ErrorS(err, "memberCluster", klog.KRef(req.Namespace, req.Name))
+		return ctrl.Result{}, errors.Wrapf(err, "failed to check and create namespace for member cluster %s in hub agent", req.Name)
 	}
 
 	return ctrl.Result{}, nil
@@ -60,7 +55,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, mcName string) (*corev1.Namespace, error) {
 	var namespace corev1.Namespace
 	// Namespace name is created using member cluster name.
-	nsName := fmt.Sprintf(namespaceNameFormat, mcName)
+	nsName := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 	// Check to see if namespace exists, if it doesn't exist create it.
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: nsName}, &namespace); err != nil {
 		if apierrors.IsNotFound(err) {

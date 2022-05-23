@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	test2 "github.com/Azure/fleet/pkg/utils/test"
+	"github.com/Azure/fleet/pkg/utils"
 )
 
 const (
@@ -114,8 +114,8 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			got, err := tt.r.checkAndCreateNamespace(context.Background(), tt.memberClusterName)
-			assert.Equal(t, tt.wantedError, err, test2.TestCaseMsg, testName)
-			assert.Equalf(t, tt.wantedNamespace, got, test2.TestCaseMsg, testName)
+			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			assert.Equalf(t, tt.wantedNamespace, got, utils.TestCaseMsg, testName)
 		})
 	}
 }

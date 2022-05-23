@@ -1,4 +1,4 @@
-package test
+package utils
 
 const (
 	// TestCaseMsg is used in the table driven test
