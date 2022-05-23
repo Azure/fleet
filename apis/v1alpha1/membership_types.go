@@ -12,7 +12,7 @@ import (
 // Membership is a resource created in a member cluster to represent its membership within a given fleet.
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:categories={fleet},shortName=membership
+// +kubebuilder:resource:scope=Namespaced,categories={fleet},shortName=membership
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ConditionTypeMembershipJoin")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
