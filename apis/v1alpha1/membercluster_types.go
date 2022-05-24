@@ -14,9 +14,9 @@ import (
 // MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=cluster
+// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=membercluster
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ConditionTypeJoined")].status`,name="Joined",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ConditionTypeMemberClusterJoin")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +kubebuilder:printcolumn:JSONPath=`.metadata.label[fleet.azure.com/clusterHealth]`,name="HealthStatus",type=string
 type MemberCluster struct {
@@ -31,19 +31,19 @@ type MemberCluster struct {
 type MemberClusterSpec struct {
 	// State indicates the desired state of the member cluster.
 
-	// +kubebuilder:validation:Enum=Join;Leave
-	// +required
+	// +kubebuilder:validation:Required,Enum=Join;Leave
 	State ClusterState `json:"state"`
 
 	// Identity used by the member cluster to contact the hub cluster.
 	// The hub cluster will create the minimal required permission for this identity.
+
 	// +required
 	Identity rbacv1.Subject `json:"identity"`
 
 	// HeartbeatPeriodSeconds indicates how often (in seconds) for the member cluster to send a heartbeat. Default to 60 seconds. Minimum value is 1.
 
-	// +optional
 	// +kubebuilder:default=60
+	// +optional
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 

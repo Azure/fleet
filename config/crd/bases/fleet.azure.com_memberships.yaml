@@ -15,11 +15,13 @@ spec:
     kind: Membership
     listKind: MembershipList
     plural: memberships
+    shortNames:
+    - membership
     singular: membership
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="ConditionTypeJoined")].status
+    - jsonPath: .status.conditions[?(@.type=="ConditionTypeMembershipJoin")].status
       name: Joined
       type: string
     - jsonPath: .metadata.creationTimestamp
@@ -46,15 +48,10 @@ spec:
               installed in the member cluster.
             properties:
               hubUrl:
-                description: HubURL is the url of apiserver endpoint of the hub cluster
-                  for the member agent to contact
                 type: string
               memberClusterName:
                 type: string
               state:
-                enum:
-                - Join
-                - Leave
                 type: string
             required:
             - hubUrl

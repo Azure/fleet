@@ -21,16 +21,15 @@ type InternalMemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MemberClusterSpec   `json:"spec"`
-	Status MemberClusterStatus `json:"status,omitempty"`
+	Spec   InternalMemberClusterSpec   `json:"spec"`
+	Status InternalMemberClusterStatus `json:"status,omitempty"`
 }
 
-// InternalMemberClusterSpec defines the desired state of MemberCluster for the hub agent.
+// InternalMemberClusterSpec defines the desired state of InternalMemberCluster for the hub agent.
 type InternalMemberClusterSpec struct {
 	// State indicates the state of the member cluster.
 
-	// +kubebuilder:validation:Enum=Join;Leave
-	// +required
+	// +kubebuilder:validation:Required,Enum=Join;Leave
 	State ClusterState `json:"state"`
 
 	// HeartbeatPeriodSeconds indicates how often (in seconds) for the member cluster to send a heartbeat. Default to 60 seconds. Minimum value is 1.
@@ -40,51 +39,32 @@ type InternalMemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 
-// MemberClusterStatus defines the observed state of MemberCluster.
+const (
+	// ConditionTypeInternalMemberClusterJoin is used to track the join state of the InternalMemberCluster.
+	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
+	ConditionTypeInternalMemberClusterJoin string = "Joined"
+
+	// ConditionTypeInternalMemberClusterHeartbeat is used to track the Heartbeat state of the InternalMemberCluster.
+	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
+	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
+)
+
+// InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
+
+	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Capacity represents the total resource capacity from all nodeStatuses on the member cluster.
+	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
+
+	// +required
 	Capacity v1.ResourceList `json:"capacity"`
 
 	// Allocatable represents the total allocatable resources on the member cluster.
+
+	// +required
 	Allocatable v1.ResourceList `json:"allocatable"`
-
-	// ClusterClaims represents cluster information that a member cluster claims,
-	// for example a unique cluster identifier (id.kubernetes.io) and kubernetes version
-	// (kubeversion). Another useful information can be the
-	// name of the cloud provider, region, zone name.
-	// They are written by the member cluster agent. The set of claims is not uniform across a fleet,
-	// some claims can be vendor or version specific and may not be included from all clusters.
-
-	// +optional
-	ClusterClaims []MemberClusterClaim `json:"clusterClaims"`
-}
-
-// +enum
-type ClusterClaimKey string
-
-const (
-	// The version of the Kubenetes running on the member cluster.
-	ClusterClaimKeyKubeversion ClusterClaimKey = "KubeVersion"
-
-	// The unique id of the member cluster.
-	// https://groups.google.com/g/kubernetes-sig-architecture/c/mVGobfD4TpY/m/nkdbkX1iBwAJ?pli=1
-	ClusterClaimKeyClusterID ClusterClaimKey = "id.kubernetes.io"
-
-	// The region that the member cluster is in
-	ClusterClaimKeyRegion ClusterClaimKey = "Region"
-)
-
-type MemberClusterClaim struct {
-	// Key is the name of the claim
-	Key ClusterClaimKey `json:"key"`
-
-	// Value is a claim-dependent string
-	// +kubebuilder:validation:MaxLength=512
-	// +kubebuilder:validation:MinLength=1
-	Value string `json:"value"`
 }
 
 //+kubebuilder:object:root=true
