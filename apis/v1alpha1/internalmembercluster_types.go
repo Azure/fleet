@@ -52,12 +52,18 @@ const (
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
+
+	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Capacity represents the total resource capacity from all nodeStatuses on the member cluster.
+	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
+
+	// +required
 	Capacity v1.ResourceList `json:"capacity"`
 
 	// Allocatable represents the total allocatable resources on the member cluster.
+
+	// +required
 	Allocatable v1.ResourceList `json:"allocatable"`
 }
 
