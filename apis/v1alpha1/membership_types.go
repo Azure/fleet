@@ -38,7 +38,7 @@ type MembershipSpec struct {
 
 	// State indicates the desired state of the member cluster.
 
-	// +kubebuilder:validation:Required,Type=ClusterState
+	// +kubebuilder:validation:Required,Enum=Join;Leave
 	State ClusterState `json:"state"`
 }
 
