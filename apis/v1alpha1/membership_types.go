@@ -12,9 +12,9 @@ import (
 // Membership is a resource created in a member cluster to represent its membership within a given fleet.
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:categories={fleet}
+// +kubebuilder:resource:scope=Namespaced,categories={fleet},shortName=membership
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ConditionTypeJoined")].status`,name="Joined",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ConditionTypeMembershipJoin")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 type Membership struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -32,13 +32,13 @@ type MembershipSpec struct {
 	MemberClusterName string `json:"memberClusterName"`
 
 	// HubURL is the url of apiserver endpoint of the hub cluster for the member agent to contact
+
 	// +required
 	HubURL string `json:"hubUrl"`
 
 	// State indicates the desired state of the member cluster.
 
-	// +kubebuilder:validation:Enum=Join;Leave
-	// +required
+	// +kubebuilder:validation:Required,Enum=Join;Leave
 	State ClusterState `json:"state"`
 }
 
@@ -50,16 +50,8 @@ type MembershipStatus struct {
 
 const (
 	// ConditionTypeMembershipJoin is used to track the join state of the membership.
-	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining, "False" == Leave
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
 	ConditionTypeMembershipJoin string = "Joined"
-
-	// ConditionTypeMembershipLeave is used to track the leave state of the membership.
-	// Its conditionStatus can be "True" == Left, "Unknown" == Leaving
-	ConditionTypeMembershipLeave string = "Left"
-
-	// ConditionTypeMembershipHeartBeat is used to track the HeartBeat state of the membership.
-	// Its conditionStatus can be "True" == HeartBeat success, "Unknown" == HeartBeat timeout, "False" == HeartBeat Failed
-	ConditionTypeMembershipHeartBeat string = "HeartbeatReceived"
 )
 
 //+kubebuilder:object:root=true

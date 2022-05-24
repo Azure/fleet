@@ -41,51 +41,21 @@ spec:
           metadata:
             type: object
           spec:
-            description: MemberClusterSpec defines the desired state of MemberCluster.
+            description: InternalMemberClusterSpec defines the desired state of InternalMemberCluster
+              for the hub agent.
             properties:
-              identity:
-                description: Identity used by the member cluster to contact the hub
-                  cluster. The hub cluster will create the minimal required permission
-                  for this identity.
-                properties:
-                  apiGroup:
-                    description: APIGroup holds the API group of the referenced subject.
-                      Defaults to "" for ServiceAccount subjects. Defaults to "rbac.authorization.k8s.io"
-                      for User and Group subjects.
-                    type: string
-                  kind:
-                    description: Kind of object being referenced. Values defined by
-                      this API group are "User", "Group", and "ServiceAccount". If
-                      the Authorizer does not recognized the kind value, the Authorizer
-                      should report an error.
-                    type: string
-                  name:
-                    description: Name of the object being referenced.
-                    type: string
-                  namespace:
-                    description: Namespace of the referenced object.  If the object
-                      kind is non-namespace, such as "User" or "Group", and this value
-                      is not empty the Authorizer should report an error.
-                    type: string
-                required:
-                - kind
-                - name
-                type: object
               leaseDurationSeconds:
                 default: 60
                 format: int32
                 type: integer
               state:
-                enum:
-                - Join
-                - Leave
                 type: string
             required:
-            - identity
             - state
             type: object
           status:
-            description: MemberClusterStatus defines the observed state of MemberCluster.
+            description: InternalMemberClusterStatus defines the observed state of
+              InternalMemberCluster.
             properties:
               allocatable:
                 additionalProperties:
