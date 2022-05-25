@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
 // HubReconciler reconciles a InternalMemberCluster object in the hub cluster.

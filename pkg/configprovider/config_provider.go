@@ -12,8 +12,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"go.goms.io/fleet/pkg/interfaces"
 	"k8s.io/client-go/rest"
+
+	"go.goms.io/fleet/pkg/interfaces"
 )
 
 const (

@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/Azure/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
