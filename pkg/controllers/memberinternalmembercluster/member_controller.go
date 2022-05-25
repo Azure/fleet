@@ -8,15 +8,15 @@ package memberinternalmembercluster
 import (
 	"context"
 
-	"go.goms.io/fleet/pkg/controllers/memberinternalmembercluster/utils"
 	v1 "k8s.io/api/core/v1"
-
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
+	"github.com/Azure/fleet/pkg/utils"
 )
 
 // MemberReconciler reconciles a InternalMemberCluster object in the member cluster.
@@ -24,6 +24,7 @@ type MemberReconciler struct {
 	hubClient    client.Client
 	memberClient client.Client
 	restMapper   meta.RESTMapper
+	recorder     record.EventRecorder
 }
 
 func NewMemberReconciler(hubClient client.Client, memberClient client.Client,
@@ -51,6 +52,7 @@ func (r *MemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("InternalMemberCluster_member")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)

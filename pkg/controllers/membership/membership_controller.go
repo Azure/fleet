@@ -8,18 +8,20 @@ package membership
 import (
 	"context"
 
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
 )
 
 // Reconciler reconciles a Membership object
 type Reconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships,verbs=get;list;watch;create;update;patch;delete
@@ -45,7 +47,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("membership")
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.Membership{}).
-		Complete(r)
+		For(&fleetv1alpha1.Membership{}).Complete(r)
 }
