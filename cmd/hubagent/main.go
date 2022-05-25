@@ -15,9 +15,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers/hubinternalmembercluster"
-	"github.com/Azure/fleet/pkg/controllers/membercluster"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/controllers/hubinternalmembercluster"
+	"go.goms.io/fleet/pkg/controllers/membercluster"
 	//+kubebuilder:scaffold:imports
 )
 

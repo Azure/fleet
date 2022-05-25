@@ -5,7 +5,6 @@ go 1.17
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.13.0
-	github.com/Azure/fleet v0.0.0-00010101000000-000000000000
 	github.com/crossplane/crossplane-runtime v0.16.0
 	github.com/stretchr/testify v1.7.0
 	k8s.io/apimachinery v0.23.0
@@ -74,7 +73,6 @@ require (
 )
 
 replace (
-	github.com/Azure/fleet => ./.
 	k8s.io/api => k8s.io/api v0.23.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.23.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.23.0

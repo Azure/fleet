@@ -1,7 +1,7 @@
 # Fleet
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Azure/fleet)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Azure/fleet)](https://goreportcard.com/report/github.com/Azure/fleet)
+[![Go Report Card](https://goreportcard.com/badge/go.goms.io/fleet)](https://goreportcard.com/report/go.goms.io/fleet)
 ![Build Status](https://github.com//Azure/fleet/actions/workflows/workflow.yml/badge.svg)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/Azure/fleet)
 [![codecov](https://codecov.io/gh/Azure/fleet/branch/main/graph/badge.svg?token=D3mtbzACjC)](https://codecov.io/gh/Azure/fleet)
