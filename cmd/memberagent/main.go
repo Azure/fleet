@@ -10,10 +10,6 @@ import (
 	"flag"
 	"os"
 
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-	"github.com/Azure/fleet/pkg/controllers/memberinternalmembercluster"
-	"github.com/Azure/fleet/pkg/controllers/membership"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -23,6 +19,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
+	"github.com/Azure/fleet/pkg/controllers/memberinternalmembercluster"
+	"github.com/Azure/fleet/pkg/controllers/membership"
 	//+kubebuilder:scaffold:imports
 )
 

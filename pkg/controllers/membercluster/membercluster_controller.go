@@ -84,7 +84,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&fleetv1alpha1.MemberCluster{}).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "failed setting up with a controller manager")
+		return errors.Wrap(err, "Failed to setup with a controller manager")
 	}
 
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")

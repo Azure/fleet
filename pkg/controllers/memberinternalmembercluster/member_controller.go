@@ -8,20 +8,16 @@ package memberinternalmembercluster
 import (
 	"context"
 
-	v1 "k8s.io/api/core/v1"
-
-	"github.com/Azure/fleet/pkg/utils"
-
 	"github.com/pkg/errors"
-
-	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
-
-	"k8s.io/client-go/tools/record"
-
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	fleetv1alpha1 "github.com/Azure/fleet/apis/v1alpha1"
+	"github.com/Azure/fleet/pkg/utils"
 )
 
 // MemberReconciler reconciles a InternalMemberCluster object in the member cluster.
@@ -61,9 +57,9 @@ func (r *MemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "failed setting up with a controller manager")
+		return errors.Wrap(err, "Failed to setup with a controller manager")
 	}
 
-	r.recorder = mgr.GetEventRecorderFor("imc/member")
+	r.recorder = mgr.GetEventRecorderFor("InternalMemberCluster_member")
 	return nil
 }
