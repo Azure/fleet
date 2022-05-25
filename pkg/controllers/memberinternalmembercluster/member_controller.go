@@ -8,7 +8,6 @@ package memberinternalmembercluster
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/tools/record"
@@ -53,13 +52,8 @@ func (r *MemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	_, err := ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.InternalMemberCluster{}).
-		Build(r)
-	if err != nil {
-		return errors.Wrap(err, "Failed to setup with a controller manager")
-	}
-
 	r.recorder = mgr.GetEventRecorderFor("InternalMemberCluster_member")
-	return nil
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&fleetv1alpha1.InternalMemberCluster{}).
+		Complete(r)
 }

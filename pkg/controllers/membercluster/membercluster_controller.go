@@ -80,13 +80,8 @@ func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, mcName string)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	_, err := ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.MemberCluster{}).
-		Build(r)
-	if err != nil {
-		return errors.Wrap(err, "Failed to setup with a controller manager")
-	}
-
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
-	return nil
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&fleetv1alpha1.MemberCluster{}).
+		Complete(r)
 }
