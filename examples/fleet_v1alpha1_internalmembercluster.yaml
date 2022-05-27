@@ -3,4 +3,5 @@ kind: InternalMemberCluster
 metadata:
   name: internalmembercluster-sample
 spec:
-  # TODO(user): Add fields here
+  state: Join
+  leaseDurationSeconds: 60

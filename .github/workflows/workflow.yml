@@ -27,7 +27,7 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
-  codecov:
+  unit-tests:
     runs-on: ubuntu-latest
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
@@ -40,13 +40,33 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Run tests & Generate coverage
-        run: make test
+      - name: Run unit tests & Generate coverage
+        run: make unit-tests
 
-      - name: Upload report
+      - name: Upload codecov report
         uses: codecov/codecov-action@v2
         with:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
           files: ./coverage.xml
+
+  e2e-tests:  
+    runs-on: ubuntu-latest
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+    - name: Install helm
+      uses: azure/setup-helm@v2
+      with:
+        version: 'v3.8.0'
+
+    - name: Run e2e tests
+      run: OUTPUT_TYPE=type=docker make docker-build-hub-agent docker-build-member-agent e2e-tests

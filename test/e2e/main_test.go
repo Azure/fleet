@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package e2e
 
 import (
@@ -9,10 +12,10 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/env"
@@ -22,66 +25,57 @@ import (
 )
 
 var (
-	kindHubName     = "hub-e2e-test"
-	kindMemberName  = "Member-e2e-test"
-	registry        = os.Getenv("")
-	hubImageName    = os.Getenv("")
-	memberImageName = os.Getenv("")
-	chartsDirectory = "charts/"
-	//exampleDirectory = "examples/"
-	hubEnv          env.Environment
-	memberEnv       env.Environment
-	deployNamespace = "fleet-system"
+	kindHubName        = "hub-e2e-test"
+	kindMemberName     = "member-e2e-test"
+	registry           = os.Getenv("REGISTRY")
+	hubImageName       = os.Getenv("HUB_AGENT_IMAGE_NAME")
+	memberImageName    = os.Getenv("MEMBER_AGENT_IMAGE_NAME")
+	hubImageVersion    = os.Getenv("HUB_AGENT_IMAGE_VERSION")
+	memberImageVersion = os.Getenv("MEMBER_AGENT_IMAGE_VERSION")
+	hubChartsDirectory = "charts/hub-agent"
+	testEnv            env.Environment
+	deployNamespace    = "fleet-system"
 )
 
 func TestMain(m *testing.M) {
-	hubEnv = env.NewWithConfig(envconf.New())
-	memberEnv = env.NewWithConfig(envconf.New())
+	testEnv = env.NewWithConfig(envconf.New())
 	// Create kind clusters
-	namespace := "e2e-tests"
-	hubEnv.Setup(
-		envfuncs.CreateKindClusterWithConfig(kindHubName, "kindest/node:v1.22.2", "kind-config.yaml"),
-		envfuncs.LoadDockerImageToCluster(kindHubName, fmt.Sprintf("%s/%s", registry, hubImageName)),
+	testEnv.Setup(
+		envfuncs.CreateKindClusterWithConfig(kindHubName, "kindest/node:v1.23.5", "kind-config.yaml"),
+		envfuncs.LoadDockerImageToCluster(kindHubName, fmt.Sprintf("%s/%s:%s", registry, hubImageName, hubImageVersion)),
 		deployHubChart(deployNamespace),
+		envfuncs.CreateKindClusterWithConfig(kindMemberName, "kindest/node:v1.23.5", "kind-config.yaml"),
+		envfuncs.LoadDockerImageToCluster(kindMemberName, fmt.Sprintf("%s/%s:%s", registry, memberImageName, memberImageVersion)),
 	).Finish( // Cleanup KinD Cluster
-		envfuncs.DeleteNamespace(namespace),
 		envfuncs.DestroyKindCluster(kindHubName),
-	)
-	memberEnv.Setup(
-		envfuncs.CreateKindClusterWithConfig(kindMemberName, "kindest/node:v1.22.2", "kind-config.yaml"),
-		envfuncs.LoadDockerImageToCluster(kindMemberName, fmt.Sprintf("%s/%s", registry, memberImageName)),
-		deployMemberChart(deployNamespace),
-	).Finish( // Cleanup KinD Cluster
-		envfuncs.DeleteNamespace(namespace),
 		envfuncs.DestroyKindCluster(kindMemberName),
 	)
-	codeExit := hubEnv.Run(m) + memberEnv.Run(m)
-	os.Exit(codeExit)
+
+	os.Exit(testEnv.Run(m))
 }
 
 func deployHubChart(namespace string) env.Func {
-
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
 		wd, err := os.Getwd()
 		if err != nil {
 			return ctx, err
 		}
-		chartsAbsolutePath, err := filepath.Abs(filepath.Join(wd, "/../../", chartsDirectory))
+
+		chartsAbsolutePath, err := filepath.Abs(filepath.Join(wd, "/../../", hubChartsDirectory))
 		if err != nil {
 			return ctx, err
 		}
 
 		manager := helm.New(cfg.KubeconfigFile())
 
-		// args := fmt.Sprintf("--set scheduler.image=%s --set controller.image=%s",
-		// 	fmt.Sprintf("%s/%s", registry, KubeSchedImageName),
-		// 	fmt.Sprintf("%s/%s", registry, controllerImageName))
+		args := fmt.Sprintf("--set image.repository=%s --set image.tag=%s",
+			fmt.Sprintf("%s/%s", registry, hubImageName), hubImageVersion)
 
 		if err := manager.RunInstall(helm.WithName("hub-agent"),
-			helm.WithChart(fmt.Sprintf("%s/%s", chartsAbsolutePath, "hub-agent")),
-			//helm.WithArgs(args),
-			helm.WithWait(), helm.WithTimeout("1m")); err != nil {
+			helm.WithChart(chartsAbsolutePath),
+			helm.WithArgs(args), helm.WithWait()); err != nil {
 			klog.ErrorS(err, "failed to invoke helm install operation due to an error")
+			return ctx, err
 		}
 
 		deployment := &appsv1.Deployment{
@@ -92,56 +86,9 @@ func deployHubChart(namespace string) env.Func {
 			Spec: appsv1.DeploymentSpec{},
 		}
 
-		if err := wait.For(conditions.New(cfg.Client().Resources()).ResourceScaled(deployment, func(object k8s.Object) int32 {
-			return object.(*appsv1.Deployment).Status.ReadyReplicas
-		}, 1), wait.WithTimeout(time.Minute*1)); err != nil {
-
+		if err := wait.For(conditions.New(cfg.Client().Resources()).DeploymentConditionMatch(deployment, appsv1.DeploymentAvailable, corev1.ConditionTrue),
+			wait.WithTimeout(time.Minute*3)); err != nil {
 			klog.ErrorS(err, " Failed to deploy hub agent")
-			return ctx, err
-		}
-
-		return ctx, nil
-	}
-}
-
-func deployMemberChart(namespace string) env.Func {
-
-	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		wd, err := os.Getwd()
-		if err != nil {
-			return ctx, err
-		}
-		chartsAbsolutePath, err := filepath.Abs(filepath.Join(wd, "/../../", chartsDirectory))
-		if err != nil {
-			return ctx, err
-		}
-
-		manager := helm.New(cfg.KubeconfigFile())
-
-		// args := fmt.Sprintf("--set scheduler.image=%s --set controller.image=%s",
-		// 	fmt.Sprintf("%s/%s", registry, KubeSchedImageName),
-		// 	fmt.Sprintf("%s/%s", registry, controllerImageName))
-
-		if err := manager.RunInstall(helm.WithName("member-agent"),
-			helm.WithChart(fmt.Sprintf("%s/%s", chartsAbsolutePath, "member-agent")),
-			//helm.WithArgs(args),
-			helm.WithWait(), helm.WithTimeout("1m")); err != nil {
-			klog.ErrorS(err, "failed to invoke helm install operation due to an error")
-		}
-
-		deployment := &appsv1.Deployment{
-			ObjectMeta: v1.ObjectMeta{
-				Name:      "",
-				Namespace: namespace,
-			},
-			Spec: appsv1.DeploymentSpec{},
-		}
-
-		if err := wait.For(conditions.New(cfg.Client().Resources()).ResourceScaled(deployment, func(object k8s.Object) int32 {
-			return object.(*appsv1.Deployment).Status.ReadyReplicas
-		}, 1), wait.WithTimeout(time.Minute*1)); err != nil {
-
-			klog.ErrorS(err, " Failed to deploy member agent")
 			return ctx, err
 		}
 

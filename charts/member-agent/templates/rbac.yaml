@@ -1,10 +1,10 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: member-agent
+  name: member-agent-role
 rules:
-  - apiGroups: [ "fleet.azure.com" ]
-    resources: [ "memberships" ]
+  - apiGroups: ["fleet.azure.com"]
+    resources: ["memberships", "internalmemberclusters"]
     verbs: [ "get", "list", "watch", "update" ]
 ---
 kind: ClusterRoleBinding
@@ -14,8 +14,8 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: member-agent
+  name: member-agent-role
 subjects:
   - kind: ServiceAccount
-    name: {{ include "member-agent.serviceAccountName" . }}
+    name: {{ include "member-agent.fullname" . }}
     namespace: {{.Values.namespace}}

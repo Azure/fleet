@@ -1,7 +1,7 @@
-REGISTRY ?= ghcr.io/azure
+REGISTRY ?= ghcr.io/azure/fleet
 HUB_AGENT_IMAGE_NAME := hub-agent
 HUB_AGENT_IMAGE_VERSION ?= v0.1.0
-MEMBER_AGENT_MIMAGE_NAME := member-agent
+MEMBER_AGENT_IMAGE_NAME := member-agent
 MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 
 # Directories
@@ -87,12 +87,17 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 ## --------------------------------------
-## test
+## tests
 ## --------------------------------------
 
-.PHONY: test
-test: manifests generate fmt vet $(ENVTEST) ## Run tests.
+.PHONY: unit-tests
+unit-test: manifests generate fmt vet $(ENVTEST) ## Run tests.
 	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -race -coverprofile=coverage.xml -covermode=atomic -v
+
+.PHONY: e2e-tests
+e2e-tests:
+	REGISTRY=${REGISTRY} MEMBER_AGENT_IMAGE_NAME=${MEMBER_AGENT_IMAGE_NAME} HUB_AGENT_IMAGE_NAME=${HUB_AGENT_IMAGE_NAME} HUB_AGENT_IMAGE_VERSION=${HUB_AGENT_IMAGE_VERSION} MEMBER_AGENT_IMAGE_VERSION=${MEMBER_AGENT_IMAGE_VERSION} go test -tags=e2e -v ./test/e2e
+
 
 reviewable: fmt vet lint staticcheck
 	go mod tidy
@@ -161,11 +166,11 @@ docker-build-hub-agent: docker-buildx-builder
 .PHONY: docker-build-member-agent
 docker-build-member-agent: docker-buildx-builder
 	docker buildx build \
-		--file docker/$(MEMBER_AGENT_MIMAGE_NAME).Dockerfile \
+		--file docker/$(MEMBER_AGENT_IMAGE_NAME).Dockerfile \
 		--output=$(OUTPUT_TYPE) \
 		--platform="linux/amd64" \
 		--pull \
-		--tag $(REGISTRY)/$(MEMBER_AGENT_MIMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) .
+		--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) .
 
 ## -----------------------------------
 ## Cleanup 
