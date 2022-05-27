@@ -20,7 +20,7 @@ env:
  REGISTRY: ghcr.io/azure
  HUB_AGENT_IMAGE_NAME : hub-agent
  HUB_AGENT_IMAGE_VERSION: v0.1.0
- MEMBER_AGENT_MIMAGE_NAME: member-agent
+ MEMBER_AGENT_IMAGE_NAME: member-agent
  MEMBER_AGENT_IMAGE_VERSION: v0.1.0
 
 jobs:
@@ -55,9 +55,9 @@ jobs:
         env:
           IMAGE_NAME: ${{ env.HUB_AGENT_IMAGE_NAME}}
           IMAGE_VERSION: ${{ env.HUB_AGENT_IMAGE_VERSION }}
-      - name: Build ${{ env.MEMBER_AGENT_MIMAGE_NAME}}
+      - name: Build ${{ env.MEMBER_AGENT_IMAGE_NAME}}
         run: |
           make docker-build-member-agent
         env:
-          IMAGE_NAME: ${{ env.MEMBER_AGENT_MIMAGE_NAME}}
+          IMAGE_NAME: ${{ env.MEMBER_AGENT_IMAGE_NAME}}
           IMAGE_VERSION: ${{ env.MEMBER_AGENT_MIMAGE_VERSION }}

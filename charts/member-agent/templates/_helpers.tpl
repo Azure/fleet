@@ -49,10 +49,3 @@ Selector labels
 app.kubernetes.io/name: {{ include "member-agent.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
-
-{{/*
-Create the name of the service account to use
-*/}}
-{{- define "member-agent.serviceAccountName" -}}
-{{- default "member-agent" }}
-{{- end }}
