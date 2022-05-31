@@ -17,5 +17,5 @@ roleRef:
   name: member-agent
 subjects:
   - kind: ServiceAccount
-    name: {{ include "member-agent.serviceAccountName" . }}
+    name: {{ include "member-agent.fullname" . }}
     namespace: {{.Values.namespace}}

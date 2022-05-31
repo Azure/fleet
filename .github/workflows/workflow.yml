@@ -12,8 +12,27 @@ on:
       - release-*
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
-jobs:
+env:
+  REGISTRY: ghcr.io/azure
+  KIND_IMAGE: 'kindest/node:v1.23.3'
+  KIND_CLUSTER_NAME: 'e2e-testing'
+  HUB_AGENT_IMAGE_NAME : hub-agent
+  MEMBER_AGENT_IMAGE_NAME: member-agent
+  HUB_AGENT_IMAGE_VERSION: v0.1.0
+  MEMBER_AGENT_IMAGE_VERSION: v0.1.0
 
+
+jobs:
+  export-registry:
+    runs-on: ubuntu-20.04
+    outputs:
+      registry: ${{ steps.export.outputs.registry }}
+    steps:
+      - id: export
+        run: |
+          # registry must be in lowercase
+          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
+  
   detect-noop:
     runs-on: ubuntu-latest
     outputs:
@@ -27,7 +46,7 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
-  codecov:
+  unit-tests:
     runs-on: ubuntu-latest
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
@@ -40,13 +59,71 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Run tests & Generate coverage
+      - name: Run unit tests & Generate coverage
         run: make test
 
-      - name: Upload report
+      - name: Upload Codecov report
         uses: codecov/codecov-action@v2
         with:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
           files: ./coverage.xml
+  
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [
+      detect-noop,
+      export-registry
+    ]
+    if: needs.detect-noop.outputs.noop != 'true'
+    env:
+      REGISTRY: ${{ needs.export-registry.outputs.registry }}
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Install helm
+        uses: azure/setup-helm@v1
+        with:
+          version: 'v3.8.0'
+
+      - name: Setup e2e Kind Cluster
+        uses: helm/kind-action@v1.2.0
+        with:
+          node_image: ${{ env.KIND_IMAGE }}
+          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
+          config: ./test/e2e/kind-config.yaml
+      - name: Build hub-agent image
+        run: |
+          OUTPUT_TYPE=type=docker make docker-build-hub-agent
+          kind load docker-image --name=${KIND_CLUSTER_NAME} ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.HUB_AGENT_IMAGE_VERSION }}|| { echo >&2 "kind not installed or error loading image: $HUB_AGENT_IMAGE_NAME"; exit 1; }
+        env: 
+          REGISTRY: ${{ env.REGISTRY}}
+          HUB_AGENT_IMAGE_NAME: ${{ env.HUB_AGENT_IMAGE_NAME}}
+          HUB_AGENT_IMAGE_VERSION: ${{ env.HUB_AGENT_IMAGE_VERSION }}
+      - name: Install hub-agent helm chart
+        run: |
+          helm install $KUBECONFIG hub-agent ./charts/hub-agent/ 
+     
+      - name: Build member-agent image
+        run: |
+          OUTPUT_TYPE=type=docker make docker-build-member-agent
+          kind load docker-image --name=${KIND_CLUSTER_NAME} ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.MEMBER_AGENT_IMAGE_VERSION }} || { echo >&2 "kind not installed or error loading image: $MEMBER_AGENT_IMAGE_NAME"; exit 1; }
+        env: 
+          REGISTRY: ${{ env.REGISTRY}}
+          MEMBER_AGENT_IMAGE_NAME: ${{ env.MEMBER_AGENT_IMAGE_NAME}}
+          MEMBER_AGENT_IMAGE_VERSION: ${{ env.MEMBER_AGENT_IMAGE_VERSION }}
+
+      - name: Install hub-agent helm chart
+        run: |
+          helm install member-agent ./charts/member-agent/ --set namespace="member-fleet-system"
+      
+      - name: Run e2e tests
+        run:
+          make e2e-tests

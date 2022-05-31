@@ -3,4 +3,6 @@ kind: Membership
 metadata:
   name: membership-sample
 spec:
-  # TODO(user): Add fields here
+  memberClusterName: member-e2e-test
+  hubUrl: ""
+  state: Join
