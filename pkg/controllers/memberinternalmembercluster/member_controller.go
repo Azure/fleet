@@ -33,6 +33,7 @@ type Reconciler struct {
 	membershipStateLock       sync.RWMutex
 }
 
+// NewReconciler creates a new reconciler for the internal membership CR
 func NewReconciler(hubClient client.Client, memberClient client.Client, restMapper meta.RESTMapper,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
 	membershipChan <-chan fleetv1alpha1.ClusterState) *Reconciler {

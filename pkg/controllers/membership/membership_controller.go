@@ -40,6 +40,7 @@ type Reconciler struct {
 	clusterStateLock           sync.RWMutex
 }
 
+// NewReconciler creates a new Reconciler for membership
 func NewReconciler(hubClient client.Client, internalMemberClusterChan <-chan fleetv1alpha1.ClusterState,
 	membershipChan chan<- fleetv1alpha1.ClusterState) *Reconciler {
 	return &Reconciler{
@@ -68,12 +69,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.membershipChan <- fleetv1alpha1.ClusterStateJoin
 		internalMemberClusterState := r.getInternalMemberClusterState()
 		if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
-			markMembershipJoinSucceed(r.recorder, &clusterMembership)
+			r.markMembershipJoinSucceed(&clusterMembership)
 			err := r.Client.Update(ctx, &clusterMembership)
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 		}
 		// the state can be leave or unknown
-		markMembershipJoinUnknown(r.recorder, &clusterMembership, nil)
+		r.markMembershipJoinUnknown(&clusterMembership, nil)
 		err := r.Client.Update(ctx, &clusterMembership)
 		return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
 	}
@@ -97,19 +98,10 @@ func (r *Reconciler) watchInternalMemberClusterChan() {
 	}
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("membership")
-	go r.watchInternalMemberClusterChan()
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.Membership{}).
-		Complete(r)
-}
-
-func markMembershipJoinSucceed(recorder record.EventRecorder, membership apis.ConditionedObj) {
+func (r *Reconciler) markMembershipJoinSucceed(membership apis.ConditionedObj) {
 	klog.InfoS("mark membership joined",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
-	recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoined, "membership joined")
+	r.recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoined, "membership joined")
 	joinedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMembershipJoin,
 		Status:             metav1.ConditionTrue,
@@ -120,10 +112,10 @@ func markMembershipJoinSucceed(recorder record.EventRecorder, membership apis.Co
 }
 
 // TODO: separate out the error case from the real "joining" condition
-func markMembershipJoinUnknown(recorder record.EventRecorder, membership apis.ConditionedObj, err error) {
+func (r *Reconciler) markMembershipJoinUnknown(membership apis.ConditionedObj, err error) {
 	klog.V(5).InfoS("mark membership join unknown",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
-	recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoinUnknown, "membership join unknown")
+	r.recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoinUnknown, "membership join unknown")
 
 	var errMsg string
 	if err != nil {
@@ -137,4 +129,13 @@ func markMembershipJoinUnknown(recorder record.EventRecorder, membership apis.Co
 		Message: errMsg,
 	}
 	membership.SetConditions(joinUnknownCondition, common.ReconcileErrorCondition(err))
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("membership")
+	go r.watchInternalMemberClusterChan()
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&fleetv1alpha1.Membership{}).
+		Complete(r)
 }
