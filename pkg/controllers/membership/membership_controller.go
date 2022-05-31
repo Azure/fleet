@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,19 +22,7 @@ import (
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/common"
-
-	"github.com/pkg/errors"
-	errors2 "k8s.io/apimachinery/pkg/api/errors"
 )
-
-// Reconciler reconciles a Membership object
-type Reconciler struct {
-	client.Client
-	Scheme                    *runtime.Scheme
-	recorder                  record.EventRecorder
-	InternalMemberClusterChan <-chan fleetv1alpha1.ClusterState
-	MembershipChan            chan<- fleetv1alpha1.ClusterState
-}
 
 // Reconcile event reasons.
 const (
@@ -41,23 +30,78 @@ const (
 	reasonMembershipJoinUnknown = "MembershipJoinUnknown"
 )
 
-var internalMemberClusterStateThreadSafe struct {
-	mu    sync.Mutex
-	state fleetv1alpha1.ClusterState
+// Reconciler reconciles a Membership object
+type Reconciler struct {
+	client.Client
+	recorder                   record.EventRecorder
+	internalMemberClusterChan  <-chan fleetv1alpha1.ClusterState
+	membershipChan             chan<- fleetv1alpha1.ClusterState
+	internalMemberClusterState fleetv1alpha1.ClusterState
+	clusterStateLock           sync.RWMutex
 }
 
-// checkStateJoining checks if the state of the membership controller is Joining.
-// This indicates that the join flow has finished on the InternalMemberCluster side.
-func checkStateJoining() bool {
-	internalMemberClusterStateThreadSafe.mu.Lock()
-	defer internalMemberClusterStateThreadSafe.mu.Unlock()
-	return internalMemberClusterStateThreadSafe.state == fleetv1alpha1.ClusterStateJoin
+// NewReconciler creates a new Reconciler for membership
+func NewReconciler(hubClient client.Client, internalMemberClusterChan <-chan fleetv1alpha1.ClusterState,
+	membershipChan chan<- fleetv1alpha1.ClusterState) *Reconciler {
+	return &Reconciler{
+		Client:                    hubClient,
+		internalMemberClusterChan: internalMemberClusterChan,
+		membershipChan:            membershipChan,
+	}
 }
 
-func markMembershipJoinSucceed(recorder record.EventRecorder, membership apis.ConditionedObj) {
+//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+
+// Reconcile reconciles membership Custom Resource on member cluster.
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var clusterMembership fleetv1alpha1.Membership
+
+	if err := r.Client.Get(ctx, req.NamespacedName, &clusterMembership); err != nil {
+		if !apierr.IsNotFound(err) {
+			return ctrl.Result{}, errors.Wrap(err, "error getting membership CR")
+		}
+	}
+
+	if clusterMembership.Spec.State == fleetv1alpha1.ClusterStateJoin {
+		r.membershipChan <- fleetv1alpha1.ClusterStateJoin
+		internalMemberClusterState := r.getInternalMemberClusterState()
+		if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
+			r.markMembershipJoinSucceed(&clusterMembership)
+			err := r.Client.Update(ctx, &clusterMembership)
+			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
+		}
+		// the state can be leave or unknown
+		r.markMembershipJoinUnknown(&clusterMembership, nil)
+		err := r.Client.Update(ctx, &clusterMembership)
+		return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
+	}
+	// This is when the state is leave
+	r.membershipChan <- fleetv1alpha1.ClusterStateLeave
+	return ctrl.Result{}, nil
+}
+
+func (r *Reconciler) getInternalMemberClusterState() fleetv1alpha1.ClusterState {
+	r.clusterStateLock.RLock()
+	defer r.clusterStateLock.RUnlock()
+	return r.internalMemberClusterState
+}
+
+func (r *Reconciler) watchInternalMemberClusterChan() {
+	for internalMemberClusterState := range r.internalMemberClusterChan {
+		klog.InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
+		r.clusterStateLock.Lock()
+		r.internalMemberClusterState = internalMemberClusterState
+		r.clusterStateLock.Unlock()
+	}
+}
+
+func (r *Reconciler) markMembershipJoinSucceed(membership apis.ConditionedObj) {
 	klog.InfoS("mark membership joined",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
-	recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoined, "mark membership joined")
+	r.recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoined, "membership joined")
 	joinedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMembershipJoin,
 		Status:             metav1.ConditionTrue,
@@ -67,10 +111,11 @@ func markMembershipJoinSucceed(recorder record.EventRecorder, membership apis.Co
 	membership.SetConditions(joinedCondition, common.ReconcileSuccessCondition())
 }
 
-func markMembershipJoinUnknown(recorder record.EventRecorder, membership apis.ConditionedObj, err error) {
-	klog.InfoS("mark membership join unknown",
+// TODO: separate out the error case from the real "joining" condition
+func (r *Reconciler) markMembershipJoinUnknown(membership apis.ConditionedObj, err error) {
+	klog.V(5).InfoS("mark membership join unknown",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
-	recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoinUnknown, "mark membership join unknown")
+	r.recorder.Event(membership, corev1.EventTypeNormal, reasonMembershipJoinUnknown, "membership join unknown")
 
 	var errMsg string
 	if err != nil {
@@ -86,63 +131,10 @@ func markMembershipJoinUnknown(recorder record.EventRecorder, membership apis.Co
 	membership.SetConditions(joinUnknownCondition, common.ReconcileErrorCondition(err))
 }
 
-func watchInternalMemberClusterChan(imcState <-chan fleetv1alpha1.ClusterState) {
-	for range imcState {
-		internalMemberClusterStateSignal, more := <-imcState
-		if !more {
-			return
-		}
-		klog.InfoS("internal member cluster state",
-			"internalMemberCluster", internalMemberClusterStateSignal)
-
-		internalMemberClusterStateThreadSafe.mu.Lock()
-		internalMemberClusterStateThreadSafe.state = internalMemberClusterStateSignal
-		internalMemberClusterStateThreadSafe.mu.Unlock()
-	}
-}
-
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberships/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-
-// Reconcile reconciles membership Custom Resource on member cluster.
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var clusterMembership fleetv1alpha1.Membership
-
-	if err := r.Client.Get(ctx, req.NamespacedName, &clusterMembership); err != nil {
-		if !errors2.IsNotFound(err) {
-			return ctrl.Result{}, errors.Wrap(err, "error getting membership")
-		}
-	}
-
-	if clusterMembership.Spec.MemberClusterName == clusterMembership.Name {
-		if clusterMembership.Spec.State == fleetv1alpha1.ClusterStateJoin {
-			markMembershipJoinUnknown(r.recorder, &clusterMembership, nil)
-			r.MembershipChan <- fleetv1alpha1.ClusterStateJoin
-
-			if err := r.Client.Update(ctx, &clusterMembership); err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
-			}
-
-			if checkStateJoining() {
-				markMembershipJoinSucceed(r.recorder, &clusterMembership)
-				if err := r.Client.Update(ctx, &clusterMembership); err != nil {
-					return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
-				}
-			}
-
-			return ctrl.Result{RequeueAfter: time.Minute}, nil
-		}
-	}
-
-	return ctrl.Result{}, nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("membership")
-	go watchInternalMemberClusterChan(r.InternalMemberClusterChan)
+	go r.watchInternalMemberClusterChan()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.Membership{}).
 		Complete(r)
