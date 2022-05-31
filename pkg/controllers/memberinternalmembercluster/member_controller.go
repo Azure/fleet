@@ -9,7 +9,6 @@ import (
 	"context"
 	"sync"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -18,45 +17,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 // TODO (mng): move `util` pkg to `controller/util`
 
-// MemberReconciler reconciles a InternalMemberCluster object in the member cluster.
-type MemberReconciler struct {
+// Reconciler reconciles a InternalMemberCluster object in the member cluster.
+type Reconciler struct {
 	hubClient                 client.Client
 	memberClient              client.Client
 	restMapper                meta.RESTMapper
 	recorder                  record.EventRecorder
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState
 	membershipChan            <-chan fleetv1alpha1.ClusterState
+	membershipState           fleetv1alpha1.ClusterState
+	membershipStateLock       sync.RWMutex
 }
 
-var membershipStateThreadSafe struct {
-	mu    sync.Mutex
-	state fleetv1alpha1.ClusterState
-}
-
-func watchMembershipChan(membershipChan <-chan fleetv1alpha1.ClusterState) {
-	for range membershipChan {
-		membershipStateSignal, more := <-membershipChan
-		if !more {
-			return
-		}
-		klog.InfoS("membership state",
-			"membership", membershipStateSignal)
-
-		membershipStateThreadSafe.mu.Lock()
-		membershipStateThreadSafe.state = membershipStateSignal
-		membershipStateThreadSafe.mu.Unlock()
-	}
-}
-
-func NewMemberReconciler(hubClient client.Client, memberClient client.Client, restMapper meta.RESTMapper,
+func NewReconciler(hubClient client.Client, memberClient client.Client, restMapper meta.RESTMapper,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
-	membershipChan <-chan fleetv1alpha1.ClusterState) *MemberReconciler {
-	return &MemberReconciler{
+	membershipChan <-chan fleetv1alpha1.ClusterState) *Reconciler {
+	return &Reconciler{
 		hubClient:                 hubClient,
 		memberClient:              memberClient,
 		restMapper:                restMapper,
@@ -69,20 +49,34 @@ func NewMemberReconciler(hubClient client.Client, memberClient client.Client, re
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/finalizers,verbs=update
 
-func (r *MemberReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO (mng): This is placeholder for implementation of GetConfigWithSecret
-	var secret v1.Secret
-	_, _ = utils.GetConfigWithSecret(secret)
+	// TODO (mng): This is placeholder for implementation of internalMemberCluster
+	r.getMembershipClusterState()
 
 	return ctrl.Result{}, nil
 }
 
+func (r *Reconciler) getMembershipClusterState() fleetv1alpha1.ClusterState {
+	r.membershipStateLock.RLock()
+	defer r.membershipStateLock.RUnlock()
+	return r.membershipState
+}
+
+func (r *Reconciler) watchMembershipChan() {
+	for membershipState := range r.membershipChan {
+		klog.InfoS("membership state has changed", "membershipState", membershipState)
+		r.membershipStateLock.Lock()
+		r.membershipState = membershipState
+		r.membershipStateLock.Unlock()
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
-func (r *MemberReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("InternalMemberCluster_member")
-	go watchMembershipChan(r.membershipChan)
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("MemberShipController")
+	go r.watchMembershipChan()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)
