@@ -17,7 +17,9 @@ import (
 )
 
 const (
-	NamespaceNameFormat = "fleet-%s"
+	NamespaceNameFormat   = "fleet-%s"
+	RoleNameFormat        = "fleet-role-%s"
+	RoleBindingNameFormat = "fleet-rolebinding-%s"
 )
 
 // GetConfigWithSecret gets the cluster config from kubernetes secret
