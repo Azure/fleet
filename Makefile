@@ -5,6 +5,7 @@ MEMBER_AGENT_IMAGE_NAME ?= member-agent
 MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 REFRESH_TOKEN_IMAGE_NAME := refresh-token
 REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
+KUBECONFIG ?= "${HOME}/.kube/config"
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -101,7 +102,7 @@ local-unit-test: $(ENVTEST) ## Run tests.
 
 .PHONY: e2e-tests
 e2e-tests: 
-	go test -tags=e2e -v ./test/e2e
+	KUBECONFIG=${KUBECONFIG} go test -tags=e2e -v ./test/e2e
 
 
 reviewable: fmt vet lint staticcheck

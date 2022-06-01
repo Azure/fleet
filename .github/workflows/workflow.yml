@@ -15,7 +15,8 @@ on:
 env:
   REGISTRY: ghcr.io
   KIND_IMAGE: 'kindest/node:v1.23.3'
-  KIND_CLUSTER_NAME: 'e2e-testing'
+  HUB_KIND_CLUSTER_NAME: 'hub-testing'
+  MEMBER_KIND_CLUSTER_NAME: 'member-testing'
   HUB_AGENT_IMAGE_NAME : hub-agent
   MEMBER_AGENT_IMAGE_NAME: member-agent
   HUB_AGENT_IMAGE_VERSION: v0.1.0
@@ -92,38 +93,56 @@ jobs:
         uses: azure/setup-helm@v1
         with:
           version: 'v3.8.0'
+      - name: Setup kubectl 
+        uses: azure/setup-kubectl@v2.0
 
-      - name: Setup e2e Kind Cluster
+      - name: Setup hub Kind Cluster
         uses: helm/kind-action@v1.2.0
         with:
           node_image: ${{ env.KIND_IMAGE }}
-          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
+          cluster_name: ${{ env.HUB_KIND_CLUSTER_NAME }}
           config: ./test/e2e/kind-config.yaml
       - name: Build hub-agent image
         run: |
+          kind export kubeconfig --name ${{ env.HUB_KIND_CLUSTER_NAME }}
           OUTPUT_TYPE=type=docker make docker-build-hub-agent
-          kind load docker-image --name=${KIND_CLUSTER_NAME} ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.HUB_AGENT_IMAGE_VERSION }}|| { echo >&2 "kind not installed or error loading image: $HUB_AGENT_IMAGE_NAME"; exit 1; }
+          kind load docker-image --name=${HUB_KIND_CLUSTER_NAME} ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.HUB_AGENT_IMAGE_VERSION }}|| { echo >&2 "kind not installed or error loading image: $HUB_AGENT_IMAGE_NAME"; exit 1; }
         env: 
           REGISTRY: ${{ env.REGISTRY}}
           HUB_AGENT_IMAGE_NAME: ${{ env.HUB_AGENT_IMAGE_NAME}}
           HUB_AGENT_IMAGE_VERSION: ${{ env.HUB_AGENT_IMAGE_VERSION }}
+          cluster_name: ${{ env.HUB_KIND_CLUSTER_NAME }}
       - name: Install hub-agent helm chart
         run: |
-          helm install $KUBECONFIG hub-agent ./charts/hub-agent/ 
-     
+          kind export kubeconfig --name ${{ env.HUB_KIND_CLUSTER_NAME }}
+          helm install hub-agent ./charts/hub-agent/
+        env: 
+          cluster_name: ${{ env.HUB_KIND_CLUSTER_NAME }}
+      - name: Setup member Kind Cluster
+        uses: helm/kind-action@v1.2.0
+        with:
+          node_image: ${{ env.KIND_IMAGE }}
+          cluster_name: ${{ env.MEMBER_KIND_CLUSTER_NAME }}
+          config: ./test/e2e/kind-config.yaml
       - name: Build member-agent image
         run: |
+          kind export kubeconfig --name ${{ env.MEMBER_KIND_CLUSTER_NAME }}
           OUTPUT_TYPE=type=docker make docker-build-member-agent
-          kind load docker-image --name=${KIND_CLUSTER_NAME} ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.MEMBER_AGENT_IMAGE_VERSION }} || { echo >&2 "kind not installed or error loading image: $MEMBER_AGENT_IMAGE_NAME"; exit 1; }
+          kind load docker-image --name=${MEMBER_KIND_CLUSTER_NAME} ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.MEMBER_AGENT_IMAGE_VERSION }} || { echo >&2 "kind not installed or error loading image: $MEMBER_AGENT_IMAGE_NAME"; exit 1; }
         env: 
           REGISTRY: ${{ env.REGISTRY}}
           MEMBER_AGENT_IMAGE_NAME: ${{ env.MEMBER_AGENT_IMAGE_NAME}}
           MEMBER_AGENT_IMAGE_VERSION: ${{ env.MEMBER_AGENT_IMAGE_VERSION }}
+          cluster_name: ${{ env.MEMBER_KIND_CLUSTER_NAME }}
 
-      - name: Install hub-agent helm chart
+      - name: Install member-agent helm chart
         run: |
-          helm install member-agent ./charts/member-agent/ --set namespace="member-fleet-system"
-      
+          kind export kubeconfig --name ${{ env.MEMBER_KIND_CLUSTER_NAME }}
+          helm install member-agent ./charts/member-agent/
+        env: 
+          cluster_name: ${{ env.MEMBER_KIND_CLUSTER_NAME }}
+
       - name: Run e2e tests
-        run:
+        run: |
+          export KUBECONFIG=$HOME/.kube/config
           make e2e-tests
