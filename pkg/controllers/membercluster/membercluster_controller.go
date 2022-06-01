@@ -27,13 +27,14 @@ import (
 )
 
 const (
-	namespaceCreated             = "NamespaceCreated"
-	roleCreated                  = "RoleCreated"
-	roleUpdated                  = "RoleUpdated"
-	roleBindingCreated           = "RoleBindingCreated"
-	roleBindingUpdated           = "RoleBindingUpdated"
-	internalMemberClusterCreated = "InternalMemberClusterCreated"
-	memberClusterJoined          = "MemberClusterJoined"
+	namespaceCreated                 = "NamespaceCreated"
+	roleCreated                      = "RoleCreated"
+	roleUpdated                      = "RoleUpdated"
+	roleBindingCreated               = "RoleBindingCreated"
+	roleBindingUpdated               = "RoleBindingUpdated"
+	internalMemberClusterCreated     = "InternalMemberClusterCreated"
+	internalMemberClusterSpecUpdated = "InternalMemberClusterSpecUpdated"
+	memberClusterJoined              = "MemberClusterJoined"
 )
 
 var (
@@ -57,14 +58,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.ErrorS(err, "failed to get the member cluster in hub agent", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	// TODO: The current condition is for the Join workflow, another condition for Leave needs to be added.
+
 	if mc.Spec.State == fleetv1alpha1.ClusterStateJoin {
 		namespaceName, err := r.checkAndCreateNamespace(ctx, &mc)
 		if err != nil {
 			klog.ErrorS(err, "failed to check and create namespace for member cluster in hub agent", "memberCluster", mc.Name, "namespace", namespaceName)
 			return ctrl.Result{}, err
 		}
-
 		roleName, err := r.checkAndCreateRole(ctx, &mc, namespaceName)
 		if err != nil {
 			klog.ErrorS(err, "failed to check and create role for member cluster in hub agent", "memberCluster", mc.Name, "role", roleName)
@@ -90,6 +90,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			}
 		}
 	}
+
+	if mc.Spec.State == fleetv1alpha1.ClusterStateLeave {
+		if err := r.updateInternalMemberClusterSpec(ctx, &mc); err != nil {
+			klog.ErrorS(err, "Internal Member cluster's spec cannot be updated", "memberCluster", mc.Name, "internalMemberCluster", mc.Name)
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -295,6 +303,24 @@ func createRoleBinding(roleName, roleBindingName, namespaceName string, identity
 		RoleRef:  roleRef,
 	}
 	return rb
+}
+
+// updateInternalMemberClusterSpec is used to update the internal member cluster's spec to Leave.
+func (r *Reconciler) updateInternalMemberClusterSpec(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) error {
+	var imc fleetv1alpha1.InternalMemberCluster
+	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.Name)
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
+		klog.InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
+		return err
+	}
+	patch := client.MergeFrom(imc.DeepCopyObject().(client.Object))
+	imc.Spec.State = fleetv1alpha1.ClusterStateLeave
+	if err := r.Client.Patch(ctx, &imc, patch, client.FieldOwner(imc.GetUID())); err != nil {
+		klog.InfoS("Internal Member cluster cannot be updated", "memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
+		return err
+	}
+	r.recorder.Event(memberCluster, corev1.EventTypeNormal, internalMemberClusterSpecUpdated, "internal member cluster spec was patched")
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
