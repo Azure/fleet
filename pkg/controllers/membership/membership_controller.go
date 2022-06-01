@@ -27,7 +27,7 @@ import (
 // Reconcile event reasons.
 const (
 	eventReasonMembershipJoined  = "MembershipJoined"
-	eventReasonMembershipUnknown = "MembershipJoinUnknown"
+	eventReasonMembershipUnknown = "MembershipUnknown"
 	eventReasonMembershipLeft    = "MembershipLeft"
 )
 
@@ -67,20 +67,28 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if clusterMembership.Spec.State == fleetv1alpha1.ClusterStateJoin {
-		r.membershipChan <- fleetv1alpha1.ClusterStateJoin
-		internalMemberClusterState := r.getInternalMemberClusterState()
-		if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
-			r.markMembershipJoinSucceed(&clusterMembership)
-			err := r.Client.Update(ctx, &clusterMembership)
-			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
-		}
-		// the state can be leave or unknown
-		r.markMembershipJoinUnknown(&clusterMembership, nil)
-		err := r.Client.Update(ctx, &clusterMembership)
-		return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
+		return r.join(ctx, clusterMembership)
 	}
 
 	// This is when the state is leave
+	return r.leave(ctx, clusterMembership)
+}
+
+func (r *Reconciler) join(ctx context.Context, clusterMembership fleetv1alpha1.Membership) (ctrl.Result, error) {
+	r.membershipChan <- fleetv1alpha1.ClusterStateJoin
+	internalMemberClusterState := r.getInternalMemberClusterState()
+	if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
+		r.markMembershipJoined(&clusterMembership)
+		err := r.Client.Update(ctx, &clusterMembership)
+		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
+	}
+	// the state can be leave or unknown
+	r.markMembershipUnknown(&clusterMembership)
+	err := r.Client.Update(ctx, &clusterMembership)
+	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
+}
+
+func (r *Reconciler) leave(ctx context.Context, clusterMembership fleetv1alpha1.Membership) (ctrl.Result, error) {
 	r.membershipChan <- fleetv1alpha1.ClusterStateLeave
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateLeave {
@@ -89,7 +97,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}
 	// internalMemberClusterState state can be joined or unknown
-	r.markMembershipJoinUnknown(&clusterMembership, nil)
+	r.markMembershipUnknown(&clusterMembership)
 	err := r.Client.Update(ctx, &clusterMembership)
 	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
 }
@@ -109,10 +117,10 @@ func (r *Reconciler) watchInternalMemberClusterChan() {
 	}
 }
 
-func (r *Reconciler) markMembershipJoinSucceed(membership apis.ConditionedObj) {
+func (r *Reconciler) markMembershipJoined(membership apis.ConditionedObj) {
 	klog.InfoS("mark membership joined",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
-	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipJoined, "membership left")
+	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipJoined, "membership joined")
 	joinedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMembershipJoin,
 		Status:             metav1.ConditionTrue,
@@ -122,24 +130,20 @@ func (r *Reconciler) markMembershipJoinSucceed(membership apis.ConditionedObj) {
 	membership.SetConditions(joinedCondition, common.ReconcileSuccessCondition())
 }
 
-// TODO: separate out the error case from the real "joining" condition
-func (r *Reconciler) markMembershipJoinUnknown(membership apis.ConditionedObj, err error) {
-	klog.V(5).InfoS("mark membership join unknown",
+// TODO (mng) we will have a systematic way to define logging level. See #33 for context
+func (r *Reconciler) markMembershipUnknown(membership apis.ConditionedObj) {
+	klog.V(5).InfoS("mark membership unknown",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
-	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipUnknown, "membership join unknown")
+	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipUnknown, "membership unknown")
 
-	var errMsg string
-	if err != nil {
-		errMsg = err.Error()
+	unknownCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMembershipJoin,
+		Status:             metav1.ConditionUnknown,
+		Reason:             eventReasonMembershipUnknown,
+		ObservedGeneration: membership.GetGeneration(),
 	}
 
-	joinUnknownCondition := metav1.Condition{
-		Type:    fleetv1alpha1.ConditionTypeMembershipJoin,
-		Status:  metav1.ConditionUnknown,
-		Reason:  eventReasonMembershipUnknown,
-		Message: errMsg,
-	}
-	membership.SetConditions(joinUnknownCondition, common.ReconcileErrorCondition(err))
+	membership.SetConditions(unknownCondition, common.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
