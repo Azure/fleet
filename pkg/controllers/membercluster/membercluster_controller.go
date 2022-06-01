@@ -20,10 +20,8 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -35,6 +33,7 @@ const (
 	roleBindingCreated           = "RoleBindingCreated"
 	roleBindingUpdated           = "RoleBindingUpdated"
 	internalMemberClusterCreated = "InternalMemberClusterCreated"
+	memberClusterJoined          = "MemberClusterJoined"
 )
 
 var (
@@ -78,10 +77,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, err
 		}
 
-		err = r.checkAndCreateInternalMemberCluster(ctx, &mc, namespaceName)
+		imc, err := r.checkAndCreateInternalMemberCluster(ctx, &mc, namespaceName)
 		if err != nil {
 			klog.ErrorS(err, "failed to check and create internal member cluster %s in hub agent", "memberCluster", mc.Name, "internalMemberCluster", mc.Name)
 			return ctrl.Result{}, err
+		}
+
+		if imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin) != nil && mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
+			err := r.updateMemberClusterStatus(ctx, imc.Name, imc.Status)
+			if err != nil {
+				klog.ErrorS(err, "cannot update member cluster status as Joined", "internalMemberCluster", imc.Name)
+			}
 		}
 	}
 	return ctrl.Result{}, nil
@@ -180,34 +186,67 @@ func (r *Reconciler) checkAndCreateRoleBinding(ctx context.Context, memberCluste
 
 // checkAndCreateInternalMemberCluster checks to see if the internal member cluster exists for given memberClusterName and namespaceName
 // if the internal member cluster doesn't exist it creates it.
-func (r *Reconciler) checkAndCreateInternalMemberCluster(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster, namespaceName string) error {
+func (r *Reconciler) checkAndCreateInternalMemberCluster(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster, namespaceName string) (*fleetv1alpha1.InternalMemberCluster, error) {
 	var imc fleetv1alpha1.InternalMemberCluster
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.InfoS("internal member cluster doesn't exist for member cluster", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
+			controllerBool := true
+			ownerRef := metav1.OwnerReference{APIVersion: memberCluster.APIVersion, Kind: memberCluster.Kind, Name: memberCluster.Name, UID: memberCluster.UID, Controller: &controllerBool}
 			imc := fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       InternalMemberClusterKind.Kind,
 					APIVersion: InternalMemberClusterKind.GroupVersion().Version,
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      memberCluster.Name,
-					Namespace: namespaceName,
+					Name:            memberCluster.Name,
+					Namespace:       namespaceName,
+					OwnerReferences: []metav1.OwnerReference{ownerRef},
 				},
 				Spec: fleetv1alpha1.InternalMemberClusterSpec{
 					State: fleetv1alpha1.ClusterStateJoin,
 				},
 			}
 			if err = r.Client.Create(ctx, &imc); err != nil {
-				return err
+				return nil, err
 			}
 			r.recorder.Event(memberCluster, corev1.EventTypeNormal, internalMemberClusterCreated, "Internal member cluster was created")
 			klog.InfoS("internal member cluster was created successfully", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
-			return nil
+			return &imc, err
 		}
+		return nil, err
+	}
+	return &imc, nil
+}
+
+// updateMemberClusterStatus is used to update the status of the member cluster with the internal member cluster's status.
+func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mcName string, status fleetv1alpha1.InternalMemberClusterStatus) error {
+	var mc fleetv1alpha1.MemberCluster
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
+		klog.ErrorS(err, "failed retrieve member cluster", "memberCluster", mcName)
 		return err
 	}
-	return nil
+	patch := client.MergeFrom(mc.DeepCopyObject().(client.Object))
+	klog.InfoS("update member cluster status with internal member cluster status", "memberCluster", mcName)
+	mc.Status.Capacity = status.Capacity
+	mc.Status.Allocatable = status.Allocatable
+	markMemberClusterJoined(r.recorder, &mc)
+	return r.Client.Status().Patch(ctx, &mc, patch, client.FieldOwner(mc.GetUID()))
+}
+
+// markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
+func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	klog.InfoS("mark the member Cluster as Joined",
+		"namespace", mc.GetNamespace(), "memberService", mc.GetName())
+	// Recording events show up on "describe"
+	recorder.Event(mc, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
+	joinedCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Status:             metav1.ConditionTrue,
+		Reason:             memberClusterJoined,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(joinedCondition)
 }
 
 // createRole creates role for member cluster.
@@ -261,16 +300,8 @@ func createRoleBinding(roleName, roleBindingName, namespaceName string, identity
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
-	c, err := controller.New("memberClusterController", mgr, controller.Options{Reconciler: r, RecoverPanic: true})
-
-	if err != nil {
-		klog.Errorf("cannot create member cluster controller %+v", err)
-		return err
-	}
-
-	if err = c.Watch(&source.Kind{Type: &fleetv1alpha1.MemberCluster{}}, &handler.EnqueueRequestForObject{}); err != nil {
-		klog.Errorf("cannot watch member cluster in member cluster controller %+v", err)
-		return err
-	}
-	return nil
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&fleetv1alpha1.MemberCluster{}).
+		Owns(&fleetv1alpha1.InternalMemberCluster{}).
+		Complete(r)
 }
