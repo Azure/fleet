@@ -12,21 +12,23 @@ import (
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
+	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
 var (
-	HubClusterName    = "hub-testing"
-	MemberClusterName = "member-testing"
-	HubCluster        = framework.NewCluster(HubClusterName)
-	MemberCluster     = framework.NewCluster(MemberClusterName)
-	genericScheme     = runtime.NewScheme()
+	hubClusterName    = "kind-hub-testing"
+	memberClusterName = "kind-member-testing"
+	HubCluster        = framework.NewCluster(hubClusterName, scheme)
+	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
+	scheme            = runtime.NewScheme()
 )
 
 func init() {
-	utilruntime.Must(scheme.AddToScheme(genericScheme))
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 }
 
 func TestE2E(t *testing.T) {
@@ -44,11 +46,5 @@ var _ = ginkgo.BeforeSuite(func() {
 	//member setup
 	framework.GetClusterDynamicClient(MemberCluster)
 	framework.GetClusterClient(MemberCluster)
-
-})
-
-var _ = ginkgo.SynchronizedAfterSuite(func() {
-
-}, func() {
 
 })
