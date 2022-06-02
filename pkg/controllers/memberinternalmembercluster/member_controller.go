@@ -9,14 +9,18 @@ import (
 	"context"
 	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/controllers/common"
 )
 
 // TODO (mng): move `util` pkg to `controller/util`
@@ -32,6 +36,10 @@ type Reconciler struct {
 	membershipState           fleetv1alpha1.ClusterState
 	membershipStateLock       sync.RWMutex
 }
+
+const (
+	eventReasonInternalMemberClusterLeft = "InternalMemberClusterLeft"
+)
 
 // NewReconciler creates a new reconciler for the internal membership CR
 func NewReconciler(hubClient client.Client, memberClient client.Client, restMapper meta.RESTMapper,
@@ -63,6 +71,19 @@ func (r *Reconciler) getMembershipClusterState() fleetv1alpha1.ClusterState {
 	r.membershipStateLock.RLock()
 	defer r.membershipStateLock.RUnlock()
 	return r.membershipState
+}
+
+func (r *Reconciler) markInternalMemberClusterLeft(internalMemberCluster apis.ConditionedObj) {
+	klog.InfoS("mark internal member cluster left",
+		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
+	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster left")
+	joinSucceedCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             eventReasonInternalMemberClusterLeft,
+		ObservedGeneration: internalMemberCluster.GetGeneration(),
+	}
+	internalMemberCluster.SetConditions(joinSucceedCondition, common.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) watchMembershipChan() {
