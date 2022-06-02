@@ -9,6 +9,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,8 @@ import (
 )
 
 var (
+	tokenFilePath        = os.Getenv("CONFIG_PATH")
+	tokenFileName        = "token.txt"
 	scheme               = runtime.NewScheme()
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -48,6 +51,13 @@ func init() {
 func main() {
 	flag.Parse()
 
+	hubURL := os.Getenv("HUB_SERVER_URL")
+
+	if hubURL == "" {
+		klog.Error("hub server api cannot be empty")
+		os.Exit(1)
+	}
+
 	hubOpts := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     *hubMetricsAddr,
@@ -60,8 +70,28 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	klog.Info("starting memebragent")
-	// TODO: to hook MSI token to get hub config
-	if err := Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), hubOpts); err != nil {
+	tokenDirPath := filepath.Join(tokenFilePath, tokenFileName)
+
+	token, err := os.ReadFile(tokenDirPath)
+	if err != nil {
+		klog.Error(errors.Wrapf(err, "cannot read token file from the path %s", tokenDirPath))
+		os.Exit(1)
+	}
+	if len(token) == 0 {
+		klog.Error(err, "token cannot be found")
+		os.Exit(1)
+	}
+
+	hubConfig := rest.Config{
+		BearerToken: string(token),
+		Host:        hubURL,
+		// TODO (mng): Remove TLSClientConfig/Insecure(true) once server CA can be passed in as flag.
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: true,
+		},
+	}
+
+	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts); err != nil {
 		klog.Error(err, "problem running controllers")
 		os.Exit(1)
 	}
