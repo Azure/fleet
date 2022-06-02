@@ -17,13 +17,13 @@ COPY pkg/interfaces pkg/interfaces
 ARG TARGETARCH
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o azureconfig main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o refreshtoken main.go
 
-# Use distroless as minimal base image to package the azureconfig binary
+# Use distroless as minimal base image to package the refreshtoken binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/azureconfig .
+COPY --from=builder /workspace/refreshtoken .
 USER 65532:65532
 
-ENTRYPOINT ["/azureconfig"]
+ENTRYPOINT ["/refreshtoken"]

@@ -17,13 +17,14 @@ import (
 	"k8s.io/klog/v2"
 
 	"go.goms.io/fleet/pkg/configprovider/azure"
+	"go.goms.io/fleet/pkg/configprovider/secret"
 )
 
 var (
-	configPath    = os.Getenv("CONFIG_PATH")
-	providerName  = flag.String("provider-name", "azure", "Name of the provider used to refresh auth token. available options: azure, secret")
-	AzureProvider = "azure"
-	//SecretProvider = "secret"
+	configPath     = os.Getenv("CONFIG_PATH")
+	providerName   = flag.String("provider-name", "azure", "Name of the provider used to refresh auth token. available options: azure, secret")
+	AzureProvider  = "azure"
+	SecretProvider = "secret"
 )
 
 func getTokenFilePath() (string, error) {
@@ -58,6 +59,8 @@ func refreshTokenRetry(ctx context.Context, filePath string) (*time.Time, error)
 				if err != nil {
 					err = errors.Wrap(err, "cannot get the token")
 				}
+			case &SecretProvider:
+				expiryDate, err = secret.NewFactory().RefreshToken(ctx, filePath)
 			}
 			return err
 		})
