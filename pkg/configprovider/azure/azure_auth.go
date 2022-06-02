@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package configprovider
+package azure
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"go.goms.io/fleet/pkg/configprovider"
 	"go.goms.io/fleet/pkg/interfaces"
 )
 
@@ -34,19 +35,15 @@ var (
 )
 
 type azureToken struct {
-	authToken interfaces.AuthToken
 }
 
 // NewFactory
 func NewFactory() interfaces.AuthenticationFactory {
-	return &azureToken{
-		authToken: interfaces.EmptyToken(),
-	}
+	return &azureToken{}
 }
 
 // /refreshtoken
 func CheckToken(rw http.ResponseWriter, req *http.Request) {
-	az := new(azureToken)
 	currentFile, err := os.ReadFile(filePath)
 	if err != nil {
 		_, writeErr := rw.Write([]byte("cannot read the token file" + err.Error() + "\n"))
@@ -55,11 +52,11 @@ func CheckToken(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 	if len(currentFile) == 0 {
-		az.getTokenLoop(rw, req)
+		getTokenLoop(rw, req)
 	}
 
-	azToken := interfaces.EmptyToken()
-	if err = json.Unmarshal(currentFile, &azToken); err != nil {
+	azToken := configprovider.EmptyToken()
+	if err = json.Unmarshal(currentFile, azToken); err != nil {
 		_, writeErr := rw.Write([]byte("cannot parse the token file" + err.Error() + "\n"))
 		if writeErr != nil {
 			panic(1)
@@ -67,11 +64,12 @@ func CheckToken(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if azToken.WillExpireIn(refreshWithin) {
-		az.getTokenLoop(rw, req)
+		getTokenLoop(rw, req)
 	}
 }
 
-func (az *azureToken) getTokenLoop(rw http.ResponseWriter, req *http.Request) {
+func getTokenLoop(rw http.ResponseWriter, req *http.Request) {
+	az := new(azureToken)
 	duration, err := time.ParseDuration("10s")
 	if err != nil {
 		_, writeErr := rw.Write([]byte("an error while parsing the duration time" + err.Error() + "\n"))
@@ -88,7 +86,7 @@ func (az *azureToken) getTokenLoop(rw http.ResponseWriter, req *http.Request) {
 			return true
 		},
 		func() error {
-			_, err = az.RefreshToken(req.Context(), filePath)
+			err = az.RefreshToken(req.Context(), filePath)
 			if err != nil {
 				_, writeErr := rw.Write([]byte("cannot get the token" + err.Error() + "\n"))
 				if writeErr != nil {
@@ -106,29 +104,29 @@ func (az *azureToken) getTokenLoop(rw http.ResponseWriter, req *http.Request) {
 }
 
 // RefreshToken get a new token to make request to the associated fleet' hub cluster, and writes it to the mounted file.
-func (az *azureToken) RefreshToken(ctx context.Context, tokenFile string) (*interfaces.AuthToken, error) {
+func (a *azureToken) RefreshToken(ctx context.Context, tokenFile string) error {
 	//at := new(interfaces.AuthToken)
 
 	ClientID := os.Getenv("AZURE_CLIENT_ID")
 
 	if ClientID == "" {
-		return nil, errors.New("client ID is cannot be empty")
+		return errors.New("client ID is cannot be empty")
 	}
 
 	currentFile, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, errors.New("cannot read the token file" + err.Error() + "\n")
+		return errors.New("cannot read the token file" + err.Error() + "\n")
 	}
 
 	if len(currentFile) == 0 {
-		return nil, errors.New("cannot read the token file")
+		return errors.New("cannot read the token file")
 	}
 
 	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(ClientID)}
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	refreshLock.Lock()
@@ -137,12 +135,12 @@ func (az *azureToken) RefreshToken(ctx context.Context, tokenFile string) (*inte
 		Scopes: []string{aksScope},
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	file, err := os.OpenFile(filePath, os.O_WRONLY, os.ModePerm)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
@@ -150,22 +148,22 @@ func (az *azureToken) RefreshToken(ctx context.Context, tokenFile string) (*inte
 		}
 	}()
 
-	expirationDate, err := az.authToken.GetTokenExpiration(token.Token)
+	expirationDate, err := configprovider.GetTokenExpiration(token.Token)
 	if err != nil {
 		klog.Errorf("failed to get token expiration %s", err)
-		return nil, errors.Wrap(err, "failed to parse acr access token expiration")
+		return errors.Wrap(err, "failed to parse acr access token expiration")
 	}
 
-	azToken := interfaces.NewToken(token.Token, expirationDate)
+	azToken := configprovider.NewToken(token.Token, expirationDate)
 	byteToken, err := json.Marshal(azToken)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = file.Write(byteToken)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return azToken, nil
+	return nil
 }
