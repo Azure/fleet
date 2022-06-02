@@ -18,8 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
-	"k8s.io/klog/v2"
-
 	"go.goms.io/fleet/pkg/configprovider"
 	"go.goms.io/fleet/pkg/interfaces"
 )
@@ -105,8 +103,6 @@ func getTokenLoop(rw http.ResponseWriter, req *http.Request) {
 
 // RefreshToken get a new token to make request to the associated fleet' hub cluster, and writes it to the mounted file.
 func (a *azureToken) RefreshToken(ctx context.Context, tokenFile string) error {
-	//at := new(interfaces.AuthToken)
-
 	ClientID := os.Getenv("AZURE_CLIENT_ID")
 
 	if ClientID == "" {
@@ -126,7 +122,7 @@ func (a *azureToken) RefreshToken(ctx context.Context, tokenFile string) error {
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create managed identity cred.")
 	}
 
 	refreshLock.Lock()
@@ -135,34 +131,35 @@ func (a *azureToken) RefreshToken(ctx context.Context, tokenFile string) error {
 		Scopes: []string{aksScope},
 	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to get a token")
 	}
 
 	file, err := os.OpenFile(filePath, os.O_WRONLY, os.ModePerm)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "cannot open the token file")
 	}
+
 	defer func() {
-		if err := file.Close(); err != nil {
-			klog.Error("cannot close the token file")
-		}
+		err = file.Close()
 	}()
+	if err != nil {
+		return errors.Wrap(err, "cannot close the token file")
+	}
 
 	expirationDate, err := configprovider.GetTokenExpiration(token.Token)
 	if err != nil {
-		klog.Errorf("failed to get token expiration %s", err)
 		return errors.Wrap(err, "failed to parse acr access token expiration")
 	}
 
 	azToken := configprovider.NewToken(token.Token, expirationDate)
 	byteToken, err := json.Marshal(azToken)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to parse acr access token")
 	}
 
 	_, err = file.Write(byteToken)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "cannot write the refresh token into the file")
 	}
 
 	return nil
