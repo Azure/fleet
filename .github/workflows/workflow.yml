@@ -13,7 +13,7 @@ on:
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 env:
-  REGISTRY: ghcr.io/azure
+  REGISTRY: ghcr.io
   KIND_IMAGE: 'kindest/node:v1.23.3'
   KIND_CLUSTER_NAME: 'e2e-testing'
   HUB_AGENT_IMAGE_NAME : hub-agent
