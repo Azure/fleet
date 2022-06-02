@@ -22,6 +22,8 @@ env:
  HUB_AGENT_IMAGE_VERSION: v0.1.0
  MEMBER_AGENT_IMAGE_NAME: member-agent
  MEMBER_AGENT_IMAGE_VERSION: v0.1.0
+ REFRESH_TOKEN_IMAGE_NAME: refresh-token
+ REFRESH_TOKEN_IMAGE_VERSION: v0.1.0
 
 jobs:
   export-registry:
@@ -63,3 +65,10 @@ jobs:
           REGISTRY: ${{ env.REGISTRY}}
           IMAGE_NAME: ${{ env.MEMBER_AGENT_IMAGE_NAME}}
           IMAGE_VERSION: ${{ env.MEMBER_AGENT_MIMAGE_VERSION }}
+
+      - name: Build ${{ env.REFRESH_TOKEN_IMAGE_NAME}}
+        run: |
+          make docker-build-refresh-token
+        env:
+          IMAGE_NAME: ${{ env.REFRESH_TOKEN_IMAGE_NAME}}
+          IMAGE_VERSION: ${{ env.REFRESH_TOKEN_MIMAGE_VERSION }}

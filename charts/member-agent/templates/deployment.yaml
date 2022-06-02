@@ -21,12 +21,48 @@ spec:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: HUB_SERVER_URL
+              value: "localhost:8080"
+            - name: SIDECAR_PORT
+              value: "4000"
           ports:
             - name: http
               containerPort: 80
               protocol: TCP
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: configdir 
+            mountPath: /config
+          - name: provider-token 
+            mountPath: /config/token.json
+        - name: refresh-token
+          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
+          imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
+          env:
+            - name: PORT
+              value: "4000"
+          ports:
+            - name: http
+              containerPort: 4000
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: configdir 
+            mountPath: /config
+          - name: provider-token 
+            mountPath: /config/token.json    
+      volumes:
+      - name: configdir
+        hostPath:
+          # Ensure the file directory is created.
+          path: /config
+          type: DirectoryOrCreate
+      - name: provider-token
+        hostPath:
+          path: /config/token.json
+          type: FileOrCreate
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

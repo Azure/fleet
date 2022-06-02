@@ -5,6 +5,11 @@ image:
   pullPolicy: Always
   tag: v0.1.0
 
+refreshtoken:
+  repository: ghcr.io/azure/fleet/refresh-token
+  pullPolicy: Always
+  tag: v0.1.0
+
 resources:
   limits:
     cpu: 500m

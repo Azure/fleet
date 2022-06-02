@@ -6,8 +6,11 @@ Licensed under the MIT license.
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
+	"net/http"
 	"os"
 
 	"github.com/pkg/errors"
@@ -21,12 +24,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/configprovider"
 	"go.goms.io/fleet/pkg/controllers/memberinternalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membership"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
+	tokenFilePath        = "/config/token.json"
 	scheme               = runtime.NewScheme()
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -48,6 +53,13 @@ func init() {
 func main() {
 	flag.Parse()
 
+	hubURL := os.Getenv("HUB_SERVER_URL")
+
+	if hubURL == "" {
+		klog.Error("hub server api cannot be empty")
+		os.Exit(1)
+	}
+
 	hubOpts := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     *hubMetricsAddr,
@@ -60,8 +72,35 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	klog.Info("starting memebragent")
-	// TODO: to hook MSI token to get hub config
-	if err := Start(ctrl.SetupSignalHandler(), ctrl.GetConfigOrDie(), hubOpts); err != nil {
+
+	token := configprovider.EmptyToken()
+	currentFile, err := os.ReadFile(tokenFilePath)
+	if err != nil {
+		klog.Error(err, "cannot read token file")
+		os.Exit(1)
+	}
+	if len(currentFile) == 0 {
+		callRefreshToken()
+	}
+
+	if err = json.Unmarshal(currentFile, &token); err != nil {
+		klog.Error(err, "cannot parse token file")
+		os.Exit(1)
+	}
+	if token.ExpiresOn == "0" || token.WillExpireIn(configprovider.RefreshBefore) {
+		callRefreshToken()
+	}
+
+	hubConfig := rest.Config{
+		BearerToken: token.AccessToken,
+		Host:        hubURL,
+		// TODO (mng): Remove TLSClientConfig/Insecure(true) once server CA can be passed in as flag.
+		TLSClientConfig: rest.TLSClientConfig{
+			Insecure: true,
+		},
+	}
+
+	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts); err != nil {
 		klog.Error(err, "problem running controllers")
 		os.Exit(1)
 	}
@@ -146,4 +185,33 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	return nil
+}
+
+func callRefreshToken() {
+	values := map[string]string{"provider": "azure"}
+
+	json_data, err := json.Marshal(values)
+	if err != nil {
+		klog.InfoS("an error has occurred while parsing the request")
+		os.Exit(1)
+	}
+
+	resp, err := http.Post("http://localhost:4000/refreshtoken", "application/json", bytes.NewBuffer(json_data))
+	if err != nil {
+		klog.Error(err, " an error has occurred while refreshing token")
+		os.Exit(1)
+	}
+	if resp.ContentLength != 0 && resp.Body != nil {
+
+		defer resp.Body.Close()
+		if err != nil {
+			klog.Error(err, "an error has occurred while refreshing token")
+			os.Exit(1)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			klog.Fatalf("an error has occurred while refreshing token. status: %s", resp.Status)
+			os.Exit(1)
+		}
+	}
 }

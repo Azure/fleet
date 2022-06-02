@@ -14,6 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	RefreshBefore = 4 * time.Hour
+)
+
 type AuthToken struct {
 	AccessToken string      `json:"accessToken"`
 	ExpiresOn   json.Number `json:"expiresOn"`

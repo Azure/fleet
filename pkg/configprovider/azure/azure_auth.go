@@ -27,9 +27,8 @@ const (
 )
 
 var (
-	filePath      = "/config/token.json"
-	refreshWithin = 4 * time.Hour
-	refreshLock   sync.RWMutex
+	filePath    = "/config/token.json"
+	refreshLock sync.RWMutex
 )
 
 type azureToken struct {
@@ -62,7 +61,7 @@ func CheckToken(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if azToken.WillExpireIn(refreshWithin) {
+	if azToken.WillExpireIn(configprovider.RefreshBefore) {
 		getTokenLoop(rw, req)
 	}
 }
