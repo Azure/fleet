@@ -1,7 +1,7 @@
 REGISTRY ?= ghcr.io/azure
-HUB_AGENT_IMAGE_NAME := hub-agent
+HUB_AGENT_IMAGE_NAME ?= hub-agent
 HUB_AGENT_IMAGE_VERSION ?= v0.1.0
-MEMBER_AGENT_IMAGE_NAME := member-agent
+MEMBER_AGENT_IMAGE_NAME ?= member-agent
 MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 
 # Directories

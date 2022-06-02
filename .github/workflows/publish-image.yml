@@ -17,7 +17,7 @@ permissions:
   packages: write
 
 env:
- REGISTRY: ghcr.io/azure
+ REGISTRY: ghcr.io
  HUB_AGENT_IMAGE_NAME : hub-agent
  HUB_AGENT_IMAGE_VERSION: v0.1.0
  MEMBER_AGENT_IMAGE_NAME: member-agent
@@ -53,11 +53,13 @@ jobs:
         run: |
           make docker-build-hub-agent
         env:
+          REGISTRY: ${{ env.REGISTRY}}
           IMAGE_NAME: ${{ env.HUB_AGENT_IMAGE_NAME}}
           IMAGE_VERSION: ${{ env.HUB_AGENT_IMAGE_VERSION }}
       - name: Build ${{ env.MEMBER_AGENT_IMAGE_NAME}}
         run: |
           make docker-build-member-agent
         env:
+          REGISTRY: ${{ env.REGISTRY}}
           IMAGE_NAME: ${{ env.MEMBER_AGENT_IMAGE_NAME}}
           IMAGE_VERSION: ${{ env.MEMBER_AGENT_MIMAGE_VERSION }}
