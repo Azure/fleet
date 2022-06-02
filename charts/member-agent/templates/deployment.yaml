@@ -24,9 +24,40 @@ spec:
           ports:
             - name: http
               containerPort: 80
-              protocol: TCP
+          env:
+          - name: CONFIG_PATH
+            value: "/config/token.txt"
+          - name: HUB_SERVER_URL
+            value: "{{ .Values.config.hubURL }}"
+          - name: AZURE_CLIENT_ID
+            value: "<CLIENT_ID_VALUE>"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: provider-token 
+            mountPath: /config
+
+        - name: refresh-token
+          image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
+          imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
+          args:
+            - --provider-name={{ .Values.config.providerName }}
+          env:
+          - name: CONFIG_PATH
+            value: "/config/token.txt"
+          - name: SECRET_NAME
+            value: "{{ .Values.config.secretName}}"
+          ports:
+            - name: http
+              containerPort: 4000
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: provider-token
+            mountPath: /config    
+      volumes:
+      - name: provider-token
+        emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

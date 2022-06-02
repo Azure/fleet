@@ -3,6 +3,8 @@ HUB_AGENT_IMAGE_NAME ?= hub-agent
 HUB_AGENT_IMAGE_VERSION ?= v0.1.0
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
+REFRESH_TOKEN_IMAGE_NAME := refresh-token
+REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -170,6 +172,15 @@ docker-build-member-agent: docker-buildx-builder
 		--platform="linux/amd64" \
 		--pull \
 		--tag $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION) .
+
+.PHONY: docker-build-refresh-token
+docker-build-refresh-token: docker-buildx-builder
+	docker buildx build \
+		--file docker/$(REFRESH_TOKEN_IMAGE_NAME).Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="linux/amd64" \
+		--pull \
+		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
 
 ## -----------------------------------
 ## Cleanup 
