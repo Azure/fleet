@@ -38,9 +38,11 @@ type Reconciler struct {
 }
 
 const (
-	eventReasonInternalMemberClusterJoined  = "InternalMemberClusterJoined"
-	eventReasonInternalMemberClusterLeft    = "InternalMemberClusterLeft"
-	eventReasonInternalMemberClusterUnknown = "InternalMemberClusterUnknown"
+	eventReasonInternalMemberClusterHBReceived = "InternalMemberClusterHeartbeatReceived"
+	eventReasonInternalMemberClusterHBUnknown  = "InternalMemberClusterHeartbeatUnknown"
+	eventReasonInternalMemberClusterJoined     = "InternalMemberClusterJoined"
+	eventReasonInternalMemberClusterLeft       = "InternalMemberClusterLeft"
+	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
 )
 
 // NewReconciler creates a new reconciler for the internal membership CR
@@ -73,6 +75,32 @@ func (r *Reconciler) getMembershipClusterState() fleetv1alpha1.ClusterState {
 	r.membershipStateLock.RLock()
 	defer r.membershipStateLock.RUnlock()
 	return r.membershipState
+}
+
+func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(internalMemberCluster apis.ConditionedObj) {
+	klog.InfoS("mark internal member cluster heartbeat received",
+		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
+	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
+	hearbeatReceivedCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+		Status:             metav1.ConditionTrue,
+		Reason:             eventReasonInternalMemberClusterHBReceived,
+		ObservedGeneration: internalMemberCluster.GetGeneration(),
+	}
+	internalMemberCluster.SetConditions(hearbeatReceivedCondition, common.ReconcileSuccessCondition())
+}
+
+func (r *Reconciler) markInternalMemberClusterHeartbeatUnknown(internalMemberCluster apis.ConditionedObj) {
+	klog.InfoS("mark internal member cluster heartbeat unknown",
+		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
+	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBUnknown, "internal member cluster heartbeat unknown")
+	heartbeatUnknownCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+		Status:             metav1.ConditionUnknown,
+		Reason:             eventReasonInternalMemberClusterHBUnknown,
+		ObservedGeneration: internalMemberCluster.GetGeneration(),
+	}
+	internalMemberCluster.SetConditions(heartbeatUnknownCondition, common.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.ConditionedObj) {
