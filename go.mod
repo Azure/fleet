@@ -5,7 +5,11 @@ go 1.17
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.13.0
+	github.com/Azure/go-autorest/autorest/date v0.3.0
+	github.com/codegangsta/negroni v1.0.0
 	github.com/crossplane/crossplane-runtime v0.16.0
+	github.com/golang-jwt/jwt v3.2.1+incompatible
+	github.com/gorilla/mux v1.8.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
 	github.com/stretchr/testify v1.7.0
@@ -17,11 +21,11 @@ require (
 )
 
 require (
+	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cyphar/filepath-securejoin v0.2.2 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
-	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
