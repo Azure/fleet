@@ -26,10 +26,6 @@ type InternalMemberCluster struct {
 	Status InternalMemberClusterStatus `json:"status,omitempty"`
 }
 
-func (m *InternalMemberCluster) GetCondition(conditionType string) *metav1.Condition {
-	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
-}
-
 // InternalMemberClusterSpec defines the desired state of InternalMemberCluster for the hub agent.
 type InternalMemberClusterSpec struct {
 	// State indicates the state of the member cluster.
@@ -53,13 +49,6 @@ const (
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
 	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
 )
-
-// SetConditions implements Conditioned.
-func (m *InternalMemberCluster) SetConditions(conditions ...metav1.Condition) {
-	for _, c := range conditions {
-		meta.SetStatusCondition(&m.Status.Conditions, c)
-	}
-}
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
