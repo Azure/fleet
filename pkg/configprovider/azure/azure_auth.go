@@ -40,6 +40,7 @@ func NewFactory() interfaces.AuthenticationFactory {
 	return &azureToken{}
 }
 
+// CheckToken read the current file and check if the token needs to be refreshed.
 // /refreshtoken
 func CheckToken(rw http.ResponseWriter, req *http.Request) {
 	currentFile, err := os.ReadFile(filePath)
@@ -101,7 +102,7 @@ func getTokenLoop(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// RefreshToken get a new token to make request to the associated fleet' hub cluster, and writes it to the mounted file.
+// RefreshToken gets a new token to make request to the associated fleet' hub cluster, and writes it to the mounted file.
 func (a *azureToken) RefreshToken(ctx context.Context, tokenFile string) error {
 	ClientID := os.Getenv("AZURE_CLIENT_ID")
 
