@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -28,12 +27,13 @@ import (
 	"go.goms.io/fleet/pkg/controllers/common"
 )
 
-// TODO (mng): move `util` pkg to `controller/util`
+// TODO(mng): rename this package to just internalMemberCluster
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
 	hubClient                 client.Client
-	memberClient              client.Client
+	memberClientOverlay       client.Client
+	memberClientUnderlay      client.Client
 	restMapper                meta.RESTMapper
 	recorder                  record.EventRecorder
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState
@@ -55,34 +55,22 @@ const (
 )
 
 // NewReconciler creates a new reconciler for the internal membership CR
-func NewReconciler(hubClient client.Client, memberClient client.Client, restMapper meta.RESTMapper,
+func NewReconciler(hubClient client.Client, memberClientOverlay client.Client, memberClientUnderlay client.Client, restMapper meta.RESTMapper,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
 	membershipChan <-chan fleetv1alpha1.ClusterState) *Reconciler {
 	return &Reconciler{
 		hubClient:                 hubClient,
-		memberClient:              memberClient,
+		memberClientOverlay:       memberClientOverlay,
+		memberClientUnderlay:      memberClientUnderlay,
 		restMapper:                restMapper,
 		internalMemberClusterChan: internalMemberClusterChan,
 		membershipChan:            membershipChan,
 	}
 }
 
-func checkHeartbeatReceived(nodes corev1.NodeList, clusterHeartbeat time.Duration) bool {
-	for _, node := range nodes.Items {
-		// check if node is master node
-		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; ok {
-			if len(node.Status.Conditions) > 0 &&
-				node.Status.Conditions[0].LastHeartbeatTime.Add(clusterHeartbeat).After(time.Now()) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, internalMemberCluster fleetv1alpha1.InternalMemberCluster) error {
 	backOffPeriod := wait.Backoff{
-		Duration: internalMemberCluster.GetHeartbeatAsDurations(),
+		Duration: time.Second * time.Duration(internalMemberCluster.Spec.HeartbeatPeriodSeconds),
 	}
 
 	return retry.OnError(backOffPeriod,
@@ -130,50 +118,41 @@ func (r *Reconciler) getMembershipClusterState() fleetv1alpha1.ClusterState {
 func (r *Reconciler) join(ctx context.Context, memberCluster fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
 	membershipState := r.getMembershipClusterState()
 
-	if membershipState == fleetv1alpha1.ClusterStateJoin {
-		kubeConfig := ctrl.GetConfigOrDie()
-		clientSet, err := kubernetes.NewForConfig(kubeConfig)
-		if err != nil {
-			klog.ErrorS(err, errInternalMemberClusterJoin, "name", memberCluster.Name, "namespace", memberCluster.Namespace)
-			return ctrl.Result{}, errors.Wrap(err, errInternalMemberClusterJoin)
-		}
-
-		nodes, err := clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		if err != nil {
-			klog.ErrorS(err, errInternalMemberClusterJoin, "name", memberCluster.Name, "namespace", memberCluster.Namespace)
-			return ctrl.Result{}, errors.Wrap(err, errInternalMemberClusterJoin)
-		}
-
-		heartbeatReceived := checkHeartbeatReceived(*(nodes), memberCluster.GetHeartbeatAsDurations())
-		if heartbeatReceived {
-			memberCluster.Status.Capacity.Cpu().Set(0)
-			memberCluster.Status.Capacity.Memory().Set(0)
-			memberCluster.Status.Allocatable.Cpu().Set(0)
-			memberCluster.Status.Allocatable.Memory().Set(0)
-
-			for _, node := range nodes.Items {
-				memberCluster.Status.Capacity.Cpu().Add(*(node.Status.Capacity.Cpu()))
-				memberCluster.Status.Capacity.Memory().Add(*(node.Status.Capacity.Memory()))
-				memberCluster.Status.Allocatable.Cpu().Add(*(node.Status.Allocatable.Cpu()))
-				memberCluster.Status.Allocatable.Memory().Add(*(node.Status.Allocatable.Memory()))
-			}
-
-			r.markInternalMemberClusterJoined(&memberCluster)
-			r.markInternalMemberClusterHeartbeatReceived(&memberCluster)
-
-			if err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); err != nil {
-				klog.ErrorS(err, errInternalMemberClusterJoin, "name", memberCluster.Name, "namespace", memberCluster.Namespace)
-				return ctrl.Result{}, errors.Wrap(err, errInternalMemberClusterJoin)
-			}
-			r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateJoin
-			return ctrl.Result{}, nil
-		}
+	if membershipState != fleetv1alpha1.ClusterStateJoin {
+		r.markInternalMemberClusterUnknown(&memberCluster)
+		r.markInternalMemberClusterHeartbeatUnknown(&memberCluster)
+		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
+			errors.Wrap(err, "error marking internal member cluster as unknown")
 	}
 
-	r.markInternalMemberClusterUnknown(&memberCluster)
-	r.markInternalMemberClusterHeartbeatUnknown(&memberCluster)
-	err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-	return ctrl.Result{RequeueAfter: memberCluster.GetHeartbeatAsDurations()}, errors.Wrap(err, "error marking internal member cluster as unknown")
+	var nodes corev1.NodeList
+	if err := r.memberClientOverlay.List(ctx, &nodes); err != nil {
+		klog.ErrorS(err, errInternalMemberClusterJoin, "name", memberCluster.Name, "namespace", memberCluster.Namespace)
+		return ctrl.Result{}, errors.Wrap(err, errInternalMemberClusterJoin)
+	}
+
+	memberCluster.Status.Capacity.Cpu().Set(0)
+	memberCluster.Status.Capacity.Memory().Set(0)
+	memberCluster.Status.Allocatable.Cpu().Set(0)
+	memberCluster.Status.Allocatable.Memory().Set(0)
+
+	for _, node := range nodes.Items {
+		memberCluster.Status.Capacity.Cpu().Add(*(node.Status.Capacity.Cpu()))
+		memberCluster.Status.Capacity.Memory().Add(*(node.Status.Capacity.Memory()))
+		memberCluster.Status.Allocatable.Cpu().Add(*(node.Status.Allocatable.Cpu()))
+		memberCluster.Status.Allocatable.Memory().Add(*(node.Status.Allocatable.Memory()))
+	}
+
+	r.markInternalMemberClusterJoined(&memberCluster)
+	r.markInternalMemberClusterHeartbeatReceived(&memberCluster)
+
+	if err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); err != nil {
+		klog.ErrorS(err, errInternalMemberClusterJoin, "name", memberCluster.Name, "namespace", memberCluster.Namespace)
+		return ctrl.Result{}, errors.Wrap(err, errInternalMemberClusterJoin)
+	}
+	r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateJoin
+	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(internalMemberCluster apis.ConditionedObj) {
