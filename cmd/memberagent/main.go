@@ -99,7 +99,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 
 	// TODO(mng): update how we populate underlay and overlay client
 	if err = memberinternalmembercluster.NewReconciler(
-		hubMrg.GetClient(), memberMgr.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
+		hubMrg.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
 		membershipChan).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
