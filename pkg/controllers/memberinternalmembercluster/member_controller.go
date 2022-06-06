@@ -43,7 +43,7 @@ type Reconciler struct {
 }
 
 const (
-	errInternalMemberClusterJoin = "error joining internal member cluster"
+	errInternalMemberClusterJoin = "internal member cluster join error"
 	errMemberClusterHeartbeat    = "member cluster heartbeat error"
 )
 
@@ -80,8 +80,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 		func() error {
 			err := r.hubClient.Update(ctx, &internalMemberCluster)
 			if err != nil {
-				klog.Error(err.Error())
-				klog.InfoS("retry update internal member cluster on hub cluster")
+				klog.ErrorS(err, "error updating internal member cluster on hub cluster")
 			}
 			return err
 		})
@@ -130,7 +129,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.join(ctx, memberCluster)
 	}
 
-	return ctrl.Result{}, nil
+	return r.leave(ctx, memberCluster)
+}
+
+// TODO (mng): double-check RequeueAfter field in all returning Ctrl.Result{}
+func (r *Reconciler) leave(ctx context.Context, memberCluster fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
+	membershipState := r.getMembershipClusterState()
+	if membershipState != fleetv1alpha1.ClusterStateLeave {
+		r.markInternalMemberClusterUnknown(&memberCluster)
+		r.markInternalMemberClusterHeartbeatUnknown(&memberCluster)
+		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
+		return ctrl.Result{RequeueAfter: time.Minute},
+			errors.Wrap(err, "error marking internal member cluster as unknown")
+	}
+
+	r.markInternalMemberClusterLeft(&memberCluster)
+	r.markInternalMemberClusterHeartbeatUnknown(&memberCluster)
+	err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
+	if err != nil {
+		r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
+	}
+	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "internal member cluster leave error")
 }
 
 func (r *Reconciler) heartbeat(ctx context.Context, ns types.NamespacedName) {
