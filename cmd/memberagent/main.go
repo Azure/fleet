@@ -97,6 +97,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	defer close(membershipChan)
 	defer close(internalMemberClusterChan)
 
+	// TODO(mng): update how we populate underlay and overlay client
 	if err = memberinternalmembercluster.NewReconciler(
 		hubMrg.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
 		membershipChan).SetupWithManager(hubMrg); err != nil {
