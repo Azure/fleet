@@ -1,4 +1,4 @@
-package memberinternalmembercluster
+package internalMemberCluster
 
 import (
 	"testing"
