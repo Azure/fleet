@@ -21,7 +21,7 @@ import (
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/common"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // Reconcile event reasons.
@@ -127,7 +127,7 @@ func (r *Reconciler) markMembershipJoined(membership apis.ConditionedObj) {
 		Reason:             eventReasonMembershipJoined,
 		ObservedGeneration: membership.GetGeneration(),
 	}
-	membership.SetConditions(joinedCondition, common.ReconcileSuccessCondition())
+	membership.SetConditions(joinedCondition, utils.ReconcileSuccessCondition())
 }
 
 // TODO (mng) we will have a systematic way to define logging level. See #33 for context
@@ -143,7 +143,7 @@ func (r *Reconciler) markMembershipUnknown(membership apis.ConditionedObj) {
 		ObservedGeneration: membership.GetGeneration(),
 	}
 
-	membership.SetConditions(unknownCondition, common.ReconcileSuccessCondition())
+	membership.SetConditions(unknownCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
@@ -156,7 +156,7 @@ func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
 		Reason:             eventReasonMembershipLeft,
 		ObservedGeneration: membership.GetGeneration(),
 	}
-	membership.SetConditions(joinedCondition, common.ReconcileSuccessCondition())
+	membership.SetConditions(joinedCondition, utils.ReconcileSuccessCondition())
 }
 
 // SetupWithManager sets up the controller with the Manager.

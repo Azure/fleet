@@ -24,7 +24,7 @@ import (
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/common"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
@@ -224,7 +224,7 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(internalMemberCl
 		Reason:             eventReasonInternalMemberClusterHBReceived,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(hearbeatReceivedCondition, common.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(hearbeatReceivedCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterHeartbeatUnknown(internalMemberCluster apis.ConditionedObj) {
@@ -237,7 +237,7 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatUnknown(internalMemberClu
 		Reason:             eventReasonInternalMemberClusterHBUnknown,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(heartbeatUnknownCondition, common.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(heartbeatUnknownCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.ConditionedObj) {
@@ -250,7 +250,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.
 		Reason:             eventReasonInternalMemberClusterJoined,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(joinSucceedCondition, common.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(joinSucceedCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(internalMemberCluster apis.ConditionedObj) {
@@ -263,7 +263,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(internalMemberCluster apis.Co
 		Reason:             eventReasonInternalMemberClusterLeft,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(joinSucceedCondition, common.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(joinSucceedCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterUnknown(internalMemberCluster apis.ConditionedObj) {
@@ -276,7 +276,7 @@ func (r *Reconciler) markInternalMemberClusterUnknown(internalMemberCluster apis
 		Reason:             eventReasonInternalMemberClusterUnknown,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(joinUnknownCondition, common.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(joinUnknownCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) watchMembershipChan() {
