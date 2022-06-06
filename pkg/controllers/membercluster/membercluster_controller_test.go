@@ -29,11 +29,13 @@ import (
 )
 
 const (
-	memberCluster2 = "mc2"
 	namespace1     = "fleet-mc1"
 	namespace2     = "fleet-mc2"
 	namespace3     = "fleet-mc3"
 	namespace4     = "fleet-mc4"
+	memberCluster1 = "mc1"
+	memberCluster2 = "mc2"
+	memberCluster3 = "mc3"
 )
 
 func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
@@ -61,9 +63,9 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 		return fmt.Errorf("namespace cannot be created")
 	}
 
-	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}
+	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster1}}
 	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
-	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 	memberCluster4 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}}
 
 	expectedEvent := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, namespaceCreated, "Namespace was created")
@@ -181,9 +183,9 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 		return nil
 	}
 
-	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}
+	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster1}}
 	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
-	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 	memberCluster4 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}}
 	memberCluster5 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}}
 	memberCluster6 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}}
@@ -330,9 +332,9 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		return nil
 	}
 
-	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}
+	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster1}}
 	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
-	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 	memberCluster4 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}}
 	memberCluster5 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}}
 	memberCluster6 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}}
@@ -430,13 +432,13 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 
 func TestCheckAndCreateInternalMemberCluster(t *testing.T) {
 	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-		if key.Name == memberCluster2 && key.Namespace == namespace2 || key.Name == "mc3" && key.Namespace == namespace3 {
+		if key.Name == memberCluster2 && key.Namespace == namespace2 || key.Name == memberCluster3 && key.Namespace == namespace3 {
 			return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
-		} else if key.Name == "mc1" && key.Namespace == namespace1 {
+		} else if key.Name == memberCluster1 && key.Namespace == namespace1 {
 			o := obj.(*fleetv1alpha1.InternalMemberCluster)
 			*o = fleetv1alpha1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "mc1",
+					Name:      memberCluster1,
 					Namespace: namespace1,
 				},
 			}
@@ -456,13 +458,13 @@ func TestCheckAndCreateInternalMemberCluster(t *testing.T) {
 
 	memberCluster1 := fleetv1alpha1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
-		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
+		ObjectMeta: metav1.ObjectMeta{Name: memberCluster1, UID: "mc1-UID"},
 	}
 	memberCluster2 := fleetv1alpha1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
 		ObjectMeta: metav1.ObjectMeta{Name: memberCluster2, UID: "mc2-UID"},
 	}
-	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 	memberCluster4 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}}
 
 	controllerBool := true
@@ -668,6 +670,82 @@ func TestReconcilerUpdateMemberClusterStatus(t *testing.T) {
 				assert.Equal(t, tt.wantedEvent, event)
 			}
 			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestUpdateInternalMemberClusterSpec(t *testing.T) {
+	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		if key.Name == memberCluster1 && key.Namespace == namespace1 || key.Name == memberCluster3 && key.Namespace == namespace3 {
+			o := obj.(*fleetv1alpha1.InternalMemberCluster)
+			*o = fleetv1alpha1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      key.Name,
+					Namespace: key.Namespace,
+				},
+			}
+		} else if key.Name == memberCluster2 && key.Namespace == namespace2 {
+			return fmt.Errorf("internal member cluster cannot be retrieved")
+		}
+		return nil
+	}
+
+	patchMock := test.NewMockPatchFn(nil, func(obj client.Object) error {
+		imc := obj.(*fleetv1alpha1.InternalMemberCluster)
+		if imc.Name == memberCluster3 && imc.Namespace == namespace3 {
+			return fmt.Errorf("internal member cluster cannot be patched")
+		}
+		return nil
+	})
+
+	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster1}}
+	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
+	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
+
+	expectedEvent := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, internalMemberClusterSpecUpdated, "internal member cluster spec was patched")
+
+	tests := map[string]struct {
+		r             *Reconciler
+		memberCluster *fleetv1alpha1.MemberCluster
+		wantedEvent   string
+		wantedError   error
+	}{
+		"internal member cluster spec is updated": {
+			r: &Reconciler{
+				Client:   &test.MockClient{MockGet: getMock, MockPatch: patchMock},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &memberCluster1,
+			wantedEvent:   expectedEvent,
+			wantedError:   nil,
+		},
+		"internal member cluster get error": {
+			r: &Reconciler{
+				Client: &test.MockClient{MockGet: getMock, MockPatch: patchMock},
+			},
+			memberCluster: &memberCluster2,
+			wantedEvent:   "",
+			wantedError:   errors.New("internal member cluster cannot be retrieved"),
+		},
+		"internal member cluster patch error": {
+			r: &Reconciler{
+				Client: &test.MockClient{MockGet: getMock, MockPatch: patchMock},
+			},
+			memberCluster: &memberCluster3,
+			wantedEvent:   "",
+			wantedError:   errors.New("internal member cluster cannot be patched"),
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			err := tt.r.updateInternalMemberClusterSpec(context.Background(), tt.memberCluster)
+			if tt.r.recorder != nil {
+				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
+				event := <-fakeRecorder.Events
+				assert.Equal(t, tt.wantedEvent, event)
+			}
+			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
 		})
 	}
 }
