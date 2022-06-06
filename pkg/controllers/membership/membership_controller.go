@@ -70,7 +70,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.join(ctx, clusterMembership)
 	}
 
-	// This is when the state is leave
+	// This is when the state is leave.
 	return r.leave(ctx, clusterMembership)
 }
 
@@ -82,7 +82,7 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership fleetv1alpha1.M
 		err := r.Client.Update(ctx, &clusterMembership)
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 	}
-	// the state can be leave or unknown
+	// the state can be leave or unknown.
 	r.markMembershipUnknown(&clusterMembership)
 	err := r.Client.Update(ctx, &clusterMembership)
 	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
@@ -96,7 +96,7 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership fleetv1alpha1.
 		err := r.Client.Update(ctx, &clusterMembership)
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}
-	// internalMemberClusterState state can be joined or unknown
+	// internalMemberClusterState state can be joined or unknown.
 	r.markMembershipUnknown(&clusterMembership)
 	err := r.Client.Update(ctx, &clusterMembership)
 	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")

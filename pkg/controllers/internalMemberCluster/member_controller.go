@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package memberinternalmembercluster
+package internalMemberCluster
 
 import (
 	"context"
@@ -21,14 +21,11 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/common"
 )
-
-// TODO(mng): rename this package to just internalMemberCluster
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
@@ -118,8 +115,6 @@ func (r *Reconciler) updateMemberClusterUsage(ctx context.Context, mc fleetv1alp
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/finalizers,verbs=update
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
-
 	var memberCluster fleetv1alpha1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &memberCluster); err != nil {
 		return ctrl.Result{}, errors.Wrap(client.IgnoreNotFound(err), "error getting internal member cluster")
