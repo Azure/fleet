@@ -13,7 +13,6 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/common"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -32,7 +31,7 @@ func TestMarkInternalMemberClusterJoined(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 
 	for _, expectedCondition := range expectedConditions {
@@ -56,7 +55,7 @@ func TestMarkInternalMemberClusterLeft(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 
 	for _, expectedCondition := range expectedConditions {
@@ -80,7 +79,7 @@ func TestMarkInternalMemberClusterUnknown(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeMembershipJoin, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterUnknown},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 	for _, expectedCondition := range expectedConditions {
 		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
@@ -103,7 +102,7 @@ func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHBReceived},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 
 	for _, expectedCondition := range expectedConditions {
@@ -127,7 +126,7 @@ func TestMarkInternalMemberClusterHeartbeatUnknown(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterHBUnknown},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 	for _, expectedCondition := range expectedConditions {
 		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)

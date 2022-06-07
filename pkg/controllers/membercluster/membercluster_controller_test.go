@@ -561,32 +561,37 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	}
 }
 
-func TestReconcilerUpdateMemberClusterStatus(t *testing.T) {
-	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-		if key.Name == memberCluster2 {
-			return fmt.Errorf("failed to retrieve member cluster")
-		}
-		if key.Name == "mc1" {
-			o, _ := obj.(*fleetv1alpha1.MemberCluster)
-			*o = fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "mc1",
-				},
-			}
-		} else {
-			o, _ := obj.(*fleetv1alpha1.MemberCluster)
-			*o = fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "mc3",
-				},
-			}
-		}
-		return nil
+func TestMarkMemberClusterHeartbeatReceived(t *testing.T) {
+	recorder := utils.NewFakeRecorder(1)
+	memberCluster := &fleetv1alpha1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       InternalMemberClusterKind.Kind,
+			APIVersion: InternalMemberClusterKind.GroupVersion().String(),
+		},
+	}
+	markMemberClusterHeartbeatReceived(recorder, memberCluster)
+
+	// check that the correct event is emitted
+	event := <-recorder.Events
+	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
+	assert.Equal(t, expected, event)
+
+	// Check expected conditions.
+	expectedConditions := []metav1.Condition{
+		{Type: fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: heartBeatReceived},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 
+	for i := range expectedConditions {
+		actualCondition := memberCluster.GetCondition(expectedConditions[i].Type)
+		assert.Equal(t, "", cmp.Diff(&expectedConditions[i], actualCondition, cmpopts.IgnoreTypes(time.Time{})))
+	}
+}
+
+func TestReconcilerUpdateMemberClusterStatus(t *testing.T) {
 	updateStatusPatchMock := test.NewMockStatusPatchFn(nil, func(o client.Object) error {
 		mc, _ := o.(*fleetv1alpha1.MemberCluster)
-		if mc.Name == "mc3" {
+		if mc.Name == "mc2" {
 			return fmt.Errorf("cannot update member cluster")
 		}
 		cond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
@@ -614,60 +619,51 @@ func TestReconcilerUpdateMemberClusterStatus(t *testing.T) {
 		Allocatable: allocatable,
 	}
 
-	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}
-	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster1}}
+	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
 	expectedEvent1 := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
-	expectedEvent3 := utils.GetEventString(&memberCluster3, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
+	expectedEvent2 := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
+	expectedEvent3 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
+	expectedEvent4 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
 
 	tests := map[string]struct {
-		r           *Reconciler
-		mcName      string
-		status      fleetv1alpha1.InternalMemberClusterStatus
-		wantedEvent string
-		wantErr     error
+		r             *Reconciler
+		memberCluster *fleetv1alpha1.MemberCluster
+		status        fleetv1alpha1.InternalMemberClusterStatus
+		wantedEvents  []string
+		wantErr       error
 	}{
 		"member cluster is updated": {
 			r: &Reconciler{
-				Client: &test.MockClient{
-					MockGet:         getMock,
-					MockStatusPatch: updateStatusPatchMock,
-				},
-				recorder: utils.NewFakeRecorder(1),
+				Client:   &test.MockClient{MockStatusPatch: updateStatusPatchMock},
+				recorder: utils.NewFakeRecorder(2),
 			},
-			mcName:      "mc1",
-			status:      status,
-			wantedEvent: expectedEvent1,
-			wantErr:     nil,
-		},
-		"member cluster get error": {
-			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
-			},
-			mcName:  memberCluster2,
-			wantErr: errors.New("failed to retrieve member cluster"),
+			memberCluster: &memberCluster1,
+			status:        status,
+			wantedEvents:  []string{expectedEvent1, expectedEvent2},
+			wantErr:       nil,
 		},
 		"member cluster status patch error": {
 			r: &Reconciler{
-				Client: &test.MockClient{
-					MockGet:         getMock,
-					MockStatusPatch: updateStatusPatchMock,
-				},
-				recorder: utils.NewFakeRecorder(1),
+				Client:   &test.MockClient{MockStatusPatch: updateStatusPatchMock},
+				recorder: utils.NewFakeRecorder(2),
 			},
-			mcName:      "mc3",
-			status:      status,
-			wantedEvent: expectedEvent3,
-			wantErr:     errors.New("cannot update member cluster"),
+			memberCluster: &memberCluster2,
+			status:        status,
+			wantedEvents:  []string{expectedEvent3, expectedEvent4},
+			wantErr:       errors.New("cannot update member cluster"),
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			err := tt.r.updateMemberClusterStatus(context.Background(), tt.mcName, tt.status)
+			err := tt.r.updateMemberClusterStatus(context.Background(), tt.memberCluster, tt.status)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
-				event := <-fakeRecorder.Events
-				assert.Equal(t, tt.wantedEvent, event)
+				for _, expectedEvent := range tt.wantedEvents {
+					event := <-fakeRecorder.Events
+					assert.Equal(t, expectedEvent, event)
+				}
 			}
 			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
 		})
@@ -702,7 +698,7 @@ func TestUpdateInternalMemberClusterSpec(t *testing.T) {
 	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
 	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 
-	expectedEvent := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, internalMemberClusterSpecUpdated, "internal member cluster spec was patched")
+	expectedEvent := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, internalMemberClusterSpecUpdated, "internal member cluster spec is marked as leave")
 
 	tests := map[string]struct {
 		r             *Reconciler

@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/common"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -31,7 +30,7 @@ func TestMarkMembershipJoined(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeMembershipJoin, Status: metav1.ConditionTrue, Reason: eventReasonMembershipJoined},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 
 	for _, expectedCondition := range expectedConditions {
@@ -55,7 +54,7 @@ func TestMarkMembershipLeft(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeMembershipJoin, Status: metav1.ConditionFalse, Reason: eventReasonMembershipLeft},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 
 	for _, expectedCondition := range expectedConditions {
@@ -79,7 +78,7 @@ func TestMarkMembershipUnknown(t *testing.T) {
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
 		{Type: v1alpha1.ConditionTypeMembershipJoin, Status: metav1.ConditionUnknown, Reason: eventReasonMembershipUnknown},
-		{Type: common.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: common.ReasonReconcileSuccess},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 	for _, expectedCondition := range expectedConditions {
 		actualCondition := membership.GetCondition(expectedCondition.Type)
