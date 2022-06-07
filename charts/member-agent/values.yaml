@@ -5,6 +5,11 @@ image:
   pullPolicy: Always
   tag: v0.1.0
 
+refreshtoken:
+  repository: ghcr.io/azure/fleet/refresh-token
+  pullPolicy: Always
+  tag: v0.1.0
+
 resources:
   limits:
     cpu: 500m
@@ -19,3 +24,8 @@ affinity: {}
 
 namespace: 
   fleet-system
+
+config:
+  secretName: "default-secret"
+  providerName: azure
+  hubURL : localhost:8080

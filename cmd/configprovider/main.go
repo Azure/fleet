@@ -21,7 +21,6 @@ import (
 
 var (
 	configPath    = os.Getenv("CONFIG_PATH")
-	tokenFileName = "token.txt"
 	providerName  = flag.String("provider-name", "azure", "Name of the provider used to refresh auth token. available options: azure, secret")
 	AzureProvider = "azure"
 	//SecretProvider = "secret"
@@ -34,8 +33,7 @@ func getTokenFilePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tokenDirPath := filepath.Join(tokenFilePath, tokenFileName)
-	return tokenDirPath, nil
+	return tokenFilePath, nil
 }
 
 // getHomeDir attempts to get the home dir from env
