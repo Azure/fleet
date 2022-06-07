@@ -8,6 +8,7 @@ package membercluster
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
@@ -17,9 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -28,6 +31,7 @@ import (
 
 const (
 	namespaceCreated                 = "NamespaceCreated"
+	namespaceDeleted                 = "NamespaceDeleted"
 	roleCreated                      = "RoleCreated"
 	roleUpdated                      = "RoleUpdated"
 	roleBindingCreated               = "RoleBindingCreated"
@@ -35,7 +39,9 @@ const (
 	internalMemberClusterCreated     = "InternalMemberClusterCreated"
 	internalMemberClusterSpecUpdated = "InternalMemberClusterSpecUpdated"
 	memberClusterJoined              = "MemberClusterJoined"
+	memberClusterLeft                = "MemberClusterLeft"
 	heartBeatReceived                = "HeartBeatReceived"
+	namespaceFinalizer               = "NamespaceFinalizer"
 )
 
 var (
@@ -74,11 +80,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // join is used to complete the Join workflow for the Hub agent
 // where we check and create namespace role, role binding, internal member cluster and update member cluster status.
 func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
+	if err := r.addNamespaceFinalizer(ctx, mc); err != nil {
+		klog.ErrorS(err, "failed to add namespace finalizer to member cluster", "memberCluster", mc.Name)
+		return ctrl.Result{}, err
+	}
+
 	namespaceName, err := r.checkAndCreateNamespace(ctx, mc)
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create namespace for member cluster in hub agent", "memberCluster", mc.Name, "namespace", namespaceName)
 		return ctrl.Result{}, err
 	}
+
 	roleName, err := r.checkAndCreateRole(ctx, mc, namespaceName)
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role for member cluster in hub agent", "memberCluster", mc.Name, "role", roleName)
@@ -97,11 +109,11 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		return ctrl.Result{}, err
 	}
 
-	joinCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	joinedCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	heartBeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
-	if (joinCondition != nil && joinCondition.Status == metav1.ConditionTrue) && (heartBeatCondition != nil && heartBeatCondition.Status == metav1.ConditionTrue) {
-		err := r.updateMemberClusterStatus(ctx, mc, imc.Status)
-		if err != nil {
+
+	if (joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue) && (heartBeatCondition != nil && heartBeatCondition.Status == metav1.ConditionTrue) {
+		if err := r.updateMemberClusterStatusWithRetryAsJoined(ctx, mc, imc.Status); err != nil {
 			klog.ErrorS(err, "cannot update member cluster status as Joined", "internalMemberCluster", imc.Name)
 			return ctrl.Result{}, err
 		}
@@ -111,10 +123,38 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 
 // leave is used to complete the Leave workflow for the Hub agent.
 func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
-	// TODO: Leave workflow for Internal Member cluster.
 	if err := r.updateInternalMemberClusterSpec(ctx, mc); err != nil {
 		klog.ErrorS(err, "Internal Member cluster's spec cannot be updated", "memberCluster", mc.Name, "internalMemberCluster", mc.Name)
 		return ctrl.Result{}, err
+	}
+
+	var imc fleetv1alpha1.InternalMemberCluster
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: mc.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)}, &imc); err != nil {
+		klog.ErrorS(err, "Internal Member cluster cannot be retrieved", "memberCluster", mc.Name, "internalMemberCluster", mc.Name)
+		return ctrl.Result{}, err
+	}
+
+	internalMemberClusterLeftCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	memberClusterLeftCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+
+	if (internalMemberClusterLeftCondition != nil && internalMemberClusterLeftCondition.Status == metav1.ConditionFalse) && memberClusterLeftCondition != nil {
+		// marking member cluster as Left so that the fleet provider could trigger member cluster deletion after which we initiate the clean-up for all resources created for the member cluster
+		if err := r.updateMemberClusterStatusWithRetryAsLeft(ctx, mc); err != nil {
+			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", mc)
+			return ctrl.Result{}, err
+		}
+
+		if mc.GetDeletionTimestamp() != nil && memberClusterLeftCondition.Status == metav1.ConditionFalse {
+			if err := r.deleteNamespace(ctx, mc); err != nil {
+				klog.ErrorS(err, "failed to delete namespace", "memberCluster", mc.Name)
+				return ctrl.Result{}, err
+			}
+
+			if err := r.removeNamespaceFinalizer(ctx, mc); err != nil {
+				klog.ErrorS(err, "failed to remove finalizers for member cluster", "memberCluster", mc.Name)
+				return ctrl.Result{}, err
+			}
+		}
 	}
 	return ctrl.Result{}, nil
 }
@@ -241,15 +281,53 @@ func (r *Reconciler) checkAndCreateInternalMemberCluster(ctx context.Context, me
 	return &imc, nil
 }
 
-// updateMemberClusterStatus is used to update the status of the member cluster with the internal member cluster's status.
-func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1alpha1.MemberCluster, status fleetv1alpha1.InternalMemberClusterStatus) error {
-	patch := client.MergeFrom(mc.DeepCopyObject().(client.Object))
-	klog.InfoS("update member cluster status with internal member cluster status", "memberCluster", mc.Name)
-	mc.Status.Capacity = status.Capacity
-	mc.Status.Allocatable = status.Allocatable
-	markMemberClusterJoined(r.recorder, mc)
-	markMemberClusterHeartbeatReceived(r.recorder, mc)
-	return r.Client.Status().Patch(ctx, mc, patch, client.FieldOwner(mc.GetUID()))
+// updateMemberClusterStatus is used to update member cluster status to indicate that the member cluster has Joined/Left.
+func (r *Reconciler) updateMemberClusterStatusWithRetryAsJoined(ctx context.Context, mc *fleetv1alpha1.MemberCluster, status fleetv1alpha1.InternalMemberClusterStatus) error {
+	backOffPeriod := retry.DefaultBackoff
+	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds)
+
+	return retry.OnError(backOffPeriod,
+		func(err error) bool {
+			if apierrors.IsNotFound(err) || apierrors.IsInvalid(err) {
+				return false
+			}
+			return true
+		},
+		func() error {
+			patch := client.MergeFrom(mc.DeepCopyObject().(client.Object))
+			mc.Status.Capacity = status.Capacity
+			mc.Status.Allocatable = status.Allocatable
+			markMemberClusterJoined(r.recorder, mc)
+			markMemberClusterHeartbeatReceived(r.recorder, mc)
+			err := r.Client.Status().Patch(ctx, mc, patch, client.FieldOwner(mc.GetUID()))
+			if err != nil {
+				klog.ErrorS(err, "cannot update member cluster status", "memberCluster", mc.Name)
+			}
+			return err
+		})
+}
+
+// updateMemberClusterStatus is used to update member cluster status to indicate that the member cluster has Joined/Left.
+func (r *Reconciler) updateMemberClusterStatusWithRetryAsLeft(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
+	backOffPeriod := retry.DefaultBackoff
+	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds)
+
+	return retry.OnError(backOffPeriod,
+		func(err error) bool {
+			if apierrors.IsNotFound(err) || apierrors.IsInvalid(err) {
+				return false
+			}
+			return true
+		},
+		func() error {
+			patch := client.MergeFrom(mc.DeepCopyObject().(client.Object))
+			markMemberClusterLeft(r.recorder, mc)
+			err := r.Client.Status().Patch(ctx, mc, patch, client.FieldOwner(mc.GetUID()))
+			if err != nil {
+				klog.ErrorS(err, "cannot update member cluster status", "memberCluster", mc.Name)
+			}
+			return err
+		})
 }
 
 // updateInternalMemberClusterSpec is used to update the internal member cluster's spec to Leave.
@@ -259,6 +337,9 @@ func (r *Reconciler) updateInternalMemberClusterSpec(ctx context.Context, member
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		klog.InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
 		return err
+	}
+	if imc.Spec.State == fleetv1alpha1.ClusterStateLeave {
+		return nil
 	}
 	patch := client.MergeFrom(imc.DeepCopyObject().(client.Object))
 	imc.Spec.State = fleetv1alpha1.ClusterStateLeave
@@ -270,10 +351,47 @@ func (r *Reconciler) updateInternalMemberClusterSpec(ctx context.Context, member
 	return nil
 }
 
+// addMemberClusterFinalizers is used to add finalizer strings for all the resources created for a member cluster.
+func (r *Reconciler) addNamespaceFinalizer(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
+	if !controllerutil.ContainsFinalizer(mc, namespaceFinalizer) {
+		patch := client.MergeFrom(mc.DeepCopyObject().(client.Object))
+		controllerutil.AddFinalizer(mc, namespaceFinalizer)
+		return r.Client.Patch(ctx, mc, patch, client.FieldOwner(mc.GetUID()))
+	}
+	return nil
+}
+
+// removeMemberClusterFinalizers is used to remove finalizer strings for all the resources created for a member cluster.
+func (r *Reconciler) removeNamespaceFinalizer(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
+	if controllerutil.ContainsFinalizer(mc, namespaceFinalizer) {
+		patch := client.MergeFrom(mc.DeepCopyObject().(client.Object))
+		controllerutil.RemoveFinalizer(mc, namespaceFinalizer)
+		return r.Client.Patch(ctx, mc, patch, client.FieldOwner(mc.GetUID()))
+	}
+	return nil
+}
+
+// deleteNamespace is used to delete the namespace created for a member cluster.
+func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
+	var namespace corev1.Namespace
+	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &namespace); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		klog.InfoS("Namespace cannot be retrieved for deletion", "memberCluster", mc.Name, "namespace", namespaceName)
+	}
+	if err := r.Client.Delete(ctx, &namespace); err != nil {
+		klog.InfoS("Namespace cannot be deleted", "memberCluster", mc.Name, "namespace", namespaceName)
+		return err
+	}
+	r.recorder.Event(mc, corev1.EventTypeNormal, namespaceDeleted, "namespace is deleted for member cluster")
+	return nil
+}
+
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	klog.InfoS("mark the member Cluster as Joined",
-		"namespace", mc.GetNamespace(), "memberService", mc.GetName())
+	klog.InfoS("mark the member Cluster as Joined", "memberService", mc.GetName())
 	recorder.Event(mc, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
 	joinedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
@@ -286,8 +404,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 
 // markMemberClusterHeartbeatReceived is used to update the status of the member cluster to have the heart beat received condition.
 func markMemberClusterHeartbeatReceived(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	klog.InfoS("mark member cluster heartbeat received",
-		"namespace", mc.GetNamespace(), "memberCluster", mc.GetName())
+	klog.InfoS("mark member cluster heartbeat received", "memberCluster", mc.GetName())
 	recorder.Event(mc, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
 	heartBeatReceivedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
@@ -296,6 +413,19 @@ func markMemberClusterHeartbeatReceived(recorder record.EventRecorder, mc apis.C
 		ObservedGeneration: mc.GetGeneration(),
 	}
 	mc.SetConditions(heartBeatReceivedCondition, utils.ReconcileSuccessCondition())
+}
+
+// markMemberClusterLeft is used to update the status of the member cluster to have the left condition.
+func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	klog.InfoS("mark member cluster left", "memberCluster", mc.GetName())
+	recorder.Event(mc, corev1.EventTypeNormal, memberClusterLeft, "member cluster has left")
+	leftCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             memberClusterLeft,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(leftCondition, utils.ReconcileSuccessCondition())
 }
 
 // createRole creates role for member cluster.
