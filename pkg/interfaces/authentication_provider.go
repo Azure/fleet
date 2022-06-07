@@ -1,11 +1,15 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
 package interfaces
 
 import (
 	"context"
-
-	"k8s.io/client-go/rest"
+	"time"
 )
 
-type AuthenticationProvider interface {
-	GetConfig(ctx context.Context, hubServerAPIAddress string) (rest.Config, error)
+type AuthenticationFactory interface {
+	//get a token and write it to a file and return its expiration date
+	RefreshToken(ctx context.Context, filePath string) (*time.Time, error)
 }
