@@ -67,38 +67,39 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if clusterMembership.Spec.State == fleetv1alpha1.ClusterStateJoin {
-		return r.join(ctx, clusterMembership)
+		return r.join(ctx, &clusterMembership)
 	}
 
 	// This is when the state is leave.
-	return r.leave(ctx, clusterMembership)
+	return r.leave(ctx, &clusterMembership)
 }
 
-func (r *Reconciler) join(ctx context.Context, clusterMembership fleetv1alpha1.Membership) (ctrl.Result, error) {
+func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
 	r.membershipChan <- fleetv1alpha1.ClusterStateJoin
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
-		r.markMembershipJoined(&clusterMembership)
-		err := r.Client.Update(ctx, &clusterMembership)
+		r.markMembershipJoined(clusterMembership)
+		err := r.Client.Status().Update(ctx, clusterMembership)
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 	}
 	// the state can be leave or unknown.
-	r.markMembershipUnknown(&clusterMembership)
-	err := r.Client.Update(ctx, &clusterMembership)
+	r.markMembershipUnknown(clusterMembership)
+	err := r.Client.Status().Update(ctx, clusterMembership)
 	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
 }
 
-func (r *Reconciler) leave(ctx context.Context, clusterMembership fleetv1alpha1.Membership) (ctrl.Result, error) {
+func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
 	r.membershipChan <- fleetv1alpha1.ClusterStateLeave
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateLeave {
-		r.markMembershipLeft(&clusterMembership)
-		err := r.Client.Update(ctx, &clusterMembership)
+		r.markMembershipLeft(clusterMembership)
+		err := r.Client.Status().Update(ctx, clusterMembership)
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}
 	// internalMemberClusterState state can be joined or unknown.
-	r.markMembershipUnknown(&clusterMembership)
-	err := r.Client.Update(ctx, &clusterMembership)
+	r.markMembershipUnknown(clusterMembership)
+	// TODO: use the same retry pattern as internal member cluster
+	err := r.Client.Status().Update(ctx, clusterMembership)
 	return ctrl.Result{RequeueAfter: time.Minute}, errors.Wrap(err, "error marking membership as unknown")
 }
 
@@ -110,9 +111,11 @@ func (r *Reconciler) getInternalMemberClusterState() fleetv1alpha1.ClusterState 
 
 func (r *Reconciler) watchInternalMemberClusterChan() {
 	for internalMemberClusterState := range r.internalMemberClusterChan {
-		klog.InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
 		r.clusterStateLock.Lock()
-		r.internalMemberClusterState = internalMemberClusterState
+		if r.internalMemberClusterState != internalMemberClusterState {
+			klog.InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
+			r.internalMemberClusterState = internalMemberClusterState
+		}
 		r.clusterStateLock.Unlock()
 	}
 }

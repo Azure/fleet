@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package internalMemberCluster
 
 import (
@@ -7,10 +12,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
-	v12 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/kubernetes/pkg/apis/core"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
@@ -24,7 +28,7 @@ func TestMarkInternalMemberClusterJoined(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
-	expected := utils.GetEventString(internalMemberCluster, v12.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster joined")
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster has joined")
 
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 
@@ -48,7 +52,7 @@ func TestMarkInternalMemberClusterLeft(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
-	expected := utils.GetEventString(internalMemberCluster, v12.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster left")
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster has left")
 
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 
@@ -72,7 +76,7 @@ func TestMarkInternalMemberClusterUnknown(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
-	expected := utils.GetEventString(internalMemberCluster, core.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster unknown")
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster join state unknown")
 
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterUnknown")
 
@@ -95,7 +99,7 @@ func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
-	expected := utils.GetEventString(internalMemberCluster, v12.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
 
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
 
@@ -119,7 +123,7 @@ func TestMarkInternalMemberClusterHeartbeatUnknown(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
-	expected := utils.GetEventString(internalMemberCluster, core.EventTypeNormal, eventReasonInternalMemberClusterHBUnknown, "internal member cluster heartbeat unknown")
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBUnknown, "internal member cluster heartbeat unknown")
 
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnknown")
 
