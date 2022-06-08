@@ -47,6 +47,8 @@ spec:
             value: "/config/token.txt"
           - name: SECRET_NAME
             value: "{{ .Values.config.secretName}}"
+          - name: SECRET_NAMESPACE
+            value: "{{ .Values.namespace }}"
           ports:
             - name: http
               containerPort: 4000

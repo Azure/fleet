@@ -36,7 +36,7 @@ func NewFactory() interfaces.AuthenticationFactory {
 // RefreshToken gets a new token to make request to the associated fleet' hub cluster, and writes it to the mounted file.
 func (a *azureProvider) RefreshToken(ctx context.Context, tokenFile string) (*time.Time, error) {
 	if a.ClientID == "" {
-		return nil, errors.New("client ID is cannot be empty")
+		return nil, errors.New("client ID cannot be empty")
 	}
 
 	klog.Info("Calling managed identity API to get new token")
