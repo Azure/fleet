@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package internalMemberCluster
+package internalmembercluster
 
 import (
 	"context"
@@ -70,17 +70,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if memberCluster.Spec.State == fleetv1alpha1.ClusterStateJoin {
-		return r.join(ctx, memberCluster)
+		return r.updateHeartbeat(ctx, memberCluster)
 	}
 
 	//TODO: make sure the state is leave, alert otherwise
 	return r.leave(ctx, memberCluster)
 }
 
-//join carries two operations:
+//updateHeartbeat repeatedly performs two below operation. This informs the hub cluster that member cluster is healthy.
+//Join flow on internal member cluster controller finishes when the first heartbeat completes.
 //1. Gets current cluster usage.
 //2. Updates the associated InternalMemberCluster Custom Resource with current cluster usage and marks it as Joined.
-func (r *Reconciler) join(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
+func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
 	membershipState := r.getMembershipClusterState()
 
 	if membershipState != fleetv1alpha1.ClusterStateJoin {
