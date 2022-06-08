@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/internalMemberCluster"
+	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membership"
 	//+kubebuilder:scaffold:imports
 )
@@ -125,7 +125,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	defer close(internalMemberClusterChan)
 
 	// TODO(mng): update how we populate underlay and overlay client
-	if err = internalMemberCluster.NewReconciler(
+	if err = internalmembercluster.NewReconciler(
 		hubMrg.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
 		membershipChan).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
