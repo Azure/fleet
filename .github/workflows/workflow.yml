@@ -94,7 +94,7 @@ jobs:
         with:
           version: 'v3.8.0'
       - name: Setup kubectl 
-        uses: azure/setup-kubectl@v2.0
+        uses: azure/setup-kubectl@v2.1
 
       - name: Setup hub Kind Cluster
         uses: helm/kind-action@v1.2.0
