@@ -5,7 +5,11 @@ MEMBER_AGENT_IMAGE_NAME ?= member-agent
 MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 REFRESH_TOKEN_IMAGE_NAME := refresh-token
 REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
-KUBECONFIG ?= "${HOME}/.kube/config"
+HUB_KUBECONFIG ?=$(KUBECONFIG)
+HUB_KUBECONFIG_CONTEXT ?=$(shell kubectl --kubeconfig $(HUB_KUBECONFIG) config current-context)
+MEMBER_KUBECONFIG ?=$(KUBECONFIG)
+MEMBER_KUBECONFIG_CONTEXT ?=$(shell kubectl --kubeconfig $(MEMBER_KUBECONFIG) config current-context)
+
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -100,9 +104,23 @@ test: manifests generate fmt vet $(ENVTEST) ## Run tests.
 local-unit-test: $(ENVTEST) ## Run tests.
 	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -race -coverprofile=coverage.xml -covermode=atomic -v
 
+cluster-ip:
+	kubectl config use-context $(HUB_KUBECONFIG_CONTEXT) --kubeconfig $(HUB_KUBECONFIG)
+  	CLUSTER_IP?=$(shell kubectl --kubeconfig $(HUB_KUBECONFIG) get svc kubernetes -n default -o jsonpath="{.spec.clusterIP}")
+
+e2e-hub-kubeconfig-secret: cluster-ip
+	cp $(HUB_KUBECONFIG) e2e-hub-kubeconfig
+	kubectl config set clusters.$(HUB_KUBECONFIG_CONTEXT).server https://$(CLUSTER_IP) --kubeconfig e2e-hub-kubeconfig
+	kubectl delete secret hub-kubeconfig-secret -n fleet-system --ignore-not-found --kubeconfig $(MEMBER_KUBECONFIG)
+	kubectl create secret generic hub-kubeconfig-secret --from-file=kubeconfig=e2e-hub-kubeconfig -n fleet-system --kubeconfig $(MEMBER_KUBECONFIG)
+	rm ./e2e-hub-kubeconfig
+
+build-e2e:
+	go test -c ./test/e2e
+
 .PHONY: e2e-tests
-e2e-tests: 
-	KUBECONFIG=${KUBECONFIG} go test -tags=e2e -v ./test/e2e
+e2e-tests: build-e2e e2e-hub-kubeconfig-secret
+	./e2e.test -test.v -ginkgo.v
 
 
 reviewable: fmt vet lint staticcheck
