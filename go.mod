@@ -8,25 +8,25 @@ require (
 	github.com/Azure/go-autorest/autorest/date v0.3.0
 	github.com/crossplane/crossplane-runtime v0.16.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
 	github.com/stretchr/testify v1.7.0
 	k8s.io/apimachinery v0.23.5
 	k8s.io/client-go v0.23.5
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/controller-runtime v0.11.0
-	sigs.k8s.io/kind v0.14.0
 )
 
 require (
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
-	github.com/alessio/shellescape v1.4.1 // indirect
+	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/pelletier/go-toml v1.9.4 // indirect
+	github.com/onsi/ginkgo/v2 v2.1.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/zap v1.19.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b // indirect
