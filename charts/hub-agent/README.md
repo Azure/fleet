@@ -30,7 +30,7 @@ _See [helm install](https://helm.sh/docs/helm/helm_install/) for command documen
 | image.tag             | The image release tag to use                                        | `v0.1.0`                                         |
 | namespace             | Namespace that this Helm chart is installed on                      | `fleet-system`                                   |
 | serviceAccount.create | Whether to create service account                                   | `true`                                           |
-| serviceAccount.name   | Service account name                                                | `hub-agent`                                      |
+| serviceAccount.name   | Service account name                                                | `hub-agent-sa`                                      |
 | resources             | The resource request/limits for the container image                 | limits: 500m CPU, 1Gi, requests: 100m CPU, 128Mi |
 | affinity              | The node affinity to use for pod scheduling                         | `{}`                                             |
 | tolerations           | The tolerations to use for pod scheduling                           | `[]`                                             |

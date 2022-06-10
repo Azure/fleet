@@ -6,6 +6,12 @@ rules:
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["create", "get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings","roles"]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create",]
   - apiGroups: ["fleet.azure.com"]
     resources: ["memberclusters"]
     verbs: ["get", "list", "watch", "update", "patch"]
@@ -23,5 +29,5 @@ roleRef:
   name: hub-agent-role
 subjects:
   - kind: ServiceAccount
-    name: {{ include "hub-agent.fullname" . }}
+    name: {{ include "hub-agent.fullname" . }}-sa
     namespace: {{ .Values.namespace }}

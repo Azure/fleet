@@ -14,7 +14,7 @@ spec:
       labels:
         {{- include "hub-agent.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "hub-agent.fullname" . }}
+      serviceAccountName: {{ include "hub-agent.fullname" . }}-sa
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

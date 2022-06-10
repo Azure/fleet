@@ -216,14 +216,10 @@ func (r *Reconciler) checkAndCreateInternalMemberCluster(ctx context.Context, me
 	var imc fleetv1alpha1.InternalMemberCluster
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		if apierrors.IsNotFound(err) {
-			klog.InfoS("internal member cluster doesn't exist for member cluster", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
+			klog.InfoS("creating the internal member cluster", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
 			controllerBool := true
 			ownerRef := metav1.OwnerReference{APIVersion: memberCluster.APIVersion, Kind: memberCluster.Kind, Name: memberCluster.Name, UID: memberCluster.UID, Controller: &controllerBool}
 			imc := fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       InternalMemberClusterKind.Kind,
-					APIVersion: InternalMemberClusterKind.GroupVersion().Version,
-				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            memberCluster.Name,
 					Namespace:       namespaceName,
@@ -238,7 +234,7 @@ func (r *Reconciler) checkAndCreateInternalMemberCluster(ctx context.Context, me
 			}
 			r.recorder.Event(memberCluster, corev1.EventTypeNormal, internalMemberClusterCreated, "Internal member cluster was created")
 			klog.InfoS("internal member cluster was created successfully", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
-			return &imc, err
+			return &imc, nil
 		}
 		return nil, err
 	}
@@ -315,10 +311,6 @@ func createRole(roleName, namespaceName string) rbacv1.Role {
 		Resources: resources,
 	}
 	role := rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Role",
-			APIVersion: rbacv1.SchemeGroupVersion.String(),
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleName,
 			Namespace: namespaceName,
@@ -336,10 +328,6 @@ func createRoleBinding(roleName, roleBindingName, namespaceName string, identity
 		Name:     roleName,
 	}
 	rb := rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "RoleBinding",
-			APIVersion: rbacv1.SchemeGroupVersion.String(),
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleBindingName,
 			Namespace: namespaceName,
