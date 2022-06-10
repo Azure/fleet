@@ -474,7 +474,6 @@ func TestCheckAndCreateInternalMemberCluster(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "mc1", Namespace: namespace1},
 	}
 	expectedInternalMemberCluster2 := fleetv1alpha1.InternalMemberCluster{
-		TypeMeta:   metav1.TypeMeta{Kind: InternalMemberClusterKind.Kind, APIVersion: InternalMemberClusterKind.GroupVersion().Version},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc2", Namespace: namespace2, OwnerReferences: []metav1.OwnerReference{expectedOwnerRef2}},
 		Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
 	}
@@ -585,88 +584,6 @@ func TestMarkMemberClusterHeartbeatReceived(t *testing.T) {
 	for i := range expectedConditions {
 		actualCondition := memberCluster.GetCondition(expectedConditions[i].Type)
 		assert.Equal(t, "", cmp.Diff(&expectedConditions[i], actualCondition, cmpopts.IgnoreTypes(time.Time{})))
-	}
-}
-
-func TestReconcilerUpdateMemberClusterStatus(t *testing.T) {
-	updateStatusPatchMock := test.NewMockStatusPatchFn(nil, func(o client.Object) error {
-		mc, _ := o.(*fleetv1alpha1.MemberCluster)
-		if mc.Name == "mc2" {
-			return fmt.Errorf("cannot update member cluster")
-		}
-		cond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-		if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != memberClusterJoined {
-			return fmt.Errorf("wrong condition after update, cond = %+v", cond)
-		}
-		return nil
-	})
-
-	condition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: 1,
-		Reason:             memberClusterJoined,
-	}
-	capacity := make(corev1.ResourceList)
-	allocatable := make(corev1.ResourceList)
-	capacity.Cpu().Set(2)
-	capacity.Memory().Set(2048)
-	allocatable.Cpu().Set(1)
-	allocatable.Memory().Set(1024)
-	status := fleetv1alpha1.InternalMemberClusterStatus{
-		Conditions:  []metav1.Condition{condition},
-		Capacity:    capacity,
-		Allocatable: allocatable,
-	}
-
-	memberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster1}}
-	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
-	expectedEvent1 := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
-	expectedEvent2 := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
-	expectedEvent3 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
-	expectedEvent4 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
-
-	tests := map[string]struct {
-		r             *Reconciler
-		memberCluster *fleetv1alpha1.MemberCluster
-		status        fleetv1alpha1.InternalMemberClusterStatus
-		wantedEvents  []string
-		wantErr       error
-	}{
-		"member cluster is updated": {
-			r: &Reconciler{
-				Client:   &test.MockClient{MockStatusPatch: updateStatusPatchMock},
-				recorder: utils.NewFakeRecorder(2),
-			},
-			memberCluster: &memberCluster1,
-			status:        status,
-			wantedEvents:  []string{expectedEvent1, expectedEvent2},
-			wantErr:       nil,
-		},
-		"member cluster status patch error": {
-			r: &Reconciler{
-				Client:   &test.MockClient{MockStatusPatch: updateStatusPatchMock},
-				recorder: utils.NewFakeRecorder(2),
-			},
-			memberCluster: &memberCluster2,
-			status:        status,
-			wantedEvents:  []string{expectedEvent3, expectedEvent4},
-			wantErr:       errors.New("cannot update member cluster"),
-		},
-	}
-
-	for testName, tt := range tests {
-		t.Run(testName, func(t *testing.T) {
-			err := tt.r.updateMemberClusterStatus(context.Background(), tt.memberCluster, tt.status)
-			if tt.r.recorder != nil {
-				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
-				for _, expectedEvent := range tt.wantedEvents {
-					event := <-fakeRecorder.Events
-					assert.Equal(t, expectedEvent, event)
-				}
-			}
-			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
-		})
 	}
 }
 
