@@ -9,6 +9,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math/rand"
 	"path/filepath"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,4 +85,19 @@ func GetEventWatcherForCurrentCluster(ctx context.Context, namespace string) (wa
 	}
 
 	return clientSet.CoreV1().Events(namespace).Watch(ctx, metav1.ListOptions{})
+}
+
+func RandBetween(min int, max int) int {
+	return rand.Intn(max-min) + min
+}
+
+func RandStr() string {
+	const length = 10 // specific size to avoid user passes in unreasonably large size, causing runtime error
+	b := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		b[i] = byte(RandBetween(97, 122))
+	}
+
+	return string(b)
 }
