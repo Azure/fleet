@@ -122,26 +122,51 @@ func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
 	}
 }
 
-func TestMarkInternalMemberClusterHeartbeatUnknown(t *testing.T) {
-	internalMemberCluster := &v1alpha1.InternalMemberCluster{}
+func TestMarkInternalMemberClusterHealthy(t *testing.T) {
 	r := Reconciler{recorder: utils.NewFakeRecorder(1)}
+	internalMemberCluster := &v1alpha1.InternalMemberCluster{}
 
-	r.markInternalMemberClusterHeartbeatUnknown(internalMemberCluster)
+	r.markInternalMemberClusterHealthy(internalMemberCluster)
 
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
-	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBUnknown, "internal member cluster heartbeat unknown")
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
 
-	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnknown")
+	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterHBUnknown},
+		{Type: v1alpha1.ConditionTypeMemberClusterHealth, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy},
 		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
+	}
+
+	for _, expectedCondition := range expectedConditions {
+		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
+	}
+}
+
+func TestMarkInternalMemberClusterHeartbeatUnhealthy(t *testing.T) {
+	internalMemberCluster := &v1alpha1.InternalMemberCluster{}
+	err := errors.New("rand-err-msg")
+	r := Reconciler{recorder: utils.NewFakeRecorder(1)}
+
+	r.markInternalMemberClusterUnhealthy(internalMemberCluster, err)
+
+	// check that the correct event is emitted
+	event := <-r.recorder.(*record.FakeRecorder).Events
+	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
+
+	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
+
+	// Check expected conditions.
+	expectedConditions := []metav1.Condition{
+		{Type: v1alpha1.ConditionTypeInternalMemberClusterHealth, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"},
+		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionFalse, Reason: utils.ReasonReconcileError, Message: "rand-err-msg"},
 	}
 	for _, expectedCondition := range expectedConditions {
 		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnknown")
+		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 	}
 }
 

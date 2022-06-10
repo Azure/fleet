@@ -40,7 +40,8 @@ type Reconciler struct {
 
 const (
 	eventReasonInternalMemberClusterHBReceived = "InternalMemberClusterHeartbeatReceived"
-	eventReasonInternalMemberClusterHBUnknown  = "InternalMemberClusterHeartbeatUnknown"
+	eventReasonInternalMemberClusterHealthy    = "InternalMemberClusterHealthy"
+	eventReasonInternalMemberClusterUnhealthy  = "InternalMemberClusterUnhealthy"
 	eventReasonInternalMemberClusterJoined     = "InternalMemberClusterJoined"
 	eventReasonInternalMemberClusterLeft       = "InternalMemberClusterLeft"
 	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
@@ -94,7 +95,9 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
 	if collectErr != nil {
 		klog.ErrorS(collectErr, "failed to collect member cluster usage", "name", memberCluster.Name, "namespace", memberCluster.Namespace)
-		memberCluster.SetConditions(utils.ReconcileErrorCondition(collectErr))
+		r.markInternalMemberClusterUnhealthy(memberCluster, collectErr)
+	} else {
+		r.markInternalMemberClusterHealthy(memberCluster)
 	}
 
 	updateErr := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
@@ -186,18 +189,30 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(internalMemberCl
 	internalMemberCluster.SetConditions(hearbeatReceivedCondition, utils.ReconcileSuccessCondition())
 }
 
-//TODO: replace this with a markInternalMemberClusterUnhealthy
-func (r *Reconciler) markInternalMemberClusterHeartbeatUnknown(internalMemberCluster apis.ConditionedObj) {
-	klog.InfoS("mark internal member cluster heartbeat unknown",
+func (r *Reconciler) markInternalMemberClusterHealthy(internalMemberCluster apis.ConditionedObj) {
+	klog.InfoS("mark internal member cluster healthy",
 		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
-	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBUnknown, "internal member cluster heartbeat unknown")
-	heartbeatUnknownCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
-		Status:             metav1.ConditionUnknown,
-		Reason:             eventReasonInternalMemberClusterHBUnknown,
+	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
+	internalMemberClusterHealthyCond := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHealth,
+		Status:             metav1.ConditionTrue,
+		Reason:             eventReasonInternalMemberClusterHealthy,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(heartbeatUnknownCondition, utils.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(internalMemberClusterHealthyCond, utils.ReconcileSuccessCondition())
+}
+
+func (r *Reconciler) markInternalMemberClusterUnhealthy(internalMemberCluster apis.ConditionedObj, err error) {
+	klog.InfoS("mark internal member cluster unhealthy",
+		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
+	r.recorder.Event(internalMemberCluster, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
+	internalMemberClusterUnhealthyCond := metav1.Condition{
+		Type:    fleetv1alpha1.ConditionTypeInternalMemberClusterHealth,
+		Status:  metav1.ConditionFalse,
+		Reason:  eventReasonInternalMemberClusterUnhealthy,
+		Message: err.Error(),
+	}
+	internalMemberCluster.SetConditions(internalMemberClusterUnhealthyCond, utils.ReconcileErrorCondition(err))
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.ConditionedObj) {

@@ -48,6 +48,10 @@ const (
 	// ConditionTypeInternalMemberClusterHeartbeat is used to track the Heartbeat state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
 	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
+
+	// ConditionTypeInternalMemberClusterHealth is used to track the Health state of the InternalMemberCluster.
+	// its conditionStatus can be "True" == Healthy, "False" == UnHealthy. "Unknown" is unused.
+	ConditionTypeInternalMemberClusterHealth string = "Healthy"
 )
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
