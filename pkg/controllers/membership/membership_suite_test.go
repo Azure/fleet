@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -28,35 +28,35 @@ var (
 )
 
 func TestMembership(t *testing.T) {
-	gomega.RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Membership Controller Integration Test Suite")
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Membership Controller Integration Test Suite")
 }
 
-var _ = ginkgo.BeforeSuite(func() {
+var _ = BeforeSuite(func() {
 	done := make(chan interface{})
 	go func() {
-		klog.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true)))
+		klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-		ginkgo.By("bootstrapping test environment")
+		By("bootstrapping test environment")
 		testEnv = &envtest.Environment{
-			CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+			CRDDirectoryPaths:     []string{filepath.Join("../../../", "config", "crd", "bases")},
 			ErrorIfCRDPathMissing: true,
 		}
 		var err error
 		cfg, err = testEnv.Start()
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		gomega.Expect(cfg).NotTo(gomega.BeNil())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg).NotTo(BeNil())
 
 		err = v1alpha1.AddToScheme(scheme.Scheme)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		//+kubebuilder:scaffold:scheme
-		ginkgo.By("construct the k8s client")
+		By("construct the k8s client")
 		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		gomega.Expect(k8sClient).NotTo(gomega.BeNil())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient).NotTo(BeNil())
 
-		ginkgo.By("Starting the controller manager")
+		By("Starting the controller manager")
 		klog.InitFlags(flag.CommandLine)
 		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 			Scheme:             scheme.Scheme,
@@ -64,15 +64,15 @@ var _ = ginkgo.BeforeSuite(func() {
 			Logger:             klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)),
 			Port:               4848,
 		})
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		Expect(err).ToNot(HaveOccurred())
 
 		close(done)
 	}()
-	gomega.Eventually(done, 60).Should(gomega.BeClosed())
+	Eventually(done, 60).Should(BeClosed())
 })
 
-var _ = ginkgo.AfterSuite(func() {
-	ginkgo.By("tearing down the test environment")
+var _ = AfterSuite(func() {
+	By("tearing down the test environment")
 	err := testEnv.Stop()
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 })
