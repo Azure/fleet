@@ -26,6 +26,12 @@ namespace:
   fleet-system
 
 config:
-  secretName: "default-secret"
-  providerName: azure
-  hubURL : localhost:8080
+  provider: secret
+  hubURL : https://127.0.0.1:53528
+
+secret:
+  name: "hub-kubeconfig-secret"
+  namespace: "default"
+
+azure:
+  clientID: ""

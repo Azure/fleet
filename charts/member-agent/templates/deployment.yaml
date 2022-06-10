@@ -25,12 +25,10 @@ spec:
             - name: http
               containerPort: 80
           env:
-          - name: CONFIG_PATH
-            value: "/config/token.txt"
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"
-          - name: AZURE_CLIENT_ID
-            value: "<CLIENT_ID_VALUE>"
+          - name: CONFIG_PATH
+            value: "/config/token"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -41,14 +39,11 @@ spec:
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
           args:
-            - --provider-name={{ .Values.config.providerName }}
-          env:
-          - name: CONFIG_PATH
-            value: "/config/token.txt"
-          - name: SECRET_NAME
-            value: "{{ .Values.config.secretName}}"
-          - name: SECRET_NAMESPACE
-            value: "{{ .Values.namespace }}"
+            {{ $provider := .Values.config.provider }}
+            - {{ $provider }}
+            {{ range $key, $value := (index .Values $provider) }}
+            - --{{ $key }}={{ $value }}
+            {{ end }}
           ports:
             - name: http
               containerPort: 4000
