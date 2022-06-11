@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -30,7 +29,6 @@ import (
 type Reconciler struct {
 	hubClient                 client.Client
 	memberClient              client.Client
-	restMapper                meta.RESTMapper
 	recorder                  record.EventRecorder
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState
 	membershipChan            <-chan fleetv1alpha1.ClusterState
@@ -48,13 +46,12 @@ const (
 )
 
 // NewReconciler creates a new reconciler for the internal membership CR
-func NewReconciler(hubClient client.Client, memberClient client.Client, restMapper meta.RESTMapper,
+func NewReconciler(hubClient client.Client, memberClient client.Client,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
 	membershipChan <-chan fleetv1alpha1.ClusterState) *Reconciler {
 	return &Reconciler{
 		hubClient:                 hubClient,
 		memberClient:              memberClient,
-		restMapper:                restMapper,
 		internalMemberClusterChan: internalMemberClusterChan,
 		membershipChan:            membershipChan,
 	}
@@ -108,7 +105,6 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, nil
 }
 
-// TODO (mng): double-check RequeueAfter field in all returning Ctrl.Result{}
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
 	membershipState := r.getMembershipClusterState()
 	if membershipState != fleetv1alpha1.ClusterStateLeave {

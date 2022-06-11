@@ -114,7 +114,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(hubCfg, apiutil.WithLazyDiscovery)
+	_, err = apiutil.NewDynamicRESTMapper(hubCfg, apiutil.WithLazyDiscovery)
 	if err != nil {
 		return errors.Wrap(err, "unable to start member manager")
 	}
@@ -124,9 +124,8 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	defer close(membershipChan)
 	defer close(internalMemberClusterChan)
 
-	// TODO(mng): update how we populate underlay and overlay client
 	if err = internalmembercluster.NewReconciler(
-		hubMrg.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
+		hubMrg.GetClient(), memberMgr.GetClient(), internalMemberClusterChan,
 		membershipChan).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
