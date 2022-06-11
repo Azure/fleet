@@ -57,7 +57,6 @@ func main() {
 
 	if err = (&membercluster.Reconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "MemberCluster")
 		os.Exit(1)

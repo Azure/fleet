@@ -101,8 +101,8 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet $(ENVTEST) ## Run tests.
 	$(local-unit-test)
 
-local-unit-test: $(ENVTEST) ## Run tests.
-	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -race -coverprofile=coverage.xml -covermode=atomic -v
+local-unit-test: ## Run local tests.
+	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -race -coverprofile=coverage.xml -covermode=atomic -v
 
 cluster-ip:
 	kubectl config use-context $(HUB_KUBECONFIG_CONTEXT) --kubeconfig $(HUB_KUBECONFIG)
@@ -122,7 +122,7 @@ build-e2e:
 e2e-tests: build-e2e e2e-hub-kubeconfig-secret
 	./e2e.test -test.v -ginkgo.v
 
-
+.PHONY: reviewable
 reviewable: fmt vet lint staticcheck
 	go mod tidy
 
