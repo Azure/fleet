@@ -1,3 +1,7 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
 package membership
 
 import (
@@ -26,8 +30,8 @@ var _ = Describe("Test Membership Controller", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		memberClusterName = "fleet-" + utils.RandStr()
-		memberClusterNamespace = "fleet-" + utils.RandStr()
+		memberClusterName = "mc" + utils.RandStr()
+		memberClusterNamespace = "fleet-" + memberClusterName
 		memberClusterNamespacedName = types.NamespacedName{
 			Name:      memberClusterName,
 			Namespace: memberClusterNamespace,
@@ -100,10 +104,9 @@ var _ = Describe("Test Membership Controller", func() {
 			var updatedMembership v1alpha1.Membership
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &updatedMembership)).Should(Succeed())
 
-			membershipLatestCond := updatedMembership.Status.Conditions[0]
-			Expect(membershipLatestCond.Type).Should(Equal(v1alpha1.ConditionTypeMembershipJoin))
-			Expect(membershipLatestCond.Status).Should(Equal(metav1.ConditionTrue))
-			Expect(membershipLatestCond.Reason).Should(Equal(eventReasonMembershipJoined))
+			membershipJoinCond := updatedMembership.GetCondition(v1alpha1.ConditionTypeMembershipJoin)
+			Expect(membershipJoinCond.Status).Should(Equal(metav1.ConditionTrue))
+			Expect(membershipJoinCond.Reason).Should(Equal(eventReasonMembershipJoined))
 		})
 	})
 })
