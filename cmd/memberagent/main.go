@@ -17,7 +17,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -114,19 +113,13 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(hubCfg, apiutil.WithLazyDiscovery)
-	if err != nil {
-		return errors.Wrap(err, "unable to start member manager")
-	}
-
 	membershipChan := make(chan fleetv1alpha1.ClusterState)
 	internalMemberClusterChan := make(chan fleetv1alpha1.ClusterState)
 	defer close(membershipChan)
 	defer close(internalMemberClusterChan)
 
-	// TODO(mng): update how we populate underlay and overlay client
 	if err = internalmembercluster.NewReconciler(
-		hubMrg.GetClient(), memberMgr.GetClient(), restMapper, internalMemberClusterChan,
+		hubMrg.GetClient(), memberMgr.GetClient(), internalMemberClusterChan,
 		membershipChan).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
