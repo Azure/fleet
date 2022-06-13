@@ -110,7 +110,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Int
 	if membershipState != fleetv1alpha1.ClusterStateLeave {
 		r.markInternalMemberClusterUnknown(memberCluster)
 		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-		return ctrl.Result{RequeueAfter: time.Minute},
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
 			errors.Wrap(err, "error marking internal member cluster as unknown")
 	}
 

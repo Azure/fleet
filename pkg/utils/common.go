@@ -88,6 +88,14 @@ func GetEventWatcherForCurrentCluster(ctx context.Context, namespace string) (wa
 	return clientSet.CoreV1().Events(namespace).Watch(ctx, metav1.ListOptions{})
 }
 
+func RandSecureInt(limit int64) int64 {
+	nBig, err := rand.Int(rand.Reader, big.NewInt(limit))
+	if err != nil {
+		log.Println(err)
+	}
+	return nBig.Int64()
+}
+
 func RandStr() string {
 	const length = 10 // specific size to avoid user passes in unreasonably large size, causing runtime error
 	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
