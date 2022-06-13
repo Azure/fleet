@@ -68,7 +68,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 	memberCluster4 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}}
 
-	expectedEvent := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, namespaceCreated, "Namespace was created")
+	expectedEvent := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created")
 
 	tests := map[string]struct {
 		r                   *Reconciler
@@ -190,8 +190,8 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 	memberCluster5 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}}
 	memberCluster6 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}}
 
-	expectedEvent1 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, roleUpdated, "role was updated")
-	expectedEvent2 := utils.GetEventString(&memberCluster3, corev1.EventTypeNormal, roleCreated, "role was created")
+	expectedEvent1 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
+	expectedEvent2 := utils.GetEventString(&memberCluster3, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
 
 	tests := map[string]struct {
 		r              *Reconciler
@@ -263,7 +263,7 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got, err := tt.r.checkAndCreateRole(context.Background(), tt.memberCluster, tt.namespaceName)
+			got, err := tt.r.syncRole(context.Background(), tt.memberCluster, tt.namespaceName)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
@@ -339,8 +339,8 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 	memberCluster5 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}}
 	memberCluster6 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}}
 
-	expectedEvent1 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, roleBindingUpdated, "role binding was updated")
-	expectedEvent2 := utils.GetEventString(&memberCluster3, corev1.EventTypeNormal, roleBindingCreated, "role binding was created")
+	expectedEvent1 := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
+	expectedEvent2 := utils.GetEventString(&memberCluster3, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 
 	tests := map[string]struct {
 		r             *Reconciler
@@ -419,7 +419,7 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			err := tt.r.checkAndCreateRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName, identity)
+			err := tt.r.syncRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName, identity)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
@@ -468,7 +468,7 @@ func TestCheckAndCreateInternalMemberCluster(t *testing.T) {
 	memberCluster4 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}}
 
 	controllerBool := true
-	expectedEvent := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, internalMemberClusterCreated, "Internal member cluster was created")
+	expectedEvent := utils.GetEventString(&memberCluster2, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 	expectedOwnerRef2 := metav1.OwnerReference{APIVersion: memberCluster2.APIVersion, Kind: memberCluster2.Kind, Name: memberCluster2.Name, UID: memberCluster2.UID, Controller: &controllerBool}
 	expectedInternalMemberCluster1 := fleetv1alpha1.InternalMemberCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "mc1", Namespace: namespace1},
@@ -522,7 +522,7 @@ func TestCheckAndCreateInternalMemberCluster(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			imc, err := tt.r.checkAndCreateInternalMemberCluster(context.Background(), tt.memberCluster, tt.namespaceName)
+			imc, err := tt.r.markInternalMemberClusterStateJoin(context.Background(), tt.memberCluster, tt.namespaceName)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
@@ -538,47 +538,20 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	recorder := utils.NewFakeRecorder(1)
 	memberCluster := &fleetv1alpha1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       InternalMemberClusterKind.Kind,
-			APIVersion: InternalMemberClusterKind.GroupVersion().String(),
+			Kind:       internalMemberClusterKind,
+			APIVersion: fleetv1alpha1.GroupVersion.String(),
 		},
 	}
 	markMemberClusterJoined(recorder, memberCluster)
 
 	// check that the correct event is emitted
 	event := <-recorder.Events
-	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, memberClusterJoined, "member cluster is joined")
+	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster is joined")
 	assert.Equal(t, expected, event)
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
-		{Type: fleetv1alpha1.ConditionTypeMemberClusterJoin, Status: metav1.ConditionTrue, Reason: memberClusterJoined},
-	}
-
-	for i := range expectedConditions {
-		actualCondition := memberCluster.GetCondition(expectedConditions[i].Type)
-		assert.Equal(t, "", cmp.Diff(&expectedConditions[i], actualCondition, cmpopts.IgnoreTypes(time.Time{})))
-	}
-}
-
-func TestMarkMemberClusterHeartbeatReceived(t *testing.T) {
-	recorder := utils.NewFakeRecorder(1)
-	memberCluster := &fleetv1alpha1.MemberCluster{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       InternalMemberClusterKind.Kind,
-			APIVersion: InternalMemberClusterKind.GroupVersion().String(),
-		},
-	}
-	markMemberClusterHeartbeatReceived(recorder, memberCluster)
-
-	// check that the correct event is emitted
-	event := <-recorder.Events
-	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, heartBeatReceived, "member cluster heartbeat received")
-	assert.Equal(t, expected, event)
-
-	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: heartBeatReceived},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
+		{Type: fleetv1alpha1.ConditionTypeMemberClusterJoin, Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined},
 	}
 
 	for i := range expectedConditions {
@@ -615,7 +588,7 @@ func TestUpdateInternalMemberClusterSpec(t *testing.T) {
 	memberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster2}}
 	memberCluster3 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberCluster3}}
 
-	expectedEvent := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, internalMemberClusterSpecUpdated, "internal member cluster spec is marked as leave")
+	expectedEvent := utils.GetEventString(&memberCluster1, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec is marked as leave")
 
 	tests := map[string]struct {
 		r             *Reconciler
@@ -652,7 +625,8 @@ func TestUpdateInternalMemberClusterSpec(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			err := tt.r.updateInternalMemberClusterSpec(context.Background(), tt.memberCluster)
+			// TODO: fix this
+			err := tt.r.syncInternalMemberClusterState(context.Background(), tt.memberCluster, nil)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
