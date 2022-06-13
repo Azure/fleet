@@ -6,6 +6,7 @@ package membership
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +31,7 @@ var _ = Describe("Test Membership Controller", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		memberClusterName = "mc" + utils.RandStr()
+		memberClusterName = "mc" + strings.ToLower(utils.RandStr())
 		memberClusterNamespace = "fleet-" + memberClusterName
 		memberClusterNamespacedName = types.NamespacedName{
 			Name:      memberClusterName,
