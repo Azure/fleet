@@ -7,8 +7,10 @@ package utils
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"log"
+	"math/big"
 	"path/filepath"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,4 +86,19 @@ func GetEventWatcherForCurrentCluster(ctx context.Context, namespace string) (wa
 	}
 
 	return clientSet.CoreV1().Events(namespace).Watch(ctx, metav1.ListOptions{})
+}
+
+func RandStr() string {
+	const length = 10 // specific size to avoid user passes in unreasonably large size, causing runtime error
+	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
+	ret := make([]byte, length)
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			return ""
+		}
+		ret[i] = letters[num.Int64()]
+	}
+
+	return string(ret)
 }
