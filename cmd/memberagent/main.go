@@ -17,7 +17,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -110,11 +109,6 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		LeaderElectionID:       "984738fa.member.fleet.azure.com",
 	}
 	memberMgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), memberOpts)
-	if err != nil {
-		return errors.Wrap(err, "unable to start member manager")
-	}
-
-	_, err = apiutil.NewDynamicRESTMapper(hubCfg, apiutil.WithLazyDiscovery)
 	if err != nil {
 		return errors.Wrap(err, "unable to start member manager")
 	}
