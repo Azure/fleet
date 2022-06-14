@@ -45,6 +45,10 @@ const (
 	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
 )
 
+var (
+	errInvalidClusterState = errors.New("invalid member cluster spec state")
+)
+
 // NewReconciler creates a new reconciler for the internal membership CR
 func NewReconciler(hubClient client.Client, memberClient client.Client,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
@@ -62,17 +66,27 @@ func NewReconciler(hubClient client.Client, memberClient client.Client,
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/finalizers,verbs=update
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var memberCluster *fleetv1alpha1.InternalMemberCluster
-	if err := r.hubClient.Get(ctx, req.NamespacedName, memberCluster); err != nil {
+	var memberCluster fleetv1alpha1.InternalMemberCluster
+	if err := r.hubClient.Get(ctx, req.NamespacedName, &memberCluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.recorder.Event(&memberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster is deleted")
+			r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
+		}
 		return ctrl.Result{}, errors.Wrap(client.IgnoreNotFound(err), "error getting internal member cluster")
 	}
 
 	if memberCluster.Spec.State == fleetv1alpha1.ClusterStateJoin {
-		return r.updateHeartbeat(ctx, memberCluster)
+		return r.updateHeartbeat(ctx, &memberCluster)
+	}
+
+	if memberCluster.Spec.State != fleetv1alpha1.ClusterStateLeave {
+		klog.ErrorS(errInvalidClusterState, "state", memberCluster.Spec.State,
+			"name", memberCluster.Name, "namespace", memberCluster.Namespace)
+		return ctrl.Result{}, errInvalidClusterState
 	}
 
 	//TODO: make sure the state is leave, alert otherwise
-	return r.leave(ctx, memberCluster)
+	return r.leave(ctx, &memberCluster)
 }
 
 //updateHeartbeat repeatedly performs two below operation. This informs the hub cluster that member cluster is healthy.
