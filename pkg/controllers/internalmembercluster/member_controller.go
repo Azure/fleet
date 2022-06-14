@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -110,7 +111,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Int
 	if membershipState != fleetv1alpha1.ClusterStateLeave {
 		r.markInternalMemberClusterUnknown(memberCluster)
 		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-		return ctrl.Result{RequeueAfter: time.Minute},
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
 			errors.Wrap(err, "error marking internal member cluster as unknown")
 	}
 
@@ -155,16 +156,22 @@ func (r *Reconciler) collectMemberClusterUsage(ctx context.Context, mc *fleetv1a
 		return err
 	}
 
-	mc.Status.Capacity.Cpu().Set(0)
-	mc.Status.Capacity.Memory().Set(0)
-	mc.Status.Allocatable.Cpu().Set(0)
-	mc.Status.Allocatable.Memory().Set(0)
+	var capacityCPU, capacityMemory, allocatableCPU, allocatableMemory resource.Quantity
 
 	for _, node := range nodes.Items {
-		mc.Status.Capacity.Cpu().Add(*(node.Status.Capacity.Cpu()))
-		mc.Status.Capacity.Memory().Add(*(node.Status.Capacity.Memory()))
-		mc.Status.Allocatable.Cpu().Add(*(node.Status.Allocatable.Cpu()))
-		mc.Status.Allocatable.Memory().Add(*(node.Status.Allocatable.Memory()))
+		capacityCPU.Add(*(node.Status.Capacity.Cpu()))
+		capacityMemory.Add(*(node.Status.Capacity.Memory()))
+		allocatableCPU.Add(*(node.Status.Allocatable.Cpu()))
+		allocatableMemory.Add(*(node.Status.Allocatable.Memory()))
+	}
+
+	mc.Status.Capacity = corev1.ResourceList{
+		corev1.ResourceCPU:    capacityCPU,
+		corev1.ResourceMemory: capacityMemory,
+	}
+	mc.Status.Allocatable = corev1.ResourceList{
+		corev1.ResourceCPU:    allocatableCPU,
+		corev1.ResourceMemory: allocatableMemory,
 	}
 
 	r.markInternalMemberClusterHeartbeatReceived(mc)
