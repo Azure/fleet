@@ -46,10 +46,6 @@ const (
 	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
 )
 
-var (
-	errInvalidClusterState = errors.New("invalid member cluster spec state")
-)
-
 // NewReconciler creates a new reconciler for the internal membership CR
 func NewReconciler(hubClient client.Client, memberClient client.Client,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
@@ -80,13 +76,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.updateHeartbeat(ctx, &memberCluster)
 	}
 
-	if memberCluster.Spec.State != fleetv1alpha1.ClusterStateLeave {
-		klog.ErrorS(errInvalidClusterState, "state", memberCluster.Spec.State,
-			"name", memberCluster.Name, "namespace", memberCluster.Namespace)
-		return ctrl.Result{}, errInvalidClusterState
-	}
-
-	//TODO: make sure the state is leave, alert otherwise
+	// Cluster state is Leave.
 	return r.leave(ctx, &memberCluster)
 }
 
@@ -100,7 +90,7 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	if membershipState != fleetv1alpha1.ClusterStateJoin {
 		r.markInternalMemberClusterUnknown(memberCluster)
 		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
+		return ctrl.Result{RequeueAfter: time.Minute},
 			errors.Wrap(err, "error marking internal member cluster as unknown")
 	}
 
