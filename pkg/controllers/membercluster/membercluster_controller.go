@@ -74,18 +74,18 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/finalizers,verbs=update
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var mc *fleetv1alpha1.MemberCluster
-	if err := r.Client.Get(ctx, req.NamespacedName, mc); err != nil {
+	var mc fleetv1alpha1.MemberCluster
+	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.ErrorS(err, "failed to get the member cluster in hub agent", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if mc.Spec.State == fleetv1alpha1.ClusterStateJoin {
-		return r.join(ctx, mc)
+		return r.join(ctx, &mc)
 	}
 
 	if mc.Spec.State == fleetv1alpha1.ClusterStateLeave {
-		return r.leave(ctx, mc)
+		return r.leave(ctx, &mc)
 	}
 
 	return ctrl.Result{}, fmt.Errorf("we get an unexpected cluster state %s for cluster %v", mc.Spec.State, req.NamespacedName)
@@ -142,6 +142,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 
 // leave is used to complete the Leave workflow for the Hub agent.
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
+	imcExists := true
 	imcLeft := false
 	memberClusterLeftCondition := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	if memberClusterLeftCondition != nil && memberClusterLeftCondition.Status == metav1.ConditionFalse {
@@ -149,9 +150,9 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 		return ctrl.Result{}, nil
 	}
 
-	var imc *fleetv1alpha1.InternalMemberCluster
+	var imc fleetv1alpha1.InternalMemberCluster
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.Name)
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, imc); err != nil {
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
@@ -159,15 +160,16 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
+		imcExists = false
 		imcLeft = true
 	}
 
-	if imc != nil {
+	if imcExists {
 		internalMemberClusterLeftCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 		if internalMemberClusterLeftCondition != nil && internalMemberClusterLeftCondition.Status == metav1.ConditionFalse {
 			imcLeft = true
 		} else {
-			if err := r.syncInternalMemberClusterState(ctx, memberCluster, imc); err != nil {
+			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
 				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
 				//leaveFailCounter.Add(1)
