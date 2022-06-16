@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,26 +32,6 @@ const (
 	eventReasonMembershipLeft    = "MembershipLeft"
 )
 
-//TODO: Will be fixed in #103
-//var (
-//	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_succeed_cnt",
-//		Help: "counts the number of successful Join operations for hub agent",
-//	})
-//	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_fail_cnt",
-//		Help: "counts the number of failed Join operations for hub agent",
-//	})
-//	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_succeed_cnt",
-//		Help: "counts the number of successful Leave operations for hub agent",
-//	})
-//	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_fail_cnt",
-//		Help: "counts the number of failed Leave operations for hub agent",
-//	})
-//)
-
 // Reconciler reconciles a Membership object
 type Reconciler struct {
 	client.Client
@@ -59,15 +40,24 @@ type Reconciler struct {
 	membershipChan             chan<- fleetv1alpha1.ClusterState
 	internalMemberClusterState fleetv1alpha1.ClusterState
 	clusterStateLock           sync.RWMutex
+	metrics                    MemberAgentJoinLeaveMetrics
+}
+
+type MemberAgentJoinLeaveMetrics struct {
+	JoinSucceedCounter  prometheus.Counter
+	JoinFailCounter     prometheus.Counter
+	LeaveSucceedCounter prometheus.Counter
+	LeaveFailCounter    prometheus.Counter
 }
 
 // NewReconciler creates a new Reconciler for membership
 func NewReconciler(hubClient client.Client, internalMemberClusterChan <-chan fleetv1alpha1.ClusterState,
-	membershipChan chan<- fleetv1alpha1.ClusterState) *Reconciler {
+	membershipChan chan<- fleetv1alpha1.ClusterState, metrics MemberAgentJoinLeaveMetrics) *Reconciler {
 	return &Reconciler{
 		Client:                    hubClient,
 		internalMemberClusterChan: internalMemberClusterChan,
 		membershipChan:            membershipChan,
+		metrics:                   metrics,
 	}
 }
 
@@ -100,11 +90,11 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
 		r.markMembershipJoined(clusterMembership)
 		err := r.Client.Status().Update(ctx, clusterMembership)
-		//if err != nil {
-		//	joinSucceedCounter.Add(1)
-		//} else {
-		//	joinFailCounter.Add(1)
-		//}
+		if err != nil {
+			r.metrics.JoinSucceedCounter.Add(1)
+		} else {
+			r.metrics.JoinFailCounter.Add(1)
+		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 	}
 	// the state can be leave or unknown.
@@ -119,11 +109,11 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateLeave {
 		r.markMembershipLeft(clusterMembership)
 		err := r.Client.Status().Update(ctx, clusterMembership)
-		//if err != nil {
-		//	leaveSucceedCounter.Add(1)
-		//} else {
-		//	leaveFailCounter.Add(1)
-		//}
+		if err != nil {
+			r.metrics.LeaveSucceedCounter.Add(1)
+		} else {
+			r.metrics.LeaveFailCounter.Add(1)
+		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}
 	// internalMemberClusterState state can be joined or unknown.
@@ -196,7 +186,6 @@ func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("membership")
 	go r.watchInternalMemberClusterChan()
-	//metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.Membership{}).
 		Complete(r)

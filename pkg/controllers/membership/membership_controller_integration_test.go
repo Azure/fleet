@@ -11,6 +11,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,6 +31,22 @@ var _ = Describe("Test Membership Controller", func() {
 		memberClusterNamespace      string
 		memberClusterNamespacedName types.NamespacedName
 		r                           *Reconciler
+		joinSucceedCounter          = promauto.NewCounter(prometheus.CounterOpts{
+			Name: "member_agent_join_succeed_cnt",
+			Help: "counts the number of successful Join operations for member agent",
+		})
+		joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+			Name: "member_agent_join_fail_cnt",
+			Help: "counts the number of failed Join operations for member agent",
+		})
+		leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+			Name: "member_agent_leave_succeed_cnt",
+			Help: "counts the number of successful Leave operations for member agent",
+		})
+		leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+			Name: "member_agent_leave_fail_cnt",
+			Help: "counts the number of failed Leave operations for member agent",
+		})
 	)
 
 	BeforeEach(func() {
@@ -51,7 +69,13 @@ var _ = Describe("Test Membership Controller", func() {
 		Expect(k8sClient.Create(ctx, &ns)).Should(Succeed())
 
 		By("create the membership reconciler")
-		r = NewReconciler(k8sClient, internalMemberClusterChan, membershipChan)
+		r = NewReconciler(k8sClient, internalMemberClusterChan, membershipChan,
+			MemberAgentJoinLeaveMetrics{
+				JoinSucceedCounter:  joinSucceedCounter,
+				JoinFailCounter:     joinFailCounter,
+				LeaveSucceedCounter: leaveSucceedCounter,
+				LeaveFailCounter:    leaveFailCounter,
+			})
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())
 

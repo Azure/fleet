@@ -11,6 +11,8 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -19,6 +21,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
@@ -37,12 +40,33 @@ var (
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 )
 
+var (
+	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "member_agent_join_succeed_cnt",
+		Help: "counts the number of successful Join operations for member agent",
+	})
+	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "member_agent_join_fail_cnt",
+		Help: "counts the number of failed Join operations for member agent",
+	})
+	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "member_agent_leave_succeed_cnt",
+		Help: "counts the number of successful Leave operations for member agent",
+	})
+	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "member_agent_leave_fail_cnt",
+		Help: "counts the number of failed Leave operations for member agent",
+	})
+)
+
 func init() {
 	klog.InitFlags(nil)
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
 }
 
 func main() {
@@ -139,8 +163,13 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		os.Exit(1)
 	}
 
-	if err = membership.NewReconciler(memberMgr.GetClient(), internalMemberClusterChan, membershipChan).
-		SetupWithManager(memberMgr); err != nil {
+	if err = membership.NewReconciler(memberMgr.GetClient(), internalMemberClusterChan, membershipChan,
+		membership.MemberAgentJoinLeaveMetrics{
+			JoinSucceedCounter:  joinSucceedCounter,
+			JoinFailCounter:     joinFailCounter,
+			LeaveSucceedCounter: leaveSucceedCounter,
+			LeaveFailCounter:    leaveFailCounter,
+		}).SetupWithManager(memberMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller membership")
 	}
 

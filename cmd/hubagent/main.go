@@ -8,12 +8,15 @@ import (
 	"flag"
 	"os"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
@@ -28,6 +31,25 @@ var (
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 )
 
+var (
+	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "hub_agent_join_succeed_cnt",
+		Help: "counts the number of successful Join operations for hub agent",
+	})
+	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "hub_agent_join_fail_cnt",
+		Help: "counts the number of failed Join operations for hub agent",
+	})
+	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "hub_agent_leave_succeed_cnt",
+		Help: "counts the number of successful Leave operations for hub agent",
+	})
+	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "hub_agent_leave_fail_cnt",
+		Help: "counts the number of failed Leave operations for hub agent",
+	})
+)
+
 func init() {
 	klog.InitFlags(nil)
 
@@ -35,6 +57,8 @@ func init() {
 
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
 }
 
 func main() {
@@ -55,9 +79,12 @@ func main() {
 
 	klog.Info("starting hubagent")
 
-	if err = (&membercluster.Reconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
+	if err = (membercluster.NewReconciler(mgr.GetClient(), membercluster.HubAgentJoinLeaveMetrics{
+		JoinSucceedCounter:  joinSucceedCounter,
+		JoinFailCounter:     joinFailCounter,
+		LeaveSucceedCounter: leaveSucceedCounter,
+		LeaveFailCounter:    leaveFailCounter,
+	})).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "MemberCluster")
 		os.Exit(1)
 	}
