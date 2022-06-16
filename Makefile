@@ -98,9 +98,9 @@ vet: ## Run go vet against code.
 ## --------------------------------------
 
 .PHONY: test
-test: manifests generate fmt vet $(ENVTEST) ## Run tests.
-	$(local-unit-test)
+test: manifests generate fmt vet local-unit-test ## Run tests.
 
+.PHONY: local-unit-test
 local-unit-test: ## Run local tests.
 	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -race -coverprofile=coverage.xml -covermode=atomic -v
 
