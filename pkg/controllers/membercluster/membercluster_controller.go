@@ -39,8 +39,6 @@ const (
 	eventReasonIMCSpecUpdated     = "InternalMemberClusterSpecUpdated"
 	reasonMemberClusterJoined     = "MemberClusterJoined"
 	reasonMemberClusterLeft       = "MemberClusterLeft"
-
-	internalMemberClusterKind = "InternalMemberCluster"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -214,7 +212,7 @@ func (r *Reconciler) checkAndCreateNamespace(ctx context.Context, memberCluster 
 		klog.InfoS("namespace doesn't exist for member cluster",
 			"namespace", nsName, "memberCluster", memberCluster.Name)
 		// make sure the entire namespace is removed if the member cluster is deleted
-		ownerRef := metav1.OwnerReference{APIVersion: memberCluster.APIVersion, Kind: memberCluster.Kind,
+		ownerRef := metav1.OwnerReference{APIVersion: fleetv1alpha1.GroupVersion.String(), Kind: fleetv1alpha1.MemberClusterKind,
 			Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 		namespace = corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -308,7 +306,7 @@ func (r *Reconciler) markInternalMemberClusterStateJoin(ctx context.Context, mem
 			return nil, err
 		}
 		klog.InfoS("creating the internal member cluster", "internalMemberCluster", memberCluster.Name, "memberCluster", memberCluster.Name)
-		ownerRef := metav1.OwnerReference{APIVersion: memberCluster.APIVersion, Kind: memberCluster.Kind,
+		ownerRef := metav1.OwnerReference{APIVersion: fleetv1alpha1.GroupVersion.String(), Kind: fleetv1alpha1.MemberClusterKind,
 			Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 		imc := fleetv1alpha1.InternalMemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
