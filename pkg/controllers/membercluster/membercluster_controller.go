@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -24,7 +22,6 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -52,24 +49,25 @@ type Reconciler struct {
 	recorder record.EventRecorder
 }
 
-var (
-	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "hub_agent_join_succeed_cnt",
-		Help: "counts the number of successful Join operations for hub agent",
-	})
-	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "hub_agent_join_fail_cnt",
-		Help: "counts the number of failed Join operations for hub agent",
-	})
-	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "hub_agent_join_succeed_cnt",
-		Help: "counts the number of successful Leave operations for hub agent",
-	})
-	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "hub_agent_join_fail_cnt",
-		Help: "counts the number of failed Leave operations for hub agent",
-	})
-)
+//TODO: Will be fixed in #103
+//var (
+//	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+//		Name: "hub_agent_join_succeed_cnt",
+//		Help: "counts the number of successful Join operations for hub agent",
+//	})
+//	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+//		Name: "hub_agent_join_fail_cnt",
+//		Help: "counts the number of failed Join operations for hub agent",
+//	})
+//	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
+//		Name: "hub_agent_join_succeed_cnt",
+//		Help: "counts the number of successful Leave operations for hub agent",
+//	})
+//	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
+//		Name: "hub_agent_join_fail_cnt",
+//		Help: "counts the number of failed Leave operations for hub agent",
+//	})
+//)
 
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/status,verbs=get;update;patch
@@ -101,7 +99,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create namespace for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "namespace", namespaceName)
-		joinFailCounter.Add(1)
+		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -109,7 +107,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create internal member cluster %s in the hub cluster",
 			"memberCluster", mc.Name, "internalMemberCluster", mc.Name)
-		joinFailCounter.Add(1)
+		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -117,7 +115,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "role", roleName)
-		joinFailCounter.Add(1)
+		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -125,7 +123,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role binding for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "roleBinding", fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name))
-		joinFailCounter.Add(1)
+		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -134,11 +132,11 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		if err := r.copyMemberClusterStatusFromInternalMC(ctx, mc, imc); err != nil {
 			klog.ErrorS(err, "cannot update member cluster status as Joined",
 				"internalMemberCluster", imc.Name)
-			joinFailCounter.Add(1)
+			//joinFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 	}
-	joinSucceedCounter.Add(1)
+	//joinSucceedCounter.Add(1)
 	return ctrl.Result{}, nil
 }
 
@@ -157,7 +155,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
-			leaveFailCounter.Add(1)
+			//leaveFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
@@ -172,7 +170,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, imc); err != nil {
 				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
-				leaveFailCounter.Add(1)
+				//leaveFailCounter.Add(1)
 				return ctrl.Result{}, err
 			}
 		}
@@ -185,18 +183,18 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 				return ctrl.Result{}, nil
 			}
 			klog.ErrorS(err, "failed to delete namespace", "memberCluster", memberCluster.Name)
-			leaveFailCounter.Add(1)
+			//leaveFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 
 		// marking member cluster as Left after all the associated resources are removed
 		if err := r.updateMemberClusterStatusAsLeft(ctx, memberCluster); err != nil {
 			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
-			leaveFailCounter.Add(1)
+			//leaveFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 	}
-	leaveSucceedCounter.Add(1)
+	//leaveSucceedCounter.Add(1)
 	return ctrl.Result{}, nil
 }
 
@@ -302,8 +300,8 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, memberCluster *fleetv1
 // markInternalMemberClusterStateJoin update the internal member cluster state as join
 // if the internal member cluster doesn't exist it creates it.
 func (r *Reconciler) markInternalMemberClusterStateJoin(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster, namespaceName string) (*fleetv1alpha1.InternalMemberCluster, error) {
-	var imc *fleetv1alpha1.InternalMemberCluster
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, imc); err != nil {
+	var imc fleetv1alpha1.InternalMemberCluster
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, err
 		}
@@ -328,8 +326,8 @@ func (r *Reconciler) markInternalMemberClusterStateJoin(ctx context.Context, mem
 		return &imc, nil
 	}
 
-	err := r.syncInternalMemberClusterState(ctx, memberCluster, imc)
-	return imc, err
+	err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc)
+	return &imc, err
 }
 
 // copyMemberClusterStatusFromInternalMC is used to update member cluster status given the internal member cluster status
@@ -486,7 +484,7 @@ func createRoleBinding(roleName, roleBindingName, namespaceName string, identity
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
-	metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
+	//metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
