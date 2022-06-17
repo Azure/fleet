@@ -26,6 +26,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		timeout  = time.Second * 30
 		interval = time.Second * 1
 	)
+
 	var (
 		ctx                         context.Context
 		memberClusterName           string
@@ -67,19 +68,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, mc)).Should(Succeed())
-	})
 
-	AfterEach(func() {
-		var ns corev1.Namespace
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
-
-		By("Deleting the namespace")
-		Eventually(func() error {
-			return k8sClient.Delete(ctx, &ns)
-		}, timeout, interval).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
-	})
-
-	It("should create namespace, role, role binding and internal member cluster & mark member cluster as joined", func() {
+		By("trigger reconcile to initiate the join workflow")
 		result, err := r.Reconcile(ctx, ctrl.Request{
 			NamespacedName: memberClusterNamespacedName,
 		})
@@ -119,7 +109,19 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		})
 		Expect(result).Should(Equal(ctrl.Result{}))
 		Expect(err).Should(Not(HaveOccurred()))
+	})
 
+	AfterEach(func() {
+		var ns corev1.Namespace
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
+
+		By("Deleting the namespace")
+		Eventually(func() error {
+			return k8sClient.Delete(ctx, &ns)
+		}, timeout, interval).Should(SatisfyAny(Succeed(), &utils.NotFoundMatcher{}))
+	})
+
+	It("should create namespace, role, role binding and internal member cluster & mark member cluster as joined", func() {
 		var mc fleetv1alpha1.MemberCluster
 		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
@@ -130,5 +132,46 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		heartBeatCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
 		Expect(heartBeatCondition.Status).To(Equal(metav1.ConditionTrue))
 		Expect(heartBeatCondition.Reason).To(Equal("InternalMemberClusterHeartbeatReceived"))
+	})
+
+	It("member cluster is marked as left after leave workflow is completed", func() {
+		By("Update member cluster's spec to leave")
+		var mc fleetv1alpha1.MemberCluster
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+		Expect(k8sClient.Update(ctx, &mc))
+
+		By("trigger reconcile again to initiate leave workflow")
+		result, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		var imc fleetv1alpha1.InternalMemberCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+		Expect(imc.Spec.State).To(Equal(fleetv1alpha1.ClusterStateLeave))
+
+		By("mark Internal Member Cluster as left")
+		imcLeftCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             "InternalMemberClusterLeft",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		imc.SetConditions(imcLeftCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to mark member cluster as left")
+		result, err = r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		mcLeftCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		Expect(mcLeftCondition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(mcLeftCondition.Reason).To(Equal(reasonMemberClusterLeft))
 	})
 })
