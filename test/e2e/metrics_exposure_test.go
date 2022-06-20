@@ -5,8 +5,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.goms.io/fleet/test/e2e/framework"
 	"k8s.io/client-go/kubernetes"
+
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 // TODO (mng): move this test to join/leave tests after those tests finished.
