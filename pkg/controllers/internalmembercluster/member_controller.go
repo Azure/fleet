@@ -88,10 +88,7 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	membershipState := r.getMembershipClusterState()
 
 	if membershipState != fleetv1alpha1.ClusterStateJoin {
-		r.markInternalMemberClusterUnknown(memberCluster)
-		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-		return ctrl.Result{RequeueAfter: time.Minute},
-			errors.Wrap(err, "error marking internal member cluster as unknown")
+		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
 
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
