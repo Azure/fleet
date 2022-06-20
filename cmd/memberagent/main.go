@@ -42,19 +42,19 @@ var (
 
 var (
 	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "successful_join_cnt_hub_agent",
+		Name: "successful_join_cnt_member_agent",
 		Help: "counts the number of successful Join operations for member agent",
 	})
 	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "failed_join_cnt_hub_agent",
+		Name: "failed_join_cnt_member_agent",
 		Help: "counts the number of failed Join operations for member agent",
 	})
 	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "successful_leave_cnt_hub_agent",
+		Name: "successful_leave_cnt_member_agent",
 		Help: "counts the number of successful Leave operations for member agent",
 	})
 	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "failed_leave_cnt_hub_agent",
+		Name: "failed_leave_cnt_member_agent",
 		Help: "counts the number of failed Leave operations for member agent",
 	})
 )
