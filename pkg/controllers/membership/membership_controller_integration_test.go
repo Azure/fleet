@@ -31,22 +31,6 @@ var _ = Describe("Test Membership Controller", func() {
 		memberClusterNamespace      string
 		memberClusterNamespacedName types.NamespacedName
 		r                           *Reconciler
-		joinSucceedCounter          = promauto.NewCounter(prometheus.CounterOpts{
-			Name: "member_agent_join_succeed_cnt",
-			Help: "counts the number of successful Join operations for member agent",
-		})
-		joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-			Name: "member_agent_join_fail_cnt",
-			Help: "counts the number of failed Join operations for member agent",
-		})
-		leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-			Name: "member_agent_leave_succeed_cnt",
-			Help: "counts the number of successful Leave operations for member agent",
-		})
-		leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-			Name: "member_agent_leave_fail_cnt",
-			Help: "counts the number of failed Leave operations for member agent",
-		})
 	)
 
 	BeforeEach(func() {
@@ -71,10 +55,18 @@ var _ = Describe("Test Membership Controller", func() {
 		By("create the membership reconciler")
 		r = NewReconciler(k8sClient, internalMemberClusterChan, membershipChan,
 			MemberAgentJoinLeaveMetrics{
-				JoinSucceedCounter:  joinSucceedCounter,
-				JoinFailCounter:     joinFailCounter,
-				LeaveSucceedCounter: leaveSucceedCounter,
-				LeaveFailCounter:    leaveFailCounter,
+				JoinSucceedCounter: promauto.NewCounter(prometheus.CounterOpts{
+					Name: utils.RandMetricsName(),
+				}),
+				JoinFailCounter: promauto.NewCounter(prometheus.CounterOpts{
+					Name: utils.RandMetricsName(),
+				}),
+				LeaveSucceedCounter: promauto.NewCounter(prometheus.CounterOpts{
+					Name: utils.RandMetricsName(),
+				}),
+				LeaveFailCounter: promauto.NewCounter(prometheus.CounterOpts{
+					Name: utils.RandMetricsName(),
+				}),
 			})
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())

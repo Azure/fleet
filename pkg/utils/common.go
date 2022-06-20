@@ -12,6 +12,7 @@ import (
 	"log"
 	"math/big"
 	"path/filepath"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -109,4 +110,24 @@ func RandStr() string {
 	}
 
 	return string(ret)
+}
+
+// RandMetricsName generates Prometheus metrics name for test purpose.
+func RandMetricsName() string {
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	const length = 5
+	const numWord = 4
+	words := make([]string, numWord)
+	for i := 0; i < numWord; i++ {
+		ret := make([]byte, length)
+		for i := 0; i < length; i++ {
+			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+			if err != nil {
+				return ""
+			}
+			ret[i] = letters[num.Int64()]
+		}
+		words[i] = string(ret)
+	}
+	return strings.Join(words, "_")
 }
