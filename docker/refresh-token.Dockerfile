@@ -10,8 +10,8 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/configprovider/main.go main.go
-COPY pkg/configprovider pkg/configprovider
+COPY cmd/authtoken/main.go main.go
+COPY pkg/authtoken pkg/authtoken
 COPY pkg/interfaces pkg/interfaces
 
 ARG TARGETARCH

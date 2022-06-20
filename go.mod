@@ -5,10 +5,10 @@ go 1.17
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.13.0
-	github.com/Azure/go-autorest/autorest/date v0.3.0
 	github.com/crossplane/crossplane-runtime v0.16.0
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
+	github.com/spf13/cobra v1.3.0
 	github.com/stretchr/testify v1.7.0
 	k8s.io/apimachinery v0.23.5
 	k8s.io/client-go v0.23.5
@@ -18,9 +18,9 @@ require (
 )
 
 require (
-	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/go-logr/zapr v1.2.0 // indirect
 	github.com/golang-jwt/jwt v3.2.1+incompatible // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
@@ -81,6 +81,7 @@ require (
 )
 
 replace (
+	github.com/spf13/cobra => github.com/spf13/cobra v1.3.0
 	k8s.io/api => k8s.io/api v0.23.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.23.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.23.0

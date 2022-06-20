@@ -15,6 +15,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -26,7 +27,6 @@ import (
 )
 
 var (
-	tokenFilePath        = os.Getenv("CONFIG_PATH")
 	scheme               = runtime.NewScheme()
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -40,7 +40,6 @@ func init() {
 	klog.InitFlags(nil)
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -54,27 +53,26 @@ func main() {
 		klog.Error("hub server api cannot be empty")
 		os.Exit(1)
 	}
+	tokenFilePath := os.Getenv("CONFIG_PATH")
 
-	hubOpts := ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     *hubMetricsAddr,
-		Port:                   8443,
-		HealthProbeBindAddress: *hubProbeAddr,
-		LeaderElection:         *enableLeaderElection,
-		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
-	}
-
-	//+kubebuilder:scaffold:builder
-
-	klog.Info("starting memebragent")
-
-	token, err := os.ReadFile(tokenFilePath)
-	if err != nil {
-		klog.Error(errors.Wrapf(err, "cannot read token file from the path %s", tokenFilePath))
+	if tokenFilePath == "" {
+		klog.Error("hub token file path cannot be empty")
 		os.Exit(1)
 	}
-	if len(token) == 0 {
-		klog.Error(err, "token cannot be found")
+
+	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
+		return true
+	}, func() error {
+		// Stat returns file info. It will return
+		// an error if there is no file.
+		_, err := os.Stat(tokenFilePath)
+		if err != nil {
+			klog.Error(err.Error())
+		}
+		return nil
+	})
+	if err != nil {
+		klog.Error(errors.Wrapf(err, " cannot retrieve token file from the path %s", tokenFilePath))
 		os.Exit(1)
 	}
 
@@ -86,6 +84,17 @@ func main() {
 			Insecure: true,
 		},
 	}
+
+	hubOpts := ctrl.Options{
+		Scheme:                 scheme,
+		MetricsBindAddress:     *hubMetricsAddr,
+		Port:                   8443,
+		HealthProbeBindAddress: *hubProbeAddr,
+		LeaderElection:         *enableLeaderElection,
+		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
+	}
+
+	//+kubebuilder:scaffold:builder
 
 	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts); err != nil {
 		klog.Error(err, "problem running controllers")
@@ -101,7 +110,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	memberOpts := ctrl.Options{
-		Scheme:                 hubOpts.Scheme,
+		Scheme:                 scheme,
 		MetricsBindAddress:     *metricsAddr,
 		Port:                   8446,
 		HealthProbeBindAddress: *probeAddr,
