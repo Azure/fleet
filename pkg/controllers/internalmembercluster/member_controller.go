@@ -46,6 +46,8 @@ const (
 	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
 )
 
+var requeueAfterPeriod = time.Second * time.Duration(15)
+
 // NewReconciler creates a new reconciler for the internal membership CR
 func NewReconciler(hubClient client.Client, memberClient client.Client,
 	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
@@ -88,7 +90,7 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	membershipState := r.getMembershipClusterState()
 
 	if membershipState != fleetv1alpha1.ClusterStateJoin {
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, nil
 	}
 
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
@@ -112,16 +114,16 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Int
 	if membershipState != fleetv1alpha1.ClusterStateLeave {
 		r.markInternalMemberClusterUnknown(memberCluster)
 		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
+		return ctrl.Result{RequeueAfter: requeueAfterPeriod},
 			errors.Wrap(err, "error marking internal member cluster as unknown")
 	}
 
 	r.markInternalMemberClusterLeft(memberCluster)
-	err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-	if err != nil {
-		r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
+	if err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "internal member cluster leave error")
 	}
-	return ctrl.Result{}, errors.Wrap(err, "internal member cluster leave error")
+	r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
+	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) getMembershipClusterState() fleetv1alpha1.ClusterState {
