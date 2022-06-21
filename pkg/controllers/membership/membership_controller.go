@@ -183,13 +183,13 @@ func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
 	klog.InfoS("mark membership left",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
 	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipLeft, "membership left")
-	joinedCondition := metav1.Condition{
+	leftCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMembershipJoin,
 		Status:             metav1.ConditionFalse,
 		Reason:             eventReasonMembershipLeft,
 		ObservedGeneration: membership.GetGeneration(),
 	}
-	membership.SetConditions(joinedCondition, utils.ReconcileSuccessCondition())
+	membership.SetConditions(leftCondition, utils.ReconcileSuccessCondition())
 }
 
 // SetupWithManager sets up the controller with the Manager.

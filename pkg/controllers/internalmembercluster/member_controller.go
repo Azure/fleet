@@ -225,39 +225,39 @@ func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.
 	klog.InfoS("mark internal member cluster as joined",
 		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster has joined")
-	joinSucceedCondition := metav1.Condition{
+	joinedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 		Status:             metav1.ConditionTrue,
 		Reason:             eventReasonInternalMemberClusterJoined,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(joinSucceedCondition, utils.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(joinedCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(internalMemberCluster apis.ConditionedObj) {
 	klog.InfoS("mark internal member cluster as left",
 		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster has left")
-	joinSucceedCondition := metav1.Condition{
+	leftCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 		Status:             metav1.ConditionFalse,
 		Reason:             eventReasonInternalMemberClusterLeft,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(joinSucceedCondition, utils.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(leftCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) markInternalMemberClusterUnknown(internalMemberCluster apis.ConditionedObj) {
 	klog.InfoS("mark internal member cluster join state unknown",
 		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster join state unknown")
-	joinUnknownCondition := metav1.Condition{
+	unknownCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 		Status:             metav1.ConditionUnknown,
 		Reason:             eventReasonInternalMemberClusterUnknown,
 		ObservedGeneration: internalMemberCluster.GetGeneration(),
 	}
-	internalMemberCluster.SetConditions(joinUnknownCondition, utils.ReconcileSuccessCondition())
+	internalMemberCluster.SetConditions(unknownCondition, utils.ReconcileSuccessCondition())
 }
 
 func (r *Reconciler) watchMembershipChan() {
