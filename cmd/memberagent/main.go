@@ -12,7 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.goms.io/fleet/pkg/utils"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -41,22 +41,26 @@ var (
 )
 
 var (
-	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "successful_join_cnt_member_agent",
-		Help: "counts the number of successful Join operations for member agent",
-	})
-	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "failed_join_cnt_member_agent",
-		Help: "counts the number of failed Join operations for member agent",
-	})
-	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "successful_leave_cnt_member_agent",
-		Help: "counts the number of successful Leave operations for member agent",
-	})
-	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "failed_leave_cnt_member_agent",
-		Help: "counts the number of failed Leave operations for member agent",
-	})
+	joinLeaveResultMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "join_leave_result",
+		Help: "Number of failed and successful Join/leaves operations",
+	}, []string{"operation", "result"})
+)
+
+var (
+	metricsResultMap = map[bool]string{
+		true:  utils.MetricsSuccessResult,
+		false: utils.MetricsFailureResult,
+	}
+)
+
+var (
+	reportJoinLeaveResultMetric = func(operation utils.MetricsOperation, successful bool) {
+		joinLeaveResultMetrics.With(prometheus.Labels{
+			"operation": string(operation),
+			"result":    metricsResultMap[successful],
+		}).Inc()
+	}
 )
 
 func init() {
@@ -66,7 +70,7 @@ func init() {
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
+	metrics.Registry.MustRegister(joinLeaveResultMetrics)
 }
 
 func main() {
@@ -164,12 +168,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	if err = membership.NewReconciler(memberMgr.GetClient(), internalMemberClusterChan, membershipChan,
-		membership.MemberAgentJoinLeaveMetrics{
-			JoinSucceedCounter:  joinSucceedCounter,
-			JoinFailCounter:     joinFailCounter,
-			LeaveSucceedCounter: leaveSucceedCounter,
-			LeaveFailCounter:    leaveFailCounter,
-		}).SetupWithManager(memberMgr); err != nil {
+		reportJoinLeaveResultMetric).SetupWithManager(memberMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller membership")
 	}
 

@@ -35,12 +35,12 @@ const (
 // Reconciler reconciles a Membership object
 type Reconciler struct {
 	client.Client
-	recorder                   record.EventRecorder
-	internalMemberClusterChan  <-chan fleetv1alpha1.ClusterState
-	membershipChan             chan<- fleetv1alpha1.ClusterState
-	internalMemberClusterState fleetv1alpha1.ClusterState
-	clusterStateLock           sync.RWMutex
-	metrics                    MemberAgentJoinLeaveMetrics
+	recorder                    record.EventRecorder
+	internalMemberClusterChan   <-chan fleetv1alpha1.ClusterState
+	membershipChan              chan<- fleetv1alpha1.ClusterState
+	internalMemberClusterState  fleetv1alpha1.ClusterState
+	clusterStateLock            sync.RWMutex
+	reportJoinLeaveResultMetric func(operation utils.MetricsOperation, successful bool)
 }
 
 type MemberAgentJoinLeaveMetrics struct {
@@ -52,12 +52,13 @@ type MemberAgentJoinLeaveMetrics struct {
 
 // NewReconciler creates a new Reconciler for membership
 func NewReconciler(hubClient client.Client, internalMemberClusterChan <-chan fleetv1alpha1.ClusterState,
-	membershipChan chan<- fleetv1alpha1.ClusterState, metrics MemberAgentJoinLeaveMetrics) *Reconciler {
+	membershipChan chan<- fleetv1alpha1.ClusterState,
+	reportLeaveResultMetric func(operation utils.MetricsOperation, successful bool)) *Reconciler {
 	return &Reconciler{
-		Client:                    hubClient,
-		internalMemberClusterChan: internalMemberClusterChan,
-		membershipChan:            membershipChan,
-		metrics:                   metrics,
+		Client:                      hubClient,
+		internalMemberClusterChan:   internalMemberClusterChan,
+		membershipChan:              membershipChan,
+		reportJoinLeaveResultMetric: reportLeaveResultMetric,
 	}
 }
 
@@ -91,9 +92,9 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		r.markMembershipJoined(clusterMembership)
 		err := r.Client.Status().Update(ctx, clusterMembership)
 		if err != nil {
-			r.metrics.JoinSucceedCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
 		} else {
-			r.metrics.JoinFailCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, true)
 		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 	}
@@ -110,9 +111,9 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 		r.markMembershipLeft(clusterMembership)
 		err := r.Client.Status().Update(ctx, clusterMembership)
 		if err != nil {
-			r.metrics.LeaveSucceedCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, false)
 		} else {
-			r.metrics.LeaveFailCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, true)
 		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}

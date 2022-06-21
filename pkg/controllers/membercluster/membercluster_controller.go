@@ -47,8 +47,8 @@ const (
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	client.Client
-	recorder record.EventRecorder
-	metrics  HubAgentJoinLeaveMetrics
+	recorder                    record.EventRecorder
+	reportJoinLeaveResultMetric func(operation utils.MetricsOperation, successful bool)
 }
 
 type HubAgentJoinLeaveMetrics struct {
@@ -59,10 +59,11 @@ type HubAgentJoinLeaveMetrics struct {
 }
 
 // NewReconciler creates a new Reconciler for member cluster
-func NewReconciler(hubClient client.Client, metrics HubAgentJoinLeaveMetrics) *Reconciler {
+func NewReconciler(hubClient client.Client,
+	reportJoinLeaveResultMetric func(operation utils.MetricsOperation, successful bool)) *Reconciler {
 	return &Reconciler{
-		Client:  hubClient,
-		metrics: metrics,
+		Client:                      hubClient,
+		reportJoinLeaveResultMetric: reportJoinLeaveResultMetric,
 	}
 }
 
@@ -96,7 +97,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create namespace for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "namespace", namespaceName)
-		r.metrics.JoinFailCounter.Add(1)
+		r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
 		return ctrl.Result{}, err
 	}
 
@@ -104,7 +105,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create internal member cluster %s in the hub cluster",
 			"memberCluster", mc.Name, "internalMemberCluster", mc.Name)
-		r.metrics.JoinFailCounter.Add(1)
+		r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
 		return ctrl.Result{}, err
 	}
 
@@ -112,7 +113,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "role", roleName)
-		r.metrics.JoinFailCounter.Add(1)
+		r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
 		return ctrl.Result{}, err
 	}
 
@@ -120,7 +121,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role binding for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "roleBinding", fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name))
-		r.metrics.JoinFailCounter.Add(1)
+		r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
 		return ctrl.Result{}, err
 	}
 
@@ -129,11 +130,11 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		if err := r.copyMemberClusterStatusFromInternalMC(ctx, mc, imc); err != nil {
 			klog.ErrorS(err, "cannot update member cluster status as Joined",
 				"internalMemberCluster", imc.Name)
-			r.metrics.JoinFailCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
 			return ctrl.Result{}, err
 		}
 	}
-	r.metrics.JoinSucceedCounter.Add(1)
+	r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, true)
 	return ctrl.Result{}, nil
 }
 
@@ -153,7 +154,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
-			r.metrics.LeaveFailCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, false)
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
@@ -169,7 +170,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
 				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
-				r.metrics.LeaveFailCounter.Add(1)
+				r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, false)
 				return ctrl.Result{}, err
 			}
 		}
@@ -182,18 +183,18 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 				return ctrl.Result{}, nil
 			}
 			klog.ErrorS(err, "failed to delete namespace", "memberCluster", memberCluster.Name)
-			r.metrics.LeaveFailCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, false)
 			return ctrl.Result{}, err
 		}
 
 		// marking member cluster as Left after all the associated resources are removed
 		if err := r.updateMemberClusterStatusAsLeft(ctx, memberCluster); err != nil {
 			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
-			r.metrics.LeaveFailCounter.Add(1)
+			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, false)
 			return ctrl.Result{}, err
 		}
 	}
-	r.metrics.LeaveSucceedCounter.Add(1)
+	r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, true)
 	return ctrl.Result{}, nil
 }
 
