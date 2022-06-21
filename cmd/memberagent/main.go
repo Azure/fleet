@@ -21,11 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	metrics2 "go.goms.io/fleet/pkg/metrics"
-
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membership"
+	metrics2 "go.goms.io/fleet/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
 
