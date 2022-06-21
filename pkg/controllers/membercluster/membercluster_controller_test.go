@@ -39,22 +39,6 @@ const (
 )
 
 func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
-	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-		if key.Name == namespace2 || key.Name == namespace3 {
-			return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
-		} else if key.Name == namespace1 {
-			o := obj.(*corev1.Namespace)
-			*o = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespace1,
-				},
-			}
-		} else if key.Name == namespace4 {
-			return errors.New("namespace cannot be retrieved")
-		}
-		return nil
-	}
-
 	createMock := func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 		o := obj.(*corev1.Namespace)
 		if o.Name == namespace2 {
@@ -75,7 +59,15 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 	}{
 		"namespace exists": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*corev1.Namespace)
+						*o = corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{Name: namespace1},
+						}
+						return nil
+					},
+				},
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName1}},
 			wantedNamespaceName: namespace1,
@@ -83,7 +75,11 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 		},
 		"namespace doesn't exist": {
 			r: &Reconciler{
-				Client:   &test.MockClient{MockGet: getMock, MockCreate: createMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+					},
+					MockCreate: createMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster:       &memberCluster,
@@ -93,7 +89,11 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 		},
 		"namespace create error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock, MockCreate: createMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+					},
+					MockCreate: createMock},
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName3}},
 			wantedNamespaceName: "",
@@ -101,7 +101,11 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 		},
 		"namespace get error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return errors.New("namespace cannot be retrieved")
+					},
+				},
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			wantedNamespaceName: "",
@@ -609,5 +613,176 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	for i := range expectedConditions {
 		actualCondition := memberCluster.GetCondition(expectedConditions[i].Type)
 		assert.Equal(t, "", cmp.Diff(&expectedConditions[i], actualCondition, cmpopts.IgnoreTypes(time.Time{})))
+	}
+}
+
+func TestCopyMemberClusterStatusFromInternalMC(t *testing.T) {
+	var count int
+	imc := fleetv1alpha1.InternalMemberCluster{}
+	heartBeatCondition := metav1.Condition{
+		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+		Status: metav1.ConditionTrue,
+		Reason: "InternalMemberClusterHeartbeatReceived",
+	}
+	imc.SetConditions(heartBeatCondition)
+
+	tests := map[string]struct {
+		r                     *Reconciler
+		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
+		memberCluster         *fleetv1alpha1.MemberCluster
+		wantErr               error
+		verifyNumberOfRetry   func() bool
+	}{
+		"mark and update member cluster as Joined": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster:         &fleetv1alpha1.MemberCluster{},
+			internalMemberCluster: &imc,
+			wantErr:               nil,
+			verifyNumberOfRetry: func() bool {
+				return count == 0
+			},
+		},
+		"mark and update member cluster as left within heartbeat": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					if count == 3 {
+						return nil
+					}
+					return apierrors.NewConflict(schema.GroupResource{}, "", errors.New("error"))
+				}},
+				recorder: utils.NewFakeRecorder(10),
+			},
+			memberCluster:         &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
+			internalMemberCluster: &imc,
+			wantErr:               nil,
+			verifyNumberOfRetry: func() bool {
+				return count == 3
+			},
+		},
+		"error updating exceeding cap for exponential backoff": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
+				}},
+				recorder: utils.NewFakeRecorder(10),
+			},
+			memberCluster:         &fleetv1alpha1.MemberCluster{},
+			internalMemberCluster: &imc,
+			wantErr:               apierrors.NewServerTimeout(schema.GroupResource{}, "", 1),
+			verifyNumberOfRetry: func() bool {
+				return count > 0
+			},
+		},
+		"error updating within cap with error different from conflict/serverTimeout": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					return errors.New("random update error")
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster:         &fleetv1alpha1.MemberCluster{},
+			internalMemberCluster: &imc,
+			wantErr:               errors.New("random update error"),
+			verifyNumberOfRetry: func() bool {
+				return count == 0
+			},
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			count = -1
+			err := tt.r.copyMemberClusterStatusFromInternalMC(context.Background(), tt.memberCluster, tt.internalMemberCluster)
+			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
+			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestUpdateMemberClusterStatusAsLeft(t *testing.T) {
+	var count int
+	tests := map[string]struct {
+		r                   *Reconciler
+		memberCluster       *fleetv1alpha1.MemberCluster
+		wantErr             error
+		verifyNumberOfRetry func() bool
+	}{
+		"mark and update member cluster as left": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					return nil
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantErr:       nil,
+			verifyNumberOfRetry: func() bool {
+				return count == 0
+			},
+		},
+		"mark and update member cluster as left within heartbeat": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					if count == 3 {
+						return nil
+					}
+					return apierrors.NewConflict(schema.GroupResource{}, "", errors.New("error"))
+				}},
+				recorder: utils.NewFakeRecorder(10),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
+			wantErr:       nil,
+			verifyNumberOfRetry: func() bool {
+				return count == 3
+			},
+		},
+		"error updating exceeding cap for exponential backoff": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
+				}},
+				recorder: utils.NewFakeRecorder(10),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantErr:       apierrors.NewServerTimeout(schema.GroupResource{}, "", 1),
+			verifyNumberOfRetry: func() bool {
+				return count > 0
+			},
+		},
+		"error updating within cap with error different from conflict/serverTimeout": {
+			r: &Reconciler{Client: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					count++
+					return errors.New("random update error")
+				}},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantErr:       errors.New("random update error"),
+			verifyNumberOfRetry: func() bool {
+				return count == 0
+			},
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			count = -1
+			err := tt.r.updateMemberClusterStatusAsLeft(context.Background(), tt.memberCluster)
+			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
+			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
+		})
 	}
 }
