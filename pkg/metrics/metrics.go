@@ -7,13 +7,13 @@ import (
 type Operation string
 
 const (
-	OperationJoin  Operation = "join" //
-	OperationLeave Operation = "leave"
+	OperationJoin  Operation = "join"  // metrics for agent join operation
+	OperationLeave Operation = "leave" // metrics for agent leave operation
 )
 
 const (
-	SuccessResult = "success"
-	FailureResult = "failure"
+	SuccessResult = "success" // marks successful operation
+	FailureResult = "failure" // marks failed operation
 )
 
 var (
