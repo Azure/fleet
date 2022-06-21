@@ -8,8 +8,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -18,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"go.goms.io/fleet/pkg/utils"
+	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
@@ -33,48 +31,6 @@ var (
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 )
 
-var (
-	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "successful_join_cnt_hub_agent",
-		Help: "counts the number of successful Join operations for hub agent",
-	})
-	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "failed_join_cnt_hub_agent",
-		Help: "counts the number of failed Join operations for hub agent",
-	})
-	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "successful_leave_cnt_hub_agent",
-		Help: "counts the number of successful Leave operations for hub agent",
-	})
-	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "failed_leave_cnt_hub_agent",
-		Help: "counts the number of failed Leave operations for hub agent",
-	})
-)
-
-var (
-	joinLeaveResultMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "join_leave_result",
-		Help: "Number of failed and successful Join/leaves operations",
-	}, []string{"operation", "result"})
-)
-
-var (
-	metricsResultMap = map[bool]string{
-		true:  utils.MetricsSuccessResult,
-		false: utils.MetricsFailureResult,
-	}
-)
-
-var (
-	reportJoinLeaveResultMetric = func(operation utils.MetricsOperation, successful bool) {
-		joinLeaveResultMetrics.With(prometheus.Labels{
-			"operation": string(operation),
-			"result":    metricsResultMap[successful],
-		}).Inc()
-	}
-)
-
 func init() {
 	klog.InitFlags(nil)
 
@@ -83,7 +39,7 @@ func init() {
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
+	metrics.Registry.MustRegister(fleetmetrics.JoinLeaveResultMetrics)
 }
 
 func main() {
@@ -104,7 +60,9 @@ func main() {
 
 	klog.Info("starting hubagent")
 
-	if err = (membercluster.NewReconciler(mgr.GetClient(), reportJoinLeaveResultMetric)).SetupWithManager(mgr); err != nil {
+	if err = (&membercluster.Reconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "MemberCluster")
 		os.Exit(1)
 	}

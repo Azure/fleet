@@ -51,8 +51,7 @@ var _ = Describe("Test Membership Controller", func() {
 		Expect(k8sClient.Create(ctx, &ns)).Should(Succeed())
 
 		By("create the membership reconciler")
-		r = NewReconciler(k8sClient, internalMemberClusterChan, membershipChan,
-			func(operation utils.MetricsOperation, successful bool) {})
+		r = NewReconciler(k8sClient, internalMemberClusterChan, membershipChan)
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())
 

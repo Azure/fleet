@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +18,8 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"go.goms.io/fleet/pkg/metrics"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -35,30 +36,20 @@ const (
 // Reconciler reconciles a Membership object
 type Reconciler struct {
 	client.Client
-	recorder                    record.EventRecorder
-	internalMemberClusterChan   <-chan fleetv1alpha1.ClusterState
-	membershipChan              chan<- fleetv1alpha1.ClusterState
-	internalMemberClusterState  fleetv1alpha1.ClusterState
-	clusterStateLock            sync.RWMutex
-	reportJoinLeaveResultMetric func(operation utils.MetricsOperation, successful bool)
-}
-
-type MemberAgentJoinLeaveMetrics struct {
-	JoinSucceedCounter  prometheus.Counter
-	JoinFailCounter     prometheus.Counter
-	LeaveSucceedCounter prometheus.Counter
-	LeaveFailCounter    prometheus.Counter
+	recorder                   record.EventRecorder
+	internalMemberClusterChan  <-chan fleetv1alpha1.ClusterState
+	membershipChan             chan<- fleetv1alpha1.ClusterState
+	internalMemberClusterState fleetv1alpha1.ClusterState
+	clusterStateLock           sync.RWMutex
 }
 
 // NewReconciler creates a new Reconciler for membership
 func NewReconciler(hubClient client.Client, internalMemberClusterChan <-chan fleetv1alpha1.ClusterState,
-	membershipChan chan<- fleetv1alpha1.ClusterState,
-	reportLeaveResultMetric func(operation utils.MetricsOperation, successful bool)) *Reconciler {
+	membershipChan chan<- fleetv1alpha1.ClusterState) *Reconciler {
 	return &Reconciler{
-		Client:                      hubClient,
-		internalMemberClusterChan:   internalMemberClusterChan,
-		membershipChan:              membershipChan,
-		reportJoinLeaveResultMetric: reportLeaveResultMetric,
+		Client:                    hubClient,
+		internalMemberClusterChan: internalMemberClusterChan,
+		membershipChan:            membershipChan,
 	}
 }
 
@@ -92,9 +83,9 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		r.markMembershipJoined(clusterMembership)
 		err := r.Client.Status().Update(ctx, clusterMembership)
 		if err != nil {
-			r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, false)
+			metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin, false)
 		} else {
-			r.reportJoinLeaveResultMetric(utils.MetricsOperationJoin, true)
+			metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin, true)
 		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 	}
@@ -111,9 +102,9 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 		r.markMembershipLeft(clusterMembership)
 		err := r.Client.Status().Update(ctx, clusterMembership)
 		if err != nil {
-			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, false)
+			metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave, false)
 		} else {
-			r.reportJoinLeaveResultMetric(utils.MetricsOperationLeave, true)
+			metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave, true)
 		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}

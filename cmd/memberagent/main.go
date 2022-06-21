@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -22,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"go.goms.io/fleet/pkg/utils"
+	metrics2 "go.goms.io/fleet/pkg/metrics"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
@@ -41,29 +40,6 @@ var (
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 )
 
-var (
-	joinLeaveResultMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "join_leave_result",
-		Help: "Number of failed and successful Join/leaves operations",
-	}, []string{"operation", "result"})
-)
-
-var (
-	metricsResultMap = map[bool]string{
-		true:  utils.MetricsSuccessResult,
-		false: utils.MetricsFailureResult,
-	}
-)
-
-var (
-	reportJoinLeaveResultMetric = func(operation utils.MetricsOperation, successful bool) {
-		joinLeaveResultMetrics.With(prometheus.Labels{
-			"operation": string(operation),
-			"result":    metricsResultMap[successful],
-		}).Inc()
-	}
-)
-
 func init() {
 	klog.InitFlags(nil)
 
@@ -71,7 +47,7 @@ func init() {
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(joinLeaveResultMetrics)
+	metrics.Registry.MustRegister(metrics2.JoinLeaveResultMetrics)
 }
 
 func main() {
@@ -168,8 +144,8 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		os.Exit(1)
 	}
 
-	if err = membership.NewReconciler(memberMgr.GetClient(), internalMemberClusterChan, membershipChan,
-		reportJoinLeaveResultMetric).SetupWithManager(memberMgr); err != nil {
+	if err = membership.NewReconciler(memberMgr.GetClient(),
+		internalMemberClusterChan, membershipChan).SetupWithManager(memberMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller membership")
 	}
 
