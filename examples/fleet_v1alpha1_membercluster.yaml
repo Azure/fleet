@@ -7,4 +7,4 @@ spec:
   identity:
     name: test
     kind: ServiceAccount
-  leaseDurationSeconds: 60
+  heartbeatPeriodSeconds: 60

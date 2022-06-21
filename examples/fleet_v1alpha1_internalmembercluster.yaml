@@ -2,4 +2,4 @@ metadata:
   name: internalmembercluster-sample
 spec:
   state: Join
-  leaseDurationSeconds: 60
+  heartbeatPeriodSeconds: 60
