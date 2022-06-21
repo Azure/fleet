@@ -40,6 +40,7 @@ func New(secretName, namespace string) interfaces.AuthTokenProvider {
 }
 
 func (s *secretAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+	klog.Infof("fetching token from secret %s", s.secretName)
 	token := interfaces.AuthToken{}
 	secret, err := s.fetchSecret(ctx)
 	if err != nil {

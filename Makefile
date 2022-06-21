@@ -1,20 +1,21 @@
-REGISTRY ?= ghcr.io/azure
+REGISTRY ?= ghcr.io
+KIND_IMAGE ?= kindest/node:v1.23.3
 HUB_AGENT_IMAGE_NAME ?= hub-agent
 HUB_AGENT_IMAGE_VERSION ?= v0.1.0
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
 MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 REFRESH_TOKEN_IMAGE_NAME := refresh-token
 REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
-HUB_KUBECONFIG ?=$(KUBECONFIG)
-HUB_KUBECONFIG_CONTEXT ?=$(shell kubectl --kubeconfig $(HUB_KUBECONFIG) config current-context)
-MEMBER_KUBECONFIG ?=$(KUBECONFIG)
-MEMBER_KUBECONFIG_CONTEXT ?=$(shell kubectl --kubeconfig $(MEMBER_KUBECONFIG) config current-context)
 
+KUBECONFIG ?= $(KUBECONFIG)
+HUB_KIND_CLUSTER_NAME = hub-testing
+MEMBER_KIND_CLUSTER_NAME = member-testing
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
+CLUSTER_CONFIG := $(abspath test/e2e/kind-config.yaml)
 
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
@@ -94,34 +95,66 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 ## --------------------------------------
+## Kind
+## --------------------------------------
+
+create-hub-kind-cluster:
+	kind create cluster --name $(HUB_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
+
+create-member-kind-cluster:
+	kind create cluster --name $(MEMBER_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
+
+## --------------------------------------
 ## test
 ## --------------------------------------
 
 .PHONY: test
-test: manifests generate fmt vet local-unit-test ## Run tests.
+test: manifests generate fmt vet ## Run unit tests.
+	$(local-unit-test)
 
-.PHONY: local-unit-test
-local-unit-test: $(ENVTEST) ## Run local tests.
-	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -race -coverprofile=coverage.xml -covermode=atomic -v
+local-unit-test: $(ENVTEST) ## Run tests.
+	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -race -coverprofile=coverage.xml -covermode=atomic -v
 
-cluster-ip:
-	kubectl config use-context $(HUB_KUBECONFIG_CONTEXT) --kubeconfig $(HUB_KUBECONFIG)
-  	CLUSTER_IP?=$(shell kubectl --kubeconfig $(HUB_KUBECONFIG) get svc kubernetes -n default -o jsonpath="{.spec.clusterIP}")
+## e2e tests
 
-e2e-hub-kubeconfig-secret: cluster-ip
-	cp $(HUB_KUBECONFIG) e2e-hub-kubeconfig
-	kubectl config set clusters.$(HUB_KUBECONFIG_CONTEXT).server https://$(CLUSTER_IP) --kubeconfig e2e-hub-kubeconfig
-	kubectl delete secret hub-kubeconfig-secret -n fleet-system --ignore-not-found --kubeconfig $(MEMBER_KUBECONFIG)
-	kubectl create secret generic hub-kubeconfig-secret --from-file=kubeconfig=e2e-hub-kubeconfig -n fleet-system --kubeconfig $(MEMBER_KUBECONFIG)
-	rm ./e2e-hub-kubeconfig
+install-hub-agent-helm:
+	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	helm install hub-agent ./charts/hub-agent/ \
+    --set image.pullPolicy=Never \
+    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME)
 
-build-e2e:
+.PHONY: e2e-hub-kubeconfig-secret
+e2e-hub-kubeconfig-secret: install-hub-agent-helm
+	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
+	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
+	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
+	kubectl create secret generic hub-kubeconfig-secret --from-literal=kubeconfig=$$TOKEN
+
+install-member-agent-helm: e2e-hub-kubeconfig-secret
+	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	## Get kind cluster IP that docker uses internally so we can talk to the other cluster. the port is the default one.
+	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
+	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
+	helm install member-agent ./charts/member-agent/ \
+	--set config.hubURL=$$HUB_SERVER_URL \
+	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
+    --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
+    --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never
+	# to make sure member-agent reads the token file.
+	kubectl delete pod --all -n fleet-system
+
+build-e2e: install-member-agent-helm
 	go test -c ./test/e2e
 
-.PHONY: e2e-tests
-e2e-tests: build-e2e e2e-hub-kubeconfig-secret
+run-e2e:
 	./e2e.test -test.v -ginkgo.v
 
+.PHONY: e2e-tests
+e2e-tests: create-hub-kind-cluster create-member-kind-cluster build-e2e
+	$(run-e2e)
+
+## reviewable
 .PHONY: reviewable
 reviewable: fmt vet lint staticcheck
 	go mod tidy
@@ -160,7 +193,6 @@ run-hubagent: manifests generate fmt vet ## Run a controllers from your host.
 .PHONY: run-memberagent
 run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 	go run ./cmd/memberagent/main.go
-
 
 ## --------------------------------------
 ## Images

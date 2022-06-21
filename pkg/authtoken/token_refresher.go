@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"go.goms.io/fleet/pkg/interfaces"
 )
 
@@ -37,13 +39,14 @@ var (
 )
 
 func (at *Refresher) RefreshToken(ctx context.Context) error {
-	refreshDuration := 0 * time.Second
+	klog.Info("start refresh token")
+	var refreshDuration time.Duration
 
-	for {
+	for ; ; <-at.createTicker(refreshDuration) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-at.createTicker(refreshDuration):
+		default:
 			token, err := at.provider.FetchToken(ctx)
 			if err != nil {
 				return err
@@ -52,8 +55,8 @@ func (at *Refresher) RefreshToken(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-
 			refreshDuration = at.refreshCalculate(token)
+			klog.Info("token has been refreshed")
 		}
 	}
 }

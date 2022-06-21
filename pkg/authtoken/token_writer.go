@@ -55,5 +55,6 @@ func (w *Writer) WriteToken(token interfaces.AuthToken) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot write the refresh token")
 	}
+	klog.Info("token has been saved to the file successfully")
 	return nil
 }

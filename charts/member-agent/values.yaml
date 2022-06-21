@@ -27,7 +27,7 @@ namespace:
 
 config:
   provider: secret
-  hubURL : https://127.0.0.1:53528
+  hubURL : https://127.0.0.1:6443
 
 secret:
   name: "hub-kubeconfig-secret"

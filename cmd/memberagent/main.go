@@ -66,10 +66,7 @@ func main() {
 		// Stat returns file info. It will return
 		// an error if there is no file.
 		_, err := os.Stat(tokenFilePath)
-		if err != nil {
-			klog.Error(err.Error())
-		}
-		return nil
+		return err
 	})
 	if err != nil {
 		klog.Error(errors.Wrapf(err, " cannot retrieve token file from the path %s", tokenFilePath))
@@ -88,7 +85,7 @@ func main() {
 	hubOpts := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     *hubMetricsAddr,
-		Port:                   8443,
+		Port:                   9446,
 		HealthProbeBindAddress: *hubProbeAddr,
 		LeaderElection:         *enableLeaderElection,
 		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
@@ -97,7 +94,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts); err != nil {
-		klog.Error(err, "problem running controllers")
+		klog.Error(err, " problem running controllers")
 		os.Exit(1)
 	}
 }

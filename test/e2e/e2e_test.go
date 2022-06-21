@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -24,6 +24,7 @@ var (
 	HubCluster        = framework.NewCluster(hubClusterName, scheme)
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	scheme            = runtime.NewScheme()
+	hubURL            string
 )
 
 func init() {
@@ -32,19 +33,23 @@ func init() {
 }
 
 func TestE2E(t *testing.T) {
-	gomega.RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "fleet e2e suite")
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "fleet e2e suite")
 }
 
-var _ = ginkgo.BeforeSuite(func() {
+var _ = BeforeSuite(func() {
 	kubeconfig := os.Getenv("KUBECONFIG")
-	gomega.Expect(kubeconfig).ShouldNot(gomega.BeEmpty())
+	Expect(kubeconfig).ShouldNot(BeEmpty())
+
+	hubURL = os.Getenv("HUB_SERVER_URL")
+	Expect(hubURL).ShouldNot(BeEmpty())
+
 	// hub setup
-	framework.GetClusterDynamicClient(HubCluster)
+	HubCluster.HubURL = hubURL
 	framework.GetClusterClient(HubCluster)
 
 	//member setup
-	framework.GetClusterDynamicClient(MemberCluster)
+	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 
 })
