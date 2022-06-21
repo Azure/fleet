@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -50,13 +49,6 @@ const (
 type Reconciler struct {
 	client.Client
 	recorder record.EventRecorder
-}
-
-type HubAgentJoinLeaveMetrics struct {
-	JoinSucceedCounter  prometheus.Counter
-	JoinFailCounter     prometheus.Counter
-	LeaveSucceedCounter prometheus.Counter
-	LeaveFailCounter    prometheus.Counter
 }
 
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters,verbs=get;list;watch;create;update;patch;delete
