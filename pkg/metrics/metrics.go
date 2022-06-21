@@ -11,11 +11,6 @@ const (
 	OperationLeave Operation = "leave" // metrics for agent leave operation
 )
 
-const (
-	SuccessResult = "success" // marks successful operation
-	FailureResult = "failure" // marks failed operation
-)
-
 var (
 	JoinLeaveResultMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "join_leave_result",
@@ -24,17 +19,12 @@ var (
 )
 
 var (
-	metricsResultMap = map[bool]string{
-		true:  SuccessResult,
-		false: FailureResult,
-	}
-)
-
-var (
-	ReportJoinLeaveResultMetric = func(operation Operation, successful bool) {
+	ReportJoinLeaveResultMetric = func(operation Operation) {
 		JoinLeaveResultMetrics.With(prometheus.Labels{
 			"operation": string(operation),
-			"result":    metricsResultMap[successful],
+			// Per team agreement, the failure result won't be reported from the agents as k8s controller would retry
+			// failed reconciliations.
+			"result": "success",
 		}).Inc()
 	}
 )

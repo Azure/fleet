@@ -81,13 +81,11 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
 		r.markMembershipJoined(clusterMembership)
-		err := r.Client.Status().Update(ctx, clusterMembership)
-		if err != nil {
-			metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin, false)
-		} else {
-			metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin, true)
+		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 		}
-		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
+		metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin)
+		return ctrl.Result{}, nil
 	}
 	// the state can be leave or unknown.
 	r.markMembershipUnknown(clusterMembership)
@@ -100,13 +98,12 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateLeave {
 		r.markMembershipLeft(clusterMembership)
-		err := r.Client.Status().Update(ctx, clusterMembership)
-		if err != nil {
-			metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave, false)
-		} else {
-			metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave, true)
+
+		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 		}
-		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
+		metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave)
+		return ctrl.Result{}, nil
 	}
 	// internalMemberClusterState state can be joined or unknown.
 	r.markMembershipUnknown(clusterMembership)
