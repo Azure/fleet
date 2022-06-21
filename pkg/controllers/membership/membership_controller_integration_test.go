@@ -11,8 +11,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -54,20 +52,7 @@ var _ = Describe("Test Membership Controller", func() {
 
 		By("create the membership reconciler")
 		r = NewReconciler(k8sClient, internalMemberClusterChan, membershipChan,
-			MemberAgentJoinLeaveMetrics{
-				JoinSucceedCounter: promauto.NewCounter(prometheus.CounterOpts{
-					Name: utils.RandMetricsName(),
-				}),
-				JoinFailCounter: promauto.NewCounter(prometheus.CounterOpts{
-					Name: utils.RandMetricsName(),
-				}),
-				LeaveSucceedCounter: promauto.NewCounter(prometheus.CounterOpts{
-					Name: utils.RandMetricsName(),
-				}),
-				LeaveFailCounter: promauto.NewCounter(prometheus.CounterOpts{
-					Name: utils.RandMetricsName(),
-				}),
-			})
+			func(operation utils.MetricsOperation, successful bool) {})
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())
 
