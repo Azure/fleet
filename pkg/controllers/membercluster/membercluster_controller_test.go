@@ -29,13 +29,9 @@ import (
 )
 
 const (
-	namespace1         = "fleet-mc1"
-	namespace2         = "fleet-mc2"
-	namespace3         = "fleet-mc3"
-	namespace4         = "fleet-mc4"
-	memberClusterName1 = "mc1"
-	memberClusterName2 = "mc2"
-	memberClusterName3 = "mc3"
+	namespace1 = "fleet-mc1"
+	namespace2 = "fleet-mc2"
+	namespace3 = "fleet-mc3"
 )
 
 func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
@@ -47,7 +43,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 		return errors.New("namespace cannot be created")
 	}
 
-	memberCluster := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName2}}
+	memberCluster := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
 	expectedEvent := utils.GetEventString(&memberCluster, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created")
 
 	tests := map[string]struct {
@@ -69,7 +65,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName1}},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
 			wantedError:         nil,
 		},
@@ -95,7 +91,7 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 					},
 					MockCreate: createMock},
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName3}},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}},
 			wantedNamespaceName: "",
 			wantedError:         errors.New("namespace cannot be created"),
 		},
@@ -128,45 +124,6 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 }
 
 func TestReconcilerCheckAndCreateRole(t *testing.T) {
-	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-		if key.Name == "fleet-role-mc3" && key.Namespace == namespace3 || key.Name == "fleet-role-mc4" && key.Namespace == namespace4 {
-			return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
-		} else if key.Name == "fleet-role-mc1" && key.Namespace == namespace1 {
-			o := obj.(*rbacv1.Role)
-			verbs := []string{"get", "list", "update", "patch", "watch"}
-			apiGroups := []string{"", fleetv1alpha1.GroupVersion.Group}
-			resources := []string{"*"}
-
-			rule := rbacv1.PolicyRule{
-				Verbs:     verbs,
-				APIGroups: apiGroups,
-				Resources: resources,
-			}
-			*o = rbacv1.Role{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Role",
-					APIVersion: rbacv1.SchemeGroupVersion.String(),
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "fleet-role-mc1",
-					Namespace: namespace1,
-				},
-				Rules: []rbacv1.PolicyRule{rule},
-			}
-		} else if key.Name == "fleet-role-mc2" && key.Namespace == namespace2 {
-			o := obj.(*rbacv1.Role)
-			*o = rbacv1.Role{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "fleet-role-mc2",
-					Namespace: namespace2,
-				},
-			}
-		} else if key.Name == "fleet-role-mc5" && key.Namespace == "fleet-mc5" {
-			return errors.New("role cannot be retrieved")
-		}
-		return nil
-	}
-
 	createMock := func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 		o := obj.(*rbacv1.Role)
 		if o.Name == "fleet-role-mc3" && o.Namespace == namespace3 {
@@ -183,8 +140,8 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 		return nil
 	}
 
-	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName2}}
-	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName3}}
+	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
+	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
 
@@ -198,16 +155,52 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 	}{
 		"role exists but no diff": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*rbacv1.Role)
+						verbs := []string{"get", "list", "update", "patch", "watch"}
+						apiGroups := []string{"", fleetv1alpha1.GroupVersion.Group}
+						resources := []string{"*"}
+
+						rule := rbacv1.PolicyRule{
+							Verbs:     verbs,
+							APIGroups: apiGroups,
+							Resources: resources,
+						}
+						*o = rbacv1.Role{
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "Role",
+								APIVersion: rbacv1.SchemeGroupVersion.String(),
+							},
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "fleet-role-mc1",
+								Namespace: namespace1,
+							},
+							Rules: []rbacv1.PolicyRule{rule},
+						}
+						return nil
+					},
+				},
 			},
-			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName1}},
+			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			namespaceName:  namespace1,
 			wantedRoleName: "fleet-role-mc1",
 			wantedError:    nil,
 		},
 		"role exists but with diff": {
 			r: &Reconciler{
-				Client:   &test.MockClient{MockGet: getMock, MockUpdate: updateMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*rbacv1.Role)
+						*o = rbacv1.Role{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "fleet-role-mc2",
+								Namespace: namespace2,
+							},
+						}
+						return nil
+					},
+					MockUpdate: updateMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster:  &expectedMemberCluster1,
@@ -218,7 +211,11 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 		},
 		"role doesn't exist": {
 			r: &Reconciler{
-				Client:   &test.MockClient{MockGet: getMock, MockCreate: createMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+					},
+					MockCreate: createMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster:  &expectedMemberCluster2,
@@ -229,16 +226,24 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 		},
 		"role create error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock, MockCreate: createMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+					},
+					MockCreate: createMock},
 			},
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
-			namespaceName:  namespace4,
+			namespaceName:  "fleet-mc4",
 			wantedRoleName: "",
 			wantedError:    errors.New("role cannot be created"),
 		},
 		"role get error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return errors.New("role cannot be retrieved")
+					},
+				},
 			},
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
 			namespaceName:  "fleet-mc5",
@@ -247,7 +252,11 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 		},
 		"role update error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock, MockUpdate: updateMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return nil
+					},
+					MockUpdate: updateMock},
 			},
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
 			namespaceName:  "fleet-mc6",
@@ -275,41 +284,6 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		Kind: "User",
 		Name: "MemberClusterIdentity",
 	}
-	getMock := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-		if key.Name == "fleet-rolebinding-mc3" && key.Namespace == namespace3 || key.Name == "fleet-rolebinding-mc4" && key.Namespace == namespace4 {
-			return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
-		} else if key.Name == "fleet-rolebinding-mc1" && key.Namespace == namespace1 {
-			roleRef := rbacv1.RoleRef{
-				APIGroup: rbacv1.GroupName,
-				Kind:     "Role",
-				Name:     "fleet-role-mc1",
-			}
-			o := obj.(*rbacv1.RoleBinding)
-			*o = rbacv1.RoleBinding{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "RoleBinding",
-					APIVersion: rbacv1.SchemeGroupVersion.String(),
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "fleet-rolebinding-mc1",
-					Namespace: namespace1,
-				},
-				Subjects: []rbacv1.Subject{identity},
-				RoleRef:  roleRef,
-			}
-		} else if key.Name == "fleet-rolebinding-mc2" && key.Namespace == namespace2 {
-			o := obj.(*rbacv1.RoleBinding)
-			*o = rbacv1.RoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "fleet-rolebinding-mc2",
-					Namespace: namespace2,
-				},
-			}
-		} else if key.Name == "fleet-rolebinding-mc5" && key.Namespace == "fleet-mc5" {
-			return errors.New("role binding cannot be retrieved")
-		}
-		return nil
-	}
 
 	createMock := func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 		o := obj.(*rbacv1.RoleBinding)
@@ -327,8 +301,8 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		return nil
 	}
 
-	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName2}}
-	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName3}}
+	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
+	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 
@@ -343,9 +317,31 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 	}{
 		"role binding but no diff": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						roleRef := rbacv1.RoleRef{
+							APIGroup: rbacv1.GroupName,
+							Kind:     "Role",
+							Name:     "fleet-role-mc1",
+						}
+						o := obj.(*rbacv1.RoleBinding)
+						*o = rbacv1.RoleBinding{
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "RoleBinding",
+								APIVersion: rbacv1.SchemeGroupVersion.String(),
+							},
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "fleet-rolebinding-mc1",
+								Namespace: namespace1,
+							},
+							Subjects: []rbacv1.Subject{identity},
+							RoleRef:  roleRef,
+						}
+						return nil
+					},
+				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: memberClusterName1}},
+			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			namespaceName: namespace1,
 			roleName:      "fleet-role-mc1",
 			identity:      identity,
@@ -353,7 +349,18 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		},
 		"role binding but with diff": {
 			r: &Reconciler{
-				Client:   &test.MockClient{MockGet: getMock, MockUpdate: updateMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*rbacv1.RoleBinding)
+						*o = rbacv1.RoleBinding{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "fleet-rolebinding-mc2",
+								Namespace: namespace2,
+							},
+						}
+						return nil
+					},
+					MockUpdate: updateMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedMemberCluster1,
@@ -365,7 +372,11 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		},
 		"role binding doesn't exist": {
 			r: &Reconciler{
-				Client:   &test.MockClient{MockGet: getMock, MockCreate: createMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+					},
+					MockCreate: createMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedMemberCluster2,
@@ -377,17 +388,25 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		},
 		"role binding create error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock, MockCreate: createMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+					},
+					MockCreate: createMock},
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
-			namespaceName: namespace4,
+			namespaceName: "fleet-mc4",
 			roleName:      "fleet-role-mc4",
 			identity:      identity,
 			wantedError:   errors.New("role binding cannot be created"),
 		},
 		"role binding get error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return errors.New("role binding cannot be retrieved")
+					},
+				},
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
 			namespaceName: "fleet-mc5",
@@ -397,7 +416,11 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		},
 		"role binding update error": {
 			r: &Reconciler{
-				Client: &test.MockClient{MockGet: getMock, MockUpdate: updateMock},
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						return nil
+					},
+					MockUpdate: updateMock},
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
 			namespaceName: "fleet-mc6",
@@ -423,7 +446,7 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 	updateMock := func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o := obj.(*fleetv1alpha1.InternalMemberCluster)
-		if o.Name == memberClusterName3 {
+		if o.Name == "mc3" {
 			return errors.New("internal member cluster cannot be updated")
 		}
 		return nil
@@ -439,7 +462,7 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 
 	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
-		ObjectMeta: metav1.ObjectMeta{Name: memberClusterName1, UID: "mc1-UID"},
+		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
 		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 	}
 
@@ -479,7 +502,7 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 			namespaceName: namespace1,
 			wantedEvent:   expectedEvent1,
 			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: memberClusterName1, Namespace: namespace1},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc1", Namespace: namespace1},
 				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			wantedError: nil,
@@ -499,12 +522,12 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{
 				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
-				ObjectMeta: metav1.ObjectMeta{Name: memberClusterName2, UID: "mc2-UID"},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc2", UID: "mc2-UID"},
 				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			namespaceName: namespace2,
 			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: memberClusterName2, Namespace: namespace2},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc2", Namespace: namespace2},
 				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			wantedError: nil,
@@ -521,12 +544,12 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 				},
 				MockUpdate: updateMock}},
 			memberCluster: &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: memberClusterName3},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
 				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			namespaceName: namespace3,
 			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: memberClusterName3, Namespace: namespace3},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc3", Namespace: namespace3},
 				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			wantedError: errors.New("internal member cluster cannot be updated"),
@@ -541,9 +564,9 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedMemberCluster2,
-			namespaceName: namespace4,
+			namespaceName: "fleet-mc4",
 			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "mc4", Namespace: namespace4, OwnerReferences: []metav1.OwnerReference{
+				ObjectMeta: metav1.ObjectMeta{Name: "mc4", Namespace: "fleet-mc4", OwnerReferences: []metav1.OwnerReference{
 					{APIVersion: expectedMemberCluster2.APIVersion, Kind: expectedMemberCluster2.Kind, Name: expectedMemberCluster2.Name, UID: expectedMemberCluster2.UID, Controller: &controllerBool}}},
 				Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
 			},
