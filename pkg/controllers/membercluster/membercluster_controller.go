@@ -112,7 +112,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 			return ctrl.Result{}, err
 		}
 	}
-	metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin)
+	metrics.ReportJoinResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -168,7 +168,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			return ctrl.Result{}, err
 		}
 	}
-	metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave)
+	metrics.ReportLeaveResultMetric()
 	return ctrl.Result{}, nil
 }
 

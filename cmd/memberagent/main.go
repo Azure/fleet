@@ -24,7 +24,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membership"
-	metrics2 "go.goms.io/fleet/pkg/metrics"
+	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -46,7 +46,7 @@ func init() {
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(metrics2.JoinLeaveResultMetrics)
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
 }
 
 func main() {

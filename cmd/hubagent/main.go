@@ -39,7 +39,7 @@ func init() {
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinLeaveResultMetrics)
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
 }
 
 func main() {

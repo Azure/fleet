@@ -84,7 +84,7 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 		}
-		metrics.ReportJoinLeaveResultMetric(metrics.OperationJoin)
+		metrics.ReportJoinResultMetric()
 		return ctrl.Result{}, nil
 	}
 	// the state can be leave or unknown.
@@ -102,7 +102,7 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 		}
-		metrics.ReportJoinLeaveResultMetric(metrics.OperationLeave)
+		metrics.ReportLeaveResultMetric()
 		return ctrl.Result{}, nil
 	}
 	// internalMemberClusterState state can be joined or unknown.
