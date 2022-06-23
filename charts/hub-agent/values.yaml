@@ -24,3 +24,6 @@ resources:
 tolerations: []
 
 affinity: {}
+
+secret:
+  name: hub-kubeconfig-secret
