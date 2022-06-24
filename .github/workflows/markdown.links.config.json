@@ -1,6 +1,11 @@
 {
     "aliveStatusCodes": [
         200,
-        203
-    ]
+        203,
+        0
+    ],
+    "timeout": "5s",
+    "retryOn429": true,
+    "retryCount": 5,
+    "fallbackRetryDelay": "30s"
 }
