@@ -87,6 +87,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 //1. Gets current cluster usage.
 //2. Updates the associated InternalMemberCluster Custom Resource with current cluster usage and marks it as Joined.
 func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
+	r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateJoin
 	membershipState := r.getMembershipClusterState()
 
 	if membershipState != fleetv1alpha1.ClusterStateJoin {
@@ -102,14 +103,12 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	}
 
 	updateErr := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-	if collectErr == nil && updateErr == nil {
-		r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateJoin
-	}
 
-	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, nil
+	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, updateErr
 }
 
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
+	r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
 	membershipState := r.getMembershipClusterState()
 	if membershipState != fleetv1alpha1.ClusterStateLeave {
 		r.markInternalMemberClusterUnknown(memberCluster)
@@ -122,7 +121,6 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Int
 	if err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "internal member cluster leave error")
 	}
-	r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
 	return ctrl.Result{}, nil
 }
 
