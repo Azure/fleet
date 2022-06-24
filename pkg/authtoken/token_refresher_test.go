@@ -6,7 +6,6 @@ package authtoken
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,19 +32,15 @@ func TestRefreshTokenOnce(t *testing.T) {
 	}
 	testChan := make(chan bool)
 
-	buf := new(strings.Builder)
-	bufferWriter := NewWriter(BufferWriterFactory{buf: buf}.Create)
+	factory := NewBufferWriterFactory()
+	bufferWriter := NewWriter(factory.Create)
 
 	createTicker := CreateTickerFuncType(func(duration time.Duration) <-chan time.Time {
-		if duration != 0 {
-			assert.Equal(t, provider.Token.Token, buf.String(), "TestRefreshTokenOnce")
-			testChan <- true
-			return nil
-		}
-		tickChan := make(chan time.Time, 1)
-		tickChan <- time.Now()
-		return tickChan
+		assert.Equal(t, provider.Token.Token, factory.buf.String(), "TestRefreshTokenOnce")
+		testChan <- true
+		return nil
 	})
+
 	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, createTicker)
 	go func() {
 		_ = refresher.RefreshToken(context.TODO())
@@ -53,6 +48,7 @@ func TestRefreshTokenOnce(t *testing.T) {
 
 	select {
 	case <-testChan:
+		assert.Equal(t, 1, factory.writeCount, "TestRefreshTokenOnce")
 		return
 	case <-time.Tick(1 * time.Second):
 		assert.Fail(t, "Test timeout", "TestRefreshTokenOnce")
@@ -67,20 +63,20 @@ func TestRefreshToken(t *testing.T) {
 			ExpiresOn: time.Now(),
 		},
 	}
-	testChan := make(chan int32)
 
-	buf := new(strings.Builder)
-	bufferWriter := NewWriter(BufferWriterFactory{buf: buf}.Create)
+	testChan := make(chan bool)
+	factory := NewBufferWriterFactory()
+	bufferWriter := NewWriter(factory.Create)
 
-	var createTickerCallCount int32
 	createTicker := CreateTickerFuncType(func(duration time.Duration) <-chan time.Time {
-		if duration != 0 {
-			assert.Equal(t, provider.Token.Token, buf.String(), "TestRefreshToken")
-			buf.Reset()
+		assert.Equal(t, provider.Token.Token, factory.buf.String(), "TestRefreshToken")
+		factory.buf.Reset()
+
+		if factory.writeCount == 2 {
+			testChan <- true
+			return nil
 		}
-		createTickerCallCount++
-		testChan <- createTickerCallCount
-		returnChan := make(chan time.Time)
+		returnChan := make(chan time.Time, 1)
 		returnChan <- time.Now()
 		return returnChan
 	})
@@ -90,12 +86,11 @@ func TestRefreshToken(t *testing.T) {
 	}()
 
 	select {
-	case count := <-testChan:
-		if count == 3 {
-			return
-		}
+	case <-testChan:
+		return
 	case <-time.Tick(1 * time.Second):
 		assert.Fail(t, "Test timeout", "TestRefreshToken")
+		return
 	}
 }
 
@@ -110,7 +105,7 @@ func TestRefresherCancelContext(t *testing.T) {
 	testChan := make(chan bool)
 	ctx, cancel := context.WithCancel(context.TODO())
 
-	bufferWriter := NewWriter(BufferWriterFactory{new(strings.Builder)}.Create)
+	bufferWriter := NewWriter(NewBufferWriterFactory().Create)
 
 	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, DefaultCreateTicker)
 	go func() {

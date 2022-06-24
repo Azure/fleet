@@ -19,7 +19,6 @@ import (
 
 var (
 	configPath string
-	clientID   string
 )
 
 func parseArgs() (interfaces.AuthTokenProvider, error) {
@@ -43,6 +42,7 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 	secretCmd.Flags().StringVar(&secretNamespace, "namespace", "", "Secret namespace (required)")
 	_ = secretCmd.MarkFlagRequired("namespace")
 
+	var clientID string
 	azureCmd := &cobra.Command{
 		Use:  "azure",
 		Args: cobra.NoArgs,
@@ -69,7 +69,7 @@ func main() {
 		klog.Error(err)
 		os.Exit(-1)
 	}
-
+	klog.Info("creating token refresher")
 	tokenRefresher := authtoken.NewAuthTokenRefresher(tokenProvider,
 		authtoken.NewWriter(authtoken.NewFactory(configPath).Create),
 		authtoken.DefaultRefreshDurationFunc, authtoken.DefaultCreateTicker)

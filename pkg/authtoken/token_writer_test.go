@@ -16,36 +16,42 @@ import (
 )
 
 type BufferWriterFactory struct {
-	buf *strings.Builder
+	buf        *strings.Builder
+	writeCount int
 }
 
-func (b BufferWriterFactory) Create() (io.WriteCloser, error) {
-	return CloseableBuilder(b), nil
+func NewBufferWriterFactory() *BufferWriterFactory {
+	return &BufferWriterFactory{new(strings.Builder), 0}
 }
 
-type CloseableBuilder struct {
-	buf *strings.Builder
+func (f *BufferWriterFactory) Create() (io.WriteCloser, error) {
+	return BufferWriter{f}, nil
 }
 
-func (c CloseableBuilder) Write(p []byte) (n int, err error) {
-	return c.buf.Write(p)
+type BufferWriter struct {
+	factory *BufferWriterFactory
 }
 
-func (c CloseableBuilder) Close() error {
-	// no-op
+func (c BufferWriter) Write(p []byte) (int, error) {
+	c.factory.writeCount++
+	return c.factory.buf.Write(p)
+}
+
+func (c BufferWriter) Close() error {
+	// no op
 	return nil
 }
 
 func TestWriteToken(t *testing.T) {
-	buf := new(strings.Builder)
 	token := interfaces.AuthToken{
 		Token:     "test token",
 		ExpiresOn: time.Now(),
 	}
 
-	bufferWriter := NewWriter(BufferWriterFactory{buf}.Create)
+	factory := NewBufferWriterFactory()
+	bufferWriter := NewWriter(factory.Create)
 	err := bufferWriter.WriteToken(token)
 
 	assert.Equal(t, nil, err, "TestWriteToken")
-	assert.Equal(t, token.Token, buf.String(), "TestWriteToken")
+	assert.Equal(t, token.Token, factory.buf.String(), "TestWriteToken")
 }

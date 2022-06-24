@@ -11,12 +11,12 @@ rules:
     verbs: ["*"]
   - apiGroups: [""]
     resources: ["events"]
-    verbs: ["get", "list", "watch", "create",]
+    verbs: ["get", "list", "watch", "create", "patch"]
   - apiGroups: ["fleet.azure.com"]
-    resources: ["memberclusters"]
+    resources: ["memberclusters", "memberclusters/status"]
     verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["fleet.azure.com"]
-    resources: ["internalmemberclusters"]
+    resources: ["internalmemberclusters","internalmemberclusters/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
 ---
 kind: ClusterRoleBinding

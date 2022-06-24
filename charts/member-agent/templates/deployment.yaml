@@ -14,9 +14,8 @@ spec:
       labels:
         {{- include "member-agent.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "member-agent.fullname" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      restartPolicy: Always
+      serviceAccountName: {{ include "member-agent.fullname" . }}-sa
       containers:
         - name: {{ include "member-agent.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

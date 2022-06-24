@@ -66,13 +66,10 @@ func main() {
 		// Stat returns file info. It will return
 		// an error if there is no file.
 		_, err := os.Stat(tokenFilePath)
-		if err != nil {
-			klog.Error(err.Error())
-		}
-		return nil
+		return err
 	})
 	if err != nil {
-		klog.Error(errors.Wrapf(err, " cannot retrieve token file from the path %s", tokenFilePath))
+		klog.ErrorS(err, " cannot retrieve token file from the path %s", tokenFilePath)
 		os.Exit(1)
 	}
 
@@ -97,7 +94,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts); err != nil {
-		klog.Error(err, "problem running controllers")
+		klog.ErrorS(err, "problem running controllers")
 		os.Exit(1)
 	}
 }
@@ -134,12 +131,11 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	if err := hubMrg.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check for hub manager")
+		klog.ErrorS(err, "unable to set up health check for hub manager")
 		os.Exit(1)
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check for hub manager")
-
+		klog.ErrorS(err, "unable to set up ready check for hub manager")
 		os.Exit(1)
 	}
 
@@ -149,11 +145,11 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	if err := memberMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check for member manager")
+		klog.ErrorS(err, "unable to set up health check for member manager")
 		os.Exit(1)
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check for member manager")
+		klog.ErrorS(err, "unable to set up ready check for member manager")
 
 		os.Exit(1)
 	}
