@@ -6,23 +6,28 @@ package framework
 
 import (
 	"os"
+	"time"
 
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
 	kubeconfigPath = os.Getenv("KUBECONFIG")
+
+	// PollInterval defines the interval time for a poll operation.
+	PollInterval = 5 * time.Second
+	// PollTimeout defines the time after which the poll operation times out.
+	PollTimeout = 30 * time.Second
 )
 
 type Cluster struct {
-	Scheme           *runtime.Scheme
-	KubeClient       client.Client
-	DynamicClientSet dynamic.Interface
-	ClusterName      string
+	Scheme      *runtime.Scheme
+	KubeClient  client.Client
+	ClusterName string
+	HubURL      string
 }
 
 func NewCluster(name string, scheme *runtime.Scheme) *Cluster {
@@ -45,19 +50,6 @@ func GetClusterClient(cluster *Cluster) {
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 
 	cluster.KubeClient = client
-}
-
-// GetClusterDynamicClient returns a DynamicCluster dynamic client for the cluster.
-func GetClusterDynamicClient(cluster *Cluster) {
-	clusterConfig := GetClientConfig(cluster)
-
-	restConfig, err := clusterConfig.ClientConfig()
-	if err != nil {
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	}
-
-	cluster.DynamicClientSet = dynamic.NewForConfigOrDie(restConfig)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
