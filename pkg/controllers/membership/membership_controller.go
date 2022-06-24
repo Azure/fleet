@@ -77,6 +77,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
+	// Check if membership 's last status before this reconcile loop is joined, for metrics reporting purpose.
+	var clusterMembershipHaveJoined bool
+	membershipLastCond := clusterMembership.GetCondition(fleetv1alpha1.ConditionTypeMembershipJoin)
+	clusterMembershipHaveJoined = membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionTrue
+
 	r.membershipChan <- fleetv1alpha1.ClusterStateJoin
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
@@ -84,7 +89,9 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 		}
-		metrics.ReportJoinResultMetric()
+		if !clusterMembershipHaveJoined {
+			metrics.ReportJoinResultMetric()
+		}
 		return ctrl.Result{}, nil
 	}
 	// the state can be leave or unknown.
@@ -94,15 +101,21 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 }
 
 func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
+	// Check if membership 's last status before this reconcile loop is joined, for metrics reporting purpose.
+	var clusterMembershipHasLeft bool
+	membershipLastCond := clusterMembership.GetCondition(fleetv1alpha1.ConditionTypeMembershipJoin)
+	clusterMembershipHasLeft = membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionFalse
+
 	r.membershipChan <- fleetv1alpha1.ClusterStateLeave
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateLeave {
 		r.markMembershipLeft(clusterMembership)
-
 		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 		}
-		metrics.ReportLeaveResultMetric()
+		if !clusterMembershipHasLeft {
+			metrics.ReportLeaveResultMetric()
+		}
 		return ctrl.Result{}, nil
 	}
 	// internalMemberClusterState state can be joined or unknown.
