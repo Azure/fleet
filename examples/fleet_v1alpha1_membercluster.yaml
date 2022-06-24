@@ -5,6 +5,7 @@ metadata:
 spec:
   state: Join
   identity:
-    name: test
+    name: member-agent-sa
     kind: ServiceAccount
-  heartbeatPeriodSeconds: 60
+    namespace: fleet-system
+  leaseDurationSeconds: 30
