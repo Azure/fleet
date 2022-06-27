@@ -28,6 +28,7 @@ import (
 
 var (
 	scheme               = runtime.NewScheme()
+	tlsClientInsecure    = flag.Bool("tls-insecure", false, "Enable TLSClientConfig.Insecure property. Enabling this will make the connection inSecure (should be 'true' for testing purpose only.)")
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	probeAddr            = flag.String("health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
@@ -76,9 +77,8 @@ func main() {
 	hubConfig := rest.Config{
 		BearerTokenFile: tokenFilePath,
 		Host:            hubURL,
-		// TODO (mng): Remove TLSClientConfig/Insecure(true) once server CA can be passed in as flag.
 		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: true,
+			Insecure: *tlsClientInsecure,
 		},
 	}
 
