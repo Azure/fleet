@@ -8,8 +8,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -18,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"go.goms.io/fleet/pkg/utils"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
