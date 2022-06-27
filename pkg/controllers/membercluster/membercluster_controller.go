@@ -395,7 +395,6 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
-
 	klog.InfoS("mark the member Cluster as Joined", "memberService", mc.GetName())
 	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster is joined")
 	joinedCondition := &metav1.Condition{
