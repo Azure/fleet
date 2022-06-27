@@ -75,10 +75,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // join is used to complete the Join workflow for the Hub agent
 // where we check and create namespace role, role binding, internal member cluster and update member cluster status.
 func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
-	// Check if mc 's last status before this reconcile loop is joined, for metrics reporting purpose.
-	var mcHaveJoined bool
-	mcLastCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-	mcHaveJoined = mcLastCond != nil && mcLastCond.Status == metav1.ConditionTrue
+	mcHaveJoined := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+	if mcHaveJoined != nil && mcHaveJoined.Status == metav1.ConditionTrue {
+		klog.InfoS("Member cluster is marked as joined", "memberCluster", mc.Name)
+		return ctrl.Result{}, nil
+	}
 
 	// Create the namespace associated with the member cluster Obj
 	namespaceName, err := r.checkAndCreateNamespace(ctx, mc)
@@ -109,8 +110,8 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		return ctrl.Result{}, err
 	}
 
-	joinedCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
+	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
 		if err := r.copyMemberClusterStatusFromInternalMC(ctx, mc, imc); err != nil {
 			klog.ErrorS(err, "cannot update member cluster status as Joined",
 				"internalMemberCluster", imc.Name)
@@ -118,19 +119,12 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		}
 	}
 
-	if !mcHaveJoined {
-		metrics.ReportJoinResultMetric()
-	}
+	metrics.ReportJoinResultMetric()
 	return ctrl.Result{}, nil
 }
 
 // leave is used to complete the Leave workflow for the Hub agent.
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
-	// Check if mc 's last status before this reconcile loop is left, for metrics reporting purpose.
-	var mcHaveLeft bool
-	mcLastCond := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-	mcHaveLeft = mcLastCond != nil && mcLastCond.Status == metav1.ConditionFalse
-
 	imcExists := true
 	imcLeft := false
 	memberClusterLeftCondition := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
@@ -182,9 +176,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 		}
 	}
 
-	if !mcHaveLeft {
-		metrics.ReportLeaveResultMetric()
-	}
+	metrics.ReportLeaveResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -403,13 +395,10 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	joinedCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
-		return
-	}
+
 	klog.InfoS("mark the member Cluster as Joined", "memberService", mc.GetName())
 	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster is joined")
-	joinedCondition = &metav1.Condition{
+	joinedCondition := &metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterJoined,
