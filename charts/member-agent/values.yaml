@@ -27,11 +27,11 @@ namespace:
 
 config:
   provider: secret
-  hubURL : https://127.0.0.1:6443
+  hubURL : https://<hub_cluster_api_server_ip>:<hub_cluster_port>
 
 secret:
   name: "hub-kubeconfig-secret"
   namespace: "default"
 
 azure:
-  clientID: ""
+  clientid: <member_cluster_clientID>
