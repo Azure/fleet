@@ -30,6 +30,8 @@ spec:
             value: "{{ .Values.config.hubURL }}"
           - name: CONFIG_PATH
             value: "/config/token"
+          - name: MEMBER_CLUSTER_NAME
+            value: "{{ .Values.config.memberClusterName }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
