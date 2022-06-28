@@ -7,10 +7,10 @@ package framework
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
@@ -137,26 +137,14 @@ func WaitMembership(cluster Cluster, m *v1alpha1.Membership) {
 	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }
 
-// WaitMembershipState waits for Membership to present on th member cluster with a specific condition.
-func WaitMembershipState(cluster Cluster, m *v1alpha1.Membership, state v1alpha1.ClusterState) {
-	klog.Infof("Waiting for Membership(%s) to be synced", m.Name)
+// WaitConditionMembership waits for Membership to present on the member cluster with a specific condition.
+// Allowing custom timeout as for join cond it needs longer than defined PollTimeout for the member agent to finish joining.
+func WaitConditionMembership(cluster Cluster, m *v1alpha1.Membership, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
+	klog.Infof("Waiting for Membership(%s) condition(%s) status(%s) to be synced", m.Name, conditionName, status)
 	gomega.Eventually(func() bool {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		return m.Spec.State == state
-	}, PollTimeout, PollInterval).Should(gomega.Equal(true))
-}
-
-// WaitConditionMembership waits for Membership to present on th member cluster with a specific condition.
-func WaitConditionMembership(cluster Cluster, m *v1alpha1.Membership, conditionName string, status metav1.ConditionStatus) {
-	klog.Infof("Waiting for Membership(%s) condition(%s) to be synced", m.Name, conditionName)
-	gomega.Eventually(func() bool {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		condition := meta.FindStatusCondition(m.Status.Conditions, conditionName)
-		if condition != nil {
-			return condition.Status == status
-		}
-		return false
-	}, PollTimeout, PollInterval).Should(gomega.Equal(true))
+		cond := m.GetCondition(conditionName)
+		return cond != nil && cond.Status == status
+	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }

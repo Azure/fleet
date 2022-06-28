@@ -6,6 +6,7 @@ package e2e
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -67,8 +69,12 @@ var _ = Describe("Join member cluster testing", func() {
 		By("check if membercluster state is updated", func() {
 			framework.WaitStateUpdatedMemberCluster(*HubCluster, mc, v1alpha1.ClusterStateJoin)
 		})
+
+		By("check if membership condition is updated to Joined", func() {
+			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionTrue, 90*time.Second)
+		})
 	})
-	It("leave flow is succuess ", func() {
+	It("leave flow is successful ", func() {
 
 		By("update membercluster in the hub cluster", func() {
 
@@ -78,6 +84,10 @@ var _ = Describe("Join member cluster testing", func() {
 		By("update membership in the member cluster", func() {
 			framework.UpdateMembershipState(*MemberCluster, membership, v1alpha1.ClusterStateLeave)
 			framework.WaitMembership(*MemberCluster, membership)
+		})
+
+		By("check if membership condition is updated to Joined", func() {
+			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionFalse, 90*time.Second)
 		})
 
 		By("member namespace is deleted from hub cluster", func() {
