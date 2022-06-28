@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.goms.io/fleet/pkg/metrics"
 	corev1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -105,6 +106,9 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		//} else {
 		//	joinFailCounter.Add(1)
 		//}
+		if err == nil {
+			metrics.ReportJoinResultMetric()
+		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 	}
 	// the state can be leave or unknown.
@@ -124,6 +128,9 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 		//} else {
 		//	leaveFailCounter.Add(1)
 		//}
+		if err == nil {
+			metrics.ReportLeaveResultMetric()
+		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 	}
 	// internalMemberClusterState state can be joined or unknown.
