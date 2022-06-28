@@ -59,7 +59,7 @@ var _ = Describe("Join member cluster testing", func() {
 		})
 
 		By("deploy membership in the member cluster", func() {
-			membership = NewMembership(MemberCluster.ClusterName, memberNS.Name, MemberCluster.HubURL, string(v1alpha1.ClusterStateJoin))
+			membership = NewMembership(MemberCluster.ClusterName, memberNS.Name, string(v1alpha1.ClusterStateJoin))
 			framework.CreateMembership(*MemberCluster, membership)
 			framework.WaitMembership(*MemberCluster, membership)
 		})

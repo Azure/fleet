@@ -32,16 +32,6 @@ func (m *Membership) GetCondition(conditionType string) *metav1.Condition {
 
 // MembershipSpec defines the desired state of the member agent installed in the member cluster.
 type MembershipSpec struct {
-	// MemberClusterName is the name of the MemberCluster custom resource, which can be found in the hub cluster.
-
-	// +required
-	MemberClusterName string `json:"memberClusterName"`
-
-	// HubURL is the url of apiserver endpoint of the hub cluster for the member agent to contact
-
-	// +required
-	HubURL string `json:"hubUrl"`
-
 	// State indicates the desired state of the member cluster.
 
 	// +kubebuilder:validation:Required,Enum=Join;Leave
