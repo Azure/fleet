@@ -15,6 +15,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -92,7 +93,7 @@ var _ = Describe("Join member cluster testing", func() {
 
 		By("member namespace is deleted from hub cluster", func() {
 			Eventually(func() bool {
-				err := HubCluster.KubeClient.Delete(context.TODO(), memberNS)
+				err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 				return apierrors.IsNotFound(err)
 			}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
 		})
