@@ -29,13 +29,12 @@ func CreateMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
 }
 
 // UpdateMemberCluster updates MemberCluster in the hub cluster.
-func UpdateMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
-	ginkgo.By(fmt.Sprintf("Updating MemberCluster(%s)", mc.Name), func() {
-		err := cluster.KubeClient.Update(context.TODO(), mc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-		err = cluster.KubeClient.Status().Update(context.TODO(), mc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	})
+func UpdateMemberClusterState(cluster Cluster, mc *v1alpha1.MemberCluster, state v1alpha1.ClusterState) {
+	err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	mc.Spec.State = state
+	err = cluster.KubeClient.Update(context.TODO(), mc)
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 }
 
 // DeleteMemberCluster deletes MemberCluster in the hub cluster.
@@ -112,12 +111,13 @@ func CreateMembership(cluster Cluster, m *v1alpha1.Membership) {
 	})
 }
 
-// UpdateMembership updates Membership in the member cluster.
-func UpdateMembership(cluster Cluster, m *v1alpha1.Membership) {
-	ginkgo.By(fmt.Sprintf("Updating Membership(%s)", m.Name), func() {
-		err := cluster.KubeClient.Update(context.TODO(), m)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	})
+// UpdateMembershipState updates Membership in the member cluster.
+func UpdateMembershipState(cluster Cluster, m *v1alpha1.Membership, state v1alpha1.ClusterState) {
+	err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	m.Spec.State = state
+	err = cluster.KubeClient.Update(context.TODO(), m)
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 }
 
 // DeleteMembership deletes Membership in the member cluster.

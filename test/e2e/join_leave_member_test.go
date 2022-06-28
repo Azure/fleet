@@ -8,8 +8,11 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -64,7 +67,25 @@ var _ = Describe("Join member cluster testing", func() {
 		By("check if membercluster state is updated", func() {
 			framework.WaitStateUpdatedMemberCluster(*HubCluster, mc, v1alpha1.ClusterStateJoin)
 		})
+	})
+	It("leave flow is succuess ", func() {
 
+		By("update membercluster in the hub cluster", func() {
+
+			framework.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
+			framework.WaitMemberCluster(*HubCluster, mc)
+		})
+		By("update membership in the member cluster", func() {
+			framework.UpdateMembershipState(*MemberCluster, membership, v1alpha1.ClusterStateLeave)
+			framework.WaitMembership(*MemberCluster, membership)
+		})
+
+		By("member namespace is deleted from hub cluster", func() {
+			Eventually(func() bool {
+				err := HubCluster.KubeClient.Delete(context.TODO(), memberNS)
+				return apierrors.IsNotFound(err)
+			}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+		})
 		DeferCleanup(func() {
 			framework.DeleteMemberCluster(*HubCluster, mc)
 			framework.DeleteNamespace(*MemberCluster, memberNS)
