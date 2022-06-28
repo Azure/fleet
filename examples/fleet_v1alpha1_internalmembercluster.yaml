@@ -1,5 +1,0 @@
-metadata:
-  name: internalmembercluster-sample
-spec:
-  state: Join
-  heartbeatPeriodSeconds: 60
