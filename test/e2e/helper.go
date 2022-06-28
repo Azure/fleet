@@ -25,16 +25,14 @@ func NewMemberCluster(name string, heartbeat int32, identity rbacv1.Subject, sta
 	}
 }
 
-func NewMembership(name, namespace, hubURL, state string) *v1alpha1.Membership {
+func NewMembership(name, namespace, state string) *v1alpha1.Membership {
 	return &v1alpha1.Membership{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
 		Spec: v1alpha1.MembershipSpec{
-			MemberClusterName: name,
-			HubURL:            hubURL,
-			State:             v1alpha1.ClusterState(state),
+			State: v1alpha1.ClusterState(state),
 		},
 	}
 }

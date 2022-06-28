@@ -47,15 +47,9 @@ spec:
             description: MembershipSpec defines the desired state of the member agent
               installed in the member cluster.
             properties:
-              hubUrl:
-                type: string
-              memberClusterName:
-                type: string
               state:
                 type: string
             required:
-            - hubUrl
-            - memberClusterName
             - state
             type: object
           status:
