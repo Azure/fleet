@@ -78,9 +78,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
 	// Check if membership 's last status before this reconcile loop is joined, for metrics reporting purpose.
-	var clusterMembershipHaveJoined bool
 	membershipLastCond := clusterMembership.GetCondition(fleetv1alpha1.ConditionTypeMembershipJoin)
-	clusterMembershipHaveJoined = membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionTrue
+	if membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionTrue {
+		return ctrl.Result{}, nil
+	}
 
 	r.membershipChan <- fleetv1alpha1.ClusterStateJoin
 	internalMemberClusterState := r.getInternalMemberClusterState()
@@ -89,9 +90,7 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
 		}
-		if !clusterMembershipHaveJoined {
-			metrics.ReportJoinResultMetric()
-		}
+		metrics.ReportJoinResultMetric()
 		return ctrl.Result{}, nil
 	}
 	// the state can be leave or unknown.
@@ -102,9 +101,10 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 
 func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
 	// Check if membership 's last status before this reconcile loop is joined, for metrics reporting purpose.
-	var clusterMembershipHasLeft bool
 	membershipLastCond := clusterMembership.GetCondition(fleetv1alpha1.ConditionTypeMembershipJoin)
-	clusterMembershipHasLeft = membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionFalse
+	if membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionFalse {
+		return ctrl.Result{}, nil
+	}
 
 	r.membershipChan <- fleetv1alpha1.ClusterStateLeave
 	internalMemberClusterState := r.getInternalMemberClusterState()
@@ -113,9 +113,7 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
 		}
-		if !clusterMembershipHasLeft {
-			metrics.ReportLeaveResultMetric()
-		}
+		metrics.ReportLeaveResultMetric()
 		return ctrl.Result{}, nil
 	}
 	// internalMemberClusterState state can be joined or unknown.
