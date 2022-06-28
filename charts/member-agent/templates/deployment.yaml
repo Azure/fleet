@@ -23,6 +23,8 @@ spec:
           ports:
             - name: http
               containerPort: 80
+          args:
+            - --tls-insecure={{ .Values.tlsClientInsecure }}
           env:
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"
