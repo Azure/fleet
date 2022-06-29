@@ -28,6 +28,7 @@ namespace:
 config:
   provider: secret
   hubURL : https://<hub_cluster_api_server_ip>:<hub_cluster_port>
+  memberClusterName: membercluster-sample
 
 secret:
   name: "hub-kubeconfig-secret"
