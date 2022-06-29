@@ -14,7 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -78,7 +78,7 @@ func getClient() client.Client {
 
 	client, err := client.New(restConfig, client.Options{})
 	if err != nil {
-		klog.Error(err, "unable to create client")
+		klog.ErrorS(err, "unable to create client")
 		os.Exit(1)
 	}
 
