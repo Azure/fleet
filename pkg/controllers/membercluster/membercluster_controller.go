@@ -286,7 +286,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, memberCluster *fleetv1
 		return nil
 	}
 	expectedRoleBinding := createRoleBinding(roleName, roleBindingName, namespaceName, identity)
-	if !cmp.Equal(rb.Subjects, expectedRoleBinding.Subjects) && !cmp.Equal(rb.RoleRef, expectedRoleBinding.RoleRef) {
+	if !cmp.Equal(rb.Subjects, expectedRoleBinding.Subjects) || !cmp.Equal(rb.RoleRef, expectedRoleBinding.RoleRef) {
 		klog.InfoS("the role binding is different from what is expected, hence it will be updated", "roleBinding", roleBindingName, "memberCluster", memberCluster.Name)
 		if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(memberCluster.GetUID())); err != nil {
 			klog.ErrorS(err, "cannot update role binding for member cluster", "memberCluster", memberCluster.Name, "roleBinding", roleBindingName)

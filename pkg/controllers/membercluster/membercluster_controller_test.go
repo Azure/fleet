@@ -351,12 +351,23 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						roleRef := rbacv1.RoleRef{
+							APIGroup: rbacv1.GroupName,
+							Kind:     "Role",
+							Name:     "fleet-role-mc2",
+						}
 						o := obj.(*rbacv1.RoleBinding)
 						*o = rbacv1.RoleBinding{
+							TypeMeta: metav1.TypeMeta{
+								Kind:       "RoleBinding",
+								APIVersion: rbacv1.SchemeGroupVersion.String(),
+							},
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "fleet-rolebinding-mc2",
 								Namespace: namespace2,
 							},
+							Subjects: []rbacv1.Subject{{Kind: "User", Name: "MemberClusterIdentity1"}},
+							RoleRef:  roleRef,
 						}
 						return nil
 					},
