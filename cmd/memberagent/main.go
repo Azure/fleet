@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
@@ -19,6 +20,8 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	"go.goms.io/fleet/pkg/utils"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
@@ -61,6 +64,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
+	if mcName == "" {
+		klog.Error("Member cluster name cannot be empty")
+		os.Exit(1)
+	}
+
+	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+
 	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
 		return true
 	}, func() error {
@@ -89,6 +100,7 @@ func main() {
 		HealthProbeBindAddress: *hubProbeAddr,
 		LeaderElection:         *enableLeaderElection,
 		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
+		Namespace:              mcNamespace,
 	}
 
 	//+kubebuilder:scaffold:builder
