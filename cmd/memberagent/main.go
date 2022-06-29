@@ -59,19 +59,19 @@ func main() {
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
-		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
+		klog.V(3).ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
 		os.Exit(1)
 	}
 	tokenFilePath := os.Getenv("CONFIG_PATH")
 
 	if tokenFilePath == "" {
-		klog.ErrorS(errors.New("hub token file path cannot be empty"), "error has occurred retrieving CONFIG_PATH")
+		klog.V(3).ErrorS(errors.New("hub token file path cannot be empty"), "error has occurred retrieving CONFIG_PATH")
 		os.Exit(1)
 	}
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
-		klog.ErrorS(errors.New("Member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
+		klog.V(3).ErrorS(errors.New("Member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
 		os.Exit(1)
 	}
 
@@ -86,7 +86,7 @@ func main() {
 		return err
 	})
 	if err != nil {
-		klog.ErrorS(err, " cannot retrieve token file from the path %s", tokenFilePath)
+		klog.V(2).ErrorS(err, " cannot retrieve token file from the path %s", tokenFilePath)
 		os.Exit(1)
 	}
 
@@ -111,7 +111,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts); err != nil {
-		klog.ErrorS(err, "problem running controllers")
+		klog.V(3).ErrorS(err, "problem running controllers")
 		os.Exit(1)
 	}
 }
@@ -148,11 +148,11 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	if err := hubMrg.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up health check for hub manager")
+		klog.V(2).ErrorS(err, "unable to set up health check for hub manager")
 		os.Exit(1)
 	}
-	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up ready check for hub manager")
+	if err := hubMrg.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		klog.V(2).ErrorS(err, "unable to set up ready check for hub manager")
 		os.Exit(1)
 	}
 
@@ -162,19 +162,19 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	}
 
 	if err := memberMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up health check for member manager")
+		klog.V(2).ErrorS(err, "unable to set up health check for member manager")
 		os.Exit(1)
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up ready check for member manager")
+		klog.V(2).ErrorS(err, "unable to set up ready check for member manager")
 
 		os.Exit(1)
 	}
 
-	klog.InfoS("starting hub manager")
+	klog.V(3).InfoS("starting hub manager")
 	startErr := make(chan error)
 	go func() {
-		defer klog.InfoS("shutting down hub manager")
+		defer klog.V(3).InfoS("shutting down hub manager")
 		err := hubMrg.Start(ctx)
 		if err != nil {
 			startErr <- errors.Wrap(err, "problem starting hub manager")
@@ -182,8 +182,8 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		}
 	}()
 
-	klog.InfoS("starting member manager")
-	defer klog.InfoS("shutting down member manager")
+	klog.V(3).InfoS("starting member manager")
+	defer klog.V(3).InfoS("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
 		return errors.Wrap(err, "problem starting member manager")
 	}

@@ -95,7 +95,7 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
 	if collectErr != nil {
-		klog.ErrorS(collectErr, "failed to collect member cluster usage", "name", memberCluster.Name, "namespace", memberCluster.Namespace)
+		klog.V(2).ErrorS(collectErr, "failed to collect member cluster usage", "name", memberCluster.Name, "namespace", memberCluster.Namespace)
 		r.markInternalMemberClusterUnhealthy(memberCluster, collectErr)
 	} else {
 		r.markInternalMemberClusterHealthy(memberCluster)
@@ -146,7 +146,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 		func() error {
 			err := r.hubClient.Status().Update(ctx, internalMemberCluster)
 			if err != nil {
-				klog.ErrorS(err, "error updating internal member cluster status on hub cluster")
+				klog.V(3).ErrorS(err, "error updating internal member cluster status on hub cluster")
 			}
 			return err
 		})
@@ -155,7 +155,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 func (r *Reconciler) collectMemberClusterUsage(ctx context.Context, mc *fleetv1alpha1.InternalMemberCluster) error {
 	var nodes corev1.NodeList
 	if err := r.memberClient.List(ctx, &nodes); err != nil {
-		klog.ErrorS(err, "failed to get member cluster node list", "name", mc.Name, "namespace", mc.Namespace)
+		klog.V(3).ErrorS(err, "failed to get member cluster node list", "name", mc.Name, "namespace", mc.Namespace)
 		return err
 	}
 
@@ -183,7 +183,7 @@ func (r *Reconciler) collectMemberClusterUsage(ctx context.Context, mc *fleetv1a
 }
 
 func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(internalMemberCluster apis.ConditionedObj) {
-	klog.InfoS("mark internal member cluster heartbeat received",
+	klog.V(3).InfoS("mark internal member cluster heartbeat received",
 		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
 	hearbeatReceivedCondition := metav1.Condition{
@@ -196,7 +196,7 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(internalMemberCl
 }
 
 func (r *Reconciler) markInternalMemberClusterHealthy(internalMemberCluster apis.ConditionedObj) {
-	klog.InfoS("mark internal member cluster healthy",
+	klog.V(3).InfoS("mark internal member cluster healthy",
 		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
 	internalMemberClusterHealthyCond := metav1.Condition{
@@ -209,7 +209,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(internalMemberCluster apis
 }
 
 func (r *Reconciler) markInternalMemberClusterUnhealthy(internalMemberCluster apis.ConditionedObj, err error) {
-	klog.InfoS("mark internal member cluster unhealthy",
+	klog.V(3).InfoS("mark internal member cluster unhealthy",
 		"namespace", internalMemberCluster.GetNamespace(), "internalMemberCluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
 	internalMemberClusterUnhealthyCond := metav1.Condition{
@@ -222,7 +222,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(internalMemberCluster ap
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.ConditionedObj) {
-	klog.InfoS("mark internal member cluster as joined",
+	klog.V(3).InfoS("mark internal member cluster as joined",
 		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster has joined")
 	joinSucceedCondition := metav1.Condition{
@@ -235,7 +235,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(internalMemberCluster apis.
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(internalMemberCluster apis.ConditionedObj) {
-	klog.InfoS("mark internal member cluster as left",
+	klog.V(3).InfoS("mark internal member cluster as left",
 		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster has left")
 	joinSucceedCondition := metav1.Condition{
@@ -248,7 +248,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(internalMemberCluster apis.Co
 }
 
 func (r *Reconciler) markInternalMemberClusterUnknown(internalMemberCluster apis.ConditionedObj) {
-	klog.InfoS("mark internal member cluster join state unknown",
+	klog.V(3).InfoS("mark internal member cluster join state unknown",
 		"namespace", internalMemberCluster.GetNamespace(), "internal member cluster", internalMemberCluster.GetName())
 	r.recorder.Event(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster join state unknown")
 	joinUnknownCondition := metav1.Condition{
@@ -264,7 +264,7 @@ func (r *Reconciler) watchMembershipChan() {
 	for membershipState := range r.membershipChan {
 		r.membershipStateLock.Lock()
 		if r.membershipState != membershipState {
-			klog.InfoS("membership state has changed", "membershipState", membershipState)
+			klog.V(3).InfoS("membership state has changed", "membershipState", membershipState)
 			r.membershipState = membershipState
 		}
 		r.membershipStateLock.Unlock()
