@@ -6,7 +6,6 @@ package e2e
 
 import (
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -67,13 +66,14 @@ var _ = Describe("Join member cluster testing", func() {
 			framework.WaitMembership(*MemberCluster, membership)
 		})
 
-		By("check if membercluster state is updated", func() {
-			framework.WaitStateUpdatedMemberCluster(*HubCluster, mc, v1alpha1.ClusterStateJoin)
+		By("check if membercluster condition is updated to Joined", func() {
+			framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 		})
 
 		By("check if membership condition is updated to Joined", func() {
-			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionTrue, 90*time.Second)
+			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 		})
+
 	})
 	It("leave flow is successful ", func() {
 
@@ -87,8 +87,12 @@ var _ = Describe("Join member cluster testing", func() {
 			framework.WaitMembership(*MemberCluster, membership)
 		})
 
-		By("check if membership condition is updated to Joined", func() {
-			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionFalse, 90*time.Second)
+		By("check if membercluster condition is updated to Left", func() {
+			framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
+		})
+
+		By("check if membership condition is updated to Left", func() {
+			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionFalse, 3*framework.PollTimeout)
 		})
 
 		By("member namespace is deleted from hub cluster", func() {

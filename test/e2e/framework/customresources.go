@@ -54,14 +54,15 @@ func WaitMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
 	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }
 
-// WaitStateUpdatedMemberCluster waits for MemberCluster to present on th hub cluster with a specific state.
-func WaitStateUpdatedMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster, state v1alpha1.ClusterState) {
-	klog.Infof("Waiting for MemberCluster(%s) to be synced", mc.Name)
+// WaitConditionMemberCluster waits for MemberCluster to present on th hub cluster with a specific condition.
+func WaitConditionMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
+	klog.Infof("Waiting for MemberCluster(%s) condition(%s) status(%s) to be synced", mc.Name, conditionName, status)
 	gomega.Eventually(func() bool {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		return mc.Spec.State == state
-	}, PollTimeout, PollInterval).Should(gomega.Equal(true))
+		cond := mc.GetCondition(conditionName)
+		return cond != nil && cond.Status == status
+	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
 
 // INTERNAL MEMBER CLUSTER
