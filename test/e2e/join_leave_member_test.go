@@ -39,7 +39,7 @@ var _ = Describe("Join/leave member cluster testing", func() {
 			}
 		})
 
-		It("Join flow is succuess ", func() {
+		It("Join flow is successful ", func() {
 			By("Prepare resources in member cluster", func() {
 				// create testing NS in member cluster
 				framework.CreateNamespace(*MemberCluster, memberNS)
@@ -67,16 +67,16 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				framework.WaitMembership(*MemberCluster, membership)
 			})
 
-		By("check if membercluster condition is updated to Joined", func() {
-			framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
-		})
+			By("check if membercluster condition is updated to Joined", func() {
+				framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
+			})
 
-		By("check if membership condition is updated to Joined", func() {
-			framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionTrue, 3*framework.PollTimeout)
-		})
+			By("check if membership condition is updated to Joined", func() {
+				framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionTrue, 3*framework.PollTimeout)
+			})
 
-	})
-	It("leave flow is successful ", func() {
+		})
+		It("leave flow is successful ", func() {
 
 			By("update membercluster in the hub cluster", func() {
 
