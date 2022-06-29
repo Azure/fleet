@@ -2,14 +2,15 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 var (
-	JoinResultMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
+	JoinResultMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "join_result_counter",
 		Help: "Number of successful Join operations",
 	}, []string{"result"})
-	LeaveResultMetrics = prometheus.NewCounterVec(prometheus.CounterOpts{
+	LeaveResultMetrics = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "leave_result_counter",
 		Help: "Number of successful Leave operations",
 	}, []string{"result"})

@@ -107,6 +107,7 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 		//	joinFailCounter.Add(1)
 		//}
 		if err == nil {
+			klog.InfoS("reporting leave", "cnt", 1)
 			metrics.ReportJoinResultMetric()
 		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
@@ -129,6 +130,7 @@ func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1
 		//	leaveFailCounter.Add(1)
 		//}
 		if err == nil {
+			klog.InfoS("reporting leave", "cnt", 1)
 			metrics.ReportLeaveResultMetric()
 		}
 		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
