@@ -12,7 +12,6 @@ HUB_SERVER_URL ?= https://172.19.0.2:6443
 
 HUB_KIND_CLUSTER_NAME = hub-testing
 MEMBER_KIND_CLUSTER_NAME = member-testing
-CREATED_MEMBER_CLUSTER_NAME = kind-member-testing
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -149,7 +148,7 @@ install-member-agent-helm: e2e-hub-kubeconfig-secret
 	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
     --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
     --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
-    --set config.memberClusterName=$(CREATED_MEMBER_CLUSTER_NAME)
+    --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)"
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
