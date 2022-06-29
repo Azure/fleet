@@ -19,12 +19,15 @@ import (
 )
 
 var (
-	hubClusterName    = "kind-hub-testing"
-	memberClusterName = "kind-member-testing"
-	HubCluster        = framework.NewCluster(hubClusterName, scheme)
-	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
-	scheme            = runtime.NewScheme()
-	hubURL            string
+	hubClusterName     = "kind-hub-testing"
+	memberClusterName  = "kind-member-testing-1"
+	memberCluster2Name = "kind-member-testing-2"
+	sharedMSI          = "shared-msi-test"
+	HubCluster         = framework.NewCluster(hubClusterName, scheme)
+	MemberCluster1     = framework.NewCluster(memberClusterName, scheme)
+	MemberCluster2     = framework.NewCluster(memberCluster2Name, scheme)
+	scheme             = runtime.NewScheme()
+	hubURL             string
 )
 
 func init() {
@@ -49,7 +52,9 @@ var _ = BeforeSuite(func() {
 	framework.GetClusterClient(HubCluster)
 
 	//member setup
-	MemberCluster.HubURL = hubURL
-	framework.GetClusterClient(MemberCluster)
+	MemberCluster1.HubURL = hubURL
+	framework.GetClusterClient(MemberCluster1)
 
+	MemberCluster2.HubURL = hubURL
+	framework.GetClusterClient(MemberCluster2)
 })

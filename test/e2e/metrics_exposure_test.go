@@ -30,7 +30,7 @@ var _ = Describe("Test metrics exposure", func() {
 
 	It("check exposed metrics on member cluster", func() {
 		By("creating cluster REST config")
-		clusterConfig := framework.GetClientConfig(MemberCluster)
+		clusterConfig := framework.GetClientConfig(MemberCluster1)
 		restConfig, err := clusterConfig.ClientConfig()
 		Expect(err).ToNot(HaveOccurred())
 
