@@ -467,7 +467,7 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 	}
 
 	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{
-		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc4", UID: "mc4-UID"},
 		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
 	}
@@ -617,7 +617,7 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	recorder := utils.NewFakeRecorder(1)
 	memberCluster := &fleetv1alpha1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       internalMemberClusterKind,
+			Kind:       fleetv1alpha1.InternalMemberClusterKind,
 			APIVersion: fleetv1alpha1.GroupVersion.String(),
 		},
 	}

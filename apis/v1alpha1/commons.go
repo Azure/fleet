@@ -27,3 +27,8 @@ const (
 	InternalMemberClusterControllerStateReadyToJoin  InternalMemberClusterControllerState = "Ready To Join"
 	InternalMemberClusterControllerStateReadyToLeave InternalMemberClusterControllerState = "Ready To Leave"
 )
+
+const (
+	MemberClusterKind         = "MemberCluster"
+	InternalMemberClusterKind = "InternalMemberCluster"
+)
