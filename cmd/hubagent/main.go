@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -54,31 +54,31 @@ func main() {
 		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
 	})
 	if err != nil {
-		klog.Error(err, "unable to start controller manager.")
+		klog.ErrorS(err, "unable to start controller manager.")
 		os.Exit(1)
 	}
 
-	klog.Info("starting hubagent")
+	klog.InfoS("starting hubagent")
 
 	if err = (&membercluster.Reconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "MemberCluster")
+		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
 		os.Exit(1)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check")
+		klog.ErrorS(err, "unable to set up health check")
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check")
+		klog.ErrorS(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		klog.Error(err, "problem starting manager")
+		klog.ErrorS(err, "problem starting manager")
 		os.Exit(1)
 	}
 }

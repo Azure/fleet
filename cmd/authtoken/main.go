@@ -66,17 +66,17 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 func main() {
 	tokenProvider, err := parseArgs()
 	if err != nil {
-		klog.Error(err)
+		klog.ErrorS(err, "error has occurred while parsing refresh token flags")
 		os.Exit(-1)
 	}
-	klog.Info("creating token refresher")
+	klog.InfoS("creating token refresher")
 	tokenRefresher := authtoken.NewAuthTokenRefresher(tokenProvider,
 		authtoken.NewWriter(authtoken.NewFactory(configPath).Create),
 		authtoken.DefaultRefreshDurationFunc, authtoken.DefaultCreateTicker)
 
 	err = tokenRefresher.RefreshToken(context.Background())
 	if err != nil {
-		klog.Error(err)
+		klog.ErrorS(err, "error has occurred while refreshing the token")
 		os.Exit(-1)
 	}
 }

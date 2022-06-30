@@ -9,7 +9,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"go.goms.io/fleet/pkg/interfaces"
 )
@@ -48,13 +48,13 @@ func (w *Writer) WriteToken(token interfaces.AuthToken) error {
 	defer func() {
 		err := writer.Close()
 		if err != nil {
-			klog.Error(err, "cannot close the token file")
+			klog.ErrorS(err, "cannot close the token file")
 		}
 	}()
 	_, err = io.WriteString(writer, token.Token)
 	if err != nil {
 		return errors.Wrap(err, "cannot write the refresh token")
 	}
-	klog.Info("token has been saved to the file successfully")
+	klog.InfoS("token has been saved to the file successfully")
 	return nil
 }

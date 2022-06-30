@@ -58,19 +58,19 @@ func main() {
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
-		klog.Error("hub server api cannot be empty")
+		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
 		os.Exit(1)
 	}
 	tokenFilePath := os.Getenv("CONFIG_PATH")
 
 	if tokenFilePath == "" {
-		klog.Error("hub token file path cannot be empty")
+		klog.ErrorS(errors.New("hub token file path cannot be empty"), "error has occurred retrieving CONFIG_PATH")
 		os.Exit(1)
 	}
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
-		klog.Error("Member cluster name cannot be empty")
+		klog.ErrorS(errors.New("Member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
 		os.Exit(1)
 	}
 
@@ -170,10 +170,10 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		os.Exit(1)
 	}
 
-	klog.Info("starting hub manager")
+	klog.InfoS("starting hub manager")
 	startErr := make(chan error)
 	go func() {
-		defer klog.Info("shutting down hub manager")
+		defer klog.InfoS("shutting down hub manager")
 		err := hubMrg.Start(ctx)
 		if err != nil {
 			startErr <- errors.Wrap(err, "problem starting hub manager")
@@ -181,8 +181,8 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		}
 	}()
 
-	klog.Info("starting member manager")
-	defer klog.Info("shutting down member manager")
+	klog.InfoS("starting member manager")
+	defer klog.InfoS("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
 		return errors.Wrap(err, "problem starting member manager")
 	}

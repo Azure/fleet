@@ -39,7 +39,7 @@ var (
 )
 
 func (at *Refresher) RefreshToken(ctx context.Context) error {
-	klog.Info("start refresh token")
+	klog.InfoS("start refresh token")
 	var refreshDuration time.Duration
 
 	for ; ; <-at.createTicker(refreshDuration) {
@@ -56,7 +56,7 @@ func (at *Refresher) RefreshToken(ctx context.Context) error {
 				return err
 			}
 			refreshDuration = at.refreshCalculate(token)
-			klog.Info("token has been refreshed")
+			klog.InfoS("token has been refreshed")
 		}
 	}
 }
