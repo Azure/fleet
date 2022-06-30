@@ -22,6 +22,7 @@ import (
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -80,17 +81,34 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 		r.markInternalMemberClusterHealthy(memberCluster)
 	}
 
-	updateErr := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
+	if updateErr := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); updateErr != nil {
+		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
+			errors.Wrap(updateErr, "error update heartbeat")
+	}
 
-	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
-		errors.Wrap(updateErr, "error update heartbeat")
+	imcLastJoinCond := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	imcHaveJoined := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionTrue
+
+	if !imcHaveJoined {
+		metrics.ReportJoinResultMetric()
+	}
+	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
+	imcLastJoinCond := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	imcHaveLeft := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionFalse
+
+	if imcHaveLeft {
+		return ctrl.Result{}, nil
+	}
+
 	r.markInternalMemberClusterLeft(memberCluster)
 	if err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "internal member cluster leave error")
 	}
+
+	metrics.ReportLeaveResultMetric()
 	return ctrl.Result{}, nil
 }
 
