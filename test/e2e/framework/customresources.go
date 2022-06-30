@@ -92,14 +92,16 @@ func WaitInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberClus
 	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }
 
-// WaitStateInternalMemberCluster waits for InternalMemberCluster to have specific state on th hub cluster.
-func WaitStateInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberCluster, state v1alpha1.ClusterState) {
-	klog.Infof("Waiting for InternalMemberCluster(%s) to be synced in the %s cluster", imc.Name, cluster.ClusterName)
+// WaitConditionInternalMemberCluster waits for InternalMemberCluster to present on the hub cluster with a specific condition.
+// Allowing custom timeout as for join cond it needs longer than defined PollTimeout for the member agent to finish joining.
+func WaitConditionInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberCluster, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
+	klog.Infof("Waiting for InternalMemberCluster(%s) condition(%s) status(%s) to be synced in the %s cluster", imc.Name, conditionName, status, cluster.ClusterName)
 	gomega.Eventually(func() bool {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		return imc.Spec.State == state
-	}, PollTimeout, PollInterval).Should(gomega.Equal(true))
+		cond := imc.GetCondition(conditionName)
+		return cond != nil && cond.Status == status
+	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
 
 // MEMBERSHIP
@@ -136,16 +138,4 @@ func WaitMembership(cluster Cluster, m *v1alpha1.Membership) {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
 		return err
 	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
-}
-
-// WaitConditionMembership waits for Membership to present on the member cluster with a specific condition.
-// Allowing custom timeout as for join cond it needs longer than defined PollTimeout for the member agent to finish joining.
-func WaitConditionMembership(cluster Cluster, m *v1alpha1.Membership, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
-	klog.Infof("Waiting for Membership(%s) condition(%s) status(%s) to be synced", m.Name, conditionName, status)
-	gomega.Eventually(func() bool {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		cond := m.GetCondition(conditionName)
-		return cond != nil && cond.Status == status
-	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
