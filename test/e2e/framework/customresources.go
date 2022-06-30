@@ -67,22 +67,6 @@ func WaitConditionMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster, con
 
 // INTERNAL MEMBER CLUSTER
 
-// CreateInternalMemberCluster creates InternalMemberCluster in the hub cluster.
-func CreateInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberCluster) {
-	ginkgo.By(fmt.Sprintf("Creating InternalMemberCluster(%s/%s)", imc.Namespace, imc.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), imc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	})
-}
-
-// DeleteInternalMemberCluster deletes InternalMemberCluster in the hub cluster.
-func DeleteInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberCluster) {
-	ginkgo.By(fmt.Sprintf("Deleting InternalMemberCluster(%s)", imc.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), imc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	})
-}
-
 // WaitInternalMemberCluster waits for InternalMemberCluster to present on th hub cluster.
 func WaitInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberCluster) {
 	klog.Infof("Waiting for InternalMemberCluster(%s) to be synced in the %s cluster", imc.Name, cluster.ClusterName)
@@ -102,40 +86,4 @@ func WaitConditionInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalM
 		cond := imc.GetCondition(conditionName)
 		return cond != nil && cond.Status == status
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
-}
-
-// MEMBERSHIP
-
-// CreateMembership creates Membership in the member cluster.
-func CreateMembership(cluster Cluster, m *v1alpha1.Membership) {
-	ginkgo.By(fmt.Sprintf("Creating Membership(%s)", m.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), m)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	})
-}
-
-// UpdateMembershipState updates Membership in the member cluster.
-func UpdateMembershipState(cluster Cluster, m *v1alpha1.Membership, state v1alpha1.ClusterState) {
-	err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	m.Spec.State = state
-	err = cluster.KubeClient.Update(context.TODO(), m)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-}
-
-// DeleteMembership deletes Membership in the member cluster.
-func DeleteMembership(cluster Cluster, m *v1alpha1.Membership) {
-	ginkgo.By(fmt.Sprintf("Deleting MemberCluster(%s)", m.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), m)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-	})
-}
-
-// WaitMembership waits for Membership to present on th member cluster.
-func WaitMembership(cluster Cluster, m *v1alpha1.Membership) {
-	klog.Infof("Waiting for Membership(%s) to be synced", m.Name)
-	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: m.Name, Namespace: m.Namespace}, m)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }

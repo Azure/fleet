@@ -26,7 +26,6 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
-	"go.goms.io/fleet/pkg/controllers/membership"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
@@ -135,14 +134,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	membershipChan := make(chan fleetv1alpha1.ClusterState)
-	internalMemberClusterChan := make(chan fleetv1alpha1.ClusterState)
-	defer close(membershipChan)
-	defer close(internalMemberClusterChan)
-
-	if err = internalmembercluster.NewReconciler(
-		hubMrg.GetClient(), memberMgr.GetClient(), internalMemberClusterChan,
-		membershipChan).SetupWithManager(hubMrg); err != nil {
+	if err = internalmembercluster.NewReconciler(hubMrg.GetClient(), memberMgr.GetClient()).SetupWithManager(hubMrg); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
 
@@ -153,11 +145,6 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check for hub manager")
 		os.Exit(1)
-	}
-
-	if err = membership.NewReconciler(memberMgr.GetClient(),
-		internalMemberClusterChan, membershipChan).SetupWithManager(memberMgr); err != nil {
-		return errors.Wrap(err, "unable to create controller membership")
 	}
 
 	if err := memberMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

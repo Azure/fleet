@@ -1,8 +1,0 @@
-apiVersion: fleet.azure.com/v1alpha1
-kind: Membership
-metadata:
-  name: membership-sample
-spec:
-  memberClusterName: member-testing
-  hubUrl: https://172.19.0.2:6443
-  state: Join

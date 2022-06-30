@@ -7,7 +7,6 @@ package internalmembercluster
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -28,13 +27,9 @@ import (
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
-	hubClient                 client.Client
-	memberClient              client.Client
-	recorder                  record.EventRecorder
-	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState
-	membershipChan            <-chan fleetv1alpha1.ClusterState
-	membershipState           fleetv1alpha1.ClusterState
-	membershipStateLock       sync.RWMutex
+	hubClient    client.Client
+	memberClient client.Client
+	recorder     record.EventRecorder
 }
 
 const (
@@ -46,17 +41,11 @@ const (
 	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
 )
 
-var requeueAfterPeriod = time.Second * time.Duration(15)
-
-// NewReconciler creates a new reconciler for the internal membership CR
-func NewReconciler(hubClient client.Client, memberClient client.Client,
-	internalMemberClusterChan chan<- fleetv1alpha1.ClusterState,
-	membershipChan <-chan fleetv1alpha1.ClusterState) *Reconciler {
+// NewReconciler creates a new reconciler for the internalMemberCluster CR
+func NewReconciler(hubClient client.Client, memberClient client.Client) *Reconciler {
 	return &Reconciler{
-		hubClient:                 hubClient,
-		memberClient:              memberClient,
-		internalMemberClusterChan: internalMemberClusterChan,
-		membershipChan:            membershipChan,
+		hubClient:    hubClient,
+		memberClient: memberClient,
 	}
 }
 
@@ -69,7 +58,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &memberCluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.recorder.Event(&memberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster is deleted")
-			r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
 		}
 		return ctrl.Result{}, errors.Wrap(client.IgnoreNotFound(err), "error getting internal member cluster")
 	}
@@ -87,12 +75,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 //1. Gets current cluster usage.
 //2. Updates the associated InternalMemberCluster Custom Resource with current cluster usage and marks it as Joined.
 func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
-	membershipState := r.getMembershipClusterState()
-
-	if membershipState != fleetv1alpha1.ClusterStateJoin {
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, nil
-	}
-
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
 	if collectErr != nil {
 		klog.ErrorS(collectErr, "failed to collect member cluster usage", "name", memberCluster.Name, "namespace", memberCluster.Namespace)
@@ -102,34 +84,17 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	}
 
 	updateErr := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-	if collectErr == nil && updateErr == nil {
-		r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateJoin
-	}
 
-	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, nil
+	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
+		errors.Wrap(updateErr, "error update heartbeat")
 }
 
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
-	membershipState := r.getMembershipClusterState()
-	if membershipState != fleetv1alpha1.ClusterStateLeave {
-		r.markInternalMemberClusterUnknown(memberCluster)
-		err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster)
-		return ctrl.Result{RequeueAfter: requeueAfterPeriod},
-			errors.Wrap(err, "error marking internal member cluster as unknown")
-	}
-
 	r.markInternalMemberClusterLeft(memberCluster)
 	if err := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "internal member cluster leave error")
 	}
-	r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
 	return ctrl.Result{}, nil
-}
-
-func (r *Reconciler) getMembershipClusterState() fleetv1alpha1.ClusterState {
-	r.membershipStateLock.RLock()
-	defer r.membershipStateLock.RUnlock()
-	return r.membershipState
 }
 
 func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, internalMemberCluster *fleetv1alpha1.InternalMemberCluster) error {
@@ -260,21 +225,9 @@ func (r *Reconciler) markInternalMemberClusterUnknown(internalMemberCluster apis
 	internalMemberCluster.SetConditions(joinUnknownCondition, utils.ReconcileSuccessCondition())
 }
 
-func (r *Reconciler) watchMembershipChan() {
-	for membershipState := range r.membershipChan {
-		r.membershipStateLock.Lock()
-		if r.membershipState != membershipState {
-			klog.InfoS("membership state has changed", "membershipState", membershipState)
-			r.membershipState = membershipState
-		}
-		r.membershipStateLock.Unlock()
-	}
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("MemberShipController")
-	go r.watchMembershipChan()
+	r.recorder = mgr.GetEventRecorderFor("InternalMemberClusterController")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)

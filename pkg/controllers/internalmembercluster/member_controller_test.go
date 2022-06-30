@@ -89,7 +89,7 @@ func TestMarkInternalMemberClusterUnknown(t *testing.T) {
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeMembershipJoin, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterUnknown},
+		{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterUnknown},
 		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
 	}
 	for _, expectedCondition := range expectedConditions {

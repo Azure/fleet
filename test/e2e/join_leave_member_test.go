@@ -27,7 +27,6 @@ var _ = Describe("Join/leave member cluster testing", func() {
 	var memberIdentity rbacv1.Subject
 	var memberNS *corev1.Namespace
 	var imc *v1alpha1.InternalMemberCluster
-	var membership *v1alpha1.Membership
 
 	memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 
@@ -62,13 +61,6 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				})
 			})
 
-			// TODO (mng): removing this when code removal is done
-			By("deploy membership in the member cluster", func() {
-				membership = NewMembership(MemberCluster.ClusterName, memberNS.Name, string(v1alpha1.ClusterStateJoin))
-				framework.CreateMembership(*MemberCluster, membership)
-				framework.WaitMembership(*MemberCluster, membership)
-			})
-
 			By("check if membercluster condition is updated to Joined", func() {
 				framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 			})
@@ -84,12 +76,6 @@ var _ = Describe("Join/leave member cluster testing", func() {
 
 				framework.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
 				framework.WaitMemberCluster(*HubCluster, mc)
-			})
-
-			// TODO (mng): removing this when code removal is done
-			By("update membership in the member cluster", func() {
-				framework.UpdateMembershipState(*MemberCluster, membership, v1alpha1.ClusterStateLeave)
-				framework.WaitMembership(*MemberCluster, membership)
 			})
 
 			By("check if membercluster condition is updated to Left", func() {
@@ -109,7 +95,6 @@ var _ = Describe("Join/leave member cluster testing", func() {
 			DeferCleanup(func() {
 				framework.DeleteMemberCluster(*HubCluster, mc)
 				framework.DeleteNamespace(*MemberCluster, memberNS)
-				framework.DeleteMembership(*MemberCluster, membership) // TODO (mng): removing this when code removal is done
 			})
 		})
 	})
