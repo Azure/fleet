@@ -6,6 +6,7 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -15,6 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -75,6 +77,25 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				framework.WaitConditionMembership(*MemberCluster, membership, v1alpha1.ConditionTypeMembershipJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 			})
 
+			// tests metrics.
+			By("creating cluster REST config")
+			clusterConfig := framework.GetClientConfig(MemberCluster)
+			restConfig, err := clusterConfig.ClientConfig()
+			Expect(err).ToNot(HaveOccurred())
+
+			By("creating cluster clientSet")
+			clientSet, err := kubernetes.NewForConfig(restConfig)
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() bool {
+				By("getting metrics exposed at /metrics endpoint")
+				data, err := clientSet.RESTClient().Get().AbsPath("/metrics").DoRaw(context.Background())
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(data).ToNot(BeEmpty())
+
+				return strings.Contains(string(data), "join_result_counter")
+			}, 3*framework.PollTimeout, framework.PollInterval).Should(Equal(true))
 		})
 		It("leave flow is successful ", func() {
 

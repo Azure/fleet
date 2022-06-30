@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -49,7 +50,13 @@ func init() {
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
+	m := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "test_result_counter",
+		Help: "Test if a metric init in main.go would work",
+	})
+
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, m)
+	m.Inc()
 }
 
 func main() {
