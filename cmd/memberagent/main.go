@@ -20,12 +20,14 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"go.goms.io/fleet/pkg/utils"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	"go.goms.io/fleet/pkg/controllers/membership"
+	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -46,6 +48,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
 }
 
 func main() {
@@ -151,8 +155,8 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		os.Exit(1)
 	}
 
-	if err = membership.NewReconciler(memberMgr.GetClient(), internalMemberClusterChan, membershipChan).
-		SetupWithManager(memberMgr); err != nil {
+	if err = membership.NewReconciler(memberMgr.GetClient(),
+		internalMemberClusterChan, membershipChan).SetupWithManager(memberMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller membership")
 	}
 

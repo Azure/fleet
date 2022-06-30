@@ -19,6 +19,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"go.goms.io/fleet/pkg/metrics"
+
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
@@ -30,26 +32,6 @@ const (
 	eventReasonMembershipUnknown = "MembershipUnknown"
 	eventReasonMembershipLeft    = "MembershipLeft"
 )
-
-//TODO: Will be fixed in #103
-//var (
-//	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_succeed_cnt",
-//		Help: "counts the number of successful Join operations for hub agent",
-//	})
-//	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_fail_cnt",
-//		Help: "counts the number of failed Join operations for hub agent",
-//	})
-//	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_succeed_cnt",
-//		Help: "counts the number of successful Leave operations for hub agent",
-//	})
-//	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "member_agent_join_fail_cnt",
-//		Help: "counts the number of failed Leave operations for hub agent",
-//	})
-//)
 
 // Reconciler reconciles a Membership object
 type Reconciler struct {
@@ -95,17 +77,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
+	// Check if membership 's last status before this reconcile loop is joined, for metrics reporting purpose.
+	membershipLastCond := clusterMembership.GetCondition(fleetv1alpha1.ConditionTypeMembershipJoin)
+	if membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionTrue {
+		return ctrl.Result{}, nil
+	}
+
 	r.membershipChan <- fleetv1alpha1.ClusterStateJoin
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateJoin {
 		r.markMembershipJoined(clusterMembership)
-		err := r.Client.Status().Update(ctx, clusterMembership)
-		//if err != nil {
-		//	joinSucceedCounter.Add(1)
-		//} else {
-		//	joinFailCounter.Add(1)
-		//}
-		return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
+		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error marking membership as joined")
+		}
+		metrics.ReportJoinResultMetric()
+		return ctrl.Result{}, nil
 	}
 	// the state can be leave or unknown.
 	r.markMembershipUnknown(clusterMembership)
@@ -114,17 +100,21 @@ func (r *Reconciler) join(ctx context.Context, clusterMembership *fleetv1alpha1.
 }
 
 func (r *Reconciler) leave(ctx context.Context, clusterMembership *fleetv1alpha1.Membership) (ctrl.Result, error) {
+	// Check if membership 's last status before this reconcile loop is joined, for metrics reporting purpose.
+	membershipLastCond := clusterMembership.GetCondition(fleetv1alpha1.ConditionTypeMembershipJoin)
+	if membershipLastCond != nil && membershipLastCond.Status == metav1.ConditionFalse {
+		return ctrl.Result{}, nil
+	}
+
 	r.membershipChan <- fleetv1alpha1.ClusterStateLeave
 	internalMemberClusterState := r.getInternalMemberClusterState()
 	if internalMemberClusterState == fleetv1alpha1.ClusterStateLeave {
 		r.markMembershipLeft(clusterMembership)
-		err := r.Client.Status().Update(ctx, clusterMembership)
-		//if err != nil {
-		//	leaveSucceedCounter.Add(1)
-		//} else {
-		//	leaveFailCounter.Add(1)
-		//}
-		return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
+		if err := r.Client.Status().Update(ctx, clusterMembership); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error marking membership as left")
+		}
+		metrics.ReportLeaveResultMetric()
+		return ctrl.Result{}, nil
 	}
 	// internalMemberClusterState state can be joined or unknown.
 	r.markMembershipUnknown(clusterMembership)
@@ -196,7 +186,6 @@ func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("membership")
 	go r.watchInternalMemberClusterChan()
-	//metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.Membership{}).
 		Complete(r)

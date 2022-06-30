@@ -14,6 +14,9 @@ import (
 	"k8s.io/klog"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
@@ -35,6 +38,8 @@ func init() {
 
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
 }
 
 func main() {

@@ -25,6 +25,7 @@ import (
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -46,26 +47,6 @@ type Reconciler struct {
 	client.Client
 	recorder record.EventRecorder
 }
-
-//TODO: Will be fixed in #103
-//var (
-//	joinSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "hub_agent_join_succeed_cnt",
-//		Help: "counts the number of successful Join operations for hub agent",
-//	})
-//	joinFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "hub_agent_join_fail_cnt",
-//		Help: "counts the number of failed Join operations for hub agent",
-//	})
-//	leaveSucceedCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "hub_agent_join_succeed_cnt",
-//		Help: "counts the number of successful Leave operations for hub agent",
-//	})
-//	leaveFailCounter = promauto.NewCounter(prometheus.CounterOpts{
-//		Name: "hub_agent_join_fail_cnt",
-//		Help: "counts the number of failed Leave operations for hub agent",
-//	})
-//)
 
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/status,verbs=get;update;patch
@@ -92,12 +73,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // join is used to complete the Join workflow for the Hub agent
 // where we check and create namespace role, role binding, internal member cluster and update member cluster status.
 func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
+	mcHaveJoined := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+	if mcHaveJoined != nil && mcHaveJoined.Status == metav1.ConditionTrue {
+		klog.InfoS("Member cluster is marked as joined", "memberCluster", mc.Name)
+		return ctrl.Result{}, nil
+	}
+
 	// Create the namespace associated with the member cluster Obj
 	namespaceName, err := r.checkAndCreateNamespace(ctx, mc)
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create namespace for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "namespace", namespaceName)
-		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -105,7 +91,6 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create internal member cluster %s in the hub cluster",
 			"memberCluster", mc.Name, "internalMemberCluster", mc.Name)
-		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -113,7 +98,6 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "role", roleName)
-		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
@@ -121,20 +105,19 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if err != nil {
 		klog.ErrorS(err, "failed to check and create role binding for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "roleBinding", fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name))
-		//joinFailCounter.Add(1)
 		return ctrl.Result{}, err
 	}
 
-	joinedCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
+	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
 		if err := r.copyMemberClusterStatusFromInternalMC(ctx, mc, imc); err != nil {
 			klog.ErrorS(err, "cannot update member cluster status as Joined",
 				"internalMemberCluster", imc.Name)
-			//joinFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 	}
-	//joinSucceedCounter.Add(1)
+
+	metrics.ReportJoinResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -154,7 +137,6 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
-			//leaveFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
@@ -170,7 +152,6 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
 				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
-				//leaveFailCounter.Add(1)
 				return ctrl.Result{}, err
 			}
 		}
@@ -183,18 +164,17 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 				return ctrl.Result{}, nil
 			}
 			klog.ErrorS(err, "failed to delete namespace", "memberCluster", memberCluster.Name)
-			//leaveFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 
 		// marking member cluster as Left after all the associated resources are removed
 		if err := r.updateMemberClusterStatusAsLeft(ctx, memberCluster); err != nil {
 			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
-			//leaveFailCounter.Add(1)
 			return ctrl.Result{}, err
 		}
 	}
-	//leaveSucceedCounter.Add(1)
+
+	metrics.ReportLeaveResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -413,13 +393,9 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	joinedCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-	if joinedCondition != nil && joinedCondition.Status == metav1.ConditionTrue {
-		return
-	}
 	klog.InfoS("mark the member Cluster as Joined", "memberService", mc.GetName())
 	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster is joined")
-	joinedCondition = &metav1.Condition{
+	joinedCondition := &metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterJoined,
@@ -484,7 +460,6 @@ func createRoleBinding(roleName, roleBindingName, namespaceName string, identity
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
-	//metrics.Registry.MustRegister(joinSucceedCounter, joinFailCounter, leaveSucceedCounter, leaveFailCounter)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
