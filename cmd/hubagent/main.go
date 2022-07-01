@@ -44,6 +44,7 @@ func init() {
 
 func main() {
 	flag.Parse()
+	defer klog.Flush()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,

@@ -7,7 +7,6 @@ package secret
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/pkg/errors"
@@ -31,12 +30,16 @@ type secretAuthTokenProvider struct {
 	secretNamespace string
 }
 
-func New(secretName, namespace string) interfaces.AuthTokenProvider {
+func New(secretName, namespace string) (interfaces.AuthTokenProvider, error) {
+	client, err := getClient()
+	if err != nil {
+		return nil, errors.Wrapf(err, "an error occurd will creating client")
+	}
 	return &secretAuthTokenProvider{
-		client:          getClient(),
+		client:          client,
 		secretName:      secretName,
 		secretNamespace: namespace,
-	}
+	}, nil
 }
 
 func (s *secretAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
@@ -73,14 +76,13 @@ func (s *secretAuthTokenProvider) fetchSecret(ctx context.Context) (*corev1.Secr
 	return &secret, err
 }
 
-func getClient() client.Client {
+func getClient() (client.Client, error) {
 	restConfig := ctrl.GetConfigOrDie()
 
 	client, err := client.New(restConfig, client.Options{})
 	if err != nil {
-		klog.ErrorS(err, "unable to create client")
-		os.Exit(1)
+		klog.Error(err, "unable to create client")
+		return nil, err
 	}
-
-	return client
+	return client, nil
 }

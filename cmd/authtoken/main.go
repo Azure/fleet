@@ -28,11 +28,16 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 
 	var secretName string
 	var secretNamespace string
+	var err error
 	secretCmd := &cobra.Command{
 		Use:  "secret",
 		Args: cobra.NoArgs,
 		Run: func(_ *cobra.Command, args []string) {
-			tokenProvider = secret.New(secretName, secretNamespace)
+			tokenProvider, err = secret.New(secretName, secretNamespace)
+			if err != nil {
+				klog.V(3).ErrorS(err, "error while creating new secret provider")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
 		},
 	}
 
@@ -55,8 +60,7 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 	_ = azureCmd.MarkFlagRequired("clientid")
 
 	rootCmd.AddCommand(secretCmd, azureCmd)
-	err := rootCmd.Execute()
-
+	err = rootCmd.Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -64,12 +68,17 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 }
 
 func main() {
+	klog.InitFlags(nil)
+
 	tokenProvider, err := parseArgs()
 	if err != nil {
 		klog.ErrorS(err, "error has occurred while parsing refresh token flags")
-		os.Exit(-1)
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
-	klog.InfoS("creating token refresher")
+
+	defer klog.Flush()
+
+	klog.V(3).InfoS("creating token refresher")
 	tokenRefresher := authtoken.NewAuthTokenRefresher(tokenProvider,
 		authtoken.NewWriter(authtoken.NewFactory(configPath).Create),
 		authtoken.DefaultRefreshDurationFunc, authtoken.DefaultCreateTicker)
@@ -77,6 +86,6 @@ func main() {
 	err = tokenRefresher.RefreshToken(context.Background())
 	if err != nil {
 		klog.ErrorS(err, "error has occurred while refreshing the token")
-		os.Exit(-1)
+		os.Exit(1)
 	}
 }

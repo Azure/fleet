@@ -55,6 +55,7 @@ func init() {
 func main() {
 	flag.Parse()
 
+	defer klog.Flush()
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
