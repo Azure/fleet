@@ -14,7 +14,7 @@ import (
 var _ = Describe("Test metrics exposure", func() {
 	It("check exposed metrics on hub cluster", func() {
 		By("creating cluster REST config")
-		clusterConfig := framework.GetClientConfig(HubCluster)
+		clusterConfig := framework.GetClientConfig(HubCluster1)
 		restConfig, err := clusterConfig.ClientConfig()
 		Expect(err).ToNot(HaveOccurred())
 

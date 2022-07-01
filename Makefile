@@ -10,9 +10,11 @@ REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
 
-HUB_KIND_CLUSTER_NAME = hub-testing
+HUB_1_KIND_CLUSTER_NAME = hub-testing-1
+HUB_2_KIND_CLUSTER_NAME = hub-testing-2
 MEMBER_1_KIND_CLUSTER_NAME = member-testing-1
 MEMBER_2_KIND_CLUSTER_NAME = member-testing-2
+MEMBER_3_KIND_CLUSTER_NAME = member-testing-3
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -101,23 +103,35 @@ vet: ## Run go vet against code.
 ## Kind
 ## --------------------------------------
 
-create-hub-kind-cluster:
-	kind create cluster --name $(HUB_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
+create-hub-kind-cluster-1:
+	kind create cluster --name $(HUB_1_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
-create-member-kind-cluster:
+create-hub-kind-cluster-2:
+	kind create cluster --name $(HUB_2_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
+
+create-member-kind-cluster-1:
 	kind create cluster --name $(MEMBER_1_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
 create-member-kind-cluster-2:
 	kind create cluster --name $(MEMBER_2_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
-load-hub-docker-image:
-	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
+create-member-kind-cluster-3:
+	kind create cluster --name $(MEMBER_3_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
-load-member-docker-image:
+load-hub-1-docker-image:
+	kind load docker-image  --name $(HUB_1_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
+
+load-hub-2-docker-image:
+	kind load docker-image  --name $(HUB_2_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
+
+load-member-1-docker-image:
 	kind load docker-image  --name $(MEMBER_1_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
 
 load-member-2-docker-image:
 	kind load docker-image  --name $(MEMBER_2_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
+
+load-member-3-docker-image:
+	kind load docker-image  --name $(MEMBER_3_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
 ## --------------------------------------
 ## test
 ## --------------------------------------
@@ -132,29 +146,40 @@ local-unit-test: $(ENVTEST) ## Run tests.
 ## e2e tests
 
 install-hub-agent-helm:
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kind export kubeconfig --name $(HUB_1_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME)
+    
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
+	helm install hub-agent ./charts/hub-agent/ \
+	--set image.pullPolicy=Never \
+	--set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME)
 
 .PHONY: e2e-hub-kubeconfig-secret
 e2e-hub-kubeconfig-secret: install-hub-agent-helm
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kind export kubeconfig --name $(HUB_1_KIND_CLUSTER_NAME)
 	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
 	kind export kubeconfig --name $(MEMBER_1_KIND_CLUSTER_NAME) ;\
 	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
 	kubectl create secret generic hub-kubeconfig-secret --from-literal=kubeconfig=$$TOKEN
 
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
 	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
 	kind export kubeconfig --name $(MEMBER_2_KIND_CLUSTER_NAME) ;\
     kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
     kubectl create secret generic hub-kubeconfig-secret --from-literal=kubeconfig=$$TOKEN
+    
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
+	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
+	kind export kubeconfig --name $(MEMBER_3_KIND_CLUSTER_NAME) ;\
+	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
+	kubectl create secret generic hub-kubeconfig-secret --from-literal=kubeconfig=$$TOKEN
 
 install-member-agent-helm: e2e-hub-kubeconfig-secret
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kind export kubeconfig --name $(HUB_1_KIND_CLUSTER_NAME)
 	## Get kind cluster IP that docker uses internally so we can talk to the other cluster. the port is the default one.
-	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
+	HUB_SERVER_URL="https://$$(docker inspect $(HUB_1_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
 	kind export kubeconfig --name $(MEMBER_1_KIND_CLUSTER_NAME) ;\
 	helm install member-agent ./charts/member-agent/ \
 	--set config.hubURL=$$HUB_SERVER_URL \
@@ -165,8 +190,8 @@ install-member-agent-helm: e2e-hub-kubeconfig-secret
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
+	HUB_SERVER_URL="https://$$(docker inspect $(HUB_2_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
 	kind export kubeconfig --name $(MEMBER_2_KIND_CLUSTER_NAME) ;\
 	helm install member-agent ./charts/member-agent/ \
 	--set config.hubURL=$$HUB_SERVER_URL \
@@ -177,6 +202,18 @@ install-member-agent-helm: e2e-hub-kubeconfig-secret
     # to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
+	HUB_SERVER_URL="https://$$(docker inspect $(HUB_2_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
+	kind export kubeconfig --name $(MEMBER_3_KIND_CLUSTER_NAME) ;\
+	helm install member-agent ./charts/member-agent/ \
+	--set config.hubURL=$$HUB_SERVER_URL \
+	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
+	--set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
+	--set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
+	--set config.memberClusterName=kind-$(MEMBER_3_KIND_CLUSTER_NAME)
+	# to make sure member-agent reads the token file.
+	kubectl delete pod --all -n fleet-system
+
 build-e2e:
 	go test -c ./test/e2e
 
@@ -184,7 +221,7 @@ run-e2e: build-e2e
 	./e2e.test -test.v -ginkgo.v
 
 .PHONY: e2e-tests
-e2e-tests: create-hub-kind-cluster create-member-kind-cluster create-member-kind-cluster-2 load-hub-docker-image load-member-docker-image load-member-2-docker-image install-member-agent-helm run-e2e
+e2e-tests: create-hub-kind-cluster-1 create-hub-kind-cluster-2 create-member-kind-cluster-1 create-member-kind-cluster-2 create-member-kind-cluster-3 load-hub-1-docker-image load-hub-2-docker-image load-member-1-docker-image load-member-2-docker-image load-member-3-docker-image install-member-agent-helm run-e2e
 
 ## reviewable
 .PHONY: reviewable
@@ -280,7 +317,10 @@ clean-bin: ## Remove all generated binaries
 
 .PHONY: uninstall-helm-charts
 uninstall-helm-charts: clean-testing-kind-clusters-resources
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kind export kubeconfig --name $(HUB_1_KIND_CLUSTER_NAME)
+	helm uninstall hub-agent
+
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
 	helm uninstall hub-agent
 
 	kind export kubeconfig --name $(MEMBER_1_KIND_CLUSTER_NAME)
@@ -289,11 +329,18 @@ uninstall-helm-charts: clean-testing-kind-clusters-resources
 	kind export kubeconfig --name $(MEMBER_2_KIND_CLUSTER_NAME)
 	helm uninstall member-agent
 
+	kind export kubeconfig --name $(MEMBER_3_KIND_CLUSTER_NAME)
+	helm uninstall member-agent
+
 .PHONY: clean-testing-kind-clusters-resources
 clean-testing-kind-clusters-resources:
-	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kind export kubeconfig --name $(HUB_1_KIND_CLUSTER_NAME)
 	kubectl delete ns fleet-kind-member-testing --ignore-not-found
 	kubectl delete memberclusters.fleet.azure.com kind-$(MEMBER_1_KIND_CLUSTER_NAME) --ignore-not-found
+
+	kind export kubeconfig --name $(HUB_2_KIND_CLUSTER_NAME)
+	kubectl delete ns fleet-kind-member-testing --ignore-not-found
+	kubectl delete memberclusters.fleet.azure.com kind-$(MEMBER_3_KIND_CLUSTER_NAME) --ignore-not-found
 	kubectl delete memberclusters.fleet.azure.com kind-$(MEMBER_2_KIND_CLUSTER_NAME) --ignore-not-found
 
 	kind export kubeconfig --name $(MEMBER_1_KIND_CLUSTER_NAME)
@@ -302,8 +349,13 @@ clean-testing-kind-clusters-resources:
 	kind export kubeconfig --name $(MEMBER_2_KIND_CLUSTER_NAME)
 	kubectl delete ns fleet-kind-member-testing --ignore-not-found
 
+	kind export kubeconfig --name $(MEMBER_3_KIND_CLUSTER_NAME)
+	kubectl delete ns fleet-kind-member-testing --ignore-not-found
+
 .PHONY: clean-e2e-tests
 clean-e2e-tests: ## Remove
-	kind delete cluster --name $(HUB_KIND_CLUSTER_NAME)
+	kind delete cluster --name $(HUB_1_KIND_CLUSTER_NAME)
+	kind delete cluster --name $(HUB_2_KIND_CLUSTER_NAME)
 	kind delete cluster --name $(MEMBER_1_KIND_CLUSTER_NAME)
 	kind delete cluster --name $(MEMBER_2_KIND_CLUSTER_NAME)
+	kind delete cluster --name $(MEMBER_3_KIND_CLUSTER_NAME)

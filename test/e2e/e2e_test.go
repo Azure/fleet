@@ -19,13 +19,17 @@ import (
 )
 
 var (
-	hubClusterName     = "kind-hub-testing"
-	memberClusterName  = "kind-member-testing-1"
+	hubCluster1Name    = "kind-hub-testing-1"
+	hubCluster2Name    = "kind-hub-testing-2"
+	memberCluster1Name = "kind-member-testing-1"
 	memberCluster2Name = "kind-member-testing-2"
+	memberCluster3Name = "kind-member-testing-3"
 	sharedMSI          = "shared-msi-test"
-	HubCluster         = framework.NewCluster(hubClusterName, scheme)
-	MemberCluster1     = framework.NewCluster(memberClusterName, scheme)
+	HubCluster1        = framework.NewCluster(hubCluster1Name, scheme)
+	HubCluster2        = framework.NewCluster(hubCluster2Name, scheme)
+	MemberCluster1     = framework.NewCluster(memberCluster1Name, scheme)
 	MemberCluster2     = framework.NewCluster(memberCluster2Name, scheme)
+	MemberCluster3     = framework.NewCluster(memberCluster3Name, scheme)
 	scheme             = runtime.NewScheme()
 	hubURL             string
 )
@@ -48,8 +52,11 @@ var _ = BeforeSuite(func() {
 	Expect(hubURL).ShouldNot(BeEmpty())
 
 	// hub setup
-	HubCluster.HubURL = hubURL
-	framework.GetClusterClient(HubCluster)
+	HubCluster1.HubURL = hubURL
+	framework.GetClusterClient(HubCluster1)
+
+	HubCluster2.HubURL = hubURL
+	framework.GetClusterClient(HubCluster2)
 
 	//member setup
 	MemberCluster1.HubURL = hubURL
@@ -57,4 +64,7 @@ var _ = BeforeSuite(func() {
 
 	MemberCluster2.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster2)
+
+	MemberCluster3.HubURL = hubURL
+	framework.GetClusterClient(MemberCluster3)
 })
