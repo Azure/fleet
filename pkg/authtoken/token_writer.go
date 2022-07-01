@@ -48,13 +48,13 @@ func (w *Writer) WriteToken(token interfaces.AuthToken) error {
 	defer func() {
 		err := writer.Close()
 		if err != nil {
-			klog.ErrorS(err, "cannot close the token file")
+			klog.V(3).ErrorS(err, "cannot close the token file")
 		}
 	}()
 	_, err = io.WriteString(writer, token.Token)
 	if err != nil {
 		return errors.Wrap(err, "cannot write the refresh token")
 	}
-	klog.InfoS("token has been saved to the file successfully")
+	klog.V(3).InfoS("token has been saved to the file successfully")
 	return nil
 }

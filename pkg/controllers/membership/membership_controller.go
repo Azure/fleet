@@ -133,7 +133,7 @@ func (r *Reconciler) watchInternalMemberClusterChan() {
 	for internalMemberClusterState := range r.internalMemberClusterChan {
 		r.clusterStateLock.Lock()
 		if r.internalMemberClusterState != internalMemberClusterState {
-			klog.InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
+			klog.V(3).InfoS("internal memberCluster state has changed", "internalMemberCluster", internalMemberClusterState)
 			r.internalMemberClusterState = internalMemberClusterState
 		}
 		r.clusterStateLock.Unlock()
@@ -141,7 +141,7 @@ func (r *Reconciler) watchInternalMemberClusterChan() {
 }
 
 func (r *Reconciler) markMembershipJoined(membership apis.ConditionedObj) {
-	klog.InfoS("mark membership joined",
+	klog.V(3).InfoS("mark membership joined",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
 	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipJoined, "membership joined")
 	joinedCondition := metav1.Condition{
@@ -170,7 +170,7 @@ func (r *Reconciler) markMembershipUnknown(membership apis.ConditionedObj) {
 }
 
 func (r *Reconciler) markMembershipLeft(membership apis.ConditionedObj) {
-	klog.InfoS("mark membership left",
+	klog.V(3).InfoS("mark membership left",
 		"namespace", membership.GetNamespace(), "membership", membership.GetName())
 	r.recorder.Event(membership, corev1.EventTypeNormal, eventReasonMembershipLeft, "membership left")
 	joinedCondition := metav1.Condition{
