@@ -55,25 +55,16 @@ $ make install-member-agent-helm
 
 ### Demo
 
-1. Get Hub api-server server
-
-```shell
-$ docker inspect hub-testing-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-
-172.19.0.2
-```
-
-2. Apply `memberCluster` to the hub cluster
+1. Apply `memberCluster` to the hub cluster
 
 ```shell
 $ kind export kubeconfig --name hub-testing
 $ kubectl apply -f examples/fleet_v1alpha1_membercluster.yaml 
 ```
 
-3. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Joined'
+2. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Joined'
 
 ```shell
-$ kind export kubeconfig --name hub-testing
 $ kubectl describe memberCluster.fleet.azure.com kind-member-testing
 $ kubectl describe internalMemberCluster.fleet.azure.com kind-member-testing
  ```
@@ -109,17 +100,15 @@ Events:
 
 </details><br/>
 
-4. Change the state for `memberCluster` yaml file to be `Leave` and apply the change.
+3. Change the state for `memberCluster` yaml file to be `Leave` and apply the change.
 
 ```shell
-$ kind export kubeconfig --name hub-testing
 $ kubectl apply -f examples/fleet_v1alpha1_membercluster.yaml 
 ```
 
-5. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Left'
+4. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Left'
 
 ```shell
-$ kind export kubeconfig --name hub-testing
 $ kubectl describe memberCluster.fleet.azure.com kind-member-testing
 $ kubectl describe internalMemberCluster.fleet.azure.com kind-member-testing
  ```
