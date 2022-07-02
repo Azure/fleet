@@ -68,7 +68,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	var memberCluster fleetv1alpha1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &memberCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.recorder.Event(&memberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster is deleted")
 			r.internalMemberClusterChan <- fleetv1alpha1.ClusterStateLeave
 		}
 		return ctrl.Result{}, errors.Wrap(client.IgnoreNotFound(err), "error getting internal member cluster")

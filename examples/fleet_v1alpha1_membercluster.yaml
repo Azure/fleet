@@ -8,4 +8,5 @@ spec:
     name: member-agent-sa
     kind: ServiceAccount
     namespace: fleet-system
+    apiGroup: rbac.authorization.k8s.io
   leaseDurationSeconds: 30
