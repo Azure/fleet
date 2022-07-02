@@ -158,14 +158,15 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*rbacv1.Role)
-						verbs := []string{"get", "list", "update", "patch", "watch"}
-						apiGroups := []string{"", fleetv1alpha1.GroupVersion.Group}
-						resources := []string{"*"}
-
-						rule := rbacv1.PolicyRule{
-							Verbs:     verbs,
-							APIGroups: apiGroups,
-							Resources: resources,
+						fleetRule := rbacv1.PolicyRule{
+							Verbs:     []string{"get", "list", "update", "patch", "watch"},
+							APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+							Resources: []string{"*"},
+						}
+						eventRule := rbacv1.PolicyRule{
+							Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
+							APIGroups: []string{""},
+							Resources: []string{"events"},
 						}
 						*o = rbacv1.Role{
 							TypeMeta: metav1.TypeMeta{
@@ -176,7 +177,7 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 								Name:      "fleet-role-mc1",
 								Namespace: namespace1,
 							},
-							Rules: []rbacv1.PolicyRule{rule},
+							Rules: []rbacv1.PolicyRule{fleetRule, eventRule},
 						}
 						return nil
 					},
