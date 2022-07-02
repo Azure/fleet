@@ -250,15 +250,6 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				})
 			})
 
-			By("check if internalMemberCluster conditions are updated to Left", func() {
-				By("check if internalMemberCluster 3 condition is updated to Left", func() {
-					framework.WaitConditionInternalMemberCluster(*HubCluster2, imc3, v1alpha1.ConditionTypeInternalMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
-				})
-				By("check if internalMemberCluster 2 condition is updated to Left", func() {
-					framework.WaitConditionInternalMemberCluster(*HubCluster2, imc2, v1alpha1.ConditionTypeInternalMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
-				})
-			})
-
 			By("check if memberCluster conditions are updated to Left", func() {
 				By("check if memberCluster 3 condition is updated to Left", func() {
 					framework.WaitConditionMemberCluster(*HubCluster2, mc3, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
