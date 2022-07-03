@@ -47,7 +47,7 @@ type ClusterResourcePlacementSpec struct {
 }
 
 // ClusterResourceSelector is used to specify cluster scoped resources to be selected.
-// Note: When the resource is of type `namespace`, ALL the resources in it is selected
+// Note: When the cluster resource is of type `namespace`, ALL the resources in this namespace are selected.
 type ClusterResourceSelector struct {
 	// Group is the group name of the target resource.
 	// +required
@@ -163,9 +163,9 @@ type ResourceIdentifier struct {
 type FailedResourcePlacement struct {
 	ResourceIdentifier `json:",inline"`
 
-	// ClusterName is the name of the cluster that
+	// ClusterName is the name of the cluster that this resource is placed on
 	// +required
-	ClusterName int `json:"clusterName"`
+	ClusterName string `json:"clusterName"`
 
 	// Condition contains the failed condition status for this failed to place resource.
 	// +required
