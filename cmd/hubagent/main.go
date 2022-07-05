@@ -59,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	klog.V(3).InfoS("starting hubagent")
+	klog.V(2).InfoS("starting hubagent")
 
 	if err = (&membercluster.Reconciler{
 		Client: mgr.GetClient(),
