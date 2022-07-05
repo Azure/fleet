@@ -335,7 +335,7 @@ func (r *Reconciler) copyMemberClusterStatusFromInternalMC(ctx context.Context, 
 		})
 }
 
-// updateMemberClusterStatus is used to update member cluster status to indicate that the member cluster has Joined/Left.
+// updateMemberClusterStatusAsLeft is used to update member cluster status to indicate that the member cluster has Joined/Left.
 func (r *Reconciler) updateMemberClusterStatusAsLeft(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
 	backOffPeriod := retry.DefaultRetry
 	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds/2)
