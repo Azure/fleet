@@ -25,18 +25,6 @@ func NewMemberCluster(name string, heartbeat int32, identity rbacv1.Subject, sta
 	}
 }
 
-func NewMembership(name, namespace, state string) *v1alpha1.Membership {
-	return &v1alpha1.Membership{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: v1alpha1.MembershipSpec{
-			State: v1alpha1.ClusterState(state),
-		},
-	}
-}
-
 func NewInternalMemberCluster(name, namespace string) *v1alpha1.InternalMemberCluster {
 	return &v1alpha1.InternalMemberCluster{
 		ObjectMeta: v1.ObjectMeta{

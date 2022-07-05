@@ -3,9 +3,6 @@ kind: ClusterRole
 metadata:
   name: member-agent
 rules:
-  - apiGroups: [ "fleet.azure.com" ]
-    resources: [ "memberships", "memberships/status"]
-    verbs: [ "get", "list", "watch", "update" ]
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "watch"]
