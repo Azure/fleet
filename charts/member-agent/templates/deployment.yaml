@@ -25,6 +25,7 @@ spec:
               containerPort: 80
           args:
             - --tls-insecure={{ .Values.tlsClientInsecure }}
+            - --v={{ .Values.logVerbosity }}
           env:
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"
