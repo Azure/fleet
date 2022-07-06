@@ -19,6 +19,8 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -97,6 +99,8 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, imc *fleetv1alpha1.Int
 		r.markInternalMemberClusterUnhealthy(imc, errors.Wrapf(err, "failed to collect member cluster usage for %s", klog.KObj(imc)))
 	} else {
 		r.markInternalMemberClusterHealthy(imc)
+		hbc := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		hbc.LastTransitionTime = metav1.Now()
 	}
 
 	if err := r.updateInternalMemberClusterWithRetry(ctx, imc); err != nil {
@@ -263,5 +267,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("InternalMemberClusterController")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
+		WithEventFilter(predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
+		}}).
 		Complete(r)
 }

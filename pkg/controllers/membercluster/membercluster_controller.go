@@ -73,12 +73,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // join is used to complete the Join workflow for the Hub agent
 // where we check and create namespace role, role binding, internal member cluster and update member cluster status.
 func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
-	mcHaveJoined := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-	if mcHaveJoined != nil && mcHaveJoined.Status == metav1.ConditionTrue {
-		klog.V(3).InfoS("Member cluster is marked as joined", "memberCluster", mc.Name)
-		return ctrl.Result{}, nil
-	}
-
 	// Create the namespace associated with the member cluster Obj
 	namespaceName, err := r.checkAndCreateNamespace(ctx, mc)
 	if err != nil {
@@ -110,14 +104,14 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 
 	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
-		if err := r.copyMemberClusterStatusFromInternalMC(ctx, mc, imc); err != nil {
+		r.copyMemberClusterStatusFromInternalMC(mc, imc)
+		if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
 			klog.V(2).ErrorS(err, "cannot update member cluster status as Joined",
 				"internalMemberCluster", imc.Name)
 			return ctrl.Result{}, err
 		}
 	}
 
-	metrics.ReportJoinResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -168,7 +162,8 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 		}
 
 		// marking member cluster as Left after all the associated resources are removed
-		if err := r.updateMemberClusterStatusAsLeft(ctx, memberCluster); err != nil {
+		markMemberClusterLeft(r.recorder, memberCluster)
+		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
 			klog.V(2).ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
 			return ctrl.Result{}, err
 		}
@@ -295,7 +290,8 @@ func (r *Reconciler) markInternalMemberClusterStateJoin(ctx context.Context, mem
 				OwnerReferences: []metav1.OwnerReference{ownerRef},
 			},
 			Spec: fleetv1alpha1.InternalMemberClusterSpec{
-				State: fleetv1alpha1.ClusterStateJoin,
+				State:                  fleetv1alpha1.ClusterStateJoin,
+				HeartbeatPeriodSeconds: memberCluster.Spec.HeartbeatPeriodSeconds,
 			},
 		}
 		if err = r.Client.Create(ctx, &imc, client.FieldOwner(memberCluster.GetUID())); err != nil {
@@ -311,32 +307,26 @@ func (r *Reconciler) markInternalMemberClusterStateJoin(ctx context.Context, mem
 }
 
 // copyMemberClusterStatusFromInternalMC is used to update member cluster status given the internal member cluster status
-func (r *Reconciler) copyMemberClusterStatusFromInternalMC(ctx context.Context, mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) error {
-	backOffPeriod := retry.DefaultRetry
-	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds/2)
-
-	return retry.OnError(backOffPeriod,
-		func(err error) bool {
-			if apierrors.IsConflict(err) || apierrors.IsServerTimeout(err) {
-				return true
-			}
-			return false
-		},
-		func() error {
-			mc.Status.Capacity = imc.Status.Capacity
-			mc.Status.Allocatable = imc.Status.Allocatable
-			mc.SetConditions(*imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat))
-			markMemberClusterJoined(r.recorder, mc)
-			err := r.Client.Status().Update(ctx, mc, client.FieldOwner(mc.GetUID()))
-			if err != nil {
-				klog.V(2).ErrorS(err, "cannot update member cluster status as join", "memberCluster", mc.Name)
-			}
-			return err
-		})
+func (r *Reconciler) copyMemberClusterStatusFromInternalMC(mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) {
+	mc.Status.Capacity = imc.Status.Capacity
+	mc.Status.Allocatable = imc.Status.Allocatable
+	memberClusterHearBeatCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+	if memberClusterHearBeatCondition == nil {
+		klog.V(3).InfoS("set heartbeat condition for member cluster", "memberCluster", mc.Name)
+		mc.SetConditions(*imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat))
+	} else {
+		internalMemberClusterHeartBeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		klog.V(3).InfoS("updating last transition for member cluster", "memberCluster", mc.Name)
+		memberClusterHearBeatCondition.LastTransitionTime = internalMemberClusterHeartBeatCondition.LastTransitionTime
+	}
+	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
+		markMemberClusterJoined(r.recorder, mc)
+		metrics.ReportJoinResultMetric()
+	}
 }
 
-// updateMemberClusterStatusAsLeft is used to update member cluster status to indicate that the member cluster has Joined/Left.
-func (r *Reconciler) updateMemberClusterStatusAsLeft(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
+// updateMemberClusterStatus is used to update member cluster status to indicate that the member cluster has Joined/Left.
+func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
 	backOffPeriod := retry.DefaultRetry
 	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds/2)
 
@@ -348,10 +338,9 @@ func (r *Reconciler) updateMemberClusterStatusAsLeft(ctx context.Context, mc *fl
 			return false
 		},
 		func() error {
-			markMemberClusterLeft(r.recorder, mc)
 			err := r.Client.Status().Update(ctx, mc, client.FieldOwner(mc.GetUID()))
 			if err != nil {
-				klog.V(2).ErrorS(err, "cannot update member cluster status as left", "memberCluster", mc.Name)
+				klog.V(2).ErrorS(err, "cannot update member cluster status", "memberCluster", mc.Name)
 			}
 			return err
 		})

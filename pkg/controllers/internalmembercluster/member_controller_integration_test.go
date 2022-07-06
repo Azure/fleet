@@ -131,6 +131,30 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(imc.Status.Allocatable).ShouldNot(BeNil())
 			Expect(imc.Status.Capacity).ShouldNot(BeNil())
 		})
+
+		It("last transition time gets updated after heartbeat", func() {
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
+			Expect(err).Should(Not(HaveOccurred()))
+
+			var imc v1alpha1.InternalMemberCluster
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
+
+			lastTransitionTime := imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
+
+			time.Sleep(time.Second)
+
+			By("trigger reconcile which should update last transition time")
+			result, err = r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
+			Expect(err).Should(Not(HaveOccurred()))
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
+			Expect(lastTransitionTime).ShouldNot(Equal(imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime))
+		})
 	})
 
 	Context("leave", func() {

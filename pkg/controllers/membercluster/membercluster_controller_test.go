@@ -481,7 +481,7 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc4", UID: "mc4-UID"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
 	}
 
 	controllerBool := true
@@ -580,7 +580,7 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc4", Namespace: "fleet-mc4", OwnerReferences: []metav1.OwnerReference{
 					{APIVersion: expectedMemberCluster2.APIVersion, Kind: expectedMemberCluster2.Kind, Name: expectedMemberCluster2.Name, UID: expectedMemberCluster2.UID, Controller: &controllerBool}}},
-				Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+				Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
 			},
 			wantedEvent: expectedEvent2,
 			wantedError: nil,
@@ -652,98 +652,43 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 }
 
 func TestCopyMemberClusterStatusFromInternalMC(t *testing.T) {
-	var count int
 	imc := fleetv1alpha1.InternalMemberCluster{}
+	mc1 := fleetv1alpha1.MemberCluster{}
 	heartBeatCondition := metav1.Condition{
 		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
 		Status: metav1.ConditionTrue,
 		Reason: "InternalMemberClusterHeartbeatReceived",
 	}
 	imc.SetConditions(heartBeatCondition)
+	mc1.SetConditions(heartBeatCondition)
 
 	tests := map[string]struct {
 		r                     *Reconciler
 		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
 		memberCluster         *fleetv1alpha1.MemberCluster
 		wantErr               error
-		verifyNumberOfRetry   func() bool
 	}{
-		"mark and update member cluster as Joined": {
-			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					count++
-					return nil
-				}},
-				recorder: utils.NewFakeRecorder(1),
-			},
+		"mark member cluster as Joined with nil heartbeat condition for member cluster": {
+			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
 			memberCluster:         &fleetv1alpha1.MemberCluster{},
 			internalMemberCluster: &imc,
-			wantErr:               nil,
-			verifyNumberOfRetry: func() bool {
-				return count == 0
-			},
 		},
-		"mark and update member cluster as left within heartbeat": {
-			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					count++
-					if count == 3 {
-						return nil
-					}
-					return apierrors.NewConflict(schema.GroupResource{}, "", errors.New("error"))
-				}},
-				recorder: utils.NewFakeRecorder(10),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
+		"mark member cluster as Joined with non nil heartbeat condition for member cluster": {
+			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			memberCluster:         &mc1,
 			internalMemberCluster: &imc,
-			wantErr:               nil,
-			verifyNumberOfRetry: func() bool {
-				return count == 3
-			},
-		},
-		"error updating exceeding cap for exponential backoff": {
-			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					count++
-					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
-				}},
-				recorder: utils.NewFakeRecorder(10),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{},
-			internalMemberCluster: &imc,
-			wantErr:               apierrors.NewServerTimeout(schema.GroupResource{}, "", 1),
-			verifyNumberOfRetry: func() bool {
-				return count > 0
-			},
-		},
-		"error updating within cap with error different from conflict/serverTimeout": {
-			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					count++
-					return errors.New("random update error")
-				}},
-				recorder: utils.NewFakeRecorder(1),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{},
-			internalMemberCluster: &imc,
-			wantErr:               errors.New("random update error"),
-			verifyNumberOfRetry: func() bool {
-				return count == 0
-			},
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			count = -1
-			err := tt.r.copyMemberClusterStatusFromInternalMC(context.Background(), tt.memberCluster, tt.internalMemberCluster)
-			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
-			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
+			tt.r.copyMemberClusterStatusFromInternalMC(tt.memberCluster, tt.internalMemberCluster)
+			assert.Equal(t, tt.internalMemberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat), tt.memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat))
 		})
 	}
 }
 
-func TestUpdateMemberClusterStatusAsLeft(t *testing.T) {
+func TestUpdateMemberClusterStatus(t *testing.T) {
 	var count int
 	tests := map[string]struct {
 		r                   *Reconciler
@@ -751,7 +696,7 @@ func TestUpdateMemberClusterStatusAsLeft(t *testing.T) {
 		wantErr             error
 		verifyNumberOfRetry func() bool
 	}{
-		"mark and update member cluster as left": {
+		"update member cluster status": {
 			r: &Reconciler{Client: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					count++
@@ -765,7 +710,7 @@ func TestUpdateMemberClusterStatusAsLeft(t *testing.T) {
 				return count == 0
 			},
 		},
-		"mark and update member cluster as left within heartbeat": {
+		"update member cluster status within cap": {
 			r: &Reconciler{Client: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					count++
@@ -815,7 +760,7 @@ func TestUpdateMemberClusterStatusAsLeft(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			count = -1
-			err := tt.r.updateMemberClusterStatusAsLeft(context.Background(), tt.memberCluster)
+			err := tt.r.updateMemberClusterStatus(context.Background(), tt.memberCluster)
 			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
 			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
 		})
