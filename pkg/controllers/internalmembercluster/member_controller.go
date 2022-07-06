@@ -92,7 +92,7 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	if !imcHaveJoined {
 		metrics.ReportJoinResultMetric()
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)}, nil
 }
 
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
