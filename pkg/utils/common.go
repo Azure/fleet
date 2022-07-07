@@ -8,20 +8,20 @@ package utils
 import (
 	"context"
 	"crypto/rand"
-	"flag"
+	"fmt"
 	"log"
 	"math/big"
-	"path/filepath"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 )
 
 const (
+	FleetSystemNamespace  = "fleet-system"
 	NamespaceNameFormat   = "fleet-%s"
 	RoleNameFormat        = "fleet-role-%s"
 	RoleBindingNameFormat = "fleet-rolebinding-%s"
@@ -43,6 +43,8 @@ const (
 	ReasonReconcileError   string = "ReconcileError"
 )
 
+var errKindNotFound = fmt.Errorf("kind not found in group version resources")
+
 // ReconcileErrorCondition returns a condition indicating that we encountered an
 // error while reconciling the resource.
 func ReconcileErrorCondition(err error) metav1.Condition {
@@ -61,31 +63,6 @@ func ReconcileSuccessCondition() metav1.Condition {
 		Status: metav1.ConditionTrue,
 		Reason: ReasonReconcileSuccess,
 	}
-}
-
-func GetKubeConfigOfCurrentCluster() (rest.Config, error) {
-	var kubeConfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeConfig = flag.String("kubeConfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeConfig file")
-	} else {
-		kubeConfig = flag.String("kubeConfig", "", "absolute path to the kubeConfig file")
-	}
-	flag.Parse()
-	cf, err := clientcmd.BuildConfigFromFlags("", *(kubeConfig))
-	return *(cf), err
-}
-
-func GetEventWatcherForCurrentCluster(ctx context.Context, namespace string) (watch.Interface, error) {
-	config, err := GetKubeConfigOfCurrentCluster()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	clientSet, err := kubernetes.NewForConfig(&config)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	return clientSet.CoreV1().Events(namespace).Watch(ctx, metav1.ListOptions{})
 }
 
 func RandSecureInt(limit int64) int64 {
@@ -109,4 +86,45 @@ func RandStr() string {
 	}
 
 	return string(ret)
+}
+
+// ContextForChannel derives a child context from a parent channel.
+//
+// The derived context's Done channel is closed when the returned cancel function
+// is called or when the parent channel is closed, whichever happens first.
+//
+// Note the caller must *always* call the CancelFunc, otherwise resources may be leaked.
+func ContextForChannel(parentCh <-chan struct{}) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		select {
+		case <-parentCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
+// CheckCRDInstalled checks if the custom resource definition is installed
+func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) error {
+	startTime := time.Now()
+	err := retry.OnError(retry.DefaultBackoff, func(err error) bool { return true }, func() error {
+		resourceList, err := discoveryClient.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
+		if err != nil {
+			return err
+		}
+		for _, r := range resourceList.APIResources {
+			if r.Kind == gvk.Kind {
+				return nil
+			}
+		}
+		return errKindNotFound
+	})
+
+	if err != nil {
+		klog.ErrorS(err, "Failed to find resources", "gvk", gvk, "waiting time", time.Since(startTime))
+	}
+	return err
 }
