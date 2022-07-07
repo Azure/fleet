@@ -13,6 +13,9 @@ const (
 )
 
 const (
-	MemberClusterKind         = "MemberCluster"
-	InternalMemberClusterKind = "InternalMemberCluster"
+	MemberClusterKind                = "MemberCluster"
+	MemberClusterResource            = "memberclusters"
+	InternalMemberClusterKind        = "InternalMemberCluster"
+	ClusterResourcePlacementKind     = "ClusterResourcePlacement"
+	ClusterResourcePlacementResource = "clusterresourceplacements"
 )
