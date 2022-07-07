@@ -77,8 +77,8 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.MemberClusterResource,
 	}
-	clusterPlacementEventHandler := newHandlerOnEvents(d.OnClusterResourcePlacementAdd,
-		d.OnClusterResourcePlacementUpdated, d.OnClusterResourcePlacementDeleted)
+	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdd,
+		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
 	d.InformerManager.ForResource(clusterResourcePlacementGVR, clusterPlacementEventHandler)
 
 	// TODO: use a different event handler that list all placement and enqueue them
@@ -87,22 +87,20 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	// TODO: add work informer that enqueue the placement name (stored in its label)
 
 	// setup the resourceChangeEventHandler
-	d.resourceChangeEventHandler = newFilteringHandlerOnAllEvents(d.EventFilter,
-		d.OnResourceAdd, d.OnResourceUpdated, d.OnResourceDeleted)
+	d.resourceChangeEventHandler = newFilteringHandlerOnAllEvents(d.resourceFilter,
+		d.onResourceAdd, d.onResourceUpdated, d.onResourceDeleted)
 	// start the resource type list loop
 	go d.discoverResources(ctx, 30*time.Second)
 
-	errs, ctx := errgroup.WithContext(ctx)
-
-	//TODO: use options passed in from flags
-
 	// We run the two controller in parallel
+	errs, cctx := errgroup.WithContext(ctx)
 	errs.Go(func() error {
-		return d.ClusterResourcePlacementController.Run(ctx, 5)
+		//TODO: use options passed in from flags for work number
+		return d.ClusterResourcePlacementController.Run(cctx, 5)
 	})
 	errs.Go(func() error {
-		// run 20 workers for the resource change queue
-		return d.ResourceChangeController.Run(ctx, 20)
+		//TODO: use options passed in from flags for work number
+		return d.ResourceChangeController.Run(cctx, 20)
 	})
 
 	return errs.Wait()
@@ -145,8 +143,8 @@ func (d *ChangeDetector) isResourceDisabled(gvr schema.GroupVersionResource) boo
 	return false
 }
 
-// filter
-func (d *ChangeDetector) EventFilter(obj interface{}) bool {
+// resourceFilter filters out resources that we don't want to watch
+func (d *ChangeDetector) resourceFilter(obj interface{}) bool {
 	key, err := controller.ClusterWideKeyFunc(obj)
 	if err != nil {
 		return false
@@ -179,40 +177,40 @@ func (d *ChangeDetector) EventFilter(obj interface{}) bool {
 	return true
 }
 
-// OnClusterResourcePlacementAdd handles object add event and push the object to queue.
-func (d *ChangeDetector) OnClusterResourcePlacementAdd(obj interface{}) {
+// onClusterResourcePlacementAdd handles object add event and push the object to queue.
+func (d *ChangeDetector) onClusterResourcePlacementAdd(obj interface{}) {
 	klog.V(5).InfoS("ClusterResourcePlacement Added", "obj", obj)
 	d.ClusterResourcePlacementController.Enqueue(obj)
 }
 
-// OnClusterResourcePlacementUpdated handles object update event and push the object to queue.
-func (d *ChangeDetector) OnClusterResourcePlacementUpdated(oldObj, newObj interface{}) {
+// onClusterResourcePlacementUpdated handles object update event and push the object to queue.
+func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interface{}) {
 	klog.V(5).InfoS("ClusterResourcePlacement Updated", "oldObj", oldObj, "newObj", newObj)
 	d.ClusterResourcePlacementController.Enqueue(newObj)
 }
 
-// OnClusterResourcePlacementDeleted handles object delete event and push the object to queue.
-func (d *ChangeDetector) OnClusterResourcePlacementDeleted(obj interface{}) {
+// onClusterResourcePlacementDeleted handles object delete event and push the object to queue.
+func (d *ChangeDetector) onClusterResourcePlacementDeleted(obj interface{}) {
 	klog.V(5).InfoS("ClusterResourcePlacement Deleted", "obj", obj)
 	d.ClusterResourcePlacementController.Enqueue(obj)
 }
 
-// OnResourceAdd handles object add event and push the object to queue.
-func (d *ChangeDetector) OnResourceAdd(obj interface{}) {
+// onResourceAdd handles object add event and push the object to queue.
+func (d *ChangeDetector) onResourceAdd(obj interface{}) {
 	klog.V(5).InfoS("Resource Added", "obj", obj)
 	d.ResourceChangeController.Enqueue(obj)
 }
 
-// OnResourceUpdated handles object update event and push the object to queue.
-func (d *ChangeDetector) OnResourceUpdated(oldObj, newObj interface{}) {
+// onResourceUpdated handles object update event and push the object to queue.
+func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
 	klog.V(5).InfoS("Resource Updated", "oldObj", oldObj, "newObj", newObj)
 	if !reflect.DeepEqual(oldObj, newObj) {
 		d.ResourceChangeController.Enqueue(newObj)
 	}
 }
 
-// OnResourceDeleted handles object delete event and push the object to queue.
-func (d *ChangeDetector) OnResourceDeleted(obj interface{}) {
+// onResourceDeleted handles object delete event and push the object to queue.
+func (d *ChangeDetector) onResourceDeleted(obj interface{}) {
 	klog.V(5).InfoS("Resource Deleted", "obj", obj)
 	d.ResourceChangeController.Enqueue(obj)
 }
