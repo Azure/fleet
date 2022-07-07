@@ -11,14 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func TestDisabledResourceConfigGVKParse(t *testing.T) {
+func TestResourceConfigGVKParse(t *testing.T) {
 	tests := []struct {
-		input string
-		out   []schema.GroupVersionKind
+		input    string
+		disabled []schema.GroupVersionKind
+		enabled  []schema.GroupVersionKind
 	}{
 		{
 			input: "v1/Node,Pod;networking.k8s.io/v1beta1/Ingress,IngressClass",
-			out: []schema.GroupVersionKind{
+			disabled: []schema.GroupVersionKind{
 				{
 					Group:   "",
 					Version: "v1",
@@ -39,16 +40,50 @@ func TestDisabledResourceConfigGVKParse(t *testing.T) {
 					Version: "v1beta1",
 					Kind:    "IngressClass",
 				},
-			}},
+			},
+			enabled: []schema.GroupVersionKind{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "ResourceQuota",
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "ControllerRevision",
+				},
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1",
+					Kind:    "Ingress",
+				},
+				{
+					Group:   "certificates.k8s.io",
+					Version: "v1beta1",
+					Kind:    "CertificateSigningRequest",
+				},
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1beta1",
+					Kind:    "",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		r := NewDisabledResourceConfig()
 		if err := r.Parse(test.input); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		for i, o := range test.out {
-			ok := r.GroupVersionKindDisabled(o)
+		for i, o := range test.disabled {
+			ok := r.IsResourceDisabled(o)
 			if !ok {
+				t.Errorf("%d: unexpected error: %v", i, o)
+			}
+		}
+		for i, o := range test.enabled {
+			ok := r.IsResourceDisabled(o)
+			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
@@ -57,63 +92,136 @@ func TestDisabledResourceConfigGVKParse(t *testing.T) {
 
 func TestResourceConfigGVParse(t *testing.T) {
 	tests := []struct {
-		input string
-		out   []schema.GroupVersion
+		input    string
+		disabled []schema.GroupVersionKind
+		enabled  []schema.GroupVersionKind
 	}{
 		{
 			input: "networking.k8s.io/v1;test/v1beta1",
-			out: []schema.GroupVersion{
+			disabled: []schema.GroupVersionKind{
 				{
 					Group:   "networking.k8s.io",
 					Version: "v1",
+					Kind:    "Ingress",
 				},
 				{
 					Group:   "networking.k8s.io",
 					Version: "v1",
+					Kind:    "EgressClass",
 				},
 				{
 					Group:   "test",
 					Version: "v1beta1",
+					Kind:    "Lease",
 				},
 				{
 					Group:   "test",
 					Version: "v1beta1",
+					Kind:    "HealthState",
 				},
-			}},
+			},
+			enabled: []schema.GroupVersionKind{
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1beta1",
+					Kind:    "Ingress",
+				},
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1beta1",
+					Kind:    "IngressClass",
+				},
+				{
+					Group:   "test",
+					Version: "v1",
+					Kind:    "Service",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		r := NewDisabledResourceConfig()
 		if err := r.Parse(test.input); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		for i, o := range test.out {
-			ok := r.GroupVersionDisabled(o)
+		for i, o := range test.disabled {
+			ok := r.IsResourceDisabled(o)
 			if !ok {
+				t.Errorf("%d: unexpected error: %v", i, o)
+			}
+		}
+		for i, o := range test.enabled {
+			ok := r.IsResourceDisabled(o)
+			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
 	}
 }
 
-func TestDisabledResourceConfigGroupParse(t *testing.T) {
+func TestResourceConfigGroupParse(t *testing.T) {
 	tests := []struct {
-		input string
-		out   []string
+		input    string
+		disabled []schema.GroupVersionKind
+		enabled  []schema.GroupVersionKind
 	}{
 		{
-			input: "networking.k8s.io;test",
-			out: []string{
-				"networking.k8s.io", "test",
-			}},
+			input: "networking.k8s.io;apps;secrets-store.csi.x-k8s.io",
+			disabled: []schema.GroupVersionKind{
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1",
+					Kind:    "Ingress",
+				},
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1beta1",
+					Kind:    "EgressClass",
+				},
+				{
+					Group:   "apps",
+					Version: "v1beta1",
+					Kind:    "Lease",
+				},
+				{
+					Group:   "secrets-store.csi.x-k8s.io",
+					Version: "v1beta1",
+					Kind:    "HealthState",
+				},
+			},
+			enabled: []schema.GroupVersionKind{
+				{
+					Group:   "",
+					Version: "v1beta1",
+					Kind:    "Ingress",
+				},
+				{
+					Group:   "apiregistration.k8s.io",
+					Version: "v1beta1",
+					Kind:    "IngressClass",
+				},
+				{
+					Group:   "authentication.k8s.i",
+					Version: "v1",
+					Kind:    "Service",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		r := NewDisabledResourceConfig()
 		if err := r.Parse(test.input); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		for i, o := range test.out {
-			ok := r.GroupDisabled(o)
+		for i, o := range test.disabled {
+			ok := r.IsResourceDisabled(o)
 			if !ok {
+				t.Errorf("%d: unexpected error: %v", i, o)
+			}
+		}
+		for i, o := range test.enabled {
+			ok := r.IsResourceDisabled(o)
+			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
@@ -122,127 +230,142 @@ func TestDisabledResourceConfigGroupParse(t *testing.T) {
 
 func TestDisabledResourceConfigMixedParse(t *testing.T) {
 	tests := []struct {
-		input string
-		out   DisabledResourceConfig
+		input    string
+		disabled []schema.GroupVersionKind
+		enabled  []schema.GroupVersionKind
 	}{
 		{
-			input: "v1/Node,Pod;networking.k8s.io/v1beta1/Ingress,IngressClass;networking.k8s.io;test.com/v1",
-			out: DisabledResourceConfig{
-				Groups: map[string]struct{}{
-					"networking.k8s.io": {},
+			input: "v1/Node,Pod;networking.k8s.io;apps/v1;authorization.k8s.io/v1/SelfSubjectRulesReview",
+			disabled: []schema.GroupVersionKind{
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1beta1",
+					Kind:    "Ingress",
 				},
-				GroupVersions: map[schema.GroupVersion]struct{}{
-					{
-						Group:   "test.com",
-						Version: "v1",
-					}: {},
+				{
+					Group:   "networking.k8s.io",
+					Version: "v1",
+					Kind:    "IngressClass",
 				},
-				GroupVersionKinds: map[schema.GroupVersionKind]struct{}{
-					{
-						Group:   "",
-						Version: "v1",
-						Kind:    "Node",
-					}: {},
-					{
-						Group:   "",
-						Version: "v1",
-						Kind:    "Pod",
-					}: {},
-					{
-						Group:   "networking.k8s.io",
-						Version: "v1beta1",
-						Kind:    "Ingress",
-					}: {},
-					{
-						Group:   "networking.k8s.io",
-						Version: "v1beta1",
-						Kind:    "IngressClass",
-					}: {},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Node",
 				},
-			}},
-	}
-	for i, test := range tests {
-		r := NewDisabledResourceConfig()
-		if err := r.Parse(test.input); err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		for g := range r.Groups {
-			ok := r.GroupDisabled(g)
-			if !ok {
-				t.Errorf("%d: unexpected error: %v", i, g)
-			}
-		}
-
-		for gv := range r.GroupVersions {
-			ok := r.GroupVersionDisabled(gv)
-			if !ok {
-				t.Errorf("%d: unexpected error: %v", i, gv)
-			}
-		}
-
-		for gvk := range r.GroupVersionKinds {
-			ok := r.GroupVersionKindDisabled(gvk)
-			if !ok {
-				t.Errorf("%d: unexpected error: %v", i, gvk)
-			}
-		}
-	}
-}
-
-func TestDefaultDisabledResourceConfigGroupParse(t *testing.T) {
-	tests := []struct {
-		input string
-		out   []string
-	}{
-		{
-			input: "",
-			out: []string{
-				"events.k8s.io",
-			}},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Pod",
+				},
+				{
+					Group:   "authorization.k8s.io",
+					Version: "v1",
+					Kind:    "SelfSubjectRulesReview",
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "HealthState",
+				},
+			},
+			enabled: []schema.GroupVersionKind{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Ingress",
+				},
+				{
+					Group:   "apps",
+					Version: "v1beta1",
+					Kind:    "IngressClass",
+				},
+				{
+					Group:   "authorization.k8s.io",
+					Version: "v1",
+					Kind:    "LocalSubjectAccessReview",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		r := NewDisabledResourceConfig()
 		if err := r.Parse(test.input); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		for i, o := range test.out {
-			ok := r.GroupDisabled(o)
+		for i, o := range test.disabled {
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
-		ok := r.GroupDisabled("")
-		if ok {
-			t.Error("unexpected error: v1")
+		for i, o := range test.enabled {
+			ok := r.IsResourceDisabled(o)
+			if ok {
+				t.Errorf("%d: unexpected error: %v", i, o)
+			}
 		}
 	}
 }
 
 func TestDefaultDisabledResourceConfigGroupVersionKindParse(t *testing.T) {
 	tests := []struct {
-		input string
-		out   []schema.GroupVersionKind
+		disabled []schema.GroupVersionKind
+		enabled  []schema.GroupVersionKind
 	}{
 		{
-			input: "",
-			out: []schema.GroupVersionKind{
+			disabled: []schema.GroupVersionKind{
 				corev1PodGVK, corev1NodeGVK,
-			}},
+				{
+					Group:   "fleet.azure.com",
+					Version: "v1beta1",
+					Kind:    "MemberCluster",
+				},
+				{
+					Group:   "fleet.azure.com",
+					Version: "v1alpha1",
+					Kind:    "MemberCluster",
+				},
+				{
+					Group:   "events.k8s.io",
+					Version: "v1beta1",
+					Kind:    "Event",
+				},
+			},
+			enabled: []schema.GroupVersionKind{
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Namespace",
+				},
+				{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+				},
+				{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Event",
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		r := NewDisabledResourceConfig()
-		if err := r.Parse(test.input); err != nil {
+		if err := r.Parse(""); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		for i, o := range test.out {
-			ok := r.GroupVersionKindDisabled(o)
+		for i, o := range test.disabled {
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
-		ok := r.GroupDisabled("")
-		if ok {
-			t.Error("unexpected error: v1")
+		for i, o := range test.enabled {
+			ok := r.IsResourceDisabled(o)
+			if ok {
+				t.Errorf("%d: unexpected error: %v", i, o)
+			}
 		}
 	}
 }

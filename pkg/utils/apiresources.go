@@ -29,24 +29,27 @@ var (
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "Node",
 	}
+
+	// we use `;` to separate the different api groups
+	apiGroupSepToken = ";"
 )
 
 // DisabledResourceConfig represents the configuration that identifies the API resources should not be selected.
 type DisabledResourceConfig struct {
-	// Groups holds a collection of API group, all resources under this group will be avoided.
-	Groups map[string]struct{}
-	// GroupVersions holds a collection of API GroupVersion, all resource under this GroupVersion will be avoided.
-	GroupVersions map[schema.GroupVersion]struct{}
-	// GroupVersionKinds holds a collection of resource that should be avoided.
-	GroupVersionKinds map[schema.GroupVersionKind]struct{}
+	// groups holds a collection of API group, all resources under this group will be avoided.
+	groups map[string]struct{}
+	// groupVersions holds a collection of API GroupVersion, all resource under this GroupVersion will be avoided.
+	groupVersions map[schema.GroupVersion]struct{}
+	// groupVersionKinds holds a collection of resource that should be avoided.
+	groupVersionKinds map[schema.GroupVersionKind]struct{}
 }
 
 // NewDisabledResourceConfig to create DisabledResourceConfig
 func NewDisabledResourceConfig() *DisabledResourceConfig {
 	r := &DisabledResourceConfig{
-		Groups:            map[string]struct{}{},
-		GroupVersions:     map[schema.GroupVersion]struct{}{},
-		GroupVersionKinds: map[schema.GroupVersionKind]struct{}{},
+		groups:            map[string]struct{}{},
+		groupVersions:     map[schema.GroupVersion]struct{}{},
+		groupVersionKinds: map[schema.GroupVersionKind]struct{}{},
 	}
 	// disable fleet group by default
 	r.DisableGroup(fleetv1alpha1.GroupVersion.Group)
@@ -64,7 +67,7 @@ func (r *DisabledResourceConfig) Parse(c string) error {
 		return nil
 	}
 
-	tokens := strings.Split(c, ";")
+	tokens := strings.Split(c, apiGroupSepToken)
 	for _, token := range tokens {
 		if err := r.parseSingle(token); err != nil {
 			return fmt.Errorf("parse --avoid-selecting-apis %w", err)
@@ -79,7 +82,7 @@ func (r *DisabledResourceConfig) parseSingle(token string) error {
 	// Assume user don't want to skip the 'core'(no group name) group.
 	// So, it should be the case "<group>".
 	case 0:
-		r.Groups[token] = struct{}{}
+		r.groups[token] = struct{}{}
 	// it should be the case "<group>/<version>"
 	case 1:
 		// for core group which don't have the group name, the case should be "v1/<kind>" or "v1/<kind>,<kind>..."
@@ -98,7 +101,7 @@ func (r *DisabledResourceConfig) parseSingle(token string) error {
 					Version: "v1",
 					Kind:    k,
 				}
-				r.GroupVersionKinds[gvk] = struct{}{}
+				r.groupVersionKinds[gvk] = struct{}{}
 			}
 		} else { // case "<group>/<version>"
 			parts := strings.Split(token, "/")
@@ -109,7 +112,7 @@ func (r *DisabledResourceConfig) parseSingle(token string) error {
 				Group:   parts[0],
 				Version: parts[1],
 			}
-			r.GroupVersions[gv] = struct{}{}
+			r.groupVersions[gv] = struct{}{}
 		}
 	// parameter format: "<group>/<version>/<kind>" or "<group>/<version>/<kind>,<kind>..."
 	case 2:
@@ -132,7 +135,7 @@ func (r *DisabledResourceConfig) parseSingle(token string) error {
 				Version: v,
 				Kind:    k,
 			}
-			r.GroupVersionKinds[gvk] = struct{}{}
+			r.groupVersionKinds[gvk] = struct{}{}
 		}
 	default:
 		return fmt.Errorf("invalid parameter: %s", token)
@@ -141,36 +144,35 @@ func (r *DisabledResourceConfig) parseSingle(token string) error {
 	return nil
 }
 
-// GroupVersionDisabled returns whether GroupVersion is disabled.
-func (r *DisabledResourceConfig) GroupVersionDisabled(gv schema.GroupVersion) bool {
-	if _, ok := r.GroupVersions[gv]; ok {
+// IsResourceDisabled returns whether a given GroupVersionKind is disabled.
+// a gkv is disabled if its group or group version is disabled
+func (r *DisabledResourceConfig) IsResourceDisabled(gvk schema.GroupVersionKind) bool {
+	if _, ok := r.groups[gvk.Group]; ok {
 		return true
 	}
-	return false
-}
 
-// GroupVersionKindDisabled returns whether GroupVersionKind is disabled.
-func (r *DisabledResourceConfig) GroupVersionKindDisabled(gvk schema.GroupVersionKind) bool {
-	if _, ok := r.GroupVersionKinds[gvk]; ok {
+	if _, ok := r.groupVersions[gvk.GroupVersion()]; ok {
 		return true
 	}
-	return false
-}
 
-// GroupDisabled returns whether Group is disabled.
-func (r *DisabledResourceConfig) GroupDisabled(g string) bool {
-	if _, ok := r.Groups[g]; ok {
+	if _, ok := r.groupVersionKinds[gvk]; ok {
 		return true
 	}
+
 	return false
 }
 
 // DisableGroup to disable group.
 func (r *DisabledResourceConfig) DisableGroup(g string) {
-	r.Groups[g] = struct{}{}
+	r.groups[g] = struct{}{}
+}
+
+// DisableGroupVersion to disable group version.
+func (r *DisabledResourceConfig) DisableGroupVersion(gv schema.GroupVersion) {
+	r.groupVersions[gv] = struct{}{}
 }
 
 // DisableGroupVersionKind to disable GroupVersionKind.
 func (r *DisabledResourceConfig) DisableGroupVersionKind(gvk schema.GroupVersionKind) {
-	r.GroupVersionKinds[gvk] = struct{}{}
+	r.groupVersionKinds[gvk] = struct{}{}
 }
