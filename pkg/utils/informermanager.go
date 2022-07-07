@@ -55,7 +55,6 @@ func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, p
 		ctx:             ctx,
 		cancel:          cancel,
 		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		handlers:        make(map[schema.GroupVersionResource][]cache.ResourceEventHandler),
 	}
 }
 
@@ -70,58 +69,25 @@ type informerManagerImpl struct {
 	// informerFactory is the client-go built-in informer factory that can create an informer given gvr
 	informerFactory dynamicinformer.DynamicSharedInformerFactory
 
-	// the map to collect all the handlers for each gvr
-	handlers    map[schema.GroupVersionResource][]cache.ResourceEventHandler
-	handlerLock sync.RWMutex
+	// the handlers map collects the handler for each gvr
+	handlers sync.Map
 }
 
 func (s *informerManagerImpl) ForResource(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) {
-	// if handler already exist, just return, nothing changed.
-	if s.doesHandlerExist(resource, handler) {
+	if _, loaded := s.handlers.LoadOrStore(resource, handler); loaded {
+		// if the handler already exists for this gvr, just return, we've added the event handler
 		return
 	}
-
 	s.informerFactory.ForResource(resource).Informer().AddEventHandler(handler)
-	s.appendHandler(resource, handler)
 }
 
 func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionResource) bool {
-	// TODO: use a lazy initialized cache to reduce the number of informer sync look ups
+	// TODO: use a lazy initialized sync map to reduce the number of informer sync look ups
 	return s.informerFactory.ForResource(resource).Informer().HasSynced()
-}
-
-// doesHandlerExist checks if handler already added to the informer that watches the 'resource'.
-func (s *informerManagerImpl) doesHandlerExist(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) bool {
-	s.handlerLock.RLock()
-	defer s.handlerLock.RUnlock()
-
-	handlers, exist := s.handlers[resource]
-	if !exist {
-		return false
-	}
-
-	for _, h := range handlers {
-		if h == handler {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (s *informerManagerImpl) Lister(resource schema.GroupVersionResource) cache.GenericLister {
 	return s.informerFactory.ForResource(resource).Lister()
-}
-
-func (s *informerManagerImpl) appendHandler(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) {
-	s.handlerLock.Lock()
-	defer s.handlerLock.Unlock()
-
-	// assume the handler list exist, caller should ensure for that.
-	handlers := s.handlers[resource]
-
-	// assume the handler not exist in it, caller should ensure for that.
-	s.handlers[resource] = append(handlers, handler)
 }
 
 func (s *informerManagerImpl) Start() {
