@@ -27,9 +27,6 @@ type InformerManager interface {
 	// IsInformerSynced checks if the resource's informer is synced.
 	IsInformerSynced(resource schema.GroupVersionResource) bool
 
-	// DoesHandlerExist checks if handler already added to the informer that watches the 'resource'.
-	DoesHandlerExist(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) bool
-
 	// Start will run all informers, the informers will keep running until the channel closed.
 	// It is intended to be called after create new informer(s), and it's safe to call multi times.
 	Start()
@@ -54,35 +51,33 @@ func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, p
 	// TODO: replace this with plain context
 	ctx, cancel := ContextForChannel(parentCh)
 	return &informerManagerImpl{
-		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		handlers:        make(map[schema.GroupVersionResource][]cache.ResourceEventHandler),
-		syncedInformers: make(map[schema.GroupVersionResource]bool),
+		dynamicClient:   client,
 		ctx:             ctx,
 		cancel:          cancel,
-		dynamicClient:   client,
+		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
+		handlers:        make(map[schema.GroupVersionResource][]cache.ResourceEventHandler),
 	}
 }
 
 type informerManagerImpl struct {
+	// dynamicClient is the client-go built-in client that can do CRUD on any resource given gvr
+	dynamicClient dynamic.Interface
+
+	// the context we use to start/stop the informers
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	// informerFactory is the client-go built-in informer factory that can create an informer given gvr
 	informerFactory dynamicinformer.DynamicSharedInformerFactory
 
-	syncedInformers map[schema.GroupVersionResource]bool
-
-	handlers map[schema.GroupVersionResource][]cache.ResourceEventHandler
-
-	dynamicClient dynamic.Interface
-
+	// the map to collect all the handlers for each gvr
+	handlers    map[schema.GroupVersionResource][]cache.ResourceEventHandler
 	handlerLock sync.RWMutex
-
-	syncLock sync.RWMutex
 }
 
 func (s *informerManagerImpl) ForResource(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) {
 	// if handler already exist, just return, nothing changed.
-	if s.DoesHandlerExist(resource, handler) {
+	if s.doesHandlerExist(resource, handler) {
 		return
 	}
 
@@ -91,29 +86,12 @@ func (s *informerManagerImpl) ForResource(resource schema.GroupVersionResource, 
 }
 
 func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionResource) bool {
-	// lazy initialization
-	checkSynced := func() bool {
-		s.syncLock.RLock()
-		defer s.syncLock.RUnlock()
-		_, exist := s.syncedInformers[resource]
-		return exist
-	}
-
-	if checkSynced() {
-		return true
-	}
-
-	if !s.informerFactory.ForResource(resource).Informer().HasSynced() {
-		return false
-	}
-
-	s.syncLock.Lock()
-	defer s.syncLock.Unlock()
-	s.syncedInformers[resource] = true
-	return true
+	// TODO: use a lazy initialized cache to reduce the number of informer sync look ups
+	return s.informerFactory.ForResource(resource).Informer().HasSynced()
 }
 
-func (s *informerManagerImpl) DoesHandlerExist(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) bool {
+// doesHandlerExist checks if handler already added to the informer that watches the 'resource'.
+func (s *informerManagerImpl) doesHandlerExist(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) bool {
 	s.handlerLock.RLock()
 	defer s.handlerLock.RUnlock()
 
