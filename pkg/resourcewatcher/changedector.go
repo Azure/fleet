@@ -55,8 +55,8 @@ type ChangeDetector struct {
 	// DisabledResourceConfig contains all the api resources that we won't select
 	DisabledResourceConfig *utils.DisabledResourceConfig
 
-	// AvoidedPropagatingNamespaces contains all the namespaces that we will avoid select
-	AvoidedPropagatingNamespaces map[string]bool
+	// SkippedNamespaces contains all the namespaces that we won't select
+	SkippedNamespaces map[string]bool
 
 	// resourceChangeEventHandler is the event handler for any resource change informer
 	resourceChangeEventHandler cache.ResourceEventHandler
@@ -111,11 +111,9 @@ func (d *ChangeDetector) discoverResources(ctx context.Context, period time.Dura
 	wait.UntilWithContext(ctx, func(ctx context.Context) {
 		newResources := utils.GetDeletableResources(d.DiscoveryClientSet)
 		for r := range newResources {
-			if d.isResourceDisabled(r) {
-				continue
+			if !d.isResourceDisabled(r) && d.InformerManager.ForResource(r, d.resourceChangeEventHandler) {
+				klog.InfoS("Setup informer for", "resource", r.String())
 			}
-			klog.Infof("Setup informer for %s", r.String())
-			d.InformerManager.ForResource(r, d.resourceChangeEventHandler)
 		}
 		d.InformerManager.Start()
 	}, period)
@@ -156,13 +154,14 @@ func (d *ChangeDetector) resourceFilter(obj interface{}) bool {
 		return false
 	}
 
-	// if AvoidedPropagatingNamespaces is set, skip object events in these namespaces.
-	if _, ok := d.AvoidedPropagatingNamespaces[clusterWideKey.Namespace]; ok {
+	// if SkippedNamespaces is set, skip any events related to the object in these namespaces.
+	if _, ok := d.SkippedNamespaces[clusterWideKey.Namespace]; ok {
 		klog.V(5).InfoS("Skip watch resource in namespace", "namespace", clusterWideKey.Namespace)
 		return false
 	}
 
 	if unstructObj, ok := obj.(*unstructured.Unstructured); ok {
+		// TODO:  add more special handling here
 		switch unstructObj.GroupVersionKind() {
 		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
 		// prevented from propagating.

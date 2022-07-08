@@ -20,9 +20,9 @@ import (
 // custom resources defined by CustomResourceDefinition.
 type InformerManager interface {
 	// ForResource builds a dynamic shared informer for 'resource' then set event handler.
-	// If the informer already exist, the event handler will be appended to the informer.
+	// If the informer already exist, this function returns false.
 	// The handler should not be nil.
-	ForResource(resource schema.GroupVersionResource, handler cache.ResourceEventHandler)
+	ForResource(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) bool
 
 	// IsInformerSynced checks if the resource's informer is synced.
 	IsInformerSynced(resource schema.GroupVersionResource) bool
@@ -73,12 +73,13 @@ type informerManagerImpl struct {
 	handlers sync.Map
 }
 
-func (s *informerManagerImpl) ForResource(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) {
+func (s *informerManagerImpl) ForResource(resource schema.GroupVersionResource, handler cache.ResourceEventHandler) bool {
 	if _, loaded := s.handlers.LoadOrStore(resource, handler); loaded {
 		// if the handler already exists for this gvr, just return, we've added the event handler
-		return
+		return false
 	}
 	s.informerFactory.ForResource(resource).Informer().AddEventHandler(handler)
+	return true
 }
 
 func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionResource) bool {
