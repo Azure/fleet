@@ -50,7 +50,9 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 			azToken, err = credential.GetToken(ctx, policy.TokenRequestOptions{
 				Scopes: []string{aksScope},
 			})
-			klog.ErrorS(err, "Failed to GetToken")
+			if err != nil {
+				klog.ErrorS(err, "Failed to GetToken")
+			}
 			return err
 		})
 	if err != nil {
