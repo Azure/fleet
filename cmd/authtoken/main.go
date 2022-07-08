@@ -6,9 +6,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
 	"go.goms.io/fleet/pkg/authtoken"
@@ -69,6 +71,10 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 
 func main() {
 	klog.InitFlags(nil)
+
+	// Add go flags (e.g., --v) to pflag.
+	// Reference: https://github.com/spf13/pflag#supporting-go-flags-when-using-pflag
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	tokenProvider, err := parseArgs()
 	if err != nil {
