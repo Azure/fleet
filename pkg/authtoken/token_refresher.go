@@ -48,7 +48,7 @@ func (at *Refresher) callFetchToken(ctx context.Context) (interfaces.AuthToken, 
 }
 
 func (at *Refresher) RefreshToken(ctx context.Context) error {
-	klog.V(5).InfoS("RefreshToken start")
+	klog.V(2).InfoS("RefreshToken start")
 	refreshDuration := DefaultRefreshDuration
 
 	for ; ; <-at.createTicker(refreshDuration) {
