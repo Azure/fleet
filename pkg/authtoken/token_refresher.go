@@ -39,6 +39,14 @@ var (
 	DefaultRefreshDuration = time.Second * 30
 )
 
+func (at *Refresher) callFetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+	klog.V(5).InfoS("FetchToken start")
+	deadline := time.Now().Add(DefaultRefreshDuration)
+	fetchTokenContext, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return at.provider.FetchToken(fetchTokenContext)
+}
+
 func (at *Refresher) RefreshToken(ctx context.Context) error {
 	klog.V(5).InfoS("RefreshToken start")
 	refreshDuration := DefaultRefreshDuration
@@ -48,10 +56,7 @@ func (at *Refresher) RefreshToken(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			klog.V(5).InfoS("FetchToken start")
-			deadline := time.Now().Add(DefaultRefreshDuration)
-			fetchTokenContext, _ := context.WithDeadline(ctx, deadline)
-			token, err := at.provider.FetchToken(fetchTokenContext)
+			token, err := at.callFetchToken(ctx)
 			if err != nil {
 				klog.ErrorS(err, "Failed to FetchToken")
 				continue
