@@ -65,14 +65,14 @@ $ kubectl apply -f examples/fleet_v1alpha1_membercluster.yaml
 2. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Joined'
 
 ```shell
-$ kubectl describe membercluster membercluster-sample
+$ kubectl describe membercluster kind-member-testing
  ```
 
 <details>
 <summary>Result</summary>
 
 ```shell
-Name:         membercluster-sample
+Name:         kind-member-testing
 Namespace:    
 Labels:       <none>
 Annotations:  <none>
@@ -163,15 +163,15 @@ Events:
 </details><br/>
 
 ```shell
-$ kubectl describe internalmembercluster membercluster-sample -n fleet-membercluster-sample
+$ kubectl describe internalmembercluster kind-member-testing -n fleet-kind-member-testing
 ```
 
 <details>
 <summary>Result</summary>
 
 ```shell
-Name:         membercluster-sample
-Namespace:    fleet-membercluster-sample
+Name:         kind-member-testing
+Namespace:    fleet-kind-member-testing
 Labels:       <none>
 Annotations:  <none>
 API Version:  fleet.azure.com/v1alpha1
@@ -216,7 +216,7 @@ Metadata:
     API Version:     fleet.azure.com/v1alpha1
     Controller:      true
     Kind:            MemberCluster
-    Name:            membercluster-sample
+    Name:            kind-member-testing
     UID:             67cec7a4-3386-4fd5-9de2-20397e7b0029
   Resource Version:  865
   UID:               1b544873-81b8-4bac-9624-d4208aa21fd1
@@ -270,17 +270,17 @@ Events:
 $ kubectl apply -f examples/fleet_v1alpha1_membercluster.yaml 
 ```
 
-4. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Left'
+4. Check to make sure the `memberCluster` resource status have been updated to 'Left'
 
 ```shell
-$ kubectl describe membercluster membercluster-sample 
+$ kubectl describe membercluster kind-member-testing
  ```
 
 <details>
 <summary>Result</summary>
 
 ```shell
-Name:         membercluster-sample
+Name:         kind-member-testing
 Namespace:    
 Labels:       <none>
 Annotations:  <none>
