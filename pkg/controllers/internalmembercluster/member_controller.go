@@ -73,6 +73,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 //1. Gets current cluster usage.
 //2. Updates the associated InternalMemberCluster Custom Resource with current cluster usage and marks it as Joined.
 func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
+	imcLastJoinCond := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	imcHaveJoined := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionTrue
+	
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
 	if collectErr != nil {
 		klog.V(2).ErrorS(collectErr, "failed to collect member cluster usage", "name", memberCluster.Name, "namespace", memberCluster.Namespace)
@@ -85,9 +88,6 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
 			errors.Wrap(updateErr, "error update heartbeat")
 	}
-
-	imcLastJoinCond := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	imcHaveJoined := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionTrue
 
 	if !imcHaveJoined {
 		metrics.ReportJoinResultMetric()
