@@ -36,7 +36,7 @@ var (
 		return time.Until(token.ExpiresOn) / 2
 	}
 	DefaultCreateTicker    = time.Tick
-	DefaultRefreshDuration = time.Second * 10
+	DefaultRefreshDuration = time.Second * 30
 )
 
 func (at *Refresher) RefreshToken(ctx context.Context) error {
