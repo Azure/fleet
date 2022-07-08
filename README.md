@@ -467,11 +467,7 @@ $ helm install hub-agent ./charts/hub-agent/
 
 Each time we create an AKS cluster a resource group gets auto generated for us **MC_ResourceGroupName_ClusterName_Location** find the resource group and then go and click the **agent pool MSI object** and get the **PRINCIPAL_ID** which will be the name of the identity for the memberCluster CR, we can also find the **CLIENT_ID** here
 
-```shell
-$ kubectl apply -f ./examples/fleet_v1alpha1_membercluster.yaml
-```
-
-#### Example Member Cluster CR
+#### Make the necessary changes on the YAML file using this example Member Cluster CR which exists in fleet/examples
 
 ```shell
 apiVersion: fleet.azure.com/v1alpha1
@@ -483,9 +479,15 @@ spec:
   identity:
     name: "PRINCIPAL_ID"
     kind: User
-    namespace: fleet-membercluster-sample
+    namespace: fleet-system
     apiGroup: rbac.authorization.k8s.io
   leaseDurationSeconds: 30
+```
+
+then apply the CR,
+
+```shell
+$ kubectl apply -f ./examples/fleet_v1alpha1_membercluster.yaml
 ```
 
 switch cluster context to member cluster and run,
