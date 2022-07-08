@@ -35,28 +35,41 @@ var (
 	DefaultRefreshDurationFunc = func(token interfaces.AuthToken) time.Duration {
 		return time.Until(token.ExpiresOn) / 2
 	}
-	DefaultCreateTicker = time.Tick
+	DefaultCreateTicker    = time.Tick
+	DefaultRefreshDuration = time.Second * 30
 )
 
+func (at *Refresher) callFetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+	klog.V(5).InfoS("FetchToken start")
+	deadline := time.Now().Add(DefaultRefreshDuration)
+	fetchTokenContext, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	return at.provider.FetchToken(fetchTokenContext)
+}
+
 func (at *Refresher) RefreshToken(ctx context.Context) error {
-	klog.V(2).InfoS("start refresh token")
-	var refreshDuration time.Duration
+	klog.V(5).InfoS("RefreshToken start")
+	refreshDuration := DefaultRefreshDuration
 
 	for ; ; <-at.createTicker(refreshDuration) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			token, err := at.provider.FetchToken(ctx)
+			token, err := at.callFetchToken(ctx)
 			if err != nil {
-				return err
+				klog.ErrorS(err, "Failed to FetchToken")
+				continue
 			}
+
+			klog.V(5).InfoS("WriteToken start")
 			err = at.writer.WriteToken(token)
 			if err != nil {
-				return err
+				klog.ErrorS(err, "Failed to WriteToken")
+				continue
 			}
 			refreshDuration = at.refreshCalculate(token)
-			klog.V(2).InfoS("token has been refreshed")
+			klog.V(2).InfoS("RefreshToken succeeded")
 		}
 	}
 }

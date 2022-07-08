@@ -12,6 +12,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 
 	"go.goms.io/fleet/pkg/interfaces"
 )
@@ -34,6 +35,8 @@ func New(clientID string) interfaces.AuthTokenProvider {
 func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
 	token := interfaces.AuthToken{}
 	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(a.clientID)}
+
+	klog.V(5).InfoS("FetchToken", "client ID", a.clientID)
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 	if err != nil {
 		return token, errors.Wrap(err, "failed to create managed identity cred.")
@@ -43,9 +46,11 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 		func(err error) bool {
 			return ctx.Err() == nil
 		}, func() error {
+			klog.V(5).InfoS("GetToken start", "credential", credential)
 			azToken, err = credential.GetToken(ctx, policy.TokenRequestOptions{
 				Scopes: []string{aksScope},
 			})
+			klog.ErrorS(err, "Failed to GetToken")
 			return err
 		})
 	if err != nil {
