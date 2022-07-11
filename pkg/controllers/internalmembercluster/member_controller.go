@@ -85,7 +85,7 @@ func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1
 	}
 
 	if updateErr := r.updateInternalMemberClusterWithRetry(ctx, memberCluster); updateErr != nil {
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(memberCluster.Spec.HeartbeatPeriodSeconds)},
+		return ctrl.Result{},
 			errors.Wrap(updateErr, "error update heartbeat")
 	}
 
