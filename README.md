@@ -20,7 +20,7 @@ Fleet Join/Leave is a feature that allows a member cluster to join and leave a f
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) version v1.22
 - [kind](https://kind.sigs.k8s.io/) version v0.12.0
 
-### Install
+### Local testing steps on Kind clusters
 
 1. Clone the repo to your machine
 
@@ -36,11 +36,19 @@ $ cd fleet
 
 3. Set up `hub` and `member` kind clusters
 
+The makefile uses **kindest/node:v1.23.3** if your version is higher/lower use the following command to pull the image for v1.23.3
+
+```shell
+$ docker pull kindest/node:v1.23.3
+```
+
+then run,
+
 ```shell
 $ make create-hub-kind-cluster create-member-kind-cluster
 ```
 
-4. Build and load images to kind clusters (only if you don't have access to [fleet packages](https://github.com/orgs/Azure/packages?repo_name=fleet))
+4. Build and load images to kind clusters (since we are testing locally we don't have access to [fleet packages](https://github.com/orgs/Azure/packages?repo_name=fleet))
 
 ```shell
  $ OUTPUT_TYPE=type=docker make docker-build-hub-agent docker-build-member-agent docker-build-refresh-token
@@ -400,17 +408,17 @@ $ make clean-e2e-tests
 
 ### Prerequisites
 
-- Valid Azure subscription to create AKS clusters
-- Resource Group under subscription
-- ACR inside the resource group to build & push docker images
+- Valid Azure subscription to create AKS clusters [setup subscription](https://docs.microsoft.com/en-us/cli/azure/manage-azure-subscriptions-azure-cli)
+- Resource Group under subscription [setup resource group](https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-portal)
+- ACR inside the resource group to build & push docker images [setup ACR](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-get-started-portal?tabs=azure-cli)
 
-### 1. Create Hub cluster with AAD, RBAC enabled
+### 1. Create hub cluster with AAD, RBAC enabled
 
 ```shell
 $ az aks create --resource-group "ResourceGroupName" --name hubCluster --attach-acr "RegistryName" --node-count 1 --generate-ssh-keys --enable-aad --enable-azure-rbac
 ```
 
-### 2. Create Member cluster with managed identity enabled
+### 2. Create member cluster with managed identity enabled
 
 ```shell
 $ az aks create --resource-group "ResourceGroupName" --name memberCluster --attach-acr "RegistryName" --node-count 1 --generate-ssh-keys --enable-managed-identity
@@ -446,11 +454,6 @@ From the fleet directory run the following commands,
 
 ```shell
 $ make docker-build-hub-agent
-```
-
-switch cluster context to member cluster and run,
-
-```shell
 $ make docker-build-member-agent
 $ make docker-build-refresh-token
 ```
@@ -467,7 +470,7 @@ $ helm install hub-agent ./charts/hub-agent/
 
 Each time we create an AKS cluster a resource group gets auto generated for us **MC_ResourceGroupName_ClusterName_Location** find the resource group and then go and click the **agent pool MSI object** and get the **PRINCIPAL_ID** which will be the name of the identity for the memberCluster CR, we can also find the **CLIENT_ID** here
 
-#### Make the necessary changes on the YAML file using this example Member Cluster CR which exists in fleet/examples
+#### copy the code below and navigate to fleet/examples/fleet_v1alpha1_membercluster.yaml, paste the code and replace the "PRINCIPAL_ID"
 
 ```shell
 apiVersion: fleet.azure.com/v1alpha1
@@ -503,12 +506,12 @@ After applying the member cluster CR the Join workflow completes and the member 
 To trigger the leave workflow change the state from **JOIN** to **LEAVE** in the member cluster CR. We can either use,
 
 ```shell
-$ kubectl edit membercluster "memberClusterName"
+$ kubectl edit membercluster "memberClusterCRName"
 ```
 
 or change the CR in the fleet/examples directory and apply the CR again.
 
-### 8. Retrieve the token created in the member cluster
+### 8. Verify the token file exists in the member cluster
 
 switch cluster context to member cluster,
 
