@@ -406,11 +406,23 @@ $ make clean-e2e-tests
 
 ---
 
+Before starting create a text file and have a list of variables and their associated values for anything with double quotes put it in this text file to keep track, since we need to make changes to most of the commands before using them.
+
+List of variables that's supposed to be in your text file as you go through the commands,
+
+- "RegistryName" 
+- "RegistryLoginServer" 
+- "ResourceGroupName"
+- "PRINCIPAL_ID"
+- "CLIENT_ID"
+- "HUB_URL"
+- "MemberClusterCRName"
+
 ### Prerequisites
 
 - Valid Azure subscription to create AKS clusters [setup subscription](https://docs.microsoft.com/en-us/cli/azure/manage-azure-subscriptions-azure-cli)
-- Resource Group under subscription [setup resource group](https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-portal)
-- ACR inside the resource group to build & push docker images [setup ACR](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-get-started-portal?tabs=azure-cli)
+- Resource Group under subscription [setup resource group](https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-portal) ("ResourceGroupName" name of the resource group created)
+- ACR inside the resource group to build & push docker images [setup ACR](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-get-started-portal?tabs=azure-cli) ("RegistryLoginServer" login server field when you navigate to your registry on Azure portal, "RegistryName" name of Registry created)
 
 ### 1. Create hub cluster with AAD, RBAC enabled
 
@@ -448,7 +460,13 @@ $ az acr login -n "RegistryName"
 
 ### 6. Build and push docker images
 
-**In the Makefile and values.yaml in the helm charts change the registry name to the ACR registry name in the appropriate places before running the commands.**
+In the Makefile which exists in **fleet/Makefile** and values.yaml files for both helm charts which exists in **fleet/charts/hub-agent/values.yaml** & **fleet/charts/member-agent/values.yaml**
+
+make the necessary changes.
+
+![Makefile](screenshots/img.png)
+![hub-agent/values.yaml](screenshots/img1.png)
+![member-agent/values.yaml](screenshots/img2.png)
 
 From the fleet directory run the following commands,
 
@@ -468,7 +486,7 @@ From the fleet directory run the following commands,
 $ helm install hub-agent ./charts/hub-agent/
 ```
 
-Each time we create an AKS cluster a resource group gets auto generated for us **MC_ResourceGroupName_ClusterName_Location** find the resource group and then go and click the **agent pool MSI object** and get the **PRINCIPAL_ID** which will be the name of the identity for the memberCluster CR, we can also find the **CLIENT_ID** here
+Each time we create an AKS cluster a resource group gets auto generated for us **MC_ResourceGroupName_ClusterName_Location** find the resource group and then go and click the **agent pool MSI object** and get the **"PRINCIPAL_ID"** which will be the name of the identity for the memberCluster CR, we can also find the **"CLIENT_ID"** here
 
 #### copy the code below and navigate to fleet/examples/fleet_v1alpha1_membercluster.yaml, paste the code and replace the "PRINCIPAL_ID"
 
@@ -496,20 +514,32 @@ $ kubectl apply -f ./examples/fleet_v1alpha1_membercluster.yaml
 switch cluster context to member cluster and run,
 
 ```shell
-$ helm install member-agent ./charts/member-agent/ --set azure.clientid=CLIENT_ID --set config.provider=azure --set config.hubURL=HUB_URL --set config.memberClusterName=MemberClusterCRName
+$ helm install member-agent ./charts/member-agent/ --set azure.clientid="CLIENT_ID" --set config.provider=azure --set config.hubURL="HUB_URL" --set config.memberClusterName="MemberClusterCRName"
 ```
 
-**CLIENT_ID** is clientId from the **agent pool MSI object**, **HUB_URL** can be found in the .kube/config file in the hub cluster context section.
+**"CLIENT_ID"** is clientId from the **agent pool MSI object**, **"HUB_URL"** can be found in the .kube/config file in the hub cluster context section.
+
+```shell
+$ kubectl describe membercluster "MemberClusterCRName"
+ ```
+
+check events to see if member cluster has Joined.
 
 After applying the member cluster CR the Join workflow completes and the member cluster gets marked as Joined with a condition.
 
-To trigger the leave workflow change the state from **JOIN** to **LEAVE** in the member cluster CR. We can either use,
+To trigger the leave workflow change the state from **Join** to **Leave** in the member cluster CR. We can either use,
 
 ```shell
-$ kubectl edit membercluster "memberClusterCRName"
+$ kubectl edit membercluster "MemberClusterCRName"
 ```
 
-or change the CR in the fleet/examples directory and apply the CR again.
+or change the CR's spec to **Leave** in the fleet/examples/fleet_v1alpha1_membercluster.yaml and apply the CR again.
+
+```shell
+$ kubectl describe membercluster "MemberClusterCRName"
+ ```
+
+check events to see if member cluster has Left.
 
 ### 8. Verify the token file exists in the member cluster
 
@@ -524,13 +554,13 @@ $ kubectl get nodes -A
 run this command to get possible upgrades for your cluster if kubernetes version for cluster is less than 1.23,
 
 ```shell
-$ az aks get-upgrades --resource-group myResourceGroup --name myAKSCluster --output table
+$ az aks get-upgrades --resource-group "ResourceGroupName" --name memberCluster --output table
 ```
 
-then use a version greater than 1.22 because ephemeral debug containers were introduced in 1.23 and run,
+then use a version greater than 1.22 replace the KUBERNETES_VERSION variable in command below this is done because ephemeral debug containers were introduced in 1.23 and run,
 
 ```shell
-az aks upgrade --resource-group resourceGroupName --name AKSClusterName --kubernetes-version KUBERNETES_VERSION
+az aks upgrade --resource-group "ResourceGroupName" --name memberCluster --kubernetes-version KUBERNETES_VERSION
 ```
 
 after the upgrade run,
