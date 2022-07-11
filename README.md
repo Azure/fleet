@@ -582,6 +582,10 @@ which returns something similar to this,
 
 navigate to the directory to find a file called token use vim to open it.
 
+### 9. Cleanup
+
+Delete the resource group under which every was created. This might take some time.
+
 ## Code of Conduct
 
 ---
