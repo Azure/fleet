@@ -1,14 +1,14 @@
 replicaCount: 1
 
 image:
-  repository: "RegistryLoginServer"/member-agent
+  repository: ghcr.io/azure/fleet/member-agent
   pullPolicy: Always
   tag: v0.1.0
 
 logVerbosity: 3
 
 refreshtoken:
-  repository: "RegistryLoginServer"/refresh-token
+  repository: ghcr.io/azure/fleet/refresh-token
   pullPolicy: Always
   tag: v0.1.0
 
