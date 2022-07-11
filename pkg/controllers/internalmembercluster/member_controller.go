@@ -75,7 +75,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) updateHeartbeat(ctx context.Context, memberCluster *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
 	imcLastJoinCond := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	imcHaveJoined := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionTrue
-	
+
 	collectErr := r.collectMemberClusterUsage(ctx, memberCluster)
 	if collectErr != nil {
 		klog.V(2).ErrorS(collectErr, "failed to collect member cluster usage", "name", memberCluster.Name, "namespace", memberCluster.Namespace)
