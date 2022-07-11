@@ -13,11 +13,14 @@ import (
 	"math/big"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
 const (
@@ -43,7 +46,31 @@ const (
 	ReasonReconcileError   string = "ReconcileError"
 )
 
-var errKindNotFound = fmt.Errorf("kind not found in group version resources")
+var (
+	ClusterResourcePlacementGVR = schema.GroupVersionResource{
+		Group:    fleetv1alpha1.GroupVersion.Group,
+		Version:  fleetv1alpha1.GroupVersion.Version,
+		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
+	}
+
+	NamespaceGVK = schema.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Namespace",
+	}
+
+	NamespaceGVR = schema.GroupVersionResource{
+		Group:    corev1.GroupName,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "namespaces",
+	}
+
+	MemberClusterGVR = schema.GroupVersionResource{
+		Group:    fleetv1alpha1.GroupVersion.Group,
+		Version:  fleetv1alpha1.GroupVersion.Version,
+		Resource: fleetv1alpha1.MemberClusterResource,
+	}
+)
 
 // ReconcileErrorCondition returns a condition indicating that we encountered an
 // error while reconciling the resource.
@@ -120,7 +147,7 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 				return nil
 			}
 		}
-		return errKindNotFound
+		return fmt.Errorf("kind not found in group version resources")
 	})
 
 	if err != nil {

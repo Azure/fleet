@@ -1,55 +1,56 @@
 /*
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
-
-Copyright 2016 The Kubernetes Authors.
-Licensed under the Apache License, Version 2.0.
 */
 
 package utils
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 )
 
-// +lifted-source: https://github.com/kubernetes/kubernetes/blob/release-1.23/pkg/controller/garbagecollector/garbagecollector.go#L696-L732
-
-// GetDeletableResources returns all resources from discoveryClient that the
-// garbage collector should recognize and work with. More specifically, all
-// preferred resources which support the 'delete', 'list', and 'watch' verbs.
-//
+// GetWatchableResources returns all api resources from discoveryClient that we can watch.
+// More specifically, all api resources which support the 'list', and 'watch' verbs.//
 // All discovery errors are considered temporary. Upon encountering any error,
-// GetDeletableResources will log and return any discovered resources it was
-// able to process (which may be none).
-func GetDeletableResources(discoveryClient discovery.ServerResourcesInterface) map[schema.GroupVersionResource]struct{} {
-	preferredResources, err := discoveryClient.ServerPreferredResources()
-	if err != nil {
-		if discovery.IsGroupDiscoveryFailedError(err) {
-			klog.Warningf("failed to discover some groups: %v", err.(*discovery.ErrGroupDiscoveryFailed).Groups) //nolint
+// GetWatchableResources will log and return any discovered resources it was able to process (which may be none).
+func GetWatchableResources(discoveryClient discovery.ServerResourcesInterface) ([]DynamicResource, error) {
+	// Get all the resources this cluster has. This includes all the versions of a resource.
+	_, allResources, discoverError := discoveryClient.ServerGroupsAndResources()
+	allErr := make([]error, 0)
+	if discoverError != nil {
+		if discovery.IsGroupDiscoveryFailedError(discoverError) {
+			klog.Warningf("failed to discover some groups: %v", discoverError.(*discovery.ErrGroupDiscoveryFailed).Groups) //nolint
 		} else {
-			klog.Warningf("failed to discover preferred resources: %v", err)
+			klog.Warningf("failed to discover some resources: %v", discoverError)
 		}
+		allErr = append(allErr, discoverError)
 	}
-	if preferredResources == nil {
-		return map[schema.GroupVersionResource]struct{}{}
+	if allResources == nil {
+		return nil, discoverError
 	}
 
-	// This is extracted from discovery.GroupVersionResources to allow tolerating
-	// failures on a per-resource basis.
-	deletableResources := discovery.FilteredBy(discovery.SupportsAllVerbs{Verbs: []string{"delete", "list", "watch"}}, preferredResources)
-	deletableGroupVersionResources := map[schema.GroupVersionResource]struct{}{}
-	for _, rl := range deletableResources {
+	watchableGroupVersionResources := make([]DynamicResource, 0)
+
+	// This is extracted from discovery.GroupVersionResources to only watch watchable resources
+	watchableResources := discovery.FilteredBy(discovery.SupportsAllVerbs{Verbs: []string{"list", "watch"}}, allResources)
+	for _, rl := range watchableResources {
 		gv, err := schema.ParseGroupVersion(rl.GroupVersion)
 		if err != nil {
 			klog.Warningf("ignoring invalid discovered resource %q: %v", rl.GroupVersion, err)
+			allErr = append(allErr, err)
 			continue
 		}
 		for i := range rl.APIResources {
-			deletableGroupVersionResources[schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: rl.APIResources[i].Name}] = struct{}{}
+			gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: rl.APIResources[i].Name}
+			watchableGroupVersionResources = append(watchableGroupVersionResources, DynamicResource{
+				GroupVersionResource: gvr,
+				IsClusterScoped:      !rl.APIResources[i].Namespaced,
+			})
 		}
 	}
 
-	return deletableGroupVersionResources
+	return watchableGroupVersionResources, errors.NewAggregate(allErr)
 }
