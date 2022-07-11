@@ -445,12 +445,12 @@ $ az aks get-credentials --resource-group "ResourceGroupName" --name memberClust
 
 ### 4. Switching contexts between clusters
 
+switching contexts provides access to the corresponding clusters. The contexts are defined in a config file, it's usual file path is /Users/username/.kube/config
+
 ```shell
 $ kubectl config use-context hubCluster-admin
 $ kubectl config use-context memberCluster-admin
 ```
-
-switching contexts provides access to the corresponding clusters. The contexts are defined in a config file, it's usual file path is /Users/username/.kube/config
 
 ### 5. Login to ACR
 
@@ -468,15 +468,13 @@ make the necessary changes.
 ![hub-agent/values.yaml](screenshots/img1.png)
 ![member-agent/values.yaml](screenshots/img2.png)
 
-From the fleet directory run the following commands,
+From the fleet directory run the following commands. This builds the docker images from local fleet directory and pushes the images to ACR.
 
 ```shell
 $ make docker-build-hub-agent
 $ make docker-build-member-agent
 $ make docker-build-refresh-token
 ```
-
-This builds the docker images from local fleet directory and pushes the images to ACR.
 
 ### 7. Install helm charts and CRs:
 
@@ -511,35 +509,31 @@ then apply the CR,
 $ kubectl apply -f ./examples/fleet_v1alpha1_membercluster.yaml
 ```
 
-switch cluster context to member cluster and run,
+switch cluster context to member cluster and run, **"CLIENT_ID"** is clientId from the **agent pool MSI object**, **"HUB_URL"** can be found in the .kube/config file in the hub cluster context section.
 
 ```shell
 $ helm install member-agent ./charts/member-agent/ --set azure.clientid="CLIENT_ID" --set config.provider=azure --set config.hubURL="HUB_URL" --set config.memberClusterName="MemberClusterCRName"
 ```
 
-**"CLIENT_ID"** is clientId from the **agent pool MSI object**, **"HUB_URL"** can be found in the .kube/config file in the hub cluster context section.
+check events to see if member cluster has Joined.
 
 ```shell
 $ kubectl describe membercluster "MemberClusterCRName"
  ```
 
-check events to see if member cluster has Joined.
-
 After applying the member cluster CR the Join workflow completes and the member cluster gets marked as Joined with a condition.
 
-To trigger the leave workflow change the state from **Join** to **Leave** in the member cluster CR. We can either use,
+To trigger the leave workflow change the state from **Join** to **Leave** in the member cluster CR or change the CR's spec to **Leave** in the fleet/examples/fleet_v1alpha1_membercluster.yaml and apply the CR again.
 
 ```shell
 $ kubectl edit membercluster "MemberClusterCRName"
 ```
 
-or change the CR's spec to **Leave** in the fleet/examples/fleet_v1alpha1_membercluster.yaml and apply the CR again.
+check events to see if member cluster has Left.
 
 ```shell
 $ kubectl describe membercluster "MemberClusterCRName"
  ```
-
-check events to see if member cluster has Left.
 
 ### 8. Verify the token file exists in the member cluster
 
@@ -586,7 +580,7 @@ which returns something similar to this,
 
 </details><br/>
 
-navigate to the directory to find a file called token use vim to open it and take a look
+navigate to the directory to find a file called token use vim to open it.
 
 ## Code of Conduct
 
