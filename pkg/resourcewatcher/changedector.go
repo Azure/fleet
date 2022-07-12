@@ -72,14 +72,14 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdd,
 		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
 	d.InformerManager.AddStaticResource(
-		utils.DynamicResource{
+		utils.APIResourceMeta{
 			GroupVersionResource: utils.ClusterResourcePlacementGVR,
 			IsClusterScoped:      true,
 		}, clusterPlacementEventHandler)
 
 	// TODO: use a different event handler that list all placements and enqueue them
 	d.InformerManager.AddStaticResource(
-		utils.DynamicResource{
+		utils.APIResourceMeta{
 			GroupVersionResource: utils.MemberClusterGVR,
 			IsClusterScoped:      true,
 		}, clusterPlacementEventHandler)
@@ -110,7 +110,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 func (d *ChangeDetector) discoverAPIResources(ctx context.Context, period time.Duration) {
 	wait.UntilWithContext(ctx, func(ctx context.Context) {
 		newResources, err := utils.GetWatchableResources(d.DiscoveryClientSet)
-		var dynamicResources []utils.DynamicResource
+		var dynamicResources []utils.APIResourceMeta
 		if err != nil {
 			klog.Warningf("Failed to get all the api resources from the cluster, err = %v", err)
 		}

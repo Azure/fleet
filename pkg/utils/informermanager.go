@@ -24,13 +24,13 @@ type InformerManager interface {
 	// AddDynamicResources builds a dynamicInformer for each resource in the resources list with the event handler.
 	// A resource is dynamic if its definition can be created/deleted/updated during runtime.
 	// Normally, it is a custom resource that is installed by users. The handler should not be nil.
-	AddDynamicResources(resources []DynamicResource, handler cache.ResourceEventHandler, listComplete bool)
+	AddDynamicResources(resources []APIResourceMeta, handler cache.ResourceEventHandler, listComplete bool)
 
 	// AddStaticResource creates a dynamicInformer for the static 'resource' and set its event handler.
 	// A resource is static if its definition is pre-determined and immutable during runtime.
 	// Normally, it is a resource that is pre-installed by the system.
 	// This function can only be called once for each type of static resource during the initialization of the informer manager.
-	AddStaticResource(resource DynamicResource, handler cache.ResourceEventHandler)
+	AddStaticResource(resource APIResourceMeta, handler cache.ResourceEventHandler)
 
 	// IsInformerSynced checks if the resource's informer is synced.
 	IsInformerSynced(resource schema.GroupVersionResource) bool
@@ -47,7 +47,7 @@ type InformerManager interface {
 	Lister(resource schema.GroupVersionResource) cache.GenericLister
 
 	// GetAllActiveNameSpacedResources returns the list of namespaced dynamic resources we are watching.
-	GetAllActiveNameSpacedResources() []schema.GroupVersionResource
+	GetNameSpaceScopedResources() []schema.GroupVersionResource
 
 	// GetClient returns the dynamic dynamicClient.
 	GetClient() dynamic.Interface
@@ -63,12 +63,12 @@ func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, p
 		ctx:             ctx,
 		cancel:          cancel,
 		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		handlers:        make(map[schema.GroupVersionResource]*DynamicResource),
+		apiResources:    make(map[schema.GroupVersionResource]*APIResourceMeta),
 	}
 }
 
-// DynamicResource is used to
-type DynamicResource struct {
+// APIResourceMeta contains the gvk and associated metadata about an api resource
+type APIResourceMeta struct {
 	// GroupVersionResource is the gvr of the resource.
 	GroupVersionResource schema.GroupVersionResource
 
@@ -78,9 +78,9 @@ type DynamicResource struct {
 	// isStaticResource indicates if the resource is a static resource that won't be deleted.
 	isStaticResource bool
 
-	// isActive indicates if the resource is still present in the system. We need this because
+	// isPresent indicates if the resource is still present in the system. We need this because
 	// the dynamicInformerFactory does not support a good way to remove/stop an informer.
-	isActive bool
+	isPresent bool
 }
 
 // informerManagerImpl implements the InformerManager interface
@@ -95,33 +95,32 @@ type informerManagerImpl struct {
 	// informerFactory is the client-go built-in informer factory that can create an informer given a gvr.
 	informerFactory dynamicinformer.DynamicSharedInformerFactory
 
-	// the handlers map collects the handler for each dynamic gvr.
-	handlers    map[schema.GroupVersionResource]*DynamicResource
-	handlerLock sync.RWMutex
+	// the apiResources map collects all the api resources we watch
+	apiResources  map[schema.GroupVersionResource]*APIResourceMeta
+	resourcesLock sync.RWMutex
 }
 
-func (s *informerManagerImpl) AddDynamicResources(dynResources []DynamicResource, handler cache.ResourceEventHandler, listComplete bool) {
+func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta, handler cache.ResourceEventHandler, listComplete bool) {
 	newGVRs := make(map[schema.GroupVersionResource]bool, len(dynResources))
 
-	addInformerFunc := func(newRes DynamicResource) {
-		dynRes, exist := s.handlers[newRes.GroupVersionResource]
+	addInformerFunc := func(newRes APIResourceMeta) {
+		dynRes, exist := s.apiResources[newRes.GroupVersionResource]
 		if !exist {
-			newRes.isActive = true
-			newRes.isStaticResource = false
-			s.handlers[newRes.GroupVersionResource] = &newRes
+			newRes.isPresent = true
+			s.apiResources[newRes.GroupVersionResource] = &newRes
 			s.informerFactory.ForResource(newRes.GroupVersionResource).Informer().AddEventHandler(handler)
 			klog.InfoS("Added an informer for a new resource", "res", newRes)
-		} else if !dynRes.isActive {
+		} else if !dynRes.isPresent {
 			// we just mark it as enabled as we should not add another eventhandler to the informer as it's still
 			// in the informerFactory
 			// TODO: we have to find a way to stop/delete the informer from the informerFactory
-			dynRes.isActive = true
+			dynRes.isPresent = true
 			klog.InfoS("Reactivated an informer for a reappeared resource", "res", dynRes)
 		}
 	}
 
-	s.handlerLock.Lock()
-	defer s.handlerLock.Unlock()
+	s.resourcesLock.Lock()
+	defer s.resourcesLock.Unlock()
 
 	// Add the new dynResources that do not exist yet while build a map to speed up lookup
 	for _, newRes := range dynResources {
@@ -135,23 +134,23 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []DynamicResource
 	}
 
 	// mark the disappeared dynResources from the handler map
-	for gvr, dynRes := range s.handlers {
-		if !newGVRs[gvr] && !dynRes.isStaticResource && dynRes.isActive {
+	for gvr, dynRes := range s.apiResources {
+		if !newGVRs[gvr] && !dynRes.isStaticResource && dynRes.isPresent {
 			// TODO: Disable the informer associated with the resource
-			dynRes.isActive = false
+			dynRes.isPresent = false
 			klog.InfoS("Disabled an informer for a disappeared resource", "res", dynRes)
 		}
 	}
 }
 
-func (s *informerManagerImpl) AddStaticResource(resource DynamicResource, handler cache.ResourceEventHandler) {
-	staticRes, exist := s.handlers[resource.GroupVersionResource]
+func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handler cache.ResourceEventHandler) {
+	staticRes, exist := s.apiResources[resource.GroupVersionResource]
 	if exist {
 		klog.ErrorS(fmt.Errorf("a static resource is added already"), "existing res", staticRes)
 	}
 
 	resource.isStaticResource = true
-	s.handlers[resource.GroupVersionResource] = &resource
+	s.apiResources[resource.GroupVersionResource] = &resource
 	s.informerFactory.ForResource(resource.GroupVersionResource).Informer().AddEventHandler(handler)
 }
 
@@ -172,13 +171,13 @@ func (s *informerManagerImpl) GetClient() dynamic.Interface {
 	return s.dynamicClient
 }
 
-func (s *informerManagerImpl) GetAllActiveNameSpacedResources() []schema.GroupVersionResource {
-	res := make([]schema.GroupVersionResource, 0, len(s.handlers))
-	s.handlerLock.RLock()
-	defer s.handlerLock.RUnlock()
+func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersionResource {
+	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
+	s.resourcesLock.RLock()
+	defer s.resourcesLock.RUnlock()
 
-	for gvr, resource := range s.handlers {
-		if resource.isActive && !resource.isStaticResource && !resource.IsClusterScoped {
+	for gvr, resource := range s.apiResources {
+		if resource.isPresent && !resource.isStaticResource && !resource.IsClusterScoped {
 			res = append(res, gvr)
 		}
 	}
