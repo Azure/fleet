@@ -6,12 +6,13 @@ package main
 
 import (
 	"flag"
-	"os"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -29,6 +30,7 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	kubeconfigPath = flag.String("kubeconfig-path", "", "Absolute path to the kubeconfig file. Required only when running out of cluster.")
 )
 
 func init() {
@@ -42,11 +44,22 @@ func init() {
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
 }
 
+func getConfigOrDie(kubeconfigPath string) *rest.Config {
+	klog.V(5).InfoS("Get kubeconfig", "kubeconfigPath", kubeconfigPath)
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		klog.ErrorS(err, "Failed to build kubeconfig", "kubeconfigPath", kubeconfigPath)
+		os.Exit(1)
+	}
+	klog.V(5).InfoS("Got kubeconfig", "host", config.Host)
+	return config
+}
+
 func main() {
 	flag.Parse()
 	defer klog.Flush()
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(getConfigOrDie(*kubeconfigPath), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     *metricsAddr,
 		Port:                   9446,
