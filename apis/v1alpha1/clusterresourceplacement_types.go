@@ -12,7 +12,7 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope="Cluster",shortName=crp
+// +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-workload}
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -35,27 +35,28 @@ type ClusterResourcePlacement struct {
 
 // ClusterResourcePlacementSpec represents the desired behavior of a ClusterResourcePlacement object.
 type ClusterResourcePlacementSpec struct {
-	// ResourceSelectors is used to select cluster scoped resources.
+	// ResourceSelectors is used to select cluster scoped resources. The selectors are `ORed`.
 	// kubebuilder:validation:MaxItems=100
 	// +required
 	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
 
 	// Policy represents the placement policy to select clusters to place all the selected resources.
-	// Default is place to the entire fleet if this field is omitted
+	// Default is place to the entire fleet if this field is omitted.
 	// +optional
 	Policy PlacementPolicy `json:"policy,omitempty"`
 }
 
 // ClusterResourceSelector is used to specify cluster scoped resources to be selected.
 // Note: When the cluster resource is of type `namespace`, ALL the resources in this namespace are selected.
+// All the fields present in this structure are `ANDed`.
 type ClusterResourceSelector struct {
 	// Group is the group name of the target resource.
 	// +required
-	Group string `json:"group,omitempty"`
+	Group string `json:"group"`
 
 	// Version is the version of the target resource.
 	// +required
-	Version string `json:"version,omitempty"`
+	Version string `json:"version"`
 
 	// Kind is the kind of the target resources.
 	// Note: When the `kind` field is `namespace` then all the resources inside that namespace is selected.
@@ -82,14 +83,14 @@ type PlacementPolicy struct {
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
 
-	// Affinity represents the selected resources' scheduling constraints
+	// Affinity represents the selected resources' scheduling constraints.
 	// If not set, the entire fleet can be scheduling candidate.
 	// +optional
 	Affinity *Affinity `json:"Affinity,omitempty"`
 }
 
 // Affinity represents the filter to select clusters.
-// The selectors in this struct are `ANDed`
+// The selectors in this struct are `ANDed`.
 type Affinity struct {
 	// ClusterAffinity describes cluster affinity scheduling rules for the resources.
 	// +optional
@@ -98,13 +99,13 @@ type Affinity struct {
 
 // ClusterAffinity represents the filter to select clusters.
 type ClusterAffinity struct {
-	// ClusterSelectorTerms is a list of cluster selector terms. The terms are ORed.
+	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
 	// kubebuilder:validation:MaxItems=10
 	// +required
 	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms"`
 }
 
-// ClusterSelectorTerm represents the requirements to selected clusters
+// ClusterSelectorTerm represents the requirements to selected clusters.
 type ClusterSelectorTerm struct {
 	// LabelSelector is a list of cluster requirements by cluster's labels.
 	// kubebuilder:validation:MaxItems=10
@@ -112,7 +113,7 @@ type ClusterSelectorTerm struct {
 	LabelSelector metav1.LabelSelector `json:"labelSelector,omitempty"`
 }
 
-// ClusterResourcePlacementStatus defines the observed state of  resource.
+// ClusterResourcePlacementStatus defines the observed state of resource.
 type ClusterResourcePlacementStatus struct {
 	// Conditions field contains the overall condition statuses for this resource.
 	// +patchMergeKey=type
@@ -153,17 +154,16 @@ type ResourceIdentifier struct {
 	// +required
 	Name string `json:"name"`
 
-	// Namespace is the namespace of the resource,
-	// the resource is cluster scoped if the value is empty
+	// Namespace is the namespace of the resource, the resource is cluster scoped if the value is empty.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// FailedResourcePlacement shows the failure details of a failed resource placement
+// FailedResourcePlacement shows the failure details of a failed resource placement.
 type FailedResourcePlacement struct {
 	ResourceIdentifier `json:",inline"`
 
-	// ClusterName is the name of the cluster that this resource is placed on
+	// ClusterName is the name of the cluster that this resource is placed on.
 	// +required
 	ClusterName string `json:"clusterName"`
 
