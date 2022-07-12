@@ -92,7 +92,7 @@ func (w *controller) Enqueue(obj interface{}) {
 	w.queue.Add(key)
 }
 
-// Run can only be run once as we will
+// Run can only be run once as we will shut down the queue on stop.
 func (w *controller) Run(ctx context.Context, workerNumber int) error {
 	// we shut down the queue after each run, therefore we can't start again.
 	if w.queue.ShuttingDown() {

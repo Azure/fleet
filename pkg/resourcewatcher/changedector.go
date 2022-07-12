@@ -21,7 +21,6 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/keys"
@@ -33,7 +32,7 @@ var (
 	_ manager.LeaderElectionRunnable = &ChangeDetector{}
 )
 
-// ChangeDetector is a resource watcher which watches all resources and reconcile the events.
+// ChangeDetector is a resource watcher which watches all types of resources in the cluster and reconcile the events.
 type ChangeDetector struct {
 	// DiscoveryClientSet is used to do resource discovery.
 	DiscoveryClientSet *discovery.DiscoveryClient
@@ -58,39 +57,40 @@ type ChangeDetector struct {
 	// SkippedNamespaces contains all the namespaces that we won't select
 	SkippedNamespaces map[string]bool
 
-	// resourceChangeEventHandler is the event handler for any resource change informer
-	resourceChangeEventHandler cache.ResourceEventHandler
+	// dynamicResourceChangeEventHandler is the event handler for any resource change informer
+	dynamicResourceChangeEventHandler cache.ResourceEventHandler
 }
 
 // Start runs the detector, never stop until stopCh closed.
 func (d *ChangeDetector) Start(ctx context.Context) error {
-	klog.Infof("Starting resource detector.")
+	klog.Infof("Starting the api resource change detector")
 
-	// watch and enqueue ClusterPropagationPolicy changes.
-	clusterResourcePlacementGVR := schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
-	}
-	memberClusterGVR := schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.MemberClusterResource,
-	}
+	// Ensure all informers are closed when the context closes
+	defer klog.Infof("The api resource change detector is stopped")
+	defer d.InformerManager.Stop()
+
 	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdd,
 		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
-	d.InformerManager.ForResource(clusterResourcePlacementGVR, clusterPlacementEventHandler)
+	d.InformerManager.AddStaticResource(
+		utils.APIResourceMeta{
+			GroupVersionResource: utils.ClusterResourcePlacementGVR,
+			IsClusterScoped:      true,
+		}, clusterPlacementEventHandler)
 
-	// TODO: use a different event handler that list all placement and enqueue them
-	d.InformerManager.ForResource(memberClusterGVR, clusterPlacementEventHandler)
+	// TODO: use a different event handler that list all placements and enqueue them
+	d.InformerManager.AddStaticResource(
+		utils.APIResourceMeta{
+			GroupVersionResource: utils.MemberClusterGVR,
+			IsClusterScoped:      true,
+		}, clusterPlacementEventHandler)
 
 	// TODO: add work informer that enqueue the placement name (stored in its label)
 
-	// setup the resourceChangeEventHandler
-	d.resourceChangeEventHandler = newFilteringHandlerOnAllEvents(d.resourceFilter,
+	// setup the dynamicResourceChangeEventHandler that enqueue an event to the resource change controller's queue
+	d.dynamicResourceChangeEventHandler = newFilteringHandlerOnAllEvents(d.dynamicResourceFilter,
 		d.onResourceAdd, d.onResourceUpdated, d.onResourceDeleted)
 	// start the resource type list loop
-	go d.discoverResources(ctx, 30*time.Second)
+	go d.discoverAPIResources(ctx, 30*time.Second)
 
 	// We run the two controller in parallel
 	errs, cctx := errgroup.WithContext(ctx)
@@ -106,15 +106,22 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	return errs.Wait()
 }
 
-// discoverResources
-func (d *ChangeDetector) discoverResources(ctx context.Context, period time.Duration) {
+// discoverAPIResources goes through all the api resources in the cluster and create informers on selected types
+func (d *ChangeDetector) discoverAPIResources(ctx context.Context, period time.Duration) {
 	wait.UntilWithContext(ctx, func(ctx context.Context) {
-		newResources := utils.GetDeletableResources(d.DiscoveryClientSet)
-		for r := range newResources {
-			if !d.isResourceDisabled(r) && d.InformerManager.ForResource(r, d.resourceChangeEventHandler) {
-				klog.InfoS("Setup informer for", "resource", r.String())
+		newResources, err := utils.GetWatchableResources(d.DiscoveryClientSet)
+		var dynamicResources []utils.APIResourceMeta
+		if err != nil {
+			klog.Warningf("Failed to get all the api resources from the cluster, err = %v", err)
+		}
+		for _, res := range newResources {
+			// all the static resources are disabled by default
+			if !d.isResourceDisabled(res.GroupVersionResource) {
+				dynamicResources = append(dynamicResources, res)
 			}
 		}
+		d.InformerManager.AddDynamicResources(dynamicResources, d.dynamicResourceChangeEventHandler, err == nil)
+		// this will start the newly added informers if there is any
 		d.InformerManager.Start()
 	}, period)
 }
@@ -130,19 +137,17 @@ func (d *ChangeDetector) isResourceDisabled(gvr schema.GroupVersionResource) boo
 		klog.Errorf("gvr(%s) transform failed: %v", gvr.String(), err)
 		return false
 	}
-
 	for _, gvk := range gvks {
 		if d.DisabledResourceConfig.IsResourceDisabled(gvk) {
 			klog.V(4).InfoS("Skip watch resource", "group version kind", gvk.String())
 			return true
 		}
 	}
-
 	return false
 }
 
-// resourceFilter filters out resources that we don't want to watch
-func (d *ChangeDetector) resourceFilter(obj interface{}) bool {
+// dynamicResourceFilter filters out resources that we don't want to watch
+func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	key, err := controller.ClusterWideKeyFunc(obj)
 	if err != nil {
 		return false
@@ -160,13 +165,13 @@ func (d *ChangeDetector) resourceFilter(obj interface{}) bool {
 		return false
 	}
 
-	if unstructObj, ok := obj.(*unstructured.Unstructured); ok {
+	if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
 		// TODO:  add more special handling here
-		switch unstructObj.GroupVersionKind() {
+		switch unstructuredObj.GroupVersionKind() {
 		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
 		// prevented from propagating.
 		case corev1.SchemeGroupVersion.WithKind("Secret"):
-			secretType, found, _ := unstructured.NestedString(unstructObj.Object, "type")
+			secretType, found, _ := unstructured.NestedString(unstructuredObj.Object, "type")
 			if found && secretType == string(corev1.SecretTypeServiceAccountToken) {
 				return false
 			}
@@ -203,6 +208,7 @@ func (d *ChangeDetector) onResourceAdd(obj interface{}) {
 // onResourceUpdated handles object update event and push the object to queue.
 func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
 	klog.V(5).InfoS("Resource Updated", "oldObj", oldObj, "newObj", newObj)
+	// TODO: see if we can check the generation
 	if !reflect.DeepEqual(oldObj, newObj) {
 		d.ResourceChangeController.Enqueue(newObj)
 	}
