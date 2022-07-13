@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
@@ -74,6 +75,40 @@ func main() {
 		os.Exit(1)
 	}
 
+	hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
+	if hubCA == "" {
+		klog.V(3).ErrorS(errors.New("hub certificate authority cannot be empty"), "error has occurred retrieving HUB_CERTIFICATE_AUTHORITY")
+		os.Exit(1)
+	}
+
+	hubKeyData := os.Getenv("HUB_KEY_DATA")
+	if hubKeyData == "" {
+		klog.V(3).ErrorS(errors.New("hub key data cannot be empty"), "error has occurred retrieving HUB_KEY_DATA")
+		os.Exit(1)
+	}
+
+	hubCertData := os.Getenv("HUB_CERTIFICATE_DATA")
+	if hubCertData == "" {
+		klog.V(3).ErrorS(errors.New("hub certificate data cannot be empty"), "error has occurred retrieving HUB_CERTIFICATE_DATA")
+		os.Exit(1)
+	}
+
+	decodedClusterCaCertificate, caError := base64.StdEncoding.DecodeString(hubCA)
+	if caError != nil {
+		klog.V(3).ErrorS(caError, "decode cluster CA certificate error")
+		os.Exit(1)
+	}
+	decodedClientKey, keyError := base64.StdEncoding.DecodeString(hubKeyData)
+	if keyError != nil {
+		klog.V(3).ErrorS(keyError, "decode client key error")
+		os.Exit(1)
+	}
+	decodedClientCertificate, certError := base64.StdEncoding.DecodeString(hubCertData)
+	if certError != nil {
+		klog.V(3).ErrorS(certError, "decode client certificate error")
+		os.Exit(1)
+	}
+
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
@@ -89,12 +124,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	hubConfig := rest.Config{
-		BearerTokenFile: tokenFilePath,
-		Host:            hubURL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: *tlsClientInsecure,
-		},
+	var hubConfig rest.Config
+	if *tlsClientInsecure {
+		hubConfig = rest.Config{
+			BearerTokenFile: tokenFilePath,
+			Host:            hubURL,
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: *tlsClientInsecure,
+			},
+		}
+	} else {
+		hubConfig = rest.Config{
+			BearerTokenFile: tokenFilePath,
+			Host:            hubURL,
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: *tlsClientInsecure,
+				CAData:   decodedClusterCaCertificate,
+				KeyData:  decodedClientKey,
+				CertData: decodedClientCertificate,
+			},
+		}
 	}
 
 	hubOpts := ctrl.Options{
