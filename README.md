@@ -10,6 +10,13 @@ Fleet Join/Leave is a feature that allows a member cluster to join and leave a f
 
 ## Quick Start
 
+**This guide has two parts,**
+
+1. Steps to run agents on Kind clusters
+2. Steps to run agents on AKS clusters
+
+**For the kind clusters everything needed to run the agents is already predefined in the makefile no changes are needed. But for the AKS cluster we need to make some changes to files within the fleet repo.**
+
 ---
 
 ### Prerequisites
@@ -20,21 +27,21 @@ Fleet Join/Leave is a feature that allows a member cluster to join and leave a f
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) version v1.22
 - [kind](https://kind.sigs.k8s.io/) version v0.12.0
 
-### Local testing steps on Kind clusters
+## Steps to run agents on Kind clusters
 
-1. Clone the repo to your machine
+**1. Clone the repo to your machine**
 
 ```shell
 $ git clone https://github.com/Azure/fleet
 ```
 
-2. Navigate to fleet directory
+**2. Navigate to fleet directory**
 
 ```shell
 $ cd fleet
 ```
 
-3. Set up `hub` and `member` kind clusters
+**3. Set up `hub` and `member` kind clusters**
 
 The makefile uses **kindest/node:v1.23.3** if your version is higher/lower use the following command to pull the image for v1.23.3
 
@@ -48,29 +55,27 @@ then run,
 $ make create-hub-kind-cluster create-member-kind-cluster
 ```
 
-4. Build and load images to kind clusters (since we are testing locally we don't have access to [fleet packages](https://github.com/orgs/Azure/packages?repo_name=fleet))
+**4. Build and load images to kind clusters** (since we are testing locally we don't have access to [fleet packages](https://github.com/orgs/Azure/packages?repo_name=fleet))
 
 ```shell
  $ OUTPUT_TYPE=type=docker make docker-build-hub-agent docker-build-member-agent docker-build-refresh-token
  $ make load-hub-docker-image load-member-docker-image
 ```
 
-5. Install hub and member agents helm charts
+**5. Install hub and member agents helm charts**
 
 ```shell
 $ make install-member-agent-helm
 ```
 
-### Demo
-
-1. Apply `memberCluster` to the hub cluster
+**6. Apply `memberCluster` to the hub cluster**
 
 ```shell
 $ kind export kubeconfig --name hub-testing
 $ kubectl apply -f examples/fleet_v1alpha1_membercluster.yaml 
 ```
 
-2. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Joined'
+**7. Check to make sure the `memberCluster` & `internalMemberCluster` resources status have been updated to 'Joined'**
 
 ```shell
 $ kubectl describe membercluster kind-member-testing
@@ -272,13 +277,13 @@ Events:
 ```
 </details><br/>
 
-3. Change the state for `memberCluster` yaml file to be `Leave` and apply the change.
+**8. Change the state for `memberCluster` yaml file to be `Leave` and apply the change**
 
 ```shell
 $ kubectl apply -f examples/fleet_v1alpha1_membercluster.yaml 
 ```
 
-4. Check to make sure the `memberCluster` resource status have been updated to 'Left'
+**9. Check to make sure the `memberCluster` resource status have been updated to 'Left'**
 
 ```shell
 $ kubectl describe membercluster kind-member-testing
@@ -402,7 +407,7 @@ delete kind clusters setup
 $ make clean-e2e-tests
 ```
 
-## Manual testing steps on AKS clusters
+## Steps to run agents on AKS clusters
 
 ---
 
