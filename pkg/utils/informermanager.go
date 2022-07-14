@@ -46,8 +46,11 @@ type InformerManager interface {
 	// The informer for 'resource' will be created if not exist, but without any event handler.
 	Lister(resource schema.GroupVersionResource) cache.GenericLister
 
-	// GetAllActiveNameSpacedResources returns the list of namespaced dynamic resources we are watching.
+	// GetNameSpaceScopedResources returns the list of namespace scoped resources we are watching.
 	GetNameSpaceScopedResources() []schema.GroupVersionResource
+
+	// WaitForCacheSync waits for the informer cache to populate.
+	WaitForCacheSync()
 
 	// GetClient returns the dynamic dynamicClient.
 	GetClient() dynamic.Interface
@@ -169,6 +172,10 @@ func (s *informerManagerImpl) Start() {
 
 func (s *informerManagerImpl) GetClient() dynamic.Interface {
 	return s.dynamicClient
+}
+
+func (s *informerManagerImpl) WaitForCacheSync() {
+	s.informerFactory.WaitForCacheSync(s.ctx.Done())
 }
 
 func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersionResource {

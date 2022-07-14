@@ -67,7 +67,6 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 
 	// Ensure all informers are closed when the context closes
 	defer klog.Infof("The api resource change detector is stopped")
-	defer d.InformerManager.Stop()
 
 	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdd,
 		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
@@ -78,6 +77,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		}, clusterPlacementEventHandler)
 
 	// TODO: use a different event handler that list all placements and enqueue them
+	// BUG (RZ): this might have to be started after the placement informer cache is synced
 	d.InformerManager.AddStaticResource(
 		utils.APIResourceMeta{
 			GroupVersionResource: utils.MemberClusterGVR,
@@ -85,6 +85,14 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		}, clusterPlacementEventHandler)
 
 	// TODO: add work informer that enqueue the placement name (stored in its label)
+
+	d.InformerManager.Start()
+	defer d.InformerManager.Stop()
+
+	// wait for all the static informer cache to sync before we proceed to the dynamic ones
+	// so the static controllers don't need to check cache sync
+	// TODO: implement a better interface to just check the static informers
+	d.InformerManager.WaitForCacheSync()
 
 	// setup the dynamicResourceChangeEventHandler that enqueue an event to the resource change controller's queue
 	d.dynamicResourceChangeEventHandler = newFilteringHandlerOnAllEvents(d.dynamicResourceFilter,
