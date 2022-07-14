@@ -93,22 +93,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	decodedClusterCaCertificate, caError := base64.StdEncoding.DecodeString(hubCA)
-	if caError != nil {
-		klog.V(3).ErrorS(caError, "decode cluster CA certificate error")
-		os.Exit(1)
-	}
-	decodedClientKey, keyError := base64.StdEncoding.DecodeString(hubKeyData)
-	if keyError != nil {
-		klog.V(3).ErrorS(keyError, "decode client key error")
-		os.Exit(1)
-	}
-	decodedClientCertificate, certError := base64.StdEncoding.DecodeString(hubCertData)
-	if certError != nil {
-		klog.V(3).ErrorS(certError, "decode client certificate error")
-		os.Exit(1)
-	}
-
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
@@ -134,6 +118,22 @@ func main() {
 			},
 		}
 	} else {
+		decodedClusterCaCertificate, caError := base64.StdEncoding.DecodeString(hubCA)
+		if caError != nil {
+			klog.V(3).ErrorS(caError, "decode cluster CA certificate error")
+			os.Exit(1)
+		}
+		decodedClientKey, keyError := base64.StdEncoding.DecodeString(hubKeyData)
+		if keyError != nil {
+			klog.V(3).ErrorS(keyError, "decode client key error")
+			os.Exit(1)
+		}
+		decodedClientCertificate, certError := base64.StdEncoding.DecodeString(hubCertData)
+		if certError != nil {
+			klog.V(3).ErrorS(certError, "decode client certificate error")
+			os.Exit(1)
+		}
+
 		hubConfig = rest.Config{
 			BearerTokenFile: tokenFilePath,
 			Host:            hubURL,
