@@ -106,9 +106,9 @@ func main() {
 			},
 		}
 	} else {
-		decodedClusterCaCertificate, caError := base64.StdEncoding.DecodeString(hubCA)
-		if caError != nil {
-			klog.V(3).ErrorS(caError, "decode cluster CA certificate error")
+		decodedClusterCaCertificate, err := base64.StdEncoding.DecodeString(hubCA)
+		if err != nil {
+			klog.V(2).ErrorS(err, "cannot decode hub cluster certificate authority data")
 			os.Exit(1)
 		}
 		hubConfig = rest.Config{
