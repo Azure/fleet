@@ -32,8 +32,6 @@ config:
   hubURL : https://<hub_cluster_api_server_ip>:<hub_cluster_port>
   memberClusterName: membercluster-sample
   hubCA: <certificate-authority-data>
-  hubKeyData: <client-key-data>
-  hubCertData: <client-certificate-data>
 
 secret:
   name: "hub-kubeconfig-secret"
