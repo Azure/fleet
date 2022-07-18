@@ -7,7 +7,6 @@ package internalmembercluster
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -186,12 +185,8 @@ func (r *Reconciler) collectMemberClusterUsage(ctx context.Context, imc *fleetv1
 	return nil
 }
 
-func getNamespacedNameFromObj(obj apis.ConditionedObj) string {
-	return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
-}
-
 func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(imc apis.ConditionedObj) {
-	klog.V(5).InfoS("markInternalMemberClusterHeartbeatReceived", "InternalMemberCluster", getNamespacedNameFromObj(imc))
+	klog.V(5).InfoS("markInternalMemberClusterHeartbeatReceived", "InternalMemberCluster", klog.KObj(imc))
 	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
 	hearbeatReceivedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
@@ -203,7 +198,7 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(imc apis.Conditi
 }
 
 func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {
-	klog.V(5).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", getNamespacedNameFromObj(imc))
+	klog.V(5).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
 	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
 	internalMemberClusterHealthyCond := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHealth,
@@ -215,7 +210,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {
 }
 
 func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj, err error) {
-	klog.V(5).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", getNamespacedNameFromObj(imc))
+	klog.V(5).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", klog.KObj(imc))
 	r.recorder.Event(imc, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
 	internalMemberClusterUnhealthyCond := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHealth,
@@ -228,7 +223,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj,
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
-	klog.V(5).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", getNamespacedNameFromObj(imc))
+	klog.V(5).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", klog.KObj(imc))
 	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster has joined")
 	joinSucceedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
@@ -240,7 +235,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
-	klog.V(5).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", getNamespacedNameFromObj(imc))
+	klog.V(5).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", klog.KObj(imc))
 	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster has left")
 	joinSucceedCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
@@ -252,7 +247,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
 }
 
 func (r *Reconciler) markInternalMemberClusterUnknown(imc apis.ConditionedObj) {
-	klog.V(5).InfoS("markInternalMemberClusterUnknown", "InternalMemberCluster", getNamespacedNameFromObj(imc))
+	klog.V(5).InfoS("markInternalMemberClusterUnknown", "InternalMemberCluster", klog.KObj(imc))
 	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster join state unknown")
 	joinUnknownCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
