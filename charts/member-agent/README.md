@@ -29,15 +29,16 @@ helm upgrade member-agent member-agent/ --namespace fleet-system
 
 ## Parameters
 
-| Parameter                | Description                                                                                                                                                                | Default                                         |
-|:-------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------|
-| replicaCount             | The number of member-agent replicas to deploy                                                                                                                              | `1`                                             |
-| image.repository         | Image repository                                                                                                                                                           | `ghcr.io/azure/azure/fleet/member-agent`        |
-| image.pullPolicy         | Image pullPolicy                                                                                                                                                           | `IfNotPresent`                                  |
-| image.tag                | The image tag to use                                                                                                                                                       | `v0.1.0`                                        |
-| affinity                 | The node affinity to use for pod scheduling                                                                                                                                | `{}`                                            |
-| tolerations              | The toleration to use for pod scheduling                                                                                                                                   | `[]`                                            |
-| resources                | The resource request/limits for the container image                                                                                                                        | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
-| namespace                | Namespace that this Helm chart is installed on.                                                                                                                            | `fleet-system`                                  |
+| Parameter                | Description                                           | Default                                         |
+|:-------------------------|:------------------------------------------------------|:------------------------------------------------|
+| replicaCount             | The number of member-agent replicas to deploy         | `1`                                             |
+| image.repository         | Image repository                                      | `ghcr.io/azure/azure/fleet/member-agent`        |
+| image.pullPolicy         | Image pullPolicy                                      | `IfNotPresent`                                  |
+| image.tag                | The image tag to use                                  | `v0.1.0`                                        |
+| affinity                 | The node affinity to use for pod scheduling           | `{}`                                            |
+| tolerations              | The toleration to use for pod scheduling              | `[]`                                            |
+| resources                | The resource request/limits for the container image   | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
+| namespace                | Namespace that this Helm chart is installed on.       | `fleet-system`                                  |
+| logVerbosity             | Log level. Uses V logs (klog)                         | `3`                                             |
 
 ## Contributing Changes

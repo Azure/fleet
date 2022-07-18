@@ -1,12 +1,12 @@
 apiVersion: fleet.azure.com/v1alpha1
 kind: MemberCluster
 metadata:
-  name: membercluster-sample
+  name: kind-member-testing
 spec:
   state: Join
   identity:
     name: member-agent-sa
     kind: ServiceAccount
     namespace: fleet-system
-    apiGroup: rbac.authorization.k8s.io
+    apiGroup: ""
   leaseDurationSeconds: 30
