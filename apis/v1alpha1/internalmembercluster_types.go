@@ -40,6 +40,9 @@ type InternalMemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 
+// InternalMemberClusterConditionType identifies a specific condition on a InternalMemberCluster.
+type InternalMemberClusterConditionType string
+
 const (
 	// ConditionTypeInternalMemberClusterJoin is used to track the join state of the InternalMemberCluster.
 	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
@@ -52,6 +55,29 @@ const (
 	// ConditionTypeInternalMemberClusterHealth is used to track the Health state of the InternalMemberCluster.
 	// its conditionStatus can be "True" == Healthy, "False" == UnHealthy. "Unknown" is unused.
 	ConditionTypeInternalMemberClusterHealth string = "Healthy"
+)
+
+const (
+	// MCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller join state of the InternalMemberCluster.
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
+	// When the condition becomes the false, the MCS controller could be safely uninstalled.
+	MCSControllerJoin InternalMemberClusterConditionType = "MCSControllerJoined"
+
+	// MCSControllerHeartbeat is used to track the MCS controller Heartbeat state of the InternalMemberCluster.
+	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
+	MCSControllerHeartbeat InternalMemberClusterConditionType = "MCSControllerHeartbeatReceived"
+
+	// NetworkingControllerJoin is used to track the networking controller (excluding MCS controller) join state of the InternalMemberCluster.
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
+	// When the condition becomes the false, the networking controller could be safely uninstalled.
+	// Note, for now, networking controller (excluding MCS controller) does not need to cleanup the resource before leaving.
+	// It's added to keep consistent with other controllers.
+	NetworkingControllerJoin InternalMemberClusterConditionType = "NetworkingControllerJoined"
+
+	// NetworkingControllerHeartbeat is used to track the networking controller (excluding MCS controller) Heartbeat
+	// state of the InternalMemberCluster.
+	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
+	NetworkingControllerHeartbeat InternalMemberClusterConditionType = "NetworkingControllerHeartbeatReceived"
 )
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
