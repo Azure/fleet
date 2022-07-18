@@ -197,7 +197,7 @@ func matchSelectorLabelSelector(targetLabels map[string]string, selector fleetv1
 	}
 	s, err := metav1.LabelSelectorAsSelector(selector.LabelSelector)
 	if err != nil {
-		return false, fmt.Errorf("user input invalid label selector %+v, err %+v", selector, err)
+		return false, fmt.Errorf("user input invalid label selector %+v, err %w", selector, err)
 	}
 	if s.Matches(labels.Set(targetLabels)) {
 		return true, nil
