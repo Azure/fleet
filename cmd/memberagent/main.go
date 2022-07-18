@@ -75,12 +75,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
-	if hubCA == "" {
-		klog.V(3).ErrorS(errors.New("hub certificate authority cannot be empty"), "error has occurred retrieving HUB_CERTIFICATE_AUTHORITY")
-		os.Exit(1)
-	}
-
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
@@ -106,6 +100,11 @@ func main() {
 			},
 		}
 	} else {
+		hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
+		if hubCA == "" {
+			klog.ErrorS(errors.New("hub certificate authority cannot be empty"), "error has occurred retrieving HUB_CERTIFICATE_AUTHORITY")
+			os.Exit(1)
+		}
 		decodedClusterCaCertificate, err := base64.StdEncoding.DecodeString(hubCA)
 		if err != nil {
 			klog.V(2).ErrorS(err, "cannot decode hub cluster certificate authority data")
