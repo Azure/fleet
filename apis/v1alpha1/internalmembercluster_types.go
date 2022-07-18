@@ -85,6 +85,10 @@ type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
 
 	// +required
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
