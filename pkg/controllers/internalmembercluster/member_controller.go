@@ -81,65 +81,62 @@ func logIfError(result ctrl.Result, err error) (ctrl.Result, error) {
 	return result, err
 }
 
-func getNamespacedName(imc *fleetv1alpha1.InternalMemberCluster) string {
-	return fmt.Sprintf("%s/%s", imc.Namespace, imc.Name)
-}
-
 // updateHeartbeat repeatedly performs two below operation. This informs the hub cluster that member cluster is healthy.
 // Join flow on internal member cluster controller finishes when the first heartbeat completes.
 // 1. Gets current cluster usage.
 // 2. Updates the associated InternalMemberCluster Custom Resource with current cluster usage and marks it as Joined.
 func (r *Reconciler) updateHeartbeat(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
-	klog.V(3).InfoS("updateHeartbeat", "InternalMemberCluster", getNamespacedName(imc))
+	klog.V(3).InfoS("updateHeartbeat", "InternalMemberCluster", klog.KObj(imc))
 
 	imcLastJoinCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	imcHaveJoined := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionTrue
 	if !imcHaveJoined {
-		klog.V(2).InfoS("join", "InternalMemberCluster", getNamespacedName(imc))
+		klog.V(2).InfoS("join", "InternalMemberCluster", klog.KObj(imc))
 	}
 
 	if err := r.collectMemberClusterUsage(ctx, imc); err != nil {
-		r.markInternalMemberClusterUnhealthy(imc, errors.Wrapf(err, "failed to collect member cluster usage for %s", getNamespacedName(imc)))
+		r.markInternalMemberClusterUnhealthy(imc, errors.Wrapf(err, "failed to collect member cluster usage for %s", klog.KObj(imc)))
 	} else {
 		r.markInternalMemberClusterHealthy(imc)
 	}
 
 	if err := r.updateInternalMemberClusterWithRetry(ctx, imc); err != nil {
-		return ctrl.Result{}, errors.Wrapf(err, "failed to set internal member cluster heartbeat for %s", getNamespacedName(imc))
+		return ctrl.Result{}, errors.Wrapf(err, "failed to set internal member cluster heartbeat for %s", klog.KObj(imc))
 	}
 
 	if !imcHaveJoined {
-		klog.V(2).InfoS("join succeeded", "InternalMemberCluster", getNamespacedName(imc))
+		klog.V(2).InfoS("join succeeded", "InternalMemberCluster", klog.KObj(imc))
 		metrics.ReportJoinResultMetric()
 	}
 
-	klog.V(3).InfoS("updateHeartbeat succeeded", "InternalMemberCluster", getNamespacedName(imc))
+	klog.V(3).InfoS("updateHeartbeat succeeded", "InternalMemberCluster", klog.KObj(imc))
 	return ctrl.Result{RequeueAfter: time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)}, nil
 }
 
 func (r *Reconciler) leave(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) (ctrl.Result, error) {
-	klog.V(2).InfoS("leave", "InternalMemberCluster", getNamespacedName(imc))
-
 	imcLastJoinCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	imcHaveLeft := imcLastJoinCond != nil && imcLastJoinCond.Status == metav1.ConditionFalse
 
 	if imcHaveLeft {
-		klog.V(2).InfoS("already left", "InternalMemberCluster", getNamespacedName(imc))
+		klog.V(3).InfoS("leave: already left", "InternalMemberCluster", klog.KObj(imc))
 		return ctrl.Result{}, nil
 	}
 
+	// if !imcHaveLeft.
+	klog.V(2).InfoS("leave", "InternalMemberCluster", klog.KObj(imc))
+
 	r.markInternalMemberClusterLeft(imc)
 	if err := r.updateInternalMemberClusterWithRetry(ctx, imc); err != nil {
-		return ctrl.Result{}, errors.Wrapf(err, "failed to set internal member cluster member to left for %s", getNamespacedName(imc))
+		return ctrl.Result{}, errors.Wrapf(err, "failed to set internal member cluster member to left")
 	}
 
 	metrics.ReportLeaveResultMetric()
-	klog.V(2).InfoS("leave succeeded", "InternalMemberCluster", getNamespacedName(imc))
+	klog.V(2).InfoS("leave succeeded", "InternalMemberCluster", klog.KObj(imc))
 	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) error {
-	klog.V(5).InfoS("updateInternalMemberClusterWithRetry", "InternalMemberCluster", getNamespacedName(imc))
+	klog.V(5).InfoS("updateInternalMemberClusterWithRetry", "InternalMemberCluster", klog.KObj(imc))
 	backOffPeriod := retry.DefaultBackoff
 	backOffPeriod.Cap = time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)
 
@@ -149,7 +146,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 				return false
 			}
 			if err != nil {
-				klog.ErrorS(err, "failed to update internal member cluster status", "InternalMemberCluster", getNamespacedName(imc))
+				klog.ErrorS(err, "failed to update internal member cluster status", "InternalMemberCluster", klog.KObj(imc))
 			}
 			return true
 		},
@@ -160,10 +157,10 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 }
 
 func (r *Reconciler) collectMemberClusterUsage(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) error {
-	klog.V(5).InfoS("collectMemberClusterUsage", "InternalMemberCluster", getNamespacedName(imc))
+	klog.V(5).InfoS("collectMemberClusterUsage", "InternalMemberCluster", klog.KObj(imc))
 	var nodes corev1.NodeList
 	if err := r.memberClient.List(ctx, &nodes); err != nil {
-		return errors.Wrapf(err, "failed to list nodes for member cluster %s", getNamespacedName(imc))
+		return errors.Wrapf(err, "failed to list nodes for member cluster %s", klog.KObj(imc))
 	}
 
 	var capacityCPU, capacityMemory, allocatableCPU, allocatableMemory resource.Quantity
