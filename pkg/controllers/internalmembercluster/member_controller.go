@@ -60,7 +60,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	var imc fleetv1alpha1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &imc); err != nil {
-		return logIfError(ctrl.Result{}, errors.Wrapf(client.IgnoreNotFound(err), "failed to get internal member cluster: %#v", req.NamespacedName))
+		return logIfError(ctrl.Result{}, errors.Wrapf(client.IgnoreNotFound(err), "failed to get internal member cluster: %s", req.NamespacedName))
 	}
 
 	switch imc.Spec.State {
@@ -69,7 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	case fleetv1alpha1.ClusterStateLeave:
 		return logIfError(r.leave(ctx, &imc))
 	default:
-		klog.Errorf("unknown state %v in InternalMemberCluster: %v", imc.Spec.State, req.NamespacedName)
+		klog.Errorf("unknown state %v in InternalMemberCluster: %s", imc.Spec.State, req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
 }
