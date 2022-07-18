@@ -89,7 +89,7 @@ type InternalMemberClusterStatus struct {
 	// +patchMergeKey=type
 	// +listType=map
 	// +listMapKey=type
-	Conditions []metav1.Condition `json:"conditions"`
+	Conditions []metav1.Condition `json:"conditions" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
 
