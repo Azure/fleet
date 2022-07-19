@@ -33,6 +33,8 @@ spec:
             value: "/config/token"
           - name: MEMBER_CLUSTER_NAME
             value: "{{ .Values.config.memberClusterName }}"
+          - name: HUB_CERTIFICATE_AUTHORITY
+            value: "{{ .Values.config.hubCA }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

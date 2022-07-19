@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
@@ -89,12 +90,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	hubConfig := rest.Config{
-		BearerTokenFile: tokenFilePath,
-		Host:            hubURL,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: *tlsClientInsecure,
-		},
+	var hubConfig rest.Config
+	if *tlsClientInsecure {
+		hubConfig = rest.Config{
+			BearerTokenFile: tokenFilePath,
+			Host:            hubURL,
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: *tlsClientInsecure,
+			},
+		}
+	} else {
+		hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
+		if hubCA == "" {
+			klog.ErrorS(errors.New("hub certificate authority cannot be empty"), "error has occurred retrieving HUB_CERTIFICATE_AUTHORITY")
+			os.Exit(1)
+		}
+		decodedClusterCaCertificate, err := base64.StdEncoding.DecodeString(hubCA)
+		if err != nil {
+			klog.ErrorS(err, "cannot decode hub cluster certificate authority data")
+			os.Exit(1)
+		}
+		hubConfig = rest.Config{
+			BearerTokenFile: tokenFilePath,
+			Host:            hubURL,
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: *tlsClientInsecure,
+				CAData:   decodedClusterCaCertificate,
+			},
+		}
 	}
 
 	hubOpts := ctrl.Options{
