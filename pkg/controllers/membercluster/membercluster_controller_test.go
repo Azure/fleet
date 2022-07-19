@@ -29,9 +29,9 @@ import (
 )
 
 const (
-	namespace1 = "fleet-mc1"
-	namespace2 = "fleet-mc2"
-	namespace3 = "fleet-mc3"
+	namespace1 = "fleet-member-mc1"
+	namespace2 = "fleet-member-mc2"
+	namespace3 = "fleet-member-mc3"
 )
 
 func TestReconcilerCheckAndCreateNamespace(t *testing.T) {

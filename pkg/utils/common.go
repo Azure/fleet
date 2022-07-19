@@ -25,7 +25,7 @@ import (
 
 const (
 	FleetSystemNamespace  = "fleet-system"
-	NamespaceNameFormat   = "fleet-%s"
+	NamespaceNameFormat   = "fleet-member-%s"
 	RoleNameFormat        = "fleet-role-%s"
 	RoleBindingNameFormat = "fleet-rolebinding-%s"
 )
