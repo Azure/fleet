@@ -57,11 +57,19 @@ type ChangeDetector struct {
 	// SkippedNamespaces contains all the namespaces that we won't select
 	SkippedNamespaces map[string]bool
 
+	// ConcurrentClusterPlacementWorker is the number of cluster `placement` reconcilers that are
+	// allowed to sync concurrently.
+	ConcurrentClusterPlacementWorker int
+
+	// ConcurrentResourceChangeWorker is the number of resource change work that are
+	// allowed to sync concurrently.
+	ConcurrentResourceChangeWorker int
+
 	// dynamicResourceChangeEventHandler is the event handler for any resource change informer
 	dynamicResourceChangeEventHandler cache.ResourceEventHandler
 }
 
-// Start runs the detector, never stop until stopCh closed.
+// Start runs the detector, never stop until stopCh closed. This is called by the controller manager.
 func (d *ChangeDetector) Start(ctx context.Context) error {
 	klog.Infof("Starting the api resource change detector")
 
@@ -77,7 +85,6 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		}, clusterPlacementEventHandler)
 
 	// TODO: use a different event handler that list all placements and enqueue them
-	// BUG (RZ): this might have to be started after the placement informer cache is synced
 	d.InformerManager.AddStaticResource(
 		utils.APIResourceMeta{
 			GroupVersionResource: utils.MemberClusterGVR,
@@ -103,12 +110,10 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	// We run the two controller in parallel
 	errs, cctx := errgroup.WithContext(ctx)
 	errs.Go(func() error {
-		//TODO: use options passed in from flags for work number
-		return d.ClusterResourcePlacementController.Run(cctx, 5)
+		return d.ClusterResourcePlacementController.Run(cctx, d.ConcurrentClusterPlacementWorker)
 	})
 	errs.Go(func() error {
-		//TODO: use options passed in from flags for work number
-		return d.ResourceChangeController.Run(cctx, 20)
+		return d.ResourceChangeController.Run(cctx, d.ConcurrentResourceChangeWorker)
 	})
 
 	return errs.Wait()
