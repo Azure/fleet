@@ -105,10 +105,19 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		r.copyMemberClusterStatusFromInternalMC(mc, imc)
 	}
 
+	mcJoined := false
+	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
+		markMemberClusterJoined(r.recorder, mc)
+		mcJoined = true
+	}
+
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
-		klog.ErrorS(err, "cannot update the member cluster status",
-			"internalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "cannot update the member cluster status", "memberCluster", klog.KObj(mc))
 		return ctrl.Result{}, err
+	}
+
+	if mcJoined {
+		metrics.ReportJoinResultMetric()
 	}
 	return ctrl.Result{}, nil
 }
@@ -143,7 +152,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			imcLeft = true
 		} else {
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
-				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
+				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated to be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
 				return ctrl.Result{}, err
 			}
@@ -166,9 +175,9 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
 			return ctrl.Result{}, err
 		}
+		metrics.ReportLeaveResultMetric()
 	}
 
-	metrics.ReportLeaveResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -317,10 +326,6 @@ func (r *Reconciler) copyMemberClusterStatusFromInternalMC(mc *fleetv1alpha1.Mem
 		internalMemberClusterHeartBeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
 		klog.V(3).InfoS("updating last transition for member cluster", "memberCluster", mc.Name)
 		memberClusterHearBeatCondition.LastTransitionTime = internalMemberClusterHeartBeatCondition.LastTransitionTime
-	}
-	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
-		markMemberClusterJoined(r.recorder, mc)
-		metrics.ReportJoinResultMetric()
 	}
 }
 

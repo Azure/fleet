@@ -658,12 +658,12 @@ func TestCopyMemberClusterStatusFromInternalMC(t *testing.T) {
 		memberCluster         *fleetv1alpha1.MemberCluster
 		wantErr               error
 	}{
-		"mark member cluster as Joined with nil heartbeat condition for member cluster": {
+		"nil heartbeat condition for member cluster": {
 			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
 			memberCluster:         &fleetv1alpha1.MemberCluster{},
 			internalMemberCluster: &imc,
 		},
-		"mark member cluster as Joined with non nil heartbeat condition for member cluster": {
+		"non nil heartbeat condition for member cluster": {
 			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
 			memberCluster:         &mc1,
 			internalMemberCluster: &imc,
