@@ -55,7 +55,7 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var mc fleetv1alpha1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
-		klog.V(3).ErrorS(err, "failed to get the member cluster in hub agent", "memberCluster", req.Name)
+		klog.ErrorS(err, "failed to get the member cluster in hub agent", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -76,28 +76,28 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	// Create the namespace associated with the member cluster Obj
 	namespaceName, err := r.checkAndCreateNamespace(ctx, mc)
 	if err != nil {
-		klog.V(3).ErrorS(err, "failed to check and create namespace for member cluster in the hub cluster",
+		klog.ErrorS(err, "failed to check and create namespace for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "namespace", namespaceName)
 		return ctrl.Result{}, err
 	}
 
 	imc, err := r.markInternalMemberClusterStateJoin(ctx, mc, namespaceName)
 	if err != nil {
-		klog.V(3).ErrorS(err, "failed to check and create internal member cluster %s in the hub cluster",
+		klog.ErrorS(err, "failed to check and create internal member cluster %s in the hub cluster",
 			"memberCluster", mc.Name, "internalMemberCluster", mc.Name)
 		return ctrl.Result{}, err
 	}
 
 	roleName, err := r.syncRole(ctx, mc, namespaceName)
 	if err != nil {
-		klog.V(3).ErrorS(err, "failed to check and create role for member cluster in the hub cluster",
+		klog.ErrorS(err, "failed to check and create role for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "role", roleName)
 		return ctrl.Result{}, err
 	}
 
 	err = r.syncRoleBinding(ctx, mc, namespaceName, roleName, mc.Spec.Identity)
 	if err != nil {
-		klog.V(3).ErrorS(err, "failed to check and create role binding for member cluster in the hub cluster",
+		klog.ErrorS(err, "failed to check and create role binding for member cluster in the hub cluster",
 			"memberCluster", mc.Name, "roleBinding", fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name))
 		return ctrl.Result{}, err
 	}
@@ -106,7 +106,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
 		r.copyMemberClusterStatusFromInternalMC(mc, imc)
 		if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
-			klog.V(2).ErrorS(err, "cannot update member cluster status as Joined",
+			klog.ErrorS(err, "cannot update member cluster status as Joined",
 				"internalMemberCluster", imc.Name)
 			return ctrl.Result{}, err
 		}
@@ -130,7 +130,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
-			klog.V(3).ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
+			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
 			return ctrl.Result{}, err
 		}
 		klog.V(3).InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
@@ -144,7 +144,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			imcLeft = true
 		} else {
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
-				klog.V(3).ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
+				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
 				return ctrl.Result{}, err
 			}
@@ -157,14 +157,14 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			if apierrors.IsNotFound(err) {
 				return ctrl.Result{}, nil
 			}
-			klog.V(2).ErrorS(err, "failed to delete namespace", "memberCluster", memberCluster.Name)
+			klog.ErrorS(err, "failed to delete namespace", "memberCluster", memberCluster.Name)
 			return ctrl.Result{}, err
 		}
 
 		// marking member cluster as Left after all the associated resources are removed
 		markMemberClusterLeft(r.recorder, memberCluster)
 		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
-			klog.V(2).ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
+			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
 			return ctrl.Result{}, err
 		}
 	}
@@ -230,7 +230,7 @@ func (r *Reconciler) syncRole(ctx context.Context, memberCluster *fleetv1alpha1.
 	if !cmp.Equal(role.Rules, expectedRole.Rules) {
 		klog.V(2).InfoS("the role has more or less permissions than expected, updating ", "role", roleName, "memberCluster", memberCluster.Name)
 		if err := r.Client.Update(ctx, &expectedRole, client.FieldOwner(memberCluster.GetUID())); err != nil {
-			klog.V(2).ErrorS(err, "cannot update role for member cluster",
+			klog.ErrorS(err, "cannot update role for member cluster",
 				"memberCluster", memberCluster.Name, "role", roleName)
 			return "", err
 		}
@@ -264,7 +264,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, memberCluster *fleetv1
 	if !cmp.Equal(rb.Subjects, expectedRoleBinding.Subjects) || !cmp.Equal(rb.RoleRef, expectedRoleBinding.RoleRef) {
 		klog.V(2).InfoS("the role binding is different from what is expected, updating", "roleBinding", roleBindingName, "memberCluster", memberCluster.Name)
 		if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(memberCluster.GetUID())); err != nil {
-			klog.V(2).ErrorS(err, "cannot update role binding for member cluster", "memberCluster", memberCluster.Name, "roleBinding", roleBindingName)
+			klog.ErrorS(err, "cannot update role binding for member cluster", "memberCluster", memberCluster.Name, "roleBinding", roleBindingName)
 			return err
 		}
 		r.recorder.Event(memberCluster, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
@@ -340,7 +340,7 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 		func() error {
 			err := r.Client.Status().Update(ctx, mc, client.FieldOwner(mc.GetUID()))
 			if err != nil {
-				klog.V(2).ErrorS(err, "cannot update member cluster status", "memberCluster", mc.Name)
+				klog.ErrorS(err, "cannot update member cluster status", "memberCluster", mc.Name)
 			}
 			return err
 		})
