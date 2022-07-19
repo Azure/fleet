@@ -77,6 +77,7 @@ func (r *DisabledResourceConfig) Parse(c string) error {
 	return nil
 }
 
+// TODO: reduce cyclo
 func (r *DisabledResourceConfig) parseSingle(token string) error {
 	switch strings.Count(token, "/") {
 	// Assume user don't want to skip the 'core'(no group name) group.

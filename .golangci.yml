@@ -5,6 +5,7 @@ linters:
   disable-all: true
   enable:
     - deadcode
+    - decorder
     - errcheck
     - errorlint
     - goconst
@@ -22,6 +23,7 @@ linters:
     - revive
     - staticcheck
     - structcheck
+    - tparallel
     - typecheck
     - unconvert
     - unused

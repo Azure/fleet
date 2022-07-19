@@ -39,7 +39,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 	klog.V(5).InfoS("FetchToken", "client ID", a.clientID)
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 	if err != nil {
-		return token, errors.Wrap(err, "failed to create managed identity cred.")
+		return token, errors.Wrap(err, "failed to create managed identity cred")
 	}
 	var azToken *azcore.AccessToken
 	err = retry.OnError(retry.DefaultBackoff,
