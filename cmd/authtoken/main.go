@@ -37,7 +37,7 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 		Run: func(_ *cobra.Command, args []string) {
 			tokenProvider, err = secret.New(secretName, secretNamespace)
 			if err != nil {
-				klog.V(3).ErrorS(err, "error while creating new secret provider")
+				klog.ErrorS(err, "error while creating new secret provider")
 				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 			}
 		},

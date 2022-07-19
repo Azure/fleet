@@ -55,7 +55,7 @@ func main() {
 		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
 	})
 	if err != nil {
-		klog.V(3).ErrorS(err, "unable to start controller manager.")
+		klog.ErrorS(err, "unable to start controller manager.")
 		os.Exit(1)
 	}
 
@@ -64,22 +64,22 @@ func main() {
 	if err = (&membercluster.Reconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.V(3).ErrorS(err, "unable to create controller", "controller", "MemberCluster")
+		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
 		os.Exit(1)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.V(2).ErrorS(err, "unable to set up health check")
+		klog.ErrorS(err, "unable to set up health check")
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.V(2).ErrorS(err, "unable to set up ready check")
+		klog.ErrorS(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		klog.V(2).ErrorS(err, "problem starting manager")
+		klog.ErrorS(err, "problem starting manager")
 		os.Exit(1)
 	}
 }
