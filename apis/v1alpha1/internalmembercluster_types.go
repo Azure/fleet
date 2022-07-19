@@ -57,6 +57,9 @@ const (
 	ConditionTypeInternalMemberClusterHealth string = "Healthy"
 )
 
+// Conditions used by the member networking controllers.
+// Member networking controllers will be considered as `Joined` when both `MCSControllerJoin` and `ServiceExportImportControllerJoin`
+// are true.
 const (
 	// MCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller join state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
@@ -67,17 +70,18 @@ const (
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
 	MCSControllerHeartbeat InternalMemberClusterConditionType = "MCSControllerHeartbeatReceived"
 
-	// NetworkingControllerJoin is used to track the networking controller (excluding MCS controller) join state of the InternalMemberCluster.
+	// ServiceExportImportControllerJoin is used to track the networking controller (to import/export service) join
+	// state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
-	// When the condition becomes the false, the networking controller could be safely uninstalled.
-	// Note, for now, networking controller (excluding MCS controller) does not need to cleanup the resource before leaving.
+	// When the condition becomes the false, the member-net-controller-manager could be safely uninstalled.
+	// Note, for now, the member-net-controller-manager does not need to cleanup the resource before leaving.
 	// It's added to keep consistent with other controllers.
-	NetworkingControllerJoin InternalMemberClusterConditionType = "NetworkingControllerJoined"
+	ServiceExportImportControllerJoin InternalMemberClusterConditionType = "NetworkingControllerJoined"
 
-	// NetworkingControllerHeartbeat is used to track the networking controller (excluding MCS controller) Heartbeat
+	// ServiceExportImportControllerHeartbeat is used to track the networking controller (to import/export service) Heartbeat
 	// state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
-	NetworkingControllerHeartbeat InternalMemberClusterConditionType = "NetworkingControllerHeartbeatReceived"
+	ServiceExportImportControllerHeartbeat InternalMemberClusterConditionType = "NetworkingControllerHeartbeatReceived"
 )
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
@@ -85,10 +89,6 @@ type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
 
 	// +required
-	// +patchStrategy=merge
-	// +patchMergeKey=type
-	// +listType=map
-	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
