@@ -14,7 +14,6 @@ A clear and concise description of what the bug is.
 Please provide the following: 
 - Hub cluster details
 - Member cluster details
-- Work resource details
 
 ### **To Reproduce**
 Steps to reproduce the behavior:
