@@ -1,5 +1,6 @@
 run:
   deadline: 10m
+  go: '1.18'
 
 linters:
   disable-all: true
@@ -22,7 +23,6 @@ linters:
     - prealloc
     - revive
     - staticcheck
-    - structcheck
     - tparallel
     - typecheck
     - unconvert
