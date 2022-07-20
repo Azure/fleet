@@ -57,16 +57,21 @@ type MemberClusterStatus struct {
 
 	// Capacity represents the total resources of all the nodes within the member cluster.
 
-	// +required
-	Capacity v1.ResourceList `json:"capacity"`
+	// +optional
+	Capacity v1.ResourceList `json:"capacity,omitempty"`
 
 	// Allocatable represents the total resources of all the nodes within the member cluster that are available for scheduling.
 
-	// +required
-	Allocatable v1.ResourceList `json:"allocatable"`
+	// +optional
+	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
 }
 
 const (
+	// ConditionTypeMemberClusterReadyToJoin is used to track the readiness of the hub cluster
+	// controller to accept the new member cluster.
+	// its conditionStatus can only be "True" == ReadyToJoin
+	ConditionTypeMemberClusterReadyToJoin string = "ReadyToJoin"
+
 	// ConditionTypeMemberClusterJoin is used to track the join state of the memberCluster.
 	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
 	ConditionTypeMemberClusterJoin string = "Joined"

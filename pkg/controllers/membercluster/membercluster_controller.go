@@ -30,16 +30,17 @@ import (
 )
 
 const (
-	eventReasonNamespaceCreated   = "NamespaceCreated"
-	eventReasonNamespaceDeleted   = "NamespaceDeleted"
-	eventReasonRoleCreated        = "RoleCreated"
-	eventReasonRoleUpdated        = "RoleUpdated"
-	eventReasonRoleBindingCreated = "RoleBindingCreated"
-	eventReasonRoleBindingUpdated = "RoleBindingUpdated"
-	eventReasonIMCCreated         = "InternalMemberClusterCreated"
-	eventReasonIMCSpecUpdated     = "InternalMemberClusterSpecUpdated"
-	reasonMemberClusterJoined     = "MemberClusterJoined"
-	reasonMemberClusterLeft       = "MemberClusterLeft"
+	eventReasonNamespaceCreated    = "NamespaceCreated"
+	eventReasonNamespaceDeleted    = "NamespaceDeleted"
+	eventReasonRoleCreated         = "RoleCreated"
+	eventReasonRoleUpdated         = "RoleUpdated"
+	eventReasonRoleBindingCreated  = "RoleBindingCreated"
+	eventReasonRoleBindingUpdated  = "RoleBindingUpdated"
+	eventReasonIMCCreated          = "InternalMemberClusterCreated"
+	eventReasonIMCSpecUpdated      = "InternalMemberClusterSpecUpdated"
+	reasonMemberClusterReadyToJoin = "MemberClusterReadyToJoin"
+	reasonMemberClusterJoined      = "MemberClusterJoined"
+	reasonMemberClusterLeft        = "MemberClusterLeft"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -102,16 +103,17 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		return ctrl.Result{}, err
 	}
 
+	markMemberClusterReadyToJoin(r.recorder, mc)
 	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
 		r.copyMemberClusterStatusFromInternalMC(mc, imc)
-		if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
-			klog.ErrorS(err, "cannot update member cluster status as Joined",
-				"internalMemberCluster", imc.Name)
-			return ctrl.Result{}, err
-		}
 	}
 
+	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
+		klog.ErrorS(err, "cannot update member cluster status as Joined",
+			"internalMemberCluster", imc.Name)
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -378,6 +380,23 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 	klog.V(2).InfoS("Namespace is deleted", "memberCluster", mc.Name, "namespace", namespaceName)
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceDeleted, "namespace is deleted for member cluster")
 	return nil
+}
+
+// markMemberClusterJoined is used to the update the status of the member cluster to ready to join condition.
+func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	joinedCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
+	if joinedCond != nil {
+		return
+	}
+	klog.V(2).InfoS("mark the member Cluster as ready to", "memberService", mc.GetName())
+	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterReadyToJoin, "member cluster is ready to join")
+	readyToJoinCondition := &metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+		Status:             metav1.ConditionTrue,
+		Reason:             reasonMemberClusterReadyToJoin,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(*readyToJoinCondition)
 }
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
