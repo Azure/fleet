@@ -110,8 +110,8 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	}
 
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
-		klog.ErrorS(err, "cannot update member cluster status as Joined",
-			"internalMemberCluster", imc.Name)
+		klog.ErrorS(err, "cannot update the member cluster status",
+			"internalMemberCluster", klog.KObj(imc))
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
@@ -382,7 +382,7 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 	return nil
 }
 
-// markMemberClusterJoined is used to the update the status of the member cluster to ready to join condition.
+// markMemberClusterReadyToJoin is used to the update the status of the member cluster to ready to join condition.
 func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	joinedCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
 	if joinedCond != nil {
