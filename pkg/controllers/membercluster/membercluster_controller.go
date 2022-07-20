@@ -115,6 +115,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	return ctrl.Result{}, nil
 }
 
+// TODO: reduce cyclo
 // leave is used to complete the Leave workflow for the Hub agent.
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
 	imcExists := true
