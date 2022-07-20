@@ -167,6 +167,7 @@ func setupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 	skippedNamespaces["kube-system"] = true
 	skippedNamespaces["kube-public"] = true
 	skippedNamespaces["kube-node-lease"] = true
+	skippedNamespaces["default"] = true
 
 	for _, ns := range opts.SkippedPropagatingNamespaces {
 		skippedNamespaces[ns] = true
