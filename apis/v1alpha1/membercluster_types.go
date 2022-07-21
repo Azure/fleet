@@ -94,7 +94,3 @@ func (m *MemberCluster) SetConditions(conditions ...metav1.Condition) {
 func (m *MemberCluster) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
-
-func init() {
-	SchemeBuilder.Register(&MemberCluster{}, &MemberClusterList{})
-}

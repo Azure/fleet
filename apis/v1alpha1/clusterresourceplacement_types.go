@@ -195,7 +195,3 @@ type ClusterResourcePlacementList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacement `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ClusterResourcePlacement{}, &ClusterResourcePlacementList{})
-}
