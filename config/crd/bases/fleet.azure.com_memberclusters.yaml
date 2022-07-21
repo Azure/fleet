@@ -178,8 +178,6 @@ spec:
                   type: object
                 type: array
             required:
-            - allocatable
-            - capacity
             - conditions
             type: object
         required:

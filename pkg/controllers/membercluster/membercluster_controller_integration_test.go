@@ -125,11 +125,18 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		var mc fleetv1alpha1.MemberCluster
 		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
+		readyToJoinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
+		Expect(readyToJoinCondition).NotTo(BeNil())
+		Expect(readyToJoinCondition.Status).To(Equal(metav1.ConditionTrue))
+		Expect(readyToJoinCondition.Reason).To(Equal(reasonMemberClusterReadyToJoin))
+
 		joinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		Expect(joinCondition).NotTo(BeNil())
 		Expect(joinCondition.Status).To(Equal(metav1.ConditionTrue))
 		Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
 
 		heartBeatCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		Expect(heartBeatCondition).NotTo(BeNil())
 		Expect(heartBeatCondition.Status).To(Equal(metav1.ConditionTrue))
 		Expect(heartBeatCondition.Reason).To(Equal("InternalMemberClusterHeartbeatReceived"))
 	})
