@@ -81,6 +81,19 @@ const (
 	ConditionTypeMemberClusterHealth string = "Healthy"
 )
 
+// Conditions used by the member networking controllers to update the MemberCluster status.
+const (
+	// ConditionTypeMemberClusterMCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller.
+	// join state of the MemberCluster.
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
+	ConditionTypeMemberClusterMCSControllerJoin string = "MCSControllerJoined"
+
+	// ConditionTypeMemberClusterServiceExportImportControllerJoin is used to track the networking controller (to
+	// import/export service) join state of the MemberCluster.
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
+	ConditionTypeMemberClusterServiceExportImportControllerJoin string = "ServiceExportImportControllerJoined"
+)
+
 //+kubebuilder:object:root=true
 
 // MemberClusterList contains a list of MemberCluster.

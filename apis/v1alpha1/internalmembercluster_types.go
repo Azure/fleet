@@ -57,31 +57,33 @@ const (
 	ConditionTypeInternalMemberClusterHealth string = "Healthy"
 )
 
-// Conditions used by the member networking controllers.
+// Conditions used by the member networking controllers to update the InternalMemberCluster status.
 // Member networking controllers will be considered as `Joined` when both `MCSControllerJoin` and `ServiceExportImportControllerJoin`
 // are true.
 const (
-	// MCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller join state of the InternalMemberCluster.
+	// ConditionTypeIMCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller.
+	// join state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
 	// When the condition becomes the false, the MCS controller could be safely uninstalled.
-	MCSControllerJoin InternalMemberClusterConditionType = "MCSControllerJoined"
+	ConditionTypeIMCSControllerJoin string = "MCSControllerJoined"
 
-	// MCSControllerHeartbeat is used to track the MCS controller Heartbeat state of the InternalMemberCluster.
+	// ConditionTypeIMCMCSControllerHeartbeat is used to track the MCS controller Heartbeat state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
-	MCSControllerHeartbeat InternalMemberClusterConditionType = "MCSControllerHeartbeatReceived"
+	ConditionTypeIMCMCSControllerHeartbeat string = "MCSControllerHeartbeatReceived"
 
-	// ServiceExportImportControllerJoin is used to track the networking controller (to import/export service) join
-	// state of the InternalMemberCluster.
+	// ConditionTypeIMCServiceExportImportControllerJoin is used to track the networking controller (to import/export
+	// service) join state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
 	// When the condition becomes the false, the member-net-controller-manager could be safely uninstalled.
 	// Note, for now, the member-net-controller-manager does not need to cleanup the resource before leaving.
 	// It's added to keep consistent with other controllers.
-	ServiceExportImportControllerJoin InternalMemberClusterConditionType = "NetworkingControllerJoined"
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
+	ConditionTypeIMCServiceExportImportControllerJoin string = "ServiceExportImportControllerJoined"
 
-	// ServiceExportImportControllerHeartbeat is used to track the networking controller (to import/export service) Heartbeat
-	// state of the InternalMemberCluster.
+	// ConditionTypeIMCServiceExportImportControllerHeartbeat is used to track the networking controller (to
+	// import/export service) Heartbeat state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
-	ServiceExportImportControllerHeartbeat InternalMemberClusterConditionType = "NetworkingControllerHeartbeatReceived"
+	ConditionTypeIMCServiceExportImportControllerHeartbeat = "ServiceExportImportControllerHeartbeatReceived"
 )
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
