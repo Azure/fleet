@@ -384,8 +384,8 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 
 // markMemberClusterReadyToJoin is used to the update the status of the member cluster to ready to join condition.
 func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	joinedCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
-	if joinedCond != nil {
+	readyToJoinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
+	if readyToJoinCond != nil {
 		return
 	}
 	klog.V(2).InfoS("mark the member Cluster as ready to", "memberService", mc.GetName())
