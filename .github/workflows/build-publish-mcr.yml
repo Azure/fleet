@@ -3,6 +3,9 @@
 
 name: Building and Pushing to MCR
 on:
+  push:
+    branches:
+      - acrtest
   workflow_dispatch:
     inputs:
       releaseTag:
