@@ -351,10 +351,11 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 
 // syncInternalMemberClusterState is used to update the internal member cluster's state to be the same as memberCluster.
 func (r *Reconciler) syncInternalMemberClusterState(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) error {
-	if imc.Spec.State == memberCluster.Spec.State {
+	if imc.Spec.State == memberCluster.Spec.State && imc.Spec.HeartbeatPeriodSeconds == memberCluster.Spec.HeartbeatPeriodSeconds {
 		return nil
 	}
 	imc.Spec.State = memberCluster.Spec.State
+	imc.Spec.HeartbeatPeriodSeconds = memberCluster.Spec.HeartbeatPeriodSeconds
 	if err := r.Client.Update(ctx, imc, client.FieldOwner(memberCluster.GetUID())); err != nil {
 		return err
 	}
