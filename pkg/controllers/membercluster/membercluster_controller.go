@@ -105,10 +105,10 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		r.copyMemberClusterStatusFromInternalMC(mc, imc)
 	}
 
-	mcJoined := false
+	mcMarkJoined := false
 	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
 		markMemberClusterJoined(r.recorder, mc)
-		mcJoined = true
+		mcMarkJoined = true
 	}
 
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
@@ -116,7 +116,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 		return ctrl.Result{}, err
 	}
 
-	if mcJoined {
+	if mcMarkJoined {
 		metrics.ReportJoinResultMetric()
 	}
 	return ctrl.Result{}, nil
