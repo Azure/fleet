@@ -100,16 +100,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	}
 
 	markMemberClusterReadyToJoin(r.recorder, mc)
-	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
-		r.copyMemberClusterStatusFromInternalMC(mc, imc)
-	}
-
-	mcMarkJoined := false
-	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
-		markMemberClusterJoined(r.recorder, mc)
-		mcMarkJoined = true
-	}
+	mcMarkJoined := r.checkJoinConditionUpdateStatus(mc, imc)
 
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
 		klog.ErrorS(err, "cannot update the member cluster status", "memberCluster", klog.KObj(mc))
@@ -383,6 +374,20 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 	klog.V(2).InfoS("Namespace is deleted", "memberCluster", mc.Name, "namespace", namespaceName)
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceDeleted, "namespace is deleted for member cluster")
 	return nil
+}
+
+func (r *Reconciler) checkJoinConditionUpdateStatus(mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) bool {
+	mcMarkJoined := false
+	imcJoinCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	if imcJoinCondition != nil && imcJoinCondition.Status == metav1.ConditionTrue {
+		r.copyMemberClusterStatusFromInternalMC(mc, imc)
+		mcJoinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		if mcJoinCondition == nil || (mcJoinCondition != nil && mcJoinCondition.Status == metav1.ConditionFalse) {
+			markMemberClusterJoined(r.recorder, mc)
+			mcMarkJoined = true
+		}
+	}
+	return mcMarkJoined
 }
 
 // markMemberClusterReadyToJoin is used to the update the status of the member cluster to ready to join condition.
