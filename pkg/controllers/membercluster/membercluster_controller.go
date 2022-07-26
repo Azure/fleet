@@ -376,6 +376,7 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 	return nil
 }
 
+// checkJoinConditionUpdateStatus is used to check the join condition for Internal member cluster and updates member cluster's status.
 func (r *Reconciler) checkJoinConditionUpdateStatus(mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) bool {
 	mcMarkJoined := false
 	imcJoinCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)

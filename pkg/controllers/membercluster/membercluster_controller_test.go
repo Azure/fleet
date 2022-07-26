@@ -756,3 +756,79 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckJoinConditionUpdateStatus(t *testing.T) {
+	imcJoinCondition := metav1.Condition{
+		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+		Status: metav1.ConditionTrue,
+		Reason: "InternalMemberClusterJoined",
+	}
+	mcJoinCondition := metav1.Condition{
+		Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Status: metav1.ConditionTrue,
+		Reason: reasonMemberClusterJoined,
+	}
+	mcLeaveCondition := metav1.Condition{
+		Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Status: metav1.ConditionFalse,
+		Reason: reasonMemberClusterJoined,
+	}
+	heartBeatCondition := metav1.Condition{
+		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+		Status: metav1.ConditionTrue,
+		Reason: "InternalMemberClusterHeartbeatReceived",
+	}
+	mc1 := &fleetv1alpha1.MemberCluster{
+		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
+		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+	}
+	mc2 := &fleetv1alpha1.MemberCluster{
+		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+		ObjectMeta: metav1.ObjectMeta{Name: "mc2", UID: "mc2-UID"},
+		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+	}
+	imc := &fleetv1alpha1.InternalMemberCluster{}
+	imc.SetConditions(imcJoinCondition)
+	imc.SetConditions(heartBeatCondition)
+	mc1.SetConditions(mcJoinCondition)
+	mc1.SetConditions(heartBeatCondition)
+	mc2.SetConditions(mcLeaveCondition)
+
+	tests := map[string]struct {
+		r                     *Reconciler
+		memberCluster         *fleetv1alpha1.MemberCluster
+		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
+		wantedResult          bool
+	}{
+		"member cluster has not joined": {
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc", UID: "mc-UID"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+			},
+			internalMemberCluster: imc,
+			wantedResult:          true,
+		},
+		"member cluster has joined": {
+			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			memberCluster:         mc1,
+			internalMemberCluster: imc,
+			wantedResult:          false,
+		},
+		"member cluster has joined & left": {
+			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			memberCluster:         mc2,
+			internalMemberCluster: imc,
+			wantedResult:          true,
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			actualResult := tt.r.checkJoinConditionUpdateStatus(tt.memberCluster, tt.internalMemberCluster)
+			assert.Equal(t, tt.wantedResult, actualResult, utils.TestCaseMsg, testName)
+		})
+	}
+}
