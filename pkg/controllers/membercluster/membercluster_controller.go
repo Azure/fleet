@@ -41,6 +41,12 @@ const (
 	reasonMemberClusterReadyToJoin = "MemberClusterReadyToJoin"
 	reasonMemberClusterJoined      = "MemberClusterJoined"
 	reasonMemberClusterLeft        = "MemberClusterLeft"
+
+	reasonMCSControllerJoined = "MCSControllerJoined"
+	reasonMCSControllerLeft   = "MCSControllerLeft"
+
+	reasonServiceExportImportControllerJoined = "ServiceExportImportControllerJoined"
+	reasonServiceExportImportControllerLeft   = "ServiceExportImportControllerLeft"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -108,6 +114,15 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
 		r.copyMemberClusterStatusFromInternalMC(mc, imc)
 	}
+	joinedCond = imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
+		r.updateMCSControllerStatus(mc, imc)
+	}
+
+	joinedCond = imc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
+		r.updateServiceExportImportControllerStatus(mc, imc)
+	}
 
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
 		klog.ErrorS(err, "cannot update the member cluster status",
@@ -121,53 +136,80 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 // leave is used to complete the Leave workflow for the Hub agent.
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
 	imcExists := true
-	imcLeft := false
+	mcKObj := klog.KObj(memberCluster)
+
 	memberClusterLeftCondition := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	if memberClusterLeftCondition != nil && memberClusterLeftCondition.Status == metav1.ConditionFalse {
-		klog.V(3).InfoS("Member cluster is marked as left", "memberCluster", memberCluster.Name)
+		klog.V(3).InfoS("Member cluster is marked as left", "memberCluster", mcKObj)
 		return ctrl.Result{}, nil
 	}
+
+	internalMemberClusterLeft := false
+	mcsControllerLeft := false
+	serviceExportImportControllerLeft := false
 
 	var imc fleetv1alpha1.InternalMemberCluster
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.Name)
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
+			klog.ErrorS(err, "Failed to get the internal Member cluster ", "memberCluster", mcKObj)
 			return ctrl.Result{}, err
 		}
-		klog.V(3).InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
+		klog.V(3).InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", mcKObj)
 		imcExists = false
-		imcLeft = true
+
+		internalMemberClusterLeft = true
+		mcsControllerLeft = true
+		serviceExportImportControllerLeft = true
 	}
 
 	if imcExists {
 		internalMemberClusterLeftCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-		if internalMemberClusterLeftCondition != nil && internalMemberClusterLeftCondition.Status == metav1.ConditionFalse {
-			imcLeft = true
-		} else {
+		mcsCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerJoin)
+		serviceExportImportControllerCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin)
+
+		internalMemberClusterLeft = internalMemberClusterLeftCondition != nil &&
+			internalMemberClusterLeftCondition.Status == metav1.ConditionFalse
+		mcsControllerLeft = mcsCondition != nil &&
+			mcsCondition.Status == metav1.ConditionFalse
+		serviceExportImportControllerLeft = serviceExportImportControllerCondition != nil &&
+			serviceExportImportControllerCondition.Status == metav1.ConditionFalse
+
+		if mcsControllerLeft {
+			markMCSControllerLeft(r.recorder, memberCluster)
+		}
+		if serviceExportImportControllerLeft {
+			markServiceImportExportControllerLeft(r.recorder, memberCluster)
+		}
+
+		if !internalMemberClusterLeft || !mcsControllerLeft || !serviceExportImportControllerLeft {
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
 				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
-					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
+					"memberCluster", mcKObj, "internalMemberCluster", klog.KObj(&imc))
 				return ctrl.Result{}, err
 			}
 		}
 	}
 
-	if imcLeft {
+	// make sure all the controllers have left and then delete the member cluster namespace.
+	// memberCluster will always be the last one to mark as left.
+	if internalMemberClusterLeft && mcsControllerLeft && serviceExportImportControllerLeft {
 		// delete every resource that is associated with the internal member cluster
-		if err := r.deleteNamespace(ctx, memberCluster); err != nil {
-			if apierrors.IsNotFound(err) {
-				return ctrl.Result{}, nil
-			}
-			klog.ErrorS(err, "failed to delete namespace", "memberCluster", memberCluster.Name)
+		if err := r.deleteNamespace(ctx, memberCluster); err != nil && !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to delete namespace", "memberCluster", mcKObj)
 			return ctrl.Result{}, err
 		}
 
 		// marking member cluster as Left after all the associated resources are removed
 		markMemberClusterLeft(r.recorder, memberCluster)
 		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
-			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
+			klog.ErrorS(err, "Failed to update member cluster as Left", "memberCluster", mcKObj)
+			return ctrl.Result{}, err
+		}
+	} else if mcsControllerLeft || serviceExportImportControllerLeft {
+		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
+			klog.ErrorS(err, "Failed to update member cluster status", "memberCluster", mcKObj, "status", memberCluster.Status)
 			return ctrl.Result{}, err
 		}
 	}
@@ -321,11 +363,77 @@ func (r *Reconciler) copyMemberClusterStatusFromInternalMC(mc *fleetv1alpha1.Mem
 		internalMemberClusterHeartBeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
 		klog.V(3).InfoS("updating last transition for member cluster", "memberCluster", mc.Name)
 		memberClusterHearBeatCondition.LastTransitionTime = internalMemberClusterHeartBeatCondition.LastTransitionTime
+		memberClusterHearBeatCondition.ObservedGeneration = internalMemberClusterHeartBeatCondition.ObservedGeneration
 	}
 	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
 		markMemberClusterJoined(r.recorder, mc)
 		metrics.ReportJoinResultMetric()
 	}
+}
+
+// updateMCSControllerStatus is used to the update the status of the mcs controller to have the joined & heartbeat
+// condition.
+func (r *Reconciler) updateMCSControllerStatus(mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) {
+	mcKObj := klog.KObj(mc)
+	heartbeatCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat)
+	if heartbeatCondition == nil {
+		klog.V(3).InfoS("Set heartbeat condition for mcs controller", "memberCluster", mcKObj)
+		mc.SetConditions(*imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat))
+	} else {
+		imcHeartbeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		klog.V(3).InfoS("Updating last transition for mcs controller", "memberCluster", mcKObj)
+		heartbeatCondition.LastTransitionTime = imcHeartbeatCondition.LastTransitionTime
+		heartbeatCondition.ObservedGeneration = imcHeartbeatCondition.ObservedGeneration
+	}
+
+	joinedCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMCSControllerJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
+		return
+	}
+	klog.V(2).InfoS("Mark the MultiClusterService controller as Joined", "memberService", mcKObj)
+	r.recorder.Event(mc, corev1.EventTypeNormal, reasonMCSControllerJoined, "MultiClusterService controller is joined")
+	joinedCond = &metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMCSControllerJoin,
+		Status:             metav1.ConditionTrue,
+		Reason:             reasonMCSControllerJoined,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(*joinedCond)
+
+	// TODO, need to distinguish different controller type for join
+	//metrics.ReportJoinResultMetric()
+}
+
+// updateServiceExportImportControllerStatus is used to the update the status of the serviceexportimport controller
+// to have the joined & heartbeat condition.
+func (r *Reconciler) updateServiceExportImportControllerStatus(mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) {
+	mcKObj := klog.KObj(mc)
+	heartbeatCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat)
+	if heartbeatCondition == nil {
+		klog.V(3).InfoS("Set heartbeat condition for serviceexportimport controller", "memberCluster", mcKObj)
+		mc.SetConditions(*imc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat))
+	} else {
+		imcHeartbeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		klog.V(3).InfoS("Updating last transition for serviceexportimport controller", "memberCluster", mcKObj)
+		heartbeatCondition.LastTransitionTime = imcHeartbeatCondition.LastTransitionTime
+		heartbeatCondition.ObservedGeneration = imcHeartbeatCondition.ObservedGeneration
+	}
+
+	joinedCond := mc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
+		return
+	}
+	klog.V(2).InfoS("Mark the ServiceExportImport controller as Joined", "memberService", mcKObj)
+	r.recorder.Event(mc, corev1.EventTypeNormal, reasonServiceExportImportControllerJoined, "ServiceExportImport controller is joined")
+	joinedCond = &metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin,
+		Status:             metav1.ConditionTrue,
+		Reason:             reasonServiceExportImportControllerJoined,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(*joinedCond)
+	// TODO, need to distinguish different controller type for join
+	//metrics.ReportJoinResultMetric()
 }
 
 // updateMemberClusterStatus is used to update member cluster status to indicate that the member cluster has Joined/Left.
@@ -421,6 +529,33 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterLeft,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(leftCondition, utils.ReconcileSuccessCondition())
+}
+
+// markMCSControllerLeft is used to update the status of the mcs controller to have the left condition.
+func markMCSControllerLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	klog.V(2).InfoS("mark mcs controller left", "memberCluster", mc.GetName())
+	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterLeft, "mcs controller has left")
+	leftCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMCSControllerJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             reasonMCSControllerLeft,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+	mc.SetConditions(leftCondition, utils.ReconcileSuccessCondition())
+}
+
+// markServiceImportExportControllerLeft is used to update the status of the serviceexportimport controller to have the
+// left condition.
+func markServiceImportExportControllerLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	klog.V(2).InfoS("mark serviceexportimport controller left", "memberCluster", mc.GetName())
+	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterLeft, "serviceexportimport controller has left")
+	leftCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             reasonServiceExportImportControllerLeft,
 		ObservedGeneration: mc.GetGeneration(),
 	}
 	mc.SetConditions(leftCondition, utils.ReconcileSuccessCondition())

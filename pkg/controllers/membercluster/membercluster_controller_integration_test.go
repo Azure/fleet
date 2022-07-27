@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +35,9 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		namespaceName               string
 		memberClusterNamespacedName types.NamespacedName
 		r                           *Reconciler
+		options                     = []cmp.Option{
+			cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime"),
+		}
 	)
 
 	BeforeEach(func() {
@@ -141,6 +146,95 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		Expect(heartBeatCondition.Reason).To(Equal("InternalMemberClusterHeartbeatReceived"))
 	})
 
+	It("should mark mcs controller as joined", func() {
+		var imc fleetv1alpha1.InternalMemberCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+
+		imc.Status.Capacity = utils.NewResourceList()
+		imc.Status.Allocatable = utils.NewResourceList()
+		joinedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Joined",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		heartBeatReceivedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat,
+			Status:             metav1.ConditionTrue,
+			Reason:             "HeartbeatReceived",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		By("Update internal member cluster status")
+		imc.SetConditions(joinedCondition, heartBeatReceivedCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to update member cluster status ")
+		result, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		var mc fleetv1alpha1.MemberCluster
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+
+		want := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             reasonMCSControllerJoined,
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		got := mc.GetCondition(fleetv1alpha1.ConditionTypeMCSControllerJoin)
+		Expect(cmp.Diff(want, *got, options...)).Should(BeEmpty())
+		got = mc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat)
+		Expect(cmp.Diff(heartBeatReceivedCondition, *got, options...)).Should(BeEmpty())
+	})
+
+	It("should mark serviceexportimport controller as joined", func() {
+		var imc fleetv1alpha1.InternalMemberCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+
+		imc.Status.Capacity = utils.NewResourceList()
+		imc.Status.Allocatable = utils.NewResourceList()
+		joinedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Joined",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		heartBeatReceivedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat,
+			Status:             metav1.ConditionTrue,
+			Reason:             "HeartbeatReceived",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		By("Update internal member cluster status")
+		imc.SetConditions(joinedCondition, heartBeatReceivedCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to update member cluster status")
+		result, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		var mc fleetv1alpha1.MemberCluster
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+
+		want := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             reasonServiceExportImportControllerJoined,
+			ObservedGeneration: imc.GetGeneration(),
+		}
+
+		got := mc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)
+		Expect(cmp.Diff(want, *got, options...)).Should(BeEmpty())
+		got = mc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat)
+		Expect(cmp.Diff(heartBeatReceivedCondition, *got, options...)).Should(BeEmpty())
+	})
+
 	It("member cluster is marked as left after leave workflow is completed", func() {
 		By("Update member cluster's spec to leave")
 		var mc fleetv1alpha1.MemberCluster
@@ -178,7 +272,73 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 		mcLeftCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		Expect(mcLeftCondition.Status).To(Equal(metav1.ConditionTrue))
+		Expect(mcLeftCondition.Reason).To(Equal(reasonMemberClusterJoined))
+
+		By("mark mcs controller as left")
+		imcLeftCondition = metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             "Left",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		imc.SetConditions(imcLeftCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to mark mcs controller as left")
+		result, err = r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		By("checking member cluster condition")
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		mcLeftCondition = mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		Expect(mcLeftCondition.Status).To(Equal(metav1.ConditionTrue))
+		Expect(mcLeftCondition.Reason).To(Equal(reasonMemberClusterJoined))
+
+		By("checking mcs condition")
+		mcLeftCondition = mc.GetCondition(fleetv1alpha1.ConditionTypeMCSControllerJoin)
+		want := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeMCSControllerJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             reasonMCSControllerLeft,
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		Expect(cmp.Diff(want, *mcLeftCondition, options...)).Should(BeEmpty())
+
+		By("mark serviceexportimport controller as left")
+		imcLeftCondition = metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             "Left",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		imc.SetConditions(imcLeftCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to mark serviceexportimport controller as left")
+		result, err = r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		By("checking member cluster condition")
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		mcLeftCondition = mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
 		Expect(mcLeftCondition.Status).To(Equal(metav1.ConditionFalse))
 		Expect(mcLeftCondition.Reason).To(Equal(reasonMemberClusterLeft))
+
+		By("checking serviceexportimport condition")
+		mcLeftCondition = mc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)
+		want = metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             reasonServiceExportImportControllerLeft,
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		Expect(cmp.Diff(want, *mcLeftCondition, options...)).Should(BeEmpty())
 	})
 })

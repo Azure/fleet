@@ -61,15 +61,15 @@ const (
 // Member networking controllers will be considered as `Joined` when both `MCSControllerJoin` and `ServiceExportImportControllerJoin`
 // are true.
 const (
-	// ConditionTypeIMCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller.
+	// ConditionTypeIMCMCSControllerJoin is used to track the MCS (Multi-Cluster Service) controller.
 	// join state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
 	// When the condition becomes the false, the MCS controller could be safely uninstalled.
-	ConditionTypeIMCSControllerJoin string = "MCSControllerJoined"
+	ConditionTypeIMCMCSControllerJoin string = "MultiClusterServiceControllerJoined"
 
 	// ConditionTypeIMCMCSControllerHeartbeat is used to track the MCS controller Heartbeat state of the InternalMemberCluster.
 	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
-	ConditionTypeIMCMCSControllerHeartbeat string = "MCSControllerHeartbeatReceived"
+	ConditionTypeIMCMCSControllerHeartbeat string = "MultiClusterServiceControllerHeartbeatReceived"
 
 	// ConditionTypeIMCServiceExportImportControllerJoin is used to track the networking controller (to import/export
 	// service) join state of the InternalMemberCluster.
