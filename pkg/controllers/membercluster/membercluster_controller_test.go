@@ -817,7 +817,7 @@ func TestCheckJoinConditionUpdateStatus(t *testing.T) {
 			internalMemberCluster: imc,
 			wantedResult:          false,
 		},
-		"member cluster has joined & left": {
+		"member cluster has left & is joining again": {
 			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
 			memberCluster:         mc2,
 			internalMemberCluster: imc,
