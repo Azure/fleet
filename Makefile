@@ -1,11 +1,15 @@
-REGISTRY ?= ghcr.io
+REGISTRY ?= qinhaofleetacr.azurecr.io
 KIND_IMAGE ?= kindest/node:v1.23.3
+ifndef TAG
+	HUB_AGENT_IMAGE_VERSION ?= $(shell git rev-parse --short=7 HEAD)
+else
+	HUB_AGENT_IMAGE_VERSION ?= $(TAG)
+	MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
+	REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
+endif
 HUB_AGENT_IMAGE_NAME ?= hub-agent
-HUB_AGENT_IMAGE_VERSION ?= v0.1.0
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
-MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 REFRESH_TOKEN_IMAGE_NAME := refresh-token
-REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
