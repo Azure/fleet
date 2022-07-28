@@ -49,10 +49,6 @@ type Reconciler struct {
 	recorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/finalizers,verbs=update
-
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var mc fleetv1alpha1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
