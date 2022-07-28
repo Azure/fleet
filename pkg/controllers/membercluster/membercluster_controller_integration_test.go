@@ -50,7 +50,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 		By("create the member cluster reconciler")
 		r = &Reconciler{
-			Client: k8sClient,
+			Client:                 k8sClient,
+			NetControllersRequired: true,
 		}
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())

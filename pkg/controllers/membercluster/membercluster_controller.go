@@ -52,7 +52,8 @@ const (
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	client.Client
-	recorder record.EventRecorder
+	recorder               record.EventRecorder
+	NetControllersRequired bool // Whether it needs to handle networking controllers join/unjoin.
 }
 
 //+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters,verbs=get;list;watch;create;update;patch;delete
@@ -114,14 +115,9 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
 		r.copyMemberClusterStatusFromInternalMC(mc, imc)
 	}
-	joinedCond = imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerJoin)
-	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
-		r.updateMCSControllerStatus(mc, imc)
-	}
 
-	joinedCond = imc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)
-	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
-		r.updateServiceExportImportControllerStatus(mc, imc)
+	if r.NetControllersRequired {
+		r.handleNetworkingControllersJoin(ctx, mc, imc)
 	}
 
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
@@ -132,90 +128,131 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	return ctrl.Result{}, nil
 }
 
+func (r *Reconciler) handleNetworkingControllersJoin(ctx context.Context, mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) {
+	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
+		r.updateMCSControllerStatus(mc, imc)
+	}
+
+	joinedCond = imc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)
+	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
+		r.updateServiceExportImportControllerStatus(mc, imc)
+	}
+}
+
 // TODO: reduce cyclo
 // leave is used to complete the Leave workflow for the Hub agent.
 func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
 	imcExists := true
-	mcKObj := klog.KObj(memberCluster)
-
+	imcLeft := false
 	memberClusterLeftCondition := memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
 	if memberClusterLeftCondition != nil && memberClusterLeftCondition.Status == metav1.ConditionFalse {
-		klog.V(3).InfoS("Member cluster is marked as left", "memberCluster", mcKObj)
+		klog.V(3).InfoS("Member cluster is marked as left", "memberCluster", memberCluster.Name)
 		return ctrl.Result{}, nil
 	}
-
-	internalMemberClusterLeft := false
-	mcsControllerLeft := false
-	serviceExportImportControllerLeft := false
 
 	var imc fleetv1alpha1.InternalMemberCluster
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, memberCluster.Name)
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: memberCluster.Name, Namespace: namespaceName}, &imc); err != nil {
 		// TODO: make sure we still get not Found error if the namespace does not exist
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to get the internal Member cluster ", "memberCluster", mcKObj)
+			klog.ErrorS(err, "failed to get the internal Member cluster ", "memberCluster", memberCluster.Name)
 			return ctrl.Result{}, err
 		}
-		klog.V(3).InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", mcKObj)
+		klog.V(3).InfoS("Internal Member cluster doesn't exist for member cluster", "memberCluster", memberCluster.Name)
 		imcExists = false
+		imcLeft = true
+	}
 
-		internalMemberClusterLeft = true
-		mcsControllerLeft = true
-		serviceExportImportControllerLeft = true
+	if r.NetControllersRequired {
+		return ctrl.Result{}, r.handleNetworkingControllersLeave(ctx, imcExists, memberCluster, &imc)
 	}
 
 	if imcExists {
 		internalMemberClusterLeftCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-		mcsCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerJoin)
-		serviceExportImportControllerCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin)
-
-		internalMemberClusterLeft = internalMemberClusterLeftCondition != nil &&
-			internalMemberClusterLeftCondition.Status == metav1.ConditionFalse
-		mcsControllerLeft = mcsCondition != nil &&
-			mcsCondition.Status == metav1.ConditionFalse
-		serviceExportImportControllerLeft = serviceExportImportControllerCondition != nil &&
-			serviceExportImportControllerCondition.Status == metav1.ConditionFalse
-
-		if mcsControllerLeft {
-			markMCSControllerLeft(r.recorder, memberCluster)
-		}
-		if serviceExportImportControllerLeft {
-			markServiceImportExportControllerLeft(r.recorder, memberCluster)
-		}
-
-		if !internalMemberClusterLeft || !mcsControllerLeft || !serviceExportImportControllerLeft {
+		if internalMemberClusterLeftCondition != nil && internalMemberClusterLeftCondition.Status == metav1.ConditionFalse {
+			imcLeft = true
+		} else {
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
 				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
-					"memberCluster", mcKObj, "internalMemberCluster", klog.KObj(&imc))
+					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
 				return ctrl.Result{}, err
 			}
 		}
 	}
 
-	// make sure all the controllers have left and then delete the member cluster namespace.
-	// memberCluster will always be the last one to mark as left.
-	if internalMemberClusterLeft && mcsControllerLeft && serviceExportImportControllerLeft {
-		// delete every resource that is associated with the internal member cluster
-		if err := r.deleteNamespace(ctx, memberCluster); err != nil && !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to delete namespace", "memberCluster", mcKObj)
-			return ctrl.Result{}, err
-		}
+	if imcLeft {
+		return ctrl.Result{}, r.cleanupAndMarkMemberClusterLeft(ctx, memberCluster)
+	}
+	return ctrl.Result{}, nil
+}
 
-		// marking member cluster as Left after all the associated resources are removed
-		markMemberClusterLeft(r.recorder, memberCluster)
-		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
-			klog.ErrorS(err, "Failed to update member cluster as Left", "memberCluster", mcKObj)
-			return ctrl.Result{}, err
-		}
-	} else if mcsControllerLeft || serviceExportImportControllerLeft {
-		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
-			klog.ErrorS(err, "Failed to update member cluster status", "memberCluster", mcKObj, "status", memberCluster.Status)
-			return ctrl.Result{}, err
-		}
+func (r *Reconciler) cleanupAndMarkMemberClusterLeft(ctx context.Context, memberCluster *fleetv1alpha1.MemberCluster) error {
+	mcKObj := klog.KObj(memberCluster)
+	klog.V(3).InfoS("Marking member cluster as left", "memberCluster", mcKObj)
+	// when the error is not found, we still need to update the memberCluster.
+	if err := r.deleteNamespace(ctx, memberCluster); err != nil && !apierrors.IsNotFound(err) {
+		klog.ErrorS(err, "Failed to delete namespace", "memberCluster", mcKObj)
+		return err
 	}
 
+	// marking member cluster as Left after all the associated resources are removed
+	markMemberClusterLeft(r.recorder, memberCluster)
+	klog.V(3).InfoS("Updating member cluster", "memberCluster", mcKObj, "status", memberCluster.Status)
+	if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
+		klog.ErrorS(err, "Failed to update member cluster as Left", "memberCluster", mcKObj)
+		return err
+	}
 	metrics.ReportLeaveResultMetric()
-	return ctrl.Result{}, nil
+	return nil
+}
+
+// handleNetworkingControllersLeave handles the networking controllers leave and makes sure memberCluster will always
+// be the last one to mark as left.
+func (r *Reconciler) handleNetworkingControllersLeave(ctx context.Context, imcExists bool, memberCluster *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) error {
+	if !imcExists {
+		markMCSControllerLeft(r.recorder, memberCluster)
+		markServiceImportExportControllerLeft(r.recorder, memberCluster)
+		return r.cleanupAndMarkMemberClusterLeft(ctx, memberCluster)
+	}
+
+	internalMemberClusterLeftCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	mcsCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerJoin)
+	serviceExportImportControllerCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin)
+
+	mcsControllerLeft := mcsCondition != nil &&
+		mcsCondition.Status == metav1.ConditionFalse
+	serviceExportImportControllerLeft := serviceExportImportControllerCondition != nil &&
+		serviceExportImportControllerCondition.Status == metav1.ConditionFalse
+	internalMemberClusterLeft := internalMemberClusterLeftCondition != nil &&
+		internalMemberClusterLeftCondition.Status == metav1.ConditionFalse
+
+	if mcsControllerLeft {
+		markMCSControllerLeft(r.recorder, memberCluster)
+	}
+	if serviceExportImportControllerLeft {
+		markServiceImportExportControllerLeft(r.recorder, memberCluster)
+	}
+
+	if internalMemberClusterLeft && mcsControllerLeft && serviceExportImportControllerLeft {
+		return r.cleanupAndMarkMemberClusterLeft(ctx, memberCluster)
+	}
+
+	mcKObj := klog.KObj(memberCluster)
+	if err := r.syncInternalMemberClusterState(ctx, memberCluster, imc); err != nil {
+		klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
+			"memberCluster", mcKObj, "internalMemberCluster", klog.KObj(imc))
+		return err
+	}
+
+	if mcsControllerLeft || serviceExportImportControllerLeft {
+		klog.V(3).InfoS("Updating member cluster", "memberCluster", mcKObj, "status", memberCluster.Status)
+		if err := r.updateMemberClusterStatus(ctx, memberCluster); err != nil {
+			klog.ErrorS(err, "Failed to update member cluster as Left", "memberCluster", mcKObj)
+			return err
+		}
+	}
+	return nil
 }
 
 // checkAndCreateNamespace checks to see if the namespace exists for given memberClusterName
