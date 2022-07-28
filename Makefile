@@ -1,4 +1,4 @@
-REGISTRY ?= qinhaofleetacr.azurecr.io
+REGISTRY ?= ghcr.io
 KIND_IMAGE ?= kindest/node:v1.23.3
 ifndef TAG
 	HUB_AGENT_IMAGE_VERSION ?= $(shell git rev-parse --short=7 HEAD)
