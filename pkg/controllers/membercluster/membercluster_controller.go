@@ -417,7 +417,7 @@ func (r *Reconciler) updateMCSControllerStatus(mc *fleetv1alpha1.MemberCluster, 
 		klog.V(3).InfoS("Set heartbeat condition for mcs controller", "memberCluster", mcKObj)
 		mc.SetConditions(*imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat))
 	} else {
-		imcHeartbeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		imcHeartbeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat)
 		klog.V(3).InfoS("Updating last transition for mcs controller", "memberCluster", mcKObj)
 		heartbeatCondition.LastTransitionTime = imcHeartbeatCondition.LastTransitionTime
 		heartbeatCondition.ObservedGeneration = imcHeartbeatCondition.ObservedGeneration
@@ -450,7 +450,7 @@ func (r *Reconciler) updateServiceExportImportControllerStatus(mc *fleetv1alpha1
 		klog.V(3).InfoS("Set heartbeat condition for serviceexportimport controller", "memberCluster", mcKObj)
 		mc.SetConditions(*imc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat))
 	} else {
-		imcHeartbeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+		imcHeartbeatCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat)
 		klog.V(3).InfoS("Updating last transition for serviceexportimport controller", "memberCluster", mcKObj)
 		heartbeatCondition.LastTransitionTime = imcHeartbeatCondition.LastTransitionTime
 		heartbeatCondition.ObservedGeneration = imcHeartbeatCondition.ObservedGeneration
