@@ -16,8 +16,11 @@ rules:
     resources: ["memberclusters", "memberclusters/status"]
     verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["fleet.azure.com"]
-    resources: ["internalmemberclusters","internalmemberclusters/status"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: ["networking.fleet.azure.com"]
+    resources: ["*"]
+    verbs: ["*"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
