@@ -151,8 +151,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		var imc fleetv1alpha1.InternalMemberCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 
-		imc.Status.Capacity = utils.NewResourceList()
-		imc.Status.Allocatable = utils.NewResourceList()
 		joinedCondition := metav1.Condition{
 			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerJoin,
 			Status:             metav1.ConditionTrue,
@@ -195,8 +193,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		var imc fleetv1alpha1.InternalMemberCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 
-		imc.Status.Capacity = utils.NewResourceList()
-		imc.Status.Allocatable = utils.NewResourceList()
 		joinedCondition := metav1.Condition{
 			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin,
 			Status:             metav1.ConditionTrue,
@@ -341,5 +337,147 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			ObservedGeneration: imc.GetGeneration(),
 		}
 		Expect(cmp.Diff(want, *mcLeftCondition, options...)).Should(BeEmpty())
+	})
+
+	It("member cluster is marked as left after leave workflow is completed without networking controllers enabled", func() {
+		By("setting NetControllersRequired as false")
+		r.NetControllersRequired = false
+
+		By("Update member cluster's spec to leave")
+		var mc fleetv1alpha1.MemberCluster
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+		Expect(k8sClient.Update(ctx, &mc))
+
+		By("trigger reconcile again to initiate leave workflow")
+		result, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		var imc fleetv1alpha1.InternalMemberCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+		Expect(imc.Spec.State).To(Equal(fleetv1alpha1.ClusterStateLeave))
+
+		By("mark Internal Member Cluster as left")
+		imcLeftCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             "InternalMemberClusterLeft",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		imc.SetConditions(imcLeftCondition)
+
+		By("mark mcs controller as joined")
+		imcLeftCondition = metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             "joined",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		imc.SetConditions(imcLeftCondition)
+
+		By("mark serviceexportimport controller as left")
+		imcLeftCondition = metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin,
+			Status:             metav1.ConditionFalse,
+			Reason:             "Left",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		imc.SetConditions(imcLeftCondition)
+
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to mark member cluster as left")
+		result, err = r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		By("checking member cluster condition")
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		mcLeftCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		Expect(mcLeftCondition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(mcLeftCondition.Reason).To(Equal(reasonMemberClusterLeft))
+		Expect(mc.GetCondition(fleetv1alpha1.ConditionTypeMCSControllerJoin)).Should(BeNil())
+		Expect(mc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)).Should(BeNil())
+	})
+
+	It("mcs controller join should be ignored without networking controllers enabled", func() {
+		By("setting NetControllersRequired as false")
+		r.NetControllersRequired = false
+
+		var imc fleetv1alpha1.InternalMemberCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+
+		joinedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Joined",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		heartBeatReceivedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat,
+			Status:             metav1.ConditionTrue,
+			Reason:             "HeartbeatReceived",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		By("Update internal member cluster status")
+		imc.SetConditions(joinedCondition, heartBeatReceivedCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to update member cluster status ")
+		result, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		var mc fleetv1alpha1.MemberCluster
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		Expect(mc.GetCondition(fleetv1alpha1.ConditionTypeMCSControllerJoin)).Should(BeNil())
+		Expect(mc.GetCondition(fleetv1alpha1.ConditionTypeIMCMCSControllerHeartbeat)).Should(BeNil())
+	})
+
+	It("serviceexportimport controller join should be ignored without networking controllers enabled", func() {
+		By("setting NetControllersRequired as false")
+		r.NetControllersRequired = false
+
+		var imc fleetv1alpha1.InternalMemberCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
+
+		joinedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin,
+			Status:             metav1.ConditionTrue,
+			Reason:             "Joined",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		heartBeatReceivedCondition := metav1.Condition{
+			Type:               fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerHeartbeat,
+			Status:             metav1.ConditionTrue,
+			Reason:             "HeartbeatReceived",
+			ObservedGeneration: imc.GetGeneration(),
+		}
+		By("Update internal member cluster status")
+		imc.SetConditions(joinedCondition, heartBeatReceivedCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("Update internal member cluster status")
+		imc.SetConditions(joinedCondition, heartBeatReceivedCondition)
+		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+
+		By("trigger reconcile again to update member cluster status ")
+		result, err := r.Reconcile(ctx, ctrl.Request{
+			NamespacedName: memberClusterNamespacedName,
+		})
+		Expect(result).Should(Equal(ctrl.Result{}))
+		Expect(err).Should(Not(HaveOccurred()))
+
+		var mc fleetv1alpha1.MemberCluster
+		Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+		Expect(mc.GetCondition(fleetv1alpha1.ConditionTypeServiceExportImportControllerJoin)).Should(BeNil())
+		Expect(mc.GetCondition(fleetv1alpha1.ConditionTypeIMCServiceExportImportControllerJoin)).Should(BeNil())
 	})
 })
