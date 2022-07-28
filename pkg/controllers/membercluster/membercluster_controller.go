@@ -603,7 +603,7 @@ func createRole(roleName, namespaceName string) rbacv1.Role {
 	// TODO: More API groups and verbs will be added as new member agents are added apart from the Join agent.
 	fleetRule := rbacv1.PolicyRule{
 		Verbs:     []string{"get", "list", "update", "patch", "watch"},
-		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+		APIGroups: []string{"*." + fleetv1alpha1.GroupVersion.Group}, // all of the fleet groups
 		Resources: []string{"*"},
 	}
 	eventRule := rbacv1.PolicyRule{

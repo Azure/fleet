@@ -160,7 +160,7 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 						o := obj.(*rbacv1.Role)
 						fleetRule := rbacv1.PolicyRule{
 							Verbs:     []string{"get", "list", "update", "patch", "watch"},
-							APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+							APIGroups: []string{"*." + fleetv1alpha1.GroupVersion.Group},
 							Resources: []string{"*"},
 						}
 						eventRule := rbacv1.PolicyRule{
