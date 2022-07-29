@@ -126,7 +126,6 @@ func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
 	r.markInternalMemberClusterHeartbeatReceived(internalMemberCluster)
 	newLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
 	assert.Equal(t, true, newLastTransitionTime.After(oldLastTransitionTime.Time), utils.TestCaseMsg, "last transition time updated")
-
 }
 
 func TestMarkInternalMemberClusterHealthy(t *testing.T) {
