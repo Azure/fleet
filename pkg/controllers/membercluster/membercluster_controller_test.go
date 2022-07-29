@@ -167,7 +167,7 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 								Name:      "fleet-role-mc1",
 								Namespace: namespace1,
 							},
-							Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule},
+							Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.LeaseRule},
 						}
 						return nil
 					},

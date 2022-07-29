@@ -89,6 +89,12 @@ var (
 		APIGroups: []string{"networking.fleet.azure.com"},
 		Resources: []string{"*"},
 	}
+	// Leases permissions are required for leader election of hub controller manager in member cluster.
+	LeaseRule = rbacv1.PolicyRule{
+		Verbs:     []string{"create", "get", "list", "update"},
+		APIGroups: []string{"coordination.k8s.io"},
+		Resources: []string{"leases"},
+	}
 )
 
 // ReconcileErrorCondition returns a condition indicating that we encountered an
