@@ -431,7 +431,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		Reason:             reasonMemberClusterLeft,
 		ObservedGeneration: mc.GetGeneration(),
 	}
-	mc.SetConditions(leftCondition, utils.ReconcileSuccessCondition())
+	mc.SetConditions(leftCondition)
 }
 
 // createRole creates role for member cluster.

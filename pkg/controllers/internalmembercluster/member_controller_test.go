@@ -36,19 +36,12 @@ func TestMarkInternalMemberClusterJoined(t *testing.T) {
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
 	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster has joined")
-
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 
-	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
-	}
-
-	for _, expectedCondition := range expectedConditions {
-		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
-	}
+	// Check expected condition.
+	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined}
+	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 }
 
 func TestMarkInternalMemberClusterLeft(t *testing.T) {
@@ -60,19 +53,12 @@ func TestMarkInternalMemberClusterLeft(t *testing.T) {
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
 	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster has left")
-
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 
 	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
-	}
-
-	for _, expectedCondition := range expectedConditions {
-		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
-	}
+	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft}
+	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 }
 
 func TestMarkInternalMemberClusterUnknown(t *testing.T) {
@@ -84,18 +70,12 @@ func TestMarkInternalMemberClusterUnknown(t *testing.T) {
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
 	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster join state unknown")
-
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterUnknown")
 
 	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterUnknown},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
-	}
-	for _, expectedCondition := range expectedConditions {
-		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterUnknown")
-	}
+	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionUnknown, Reason: eventReasonInternalMemberClusterUnknown}
+	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterUnknown")
 }
 
 func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
@@ -107,19 +87,12 @@ func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
 	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
-
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
 
 	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHBReceived},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
-	}
-
-	for _, expectedCondition := range expectedConditions {
-		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
-	}
+	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHBReceived}
+	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
 
 	// Verify last transition time is updated.
 	oldLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
@@ -137,19 +110,12 @@ func TestMarkInternalMemberClusterHealthy(t *testing.T) {
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
 	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
-
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 
 	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeMemberClusterHealth, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionTrue, Reason: utils.ReasonReconcileSuccess},
-	}
-
-	for _, expectedCondition := range expectedConditions {
-		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
-	}
+	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeMemberClusterHealth, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy}
+	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 }
 
 func TestMarkInternalMemberClusterHeartbeatUnhealthy(t *testing.T) {
@@ -162,18 +128,12 @@ func TestMarkInternalMemberClusterHeartbeatUnhealthy(t *testing.T) {
 	// check that the correct event is emitted
 	event := <-r.recorder.(*record.FakeRecorder).Events
 	expected := utils.GetEventString(internalMemberCluster, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
-
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 
 	// Check expected conditions.
-	expectedConditions := []metav1.Condition{
-		{Type: v1alpha1.ConditionTypeInternalMemberClusterHealth, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"},
-		{Type: utils.ConditionTypeSynced, Status: metav1.ConditionFalse, Reason: utils.ReasonReconcileError, Message: "rand-err-msg"},
-	}
-	for _, expectedCondition := range expectedConditions {
-		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
-	}
+	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterHealth, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"}
+	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 }
 
 func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
