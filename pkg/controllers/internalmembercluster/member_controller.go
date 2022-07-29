@@ -57,50 +57,37 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	var imc fleetv1alpha1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &imc); err != nil {
-		return logIfError(errors.Wrapf(client.IgnoreNotFound(err), "failed to get internal member cluster: %s", req.NamespacedName))
+		klog.ErrorS(err, "failed to get internal member cluster: %s", req.NamespacedName)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	switch imc.Spec.State {
 	case fleetv1alpha1.ClusterStateJoin:
-		r.updateHeartbeat(&imc)
+		r.markInternalMemberClusterHeartbeatReceived(&imc)
 		updateHealthErr := r.updateHealth(ctx, &imc)
 		r.join(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
-			return logIfError(errors.Wrapf(err, "failed to update status for %s", klog.KObj(&imc)))
+			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		if updateHealthErr != nil {
-			return logIfError(errors.Wrapf(updateHealthErr, "failed to update health for %s", klog.KObj(&imc)))
+			klog.ErrorS(updateHealthErr, "failed to update health for %s", klog.KObj(&imc))
+			return ctrl.Result{}, updateHealthErr
 		}
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)}, nil
 
 	case fleetv1alpha1.ClusterStateLeave:
 		r.leave(ctx, &imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
-			return logIfError(errors.Wrapf(err, "failed to set internal member cluster heartbeat for %s", klog.KObj(&imc)))
+			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		return ctrl.Result{}, nil
 
 	default:
-		klog.Errorf("unknown state %v in InternalMemberCluster: %s", imc.Spec.State, req.NamespacedName)
+		klog.Errorf("encountered a fatal error. unknown state %v in InternalMemberCluster: %s", imc.Spec.State, req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
-
-	return ctrl.Result{}, nil
-}
-
-func logIfError(err error) (ctrl.Result, error) {
-	if err != nil {
-		klog.ErrorS(err, "reconcile failed")
-	}
-	return ctrl.Result{}, err
-}
-
-// updateHeartbeat updates ConditionTypeInternalMemberClusterHeartbeat to true and set last transition time
-// to now.
-func (r *Reconciler) updateHeartbeat(imc *fleetv1alpha1.InternalMemberCluster) {
-	r.markInternalMemberClusterHeartbeatReceived(imc)
-	hbc := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
-	hbc.LastTransitionTime = metav1.Now()
 }
 
 // updateHealth collects and updates member cluster resource stats and set ConditionTypeInternalMemberClusterHealth.
@@ -149,36 +136,28 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *fleetv1alpha1
 func (r *Reconciler) join(imc *fleetv1alpha1.InternalMemberCluster) {
 	klog.V(3).InfoS("join", "InternalMemberCluster", klog.KObj(imc))
 
+	// Log and update metrics if this is a new join.
 	joined := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-
-	// Already joined for the current spec.
-	if joined != nil && joined.ObservedGeneration == imc.Generation && joined.Status == metav1.ConditionTrue {
-		klog.V(3).InfoS("already joined", "InternalMemberCluster", klog.KObj(imc))
-		return
+	if joined == nil || joined.ObservedGeneration != imc.Generation || joined.Status == metav1.ConditionFalse {
+		klog.V(2).InfoS("join", "InternalMemberCluster", klog.KObj(imc))
+		metrics.ReportJoinResultMetric()
 	}
 
-	// Join.
-	klog.V(2).InfoS("join", "InternalMemberCluster", klog.KObj(imc))
 	r.markInternalMemberClusterJoined(imc)
-	metrics.ReportJoinResultMetric()
 }
 
 // leave updates ConditionTypeInternalMemberClusterJoin to false if not left yet.
 func (r *Reconciler) leave(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) {
 	klog.V(3).InfoS("leave", "InternalMemberCluster", klog.KObj(imc))
 
+	// Log and update metrics if this is a new leave.
 	joined := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-
-	// Already left for the current spec.
-	if joined != nil && joined.ObservedGeneration == imc.Generation && joined.Status == metav1.ConditionFalse {
-		klog.V(3).InfoS("already left", "InternalMemberCluster", klog.KObj(imc))
-		return
+	if joined == nil || joined.ObservedGeneration != imc.Generation || joined.Status == metav1.ConditionTrue {
+		klog.V(2).InfoS("leave", "InternalMemberCluster", klog.KObj(imc))
+		metrics.ReportLeaveResultMetric()
 	}
 
-	// Leave.
-	klog.V(2).InfoS("leave", "InternalMemberCluster", klog.KObj(imc))
 	r.markInternalMemberClusterLeft(imc)
-	metrics.ReportLeaveResultMetric()
 }
 
 // updateInternalMemberClusterWithRetry updates InternalMemberCluster status.
@@ -206,6 +185,11 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(imc apis.Conditi
 		ObservedGeneration: imc.GetGeneration(),
 	}
 	imc.SetConditions(hearbeatReceivedCondition, utils.ReconcileSuccessCondition())
+
+	// Hack: We need to get and set again as SetConditions() will ignore new LastTransitionTime if there is no status
+	// change between existing condition and new condition.
+	hbc := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
+	hbc.LastTransitionTime = metav1.Now()
 }
 
 func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {

@@ -120,6 +120,13 @@ func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
 		actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
 		assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
 	}
+
+	// Verify last transition time is updated.
+	oldLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
+	r.markInternalMemberClusterHeartbeatReceived(internalMemberCluster)
+	newLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
+	assert.Equal(t, true, newLastTransitionTime.After(oldLastTransitionTime.Time), utils.TestCaseMsg, "last transition time updated")
+
 }
 
 func TestMarkInternalMemberClusterHealthy(t *testing.T) {
