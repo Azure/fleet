@@ -52,10 +52,6 @@ func NewReconciler(hubClient client.Client, memberClient client.Client) *Reconci
 	}
 }
 
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=internalmemberclusters/finalizers,verbs=update
-
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(3).InfoS("Reconcile", "InternalMemberCluster", req.NamespacedName)
 

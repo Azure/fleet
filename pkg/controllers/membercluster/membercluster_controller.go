@@ -49,10 +49,6 @@ type Reconciler struct {
 	recorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=fleet.azure.com,resources=memberclusters/finalizers,verbs=update
-
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var mc fleetv1alpha1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
@@ -429,22 +425,12 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 // createRole creates role for member cluster.
 func createRole(roleName, namespaceName string) rbacv1.Role {
 	// TODO: More API groups and verbs will be added as new member agents are added apart from the Join agent.
-	fleetRule := rbacv1.PolicyRule{
-		Verbs:     []string{"get", "list", "update", "patch", "watch"},
-		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
-		Resources: []string{"*"},
-	}
-	eventRule := rbacv1.PolicyRule{
-		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
-		APIGroups: []string{""},
-		Resources: []string{"events"},
-	}
 	role := rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleName,
 			Namespace: namespaceName,
 		},
-		Rules: []rbacv1.PolicyRule{fleetRule, eventRule},
+		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.LeaseRule},
 	}
 	return role
 }
