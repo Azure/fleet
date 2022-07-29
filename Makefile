@@ -160,7 +160,7 @@ run-e2e: build-e2e
 
 .PHONY: e2e-tests
 OUTPUT_TYPE=type=docker
-e2e-tests: create-hub-kind-cluster create-member-kind-cluster docker-build-hub-agent docker-build-member-agent docker-build-refresh-token load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e
+e2e-tests: create-hub-kind-cluster create-member-kind-cluster load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e
 
 ## reviewable
 .PHONY: reviewable
