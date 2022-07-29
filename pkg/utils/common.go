@@ -14,6 +14,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -69,6 +70,24 @@ var (
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.MemberClusterResource,
+	}
+)
+
+var (
+	FleetRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+		Resources: []string{"*"},
+	}
+	EventRule = rbacv1.PolicyRule{
+		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
+		APIGroups: []string{""},
+		Resources: []string{"events"},
+	}
+	FleetNetworkRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{"networking.fleet.azure.com"},
+		Resources: []string{"*"},
 	}
 )
 

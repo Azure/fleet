@@ -1,11 +1,15 @@
 REGISTRY ?= ghcr.io
 KIND_IMAGE ?= kindest/node:v1.23.3
+ifndef TAG
+	TAG ?= $(shell git rev-parse --short=7 HEAD)
+endif
+HUB_AGENT_IMAGE_VERSION ?= $(TAG)
+MEMBER_AGENT_IMAGE_VERSION ?= $(TAG)
+REFRESH_TOKEN_IMAGE_VERSION ?= $(TAG)
+
 HUB_AGENT_IMAGE_NAME ?= hub-agent
-HUB_AGENT_IMAGE_VERSION ?= v0.1.0
 MEMBER_AGENT_IMAGE_NAME ?= member-agent
-MEMBER_AGENT_IMAGE_VERSION ?= v0.1.0
 REFRESH_TOKEN_IMAGE_NAME := refresh-token
-REFRESH_TOKEN_IMAGE_VERSION ?= v0.1.0
 
 KUBECONFIG ?= $(HOME)/.kube/config
 HUB_SERVER_URL ?= https://172.19.0.2:6443
@@ -128,7 +132,8 @@ install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
     --set image.pullPolicy=Never \
-    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME)
+    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
+    --set image.tag=$(HUB_AGENT_IMAGE_VERSION)
 
 .PHONY: e2e-hub-kubeconfig-secret
 e2e-hub-kubeconfig-secret: install-hub-agent-helm
@@ -146,7 +151,9 @@ install-member-agent-helm: e2e-hub-kubeconfig-secret
 	helm install member-agent ./charts/member-agent/ \
 	--set config.hubURL=$$HUB_SERVER_URL \
 	--set image.repository=$(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME) \
+	--set image.tag=$(MEMBER_AGENT_IMAGE_VERSION) \
     --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
+    --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
     --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
     --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)"
 	# to make sure member-agent reads the token file.
