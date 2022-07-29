@@ -171,106 +171,63 @@ func TestMarkInternalMemberClusterHeartbeatUnhealthy(t *testing.T) {
 }
 
 func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
-	updateErr := errors.New("rand-err-msg")
-	updateErrNotFound := apierrors.NewNotFound(schema.GroupResource{}, "")
-	updateErrInvalid := apierrors.NewInvalid(schema.GroupKind{}, "", field.ErrorList{})
-	numberOfRetrySuccess := 3
-	hbPeriod := 5
-
-	cntRetryUpdateHappyPath := -1
-	cntRetryUpdateHappyPathWithRetry := -1
-	cntRetryUpdateErr := -1
-	cntRetryUpdateErrFailWithinHeartbeat := -1
-	cntRetryUpdateErrInvalid := -1
-	cntRetryUpdateErrNotFound := -1
+	lessRetriesForRetriable := 0
+	lessRetriesForNonRetriable := 0
+	moreRetriesForRetriable := 0
 
 	testCases := map[string]struct {
-		verifyNumberOfRetry   func() bool
-		internalMemberCluster *v1alpha1.InternalMemberCluster
-		wantErr               error
 		r                     *Reconciler
+		internalMemberCluster *v1alpha1.InternalMemberCluster
+		retries               int
+		wantRetries           int
+		wantErr               error
 	}{
-		"succeed- no update error": {
-			wantErr: nil,
+		"succeed without retries if no errors": {
+			retries: 0,
 			r: &Reconciler{hubClient: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					cntRetryUpdateHappyPath++
 					return nil
 				}}},
-			verifyNumberOfRetry: func() bool {
-				return cntRetryUpdateHappyPath == 0
-			},
 			internalMemberCluster: &v1alpha1.InternalMemberCluster{},
+			wantErr:               nil,
 		},
-		"succeed- retry succeed within heartbeat": {
+		"succeed with retries for retriable errors: TooManyRequests": {
+			r: &Reconciler{hubClient: &test.MockClient{
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					lessRetriesForRetriable++
+					if lessRetriesForRetriable >= 3 {
+						return nil
+					}
+					return apierrors.NewTooManyRequests("", 0)
+				}}},
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{
+				Spec: v1alpha1.InternalMemberClusterSpec{HeartbeatPeriodSeconds: int32(3)},
+			},
 			wantErr: nil,
+		},
+		"fail without retries for non-retriable errors: Invalid": {
 			r: &Reconciler{hubClient: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					cntRetryUpdateHappyPathWithRetry++
-					if cntRetryUpdateHappyPathWithRetry == numberOfRetrySuccess {
+					lessRetriesForNonRetriable++
+					if lessRetriesForNonRetriable >= 3 {
 						return nil
 					}
-					return updateErr
+					return apierrors.NewInvalid(schema.GroupKind{}, "", field.ErrorList{})
 				}}},
-			verifyNumberOfRetry: func() bool {
-				return cntRetryUpdateHappyPathWithRetry == numberOfRetrySuccess
-			},
-			internalMemberCluster: &v1alpha1.InternalMemberCluster{
-				Spec: v1alpha1.InternalMemberClusterSpec{HeartbeatPeriodSeconds: int32(hbPeriod)},
-			},
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{},
+			wantErr:               apierrors.NewInvalid(schema.GroupKind{}, "", field.ErrorList{}),
 		},
-		"fail updating within heartbeat": {
-			wantErr: updateErr,
+		"fail if too many retries for retirable errors: TooManyRequests": {
 			r: &Reconciler{hubClient: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					cntRetryUpdateErrFailWithinHeartbeat++
-					if cntRetryUpdateErrFailWithinHeartbeat == 1000 { // big number of retry to let the operation overrun heartbeat period
+					moreRetriesForRetriable++
+					if moreRetriesForRetriable >= 100 {
 						return nil
 					}
-					return updateErr
+					return apierrors.NewTooManyRequests("", 0)
 				}}},
-			verifyNumberOfRetry: func() bool {
-				return cntRetryUpdateErrFailWithinHeartbeat > 0
-			},
-			internalMemberCluster: &v1alpha1.InternalMemberCluster{
-				Spec: v1alpha1.InternalMemberClusterSpec{HeartbeatPeriodSeconds: int32(hbPeriod)},
-			},
-		},
-		"fail updating within heartbeat- all update call return error": {
-			wantErr: updateErr,
-			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					cntRetryUpdateErr++
-					return updateErr
-				}}},
-			verifyNumberOfRetry: func() bool {
-				return cntRetryUpdateErr > 0
-			},
 			internalMemberCluster: &v1alpha1.InternalMemberCluster{},
-		},
-		"fail updating within heartbeat- err not found": {
-			wantErr: updateErrNotFound,
-			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					cntRetryUpdateErrNotFound++
-					return updateErrNotFound
-				}}},
-			verifyNumberOfRetry: func() bool {
-				return cntRetryUpdateErrNotFound == 0
-			},
-			internalMemberCluster: &v1alpha1.InternalMemberCluster{},
-		},
-		"fail updating within heartbeat- err invalid": {
-			wantErr: updateErrInvalid,
-			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					cntRetryUpdateErrInvalid++
-					return updateErrInvalid
-				}}},
-			verifyNumberOfRetry: func() bool {
-				return cntRetryUpdateErrInvalid == 0
-			},
-			internalMemberCluster: &v1alpha1.InternalMemberCluster{},
+			wantErr:               apierrors.NewTooManyRequests("", 0),
 		},
 	}
 
@@ -278,7 +235,6 @@ func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			err := testCase.r.updateInternalMemberClusterWithRetry(context.Background(), testCase.internalMemberCluster)
 			assert.Equal(t, testCase.wantErr, err, utils.TestCaseMsg, testName)
-			assert.Equal(t, testCase.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
 		})
 	}
 }
