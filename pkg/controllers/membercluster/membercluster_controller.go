@@ -100,15 +100,15 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster) 
 	}
 
 	markMemberClusterReadyToJoin(r.recorder, mc)
-	joinedCond := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	if joinedCond != nil && joinedCond.Status == metav1.ConditionTrue {
-		r.copyMemberClusterStatusFromInternalMC(mc, imc)
-	}
+	mcMarkJoined := r.checkJoinConditionUpdateStatus(mc, imc)
 
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
-		klog.ErrorS(err, "cannot update the member cluster status",
-			"internalMemberCluster", klog.KObj(imc))
+		klog.ErrorS(err, "cannot update the member cluster status", "memberCluster", klog.KObj(mc))
 		return ctrl.Result{}, err
+	}
+
+	if mcMarkJoined {
+		metrics.ReportJoinResultMetric()
 	}
 	return ctrl.Result{}, nil
 }
@@ -143,7 +143,7 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			imcLeft = true
 		} else {
 			if err := r.syncInternalMemberClusterState(ctx, memberCluster, &imc); err != nil {
-				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated tp be left",
+				klog.ErrorS(err, "Internal Member cluster's spec cannot be updated to be left",
 					"memberCluster", memberCluster.Name, "internalMemberCluster", memberCluster.Name)
 				return ctrl.Result{}, err
 			}
@@ -166,9 +166,9 @@ func (r *Reconciler) leave(ctx context.Context, memberCluster *fleetv1alpha1.Mem
 			klog.ErrorS(err, "failed to update member cluster as Left", "memberCluster", memberCluster)
 			return ctrl.Result{}, err
 		}
+		metrics.ReportLeaveResultMetric()
 	}
 
-	metrics.ReportLeaveResultMetric()
 	return ctrl.Result{}, nil
 }
 
@@ -318,10 +318,6 @@ func (r *Reconciler) copyMemberClusterStatusFromInternalMC(mc *fleetv1alpha1.Mem
 		klog.V(3).InfoS("updating last transition for member cluster", "memberCluster", mc.Name)
 		memberClusterHearBeatCondition.LastTransitionTime = internalMemberClusterHeartBeatCondition.LastTransitionTime
 	}
-	if mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin) == nil {
-		markMemberClusterJoined(r.recorder, mc)
-		metrics.ReportJoinResultMetric()
-	}
 }
 
 // updateMemberClusterStatus is used to update member cluster status to indicate that the member cluster has Joined/Left.
@@ -378,6 +374,21 @@ func (r *Reconciler) deleteNamespace(ctx context.Context, mc *fleetv1alpha1.Memb
 	klog.V(2).InfoS("Namespace is deleted", "memberCluster", mc.Name, "namespace", namespaceName)
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceDeleted, "namespace is deleted for member cluster")
 	return nil
+}
+
+// checkJoinConditionUpdateStatus is used to check the join condition for Internal member cluster and updates member cluster's status.
+func (r *Reconciler) checkJoinConditionUpdateStatus(mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) bool {
+	mcMarkJoined := false
+	imcJoinCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
+	if imcJoinCondition != nil && imcJoinCondition.Status == metav1.ConditionTrue {
+		r.copyMemberClusterStatusFromInternalMC(mc, imc)
+		mcJoinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		if mcJoinCondition == nil || (mcJoinCondition != nil && mcJoinCondition.Status == metav1.ConditionFalse) {
+			markMemberClusterJoined(r.recorder, mc)
+			mcMarkJoined = true
+		}
+	}
+	return mcMarkJoined
 }
 
 // markMemberClusterReadyToJoin is used to the update the status of the member cluster to ready to join condition.
