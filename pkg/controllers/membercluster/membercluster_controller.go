@@ -430,7 +430,7 @@ func createRole(roleName, namespaceName string) rbacv1.Role {
 			Name:      roleName,
 			Namespace: namespaceName,
 		},
-		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule},
+		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.LeaseRule},
 	}
 	return role
 }
