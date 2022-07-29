@@ -61,6 +61,11 @@ type InternalMemberClusterStatus struct {
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
+	// Heartbeats is an array of the received heartbeats from each controller managers.
+
+	// +optional
+	Heartbeats []Heartbeat `json:"heartbeats,omitempty"`
+
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
 
 	// +required

@@ -144,6 +144,23 @@ spec:
                   - type
                   type: object
                 type: array
+              heartbeats:
+                items:
+                  description: Heartbeat contains heartbeat information received for
+                    the particular controller manager type .
+                  properties:
+                    lastReceivedTimeTime:
+                      description: Last time we got the heartbeat.
+                      format: date-time
+                      type: string
+                    type:
+                      description: Type of controller manager type.
+                      type: string
+                  required:
+                  - lastReceivedTimeTime
+                  - type
+                  type: object
+                type: array
             required:
             - allocatable
             - capacity
