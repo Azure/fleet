@@ -25,7 +25,6 @@ import (
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
@@ -184,7 +183,7 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(imc apis.Conditi
 		Reason:             eventReasonInternalMemberClusterHBReceived,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(hearbeatReceivedCondition, utils.ReconcileSuccessCondition())
+	imc.SetConditions(hearbeatReceivedCondition)
 
 	// Hack: We need to get and set again as SetConditions() will ignore new LastTransitionTime if there is no status
 	// change between existing condition and new condition.
@@ -201,7 +200,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {
 		Reason:             eventReasonInternalMemberClusterHealthy,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(internalMemberClusterHealthyCond, utils.ReconcileSuccessCondition())
+	imc.SetConditions(internalMemberClusterHealthyCond)
 }
 
 func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj, err error) {
@@ -214,7 +213,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj,
 		Message:            err.Error(),
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(internalMemberClusterUnhealthyCond, utils.ReconcileErrorCondition(err))
+	imc.SetConditions(internalMemberClusterUnhealthyCond)
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
@@ -226,7 +225,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
 		Reason:             eventReasonInternalMemberClusterJoined,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(joinSucceedCondition, utils.ReconcileSuccessCondition())
+	imc.SetConditions(joinSucceedCondition)
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
@@ -238,7 +237,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
 		Reason:             eventReasonInternalMemberClusterLeft,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(joinSucceedCondition, utils.ReconcileSuccessCondition())
+	imc.SetConditions(joinSucceedCondition)
 }
 
 func (r *Reconciler) markInternalMemberClusterUnknown(imc apis.ConditionedObj) {
@@ -250,7 +249,7 @@ func (r *Reconciler) markInternalMemberClusterUnknown(imc apis.ConditionedObj) {
 		Reason:             eventReasonInternalMemberClusterUnknown,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(joinUnknownCondition, utils.ReconcileSuccessCondition())
+	imc.SetConditions(joinUnknownCondition)
 }
 
 // SetupWithManager sets up the controller with the Manager.
