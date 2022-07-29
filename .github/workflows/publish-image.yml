@@ -15,11 +15,11 @@ permissions:
 env:
  REGISTRY: ghcr.io
  HUB_AGENT_IMAGE_NAME : hub-agent
- HUB_AGENT_IMAGE_VERSION: v0.1.0.ci
+ HUB_AGENT_IMAGE_VERSION: main
  MEMBER_AGENT_IMAGE_NAME: member-agent
- MEMBER_AGENT_IMAGE_VERSION: v0.1.0.ci
+ MEMBER_AGENT_IMAGE_VERSION: main
  REFRESH_TOKEN_IMAGE_NAME: refresh-token
- REFRESH_TOKEN_IMAGE_VERSION: v0.1.0.ci
+ REFRESH_TOKEN_IMAGE_VERSION: main
 
 jobs:
   export-registry:
@@ -41,6 +41,12 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
+      - name: Set image version for a new release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "HUB_AGENT_IMAGE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          echo "MEMBER_AGENT_IMAGE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          echo "REFRESH_TOKEN_IMAGE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       - name: Login to ${{ env.REGISTRY }}
         uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
         with:

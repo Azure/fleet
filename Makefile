@@ -132,7 +132,7 @@ install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
     --set image.pullPolicy=Never \
-    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME)
+    --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
     --set image.tag=$(HUB_AGENT_IMAGE_VERSION)
 
 .PHONY: e2e-hub-kubeconfig-secret
