@@ -40,7 +40,6 @@ const (
 	eventReasonInternalMemberClusterUnhealthy  = "InternalMemberClusterUnhealthy"
 	eventReasonInternalMemberClusterJoined     = "InternalMemberClusterJoined"
 	eventReasonInternalMemberClusterLeft       = "InternalMemberClusterLeft"
-	eventReasonInternalMemberClusterUnknown    = "InternalMemberClusterUnknown"
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
