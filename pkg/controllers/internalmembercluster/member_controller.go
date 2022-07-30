@@ -64,7 +64,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	case fleetv1alpha1.ClusterStateJoin:
 		r.markInternalMemberClusterHeartbeatReceived(&imc)
 		updateHealthErr := r.updateHealth(ctx, &imc)
-		r.join(&imc)
+		r.markInternalMemberClusterJoined(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -76,7 +76,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)}, nil
 
 	case fleetv1alpha1.ClusterStateLeave:
-		r.leave(ctx, &imc)
+		r.markInternalMemberClusterLeft(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -131,34 +131,6 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *fleetv1alpha1
 	return nil
 }
 
-// join updates ConditionTypeInternalMemberClusterJoin to True if not joined yet.
-func (r *Reconciler) join(imc *fleetv1alpha1.InternalMemberCluster) {
-	klog.V(3).InfoS("join", "InternalMemberCluster", klog.KObj(imc))
-
-	// Log and update metrics if this is a new join.
-	joined := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	if joined == nil || joined.ObservedGeneration != imc.Generation || joined.Status == metav1.ConditionFalse {
-		klog.V(2).InfoS("join", "InternalMemberCluster", klog.KObj(imc))
-		metrics.ReportJoinResultMetric()
-	}
-
-	r.markInternalMemberClusterJoined(imc)
-}
-
-// leave updates ConditionTypeInternalMemberClusterJoin to false if not left yet.
-func (r *Reconciler) leave(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) {
-	klog.V(3).InfoS("leave", "InternalMemberCluster", klog.KObj(imc))
-
-	// Log and update metrics if this is a new leave.
-	joined := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	if joined == nil || joined.ObservedGeneration != imc.Generation || joined.Status == metav1.ConditionTrue {
-		klog.V(2).InfoS("leave", "InternalMemberCluster", klog.KObj(imc))
-		metrics.ReportLeaveResultMetric()
-	}
-
-	r.markInternalMemberClusterLeft(imc)
-}
-
 // updateInternalMemberClusterWithRetry updates InternalMemberCluster status.
 func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) error {
 	klog.V(5).InfoS("updateInternalMemberClusterWithRetry", "InternalMemberCluster", klog.KObj(imc))
@@ -176,14 +148,13 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 
 func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(imc apis.ConditionedObj) {
 	klog.V(5).InfoS("markInternalMemberClusterHeartbeatReceived", "InternalMemberCluster", klog.KObj(imc))
-	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHBReceived, "internal member cluster heartbeat received")
-	hearbeatReceivedCondition := metav1.Condition{
+	newCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
 		Status:             metav1.ConditionTrue,
 		Reason:             eventReasonInternalMemberClusterHBReceived,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(hearbeatReceivedCondition)
+	imc.SetConditions(newCondition)
 
 	// Hack: We need to get and set again as SetConditions() will ignore new LastTransitionTime if there is no status
 	// change between existing condition and new condition.
@@ -193,63 +164,81 @@ func (r *Reconciler) markInternalMemberClusterHeartbeatReceived(imc apis.Conditi
 
 func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {
 	klog.V(5).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
-	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
-	internalMemberClusterHealthyCond := metav1.Condition{
+	newCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHealth,
 		Status:             metav1.ConditionTrue,
 		Reason:             eventReasonInternalMemberClusterHealthy,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(internalMemberClusterHealthyCond)
+
+	// Healthy status changed.
+	existingCondition := imc.GetCondition(newCondition.Type)
+	if existingCondition == nil || existingCondition.Status != newCondition.Status {
+		klog.V(2).InfoS("healthy", "InternalMemberCluster", klog.KObj(imc))
+		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
+	}
+
+	imc.SetConditions(newCondition)
 }
 
 func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj, err error) {
 	klog.V(5).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", klog.KObj(imc))
-	r.recorder.Event(imc, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
-	internalMemberClusterUnhealthyCond := metav1.Condition{
+	newCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHealth,
 		Status:             metav1.ConditionFalse,
 		Reason:             eventReasonInternalMemberClusterUnhealthy,
 		Message:            err.Error(),
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(internalMemberClusterUnhealthyCond)
+
+	// Healthy status changed.
+	existingCondition := imc.GetCondition(newCondition.Type)
+	if existingCondition == nil || existingCondition.Status != newCondition.Status {
+		klog.V(2).InfoS("unhealthy", "InternalMemberCluster", klog.KObj(imc))
+		r.recorder.Event(imc, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
+	}
+
+	imc.SetConditions(newCondition)
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
 	klog.V(5).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", klog.KObj(imc))
-	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster has joined")
-	joinSucceedCondition := metav1.Condition{
+	newCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 		Status:             metav1.ConditionTrue,
 		Reason:             eventReasonInternalMemberClusterJoined,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(joinSucceedCondition)
+
+	// Joined status changed.
+	existingCondition := imc.GetCondition(newCondition.Type)
+	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
+		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster joined")
+		klog.V(2).InfoS("joined", "InternalMemberCluster", klog.KObj(imc))
+		metrics.ReportJoinResultMetric()
+	}
+
+	imc.SetConditions(newCondition)
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
 	klog.V(5).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", klog.KObj(imc))
-	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster has left")
-	joinSucceedCondition := metav1.Condition{
+	newCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 		Status:             metav1.ConditionFalse,
 		Reason:             eventReasonInternalMemberClusterLeft,
 		ObservedGeneration: imc.GetGeneration(),
 	}
-	imc.SetConditions(joinSucceedCondition)
-}
 
-func (r *Reconciler) markInternalMemberClusterUnknown(imc apis.ConditionedObj) {
-	klog.V(5).InfoS("markInternalMemberClusterUnknown", "InternalMemberCluster", klog.KObj(imc))
-	r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterUnknown, "internal member cluster join state unknown")
-	joinUnknownCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
-		Status:             metav1.ConditionUnknown,
-		Reason:             eventReasonInternalMemberClusterUnknown,
-		ObservedGeneration: imc.GetGeneration(),
+	// Joined status changed.
+	existingCondition := imc.GetCondition(newCondition.Type)
+	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
+		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster left")
+		klog.V(2).InfoS("left", "InternalMemberCluster", klog.KObj(imc))
+		metrics.ReportLeaveResultMetric()
 	}
-	imc.SetConditions(joinUnknownCondition)
+
+	imc.SetConditions(newCondition)
 }
 
 // SetupWithManager sets up the controller with the Manager.
