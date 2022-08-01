@@ -94,45 +94,6 @@ Kind:         MemberCluster
 Metadata:
   Creation Timestamp:  2022-07-08T01:42:35Z
   Generation:          1
-  Managed Fields:
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:metadata:
-        f:annotations:
-          .:
-          f:kubectl.kubernetes.io/last-applied-configuration:
-      f:spec:
-        .:
-        f:identity:
-          .:
-          f:apiGroup:
-          f:kind:
-          f:name:
-          f:namespace:
-        f:leaseDurationSeconds:
-        f:state:
-    Manager:      kubectl-client-side-apply
-    Operation:    Update
-    Time:         2022-07-08T01:42:35Z
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:status:
-        .:
-        f:allocatable:
-          .:
-          f:cpu:
-          f:memory:
-        f:capacity:
-          .:
-          f:cpu:
-          f:memory:
-        f:conditions:
-    Manager:         67cec7a4-3386-4fd5-9de2-20397e7b0029
-    Operation:       Update
-    Subresource:     status
-    Time:            2022-07-08T01:42:36Z
   Resource Version:  868
   UID:               67cec7a4-3386-4fd5-9de2-20397e7b0029
 Spec:
@@ -185,46 +146,11 @@ $ kubectl describe internalmembercluster kind-member-testing -n fleet-kind-membe
 ```shell
 Name:         kind-member-testing
 Namespace:    fleet-kind-member-testing
-Labels:       <none>
-Annotations:  <none>
 API Version:  fleet.azure.com/v1alpha1
 Kind:         InternalMemberCluster
 Metadata:
   Creation Timestamp:  2022-07-08T01:42:36Z
   Generation:          1
-  Managed Fields:
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:metadata:
-        f:ownerReferences:
-          .:
-          k:{"uid":"67cec7a4-3386-4fd5-9de2-20397e7b0029"}:
-      f:spec:
-        .:
-        f:leaseDurationSeconds:
-        f:state:
-    Manager:      67cec7a4-3386-4fd5-9de2-20397e7b0029
-    Operation:    Update
-    Time:         2022-07-08T01:42:36Z
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:status:
-        .:
-        f:allocatable:
-          .:
-          f:cpu:
-          f:memory:
-        f:capacity:
-          .:
-          f:cpu:
-          f:memory:
-        f:conditions:
-    Manager:      memberagent
-    Operation:    Update
-    Subresource:  status
-    Time:         2022-07-08T01:42:36Z
   Owner References:
     API Version:     fleet.azure.com/v1alpha1
     Controller:      true
@@ -302,52 +228,6 @@ Kind:         MemberCluster
 Metadata:
   Creation Timestamp:  2022-07-08T01:42:35Z
   Generation:          2
-  Managed Fields:
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:metadata:
-        f:annotations:
-          .:
-          f:kubectl.kubernetes.io/last-applied-configuration:
-      f:spec:
-        .:
-        f:identity:
-          .:
-          f:apiGroup:
-          f:kind:
-          f:name:
-          f:namespace:
-        f:leaseDurationSeconds:
-    Manager:      kubectl-client-side-apply
-    Operation:    Update
-    Time:         2022-07-08T01:42:35Z
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:status:
-        .:
-        f:allocatable:
-          .:
-          f:cpu:
-          f:memory:
-        f:capacity:
-          .:
-          f:cpu:
-          f:memory:
-        f:conditions:
-    Manager:      67cec7a4-3386-4fd5-9de2-20397e7b0029
-    Operation:    Update
-    Subresource:  status
-    Time:         2022-07-08T01:42:36Z
-    API Version:  fleet.azure.com/v1alpha1
-    Fields Type:  FieldsV1
-    fieldsV1:
-      f:spec:
-        f:state:
-    Manager:         kubectl-edit
-    Operation:       Update
-    Time:            2022-07-08T01:49:10Z
   Resource Version:  1565
   UID:               67cec7a4-3386-4fd5-9de2-20397e7b0029
 Spec:
@@ -610,12 +490,7 @@ Azure fleet is an open source project that is [**not** covered by the Microsoft 
 [1]:  https://img.shields.io/github/v/release/Azure/fleet
 [2]:  https://goreportcard.com/badge/go.goms.io/fleet
 [3]:  https://goreportcard.com/report/go.goms.io/fleet
-[4]:  https://github.com//Azure/fleet/actions/workflows/workflow.yml/badge.svg
+[4]:  https://codecov.io/gh/Azure/fleet/branch/main/graph/badge.svg?token=D3mtbzACjC
 [5]:  https://img.shields.io/github/go-mod/go-version/Azure/fleet
-[6]:  https://codecov.io/gh/Azure/fleet/branch/main/graph/badge.svg?token=D3mtbzACjC
-[7]:  https://codecov.io/gh/Azure/fleet
-[8]: https://opensource.microsoft.com/codeofconduct/
-[9]: https://opensource.microsoft.com/codeofconduct/faq
-[10]: https://support.microsoft.com/en-us/help/2941892/support-for-linux-and-open-source-technology-in-azure
-[11]: https://github.com/Azure/fleet/issues
-[12]: https://github.com/Azure/fleet/issues/new
+[6]: https://opensource.microsoft.com/codeofconduct/
+[7]: https://opensource.microsoft.com/codeofconduct/faq

@@ -50,6 +50,7 @@ spec:
             {{ range $key, $value := (index .Values $provider) }}
             - --{{ $key }}={{ $value }}
             {{ end }}
+            - --v={{ .Values.logVerbosity }}
           ports:
             - name: http
               containerPort: 4000

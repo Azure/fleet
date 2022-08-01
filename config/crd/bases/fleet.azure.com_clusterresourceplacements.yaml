@@ -52,7 +52,7 @@ spec:
                   to place all the selected resources. Default is place to the entire
                   fleet if this field is omitted.
                 properties:
-                  Affinity:
+                  affinity:
                     description: Affinity represents the selected resources' scheduling
                       constraints. If not set, the entire fleet can be scheduling
                       candidate.
@@ -69,8 +69,8 @@ spec:
                                 to selected clusters.
                               properties:
                                 labelSelector:
-                                  description: LabelSelector is a list of cluster
-                                    requirements by cluster's labels. kubebuilder:validation:MaxItems=10
+                                  description: LabelSelector is the requirements by
+                                    cluster's labels.
                                   properties:
                                     matchExpressions:
                                       description: matchExpressions is a list of label
@@ -119,10 +119,10 @@ spec:
                                         The requirements are ANDed.
                                       type: object
                                   type: object
+                              required:
+                              - labelSelector
                               type: object
                             type: array
-                        required:
-                        - clusterSelectorTerms
                         type: object
                     type: object
                   clusterNames:
