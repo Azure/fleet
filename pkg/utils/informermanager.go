@@ -49,6 +49,9 @@ type InformerManager interface {
 	// GetNameSpaceScopedResources returns the list of namespace scoped resources we are watching.
 	GetNameSpaceScopedResources() []schema.GroupVersionResource
 
+	// IsClusterScopedResources returns if a resource is cluster scoped.
+	IsClusterScopedResources(resource schema.GroupVersionResource) bool
+
 	// WaitForCacheSync waits for the informer cache to populate.
 	WaitForCacheSync()
 
@@ -147,6 +150,9 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 }
 
 func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handler cache.ResourceEventHandler) {
+	s.resourcesLock.Lock()
+	defer s.resourcesLock.Unlock()
+
 	staticRes, exist := s.apiResources[resource.GroupVersionResource]
 	if exist {
 		klog.ErrorS(fmt.Errorf("a static resource is added already"), "existing res", staticRes)
@@ -179,16 +185,27 @@ func (s *informerManagerImpl) WaitForCacheSync() {
 }
 
 func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersionResource {
-	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
 	s.resourcesLock.RLock()
 	defer s.resourcesLock.RUnlock()
 
+	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
 	for gvr, resource := range s.apiResources {
 		if resource.isPresent && !resource.isStaticResource && !resource.IsClusterScoped {
 			res = append(res, gvr)
 		}
 	}
 	return res
+}
+
+func (s *informerManagerImpl) IsClusterScopedResources(resource schema.GroupVersionResource) bool {
+	s.resourcesLock.RLock()
+	defer s.resourcesLock.RUnlock()
+
+	resMeta, exist := s.apiResources[resource]
+	if !exist {
+		return false
+	}
+	return resMeta.IsClusterScoped
 }
 
 func (s *informerManagerImpl) Stop() {

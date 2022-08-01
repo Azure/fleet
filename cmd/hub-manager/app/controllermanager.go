@@ -186,7 +186,7 @@ func setupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 	}
 
 	ratelimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
-	clusterResourcePlacementController := controller.NewController(clusterResourcePlacementName, controller.MetaNamespaceKeyFunc, crpc.Reconcile, ratelimiter)
+	clusterResourcePlacementController := controller.NewController(clusterResourcePlacementName, controller.NamespaceKeyFunc, crpc.Reconcile, ratelimiter)
 	if err != nil {
 		klog.ErrorS(err, "unable to set up clusterResourcePlacement controller")
 		return err

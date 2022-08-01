@@ -8,26 +8,25 @@ package keys
 import (
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/clientcmd/api"
+
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
 var (
-	secretObj = &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "foo",
-			Name:      "bar",
-		},
+	secretObj = &api.Config{
+		Kind:           "Test",
+		APIVersion:     "v1/secret",
+		CurrentContext: "federal-context",
 	}
-	nodeObj = &corev1.Node{
+	crp = &fleetv1alpha1.ClusterResourcePlacement{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Node",
-			APIVersion: "v1",
+			Kind:       "ClusterResourcePlacement",
+			APIVersion: "fleet.azure.com/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "foo",
@@ -37,7 +36,7 @@ var (
 	roleObj = &rbacv1.Role{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Role",
-			APIVersion: "v1",
+			APIVersion: "rbac.authorization.k8s.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "foo",
@@ -47,16 +46,16 @@ var (
 	clusterRoleObj = &rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Role",
-			APIVersion: "v1",
+			APIVersion: "rbac.authorization.k8s.io/v1beta1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "foo",
-			Name:      "bar",
+			Name: "bar",
 		},
 	}
 )
 
 func TestClusterWideKeyFunc(t *testing.T) {
+	objMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crp)
 	tests := []struct {
 		name         string
 		object       interface{}
@@ -64,28 +63,29 @@ func TestClusterWideKeyFunc(t *testing.T) {
 		expectKeyStr string
 	}{
 		{
-			name:         "namespace scoped resource in core group",
-			object:       secretObj,
+			name: "unstructured object",
+			object: &unstructured.Unstructured{
+				Object: objMap,
+			},
 			expectErr:    false,
-			expectKeyStr: "v1, kind=Secret, foo/bar",
+			expectKeyStr: "fleet.azure.com/v1alpha1, kind=ClusterResourcePlacement, foo/bar",
 		},
 		{
-			name:         "cluster scoped resource in core group",
-			object:       nodeObj,
-			expectErr:    false,
-			expectKeyStr: "v1, kind=Node, foo/bar",
-		},
-		{
-			name:         "namespace scoped resource not in core group",
+			name:         "namespace scoped resource",
 			object:       roleObj,
 			expectErr:    false,
-			expectKeyStr: "v1, kind=Role, foo/bar",
+			expectKeyStr: "rbac.authorization.k8s.io/v1, kind=Role, foo/bar",
 		},
 		{
-			name:         "cluster scoped resource not in core group",
+			name:         "cluster scoped resource",
 			object:       clusterRoleObj,
 			expectErr:    false,
-			expectKeyStr: "v1, kind=Role, foo/bar",
+			expectKeyStr: "rbac.authorization.k8s.io/v1beta1, kind=Role, bar",
+		},
+		{
+			name:      "runtime object without meta",
+			object:    secretObj,
+			expectErr: true,
 		},
 		{
 			name:      "non runtime object should be error",
@@ -113,6 +113,79 @@ func TestClusterWideKeyFunc(t *testing.T) {
 
 			if key.String() != tc.expectKeyStr {
 				t.Fatalf("expect key string: %s, but got: %s", tc.expectKeyStr, key.String())
+			}
+		})
+	}
+}
+
+func TestNamespaceKeyFunc(t *testing.T) {
+	objMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crp)
+	tests := []struct {
+		name         string
+		object       interface{}
+		expectErr    bool
+		expectKeyStr string
+	}{
+		{
+			name: "unstructured object",
+			object: &unstructured.Unstructured{
+				Object: objMap,
+			},
+			expectErr:    false,
+			expectKeyStr: "foo/bar",
+		},
+		{
+			name:         "namespace scoped resource",
+			object:       roleObj,
+			expectErr:    false,
+			expectKeyStr: "foo/bar",
+		},
+		{
+			name:         "cluster scoped resource",
+			object:       clusterRoleObj,
+			expectErr:    false,
+			expectKeyStr: "bar",
+		},
+		{
+			name:         "string works",
+			object:       "string-key",
+			expectErr:    false,
+			expectKeyStr: "string-key",
+		},
+		{
+			name:      "runtime object without meta",
+			object:    secretObj,
+			expectErr: true,
+		},
+		{
+			name: "none runtime object should be error",
+			object: ClusterWideKey{fleetv1alpha1.ResourceIdentifier{
+				Name:      "foo",
+				Namespace: "bar",
+			}},
+			expectErr: true,
+		},
+		{
+			name:      "nil object should be error",
+			object:    nil,
+			expectErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		tc := test
+		t.Run(tc.name, func(t *testing.T) {
+			key, err := GetNamespaceKeyForObject(tc.object)
+			if err != nil {
+				if tc.expectErr == false {
+					t.Fatalf("not expect error but error happed: %v", err)
+				}
+
+				return
+			}
+
+			if key != tc.expectKeyStr {
+				t.Fatalf("expect key string: %s, but got: %s", tc.expectKeyStr, key)
 			}
 		})
 	}

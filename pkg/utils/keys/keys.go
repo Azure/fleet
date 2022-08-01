@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog/v2"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
@@ -61,22 +60,21 @@ func (k *ClusterWideKey) GroupKind() schema.GroupKind {
 	}
 }
 
-// getClusterWideKeyForObject generates a ClusterWideKey for object.
+// GetClusterWideKeyForObject generates a ClusterWideKey for object.
 func GetClusterWideKeyForObject(obj interface{}) (ClusterWideKey, error) {
 	key := ClusterWideKey{}
 
 	runtimeObject, ok := obj.(runtime.Object)
-	if !ok {
-		klog.Errorf("Invalid object")
-		return key, fmt.Errorf("not runtime object")
+	if !ok { // should not happen
+		return key, fmt.Errorf("object %+v is not a runtime object", obj)
 	}
-
-	metaInfo, err := meta.Accessor(obj)
-	if err != nil { // should not happen
-		return key, fmt.Errorf("object has no meta: %w", err)
-	}
-
 	gvk := runtimeObject.GetObjectKind().GroupVersionKind()
+
+	metaInfo, err := meta.Accessor(runtimeObject)
+	if err != nil { // should not happen
+		return key, fmt.Errorf("object %s has no meta: %w", gvk.String(), err)
+	}
+
 	key.Group = gvk.Group
 	key.Version = gvk.Version
 	key.Kind = gvk.Kind
@@ -84,4 +82,19 @@ func GetClusterWideKeyForObject(obj interface{}) (ClusterWideKey, error) {
 	key.Name = metaInfo.GetName()
 
 	return key, nil
+}
+
+// GetNamespaceKeyForObject generates a namespace/name key for object.
+func GetNamespaceKeyForObject(obj interface{}) (string, error) {
+	if key, ok := obj.(string); ok {
+		return key, nil
+	}
+	metaInfo, err := meta.Accessor(obj)
+	if err != nil { // should not happen
+		return "", fmt.Errorf("object %+v has no meta: %w", obj, err)
+	}
+	if len(metaInfo.GetNamespace()) > 0 {
+		return metaInfo.GetNamespace() + "/" + metaInfo.GetName(), nil
+	}
+	return metaInfo.GetName(), nil
 }

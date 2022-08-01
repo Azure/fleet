@@ -12,7 +12,6 @@ import (
 	"time"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -84,8 +83,8 @@ func NewController(Name string, KeyFunc KeyFunc, ReconcileFunc ReconcileFunc, ra
 
 func (w *controller) Enqueue(obj interface{}) {
 	key, err := w.keyFunc(obj)
-	if err != nil || key == nil {
-		klog.ErrorS(fmt.Errorf("failed to generate key for obj %+v", obj), "failed to enqueue a resource", "controller", w.name)
+	if err != nil {
+		klog.ErrorS(err, "failed to enqueue a resource", "controller", w.name)
 		return
 	}
 
@@ -193,9 +192,9 @@ func (w *controller) initMetrics(workerNumber int) {
 	metrics.FleetWorkerCount.WithLabelValues(w.name).Set(float64(workerNumber))
 }
 
-// MetaNamespaceKeyFunc generates a namespaced key for object.
-func MetaNamespaceKeyFunc(obj interface{}) (QueueKey, error) {
-	return cache.MetaNamespaceKeyFunc(obj)
+// NamespaceKeyFunc generates a namespaced key for any objects.
+func NamespaceKeyFunc(obj interface{}) (QueueKey, error) {
+	return keys.GetNamespaceKeyForObject(obj)
 }
 
 // ClusterWideKeyFunc generates a ClusterWideKey for object.

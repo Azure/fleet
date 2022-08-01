@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -51,10 +52,13 @@ func NewDisabledResourceConfig() *DisabledResourceConfig {
 		groupVersions:     map[schema.GroupVersion]struct{}{},
 		groupVersionKinds: map[schema.GroupVersionKind]struct{}{},
 	}
-	// disable fleet group by default
+	// disable fleet related resource by default
 	r.DisableGroup(fleetv1alpha1.GroupVersion.Group)
-	// disable event by default
+	r.DisableGroupVersionKind(WorkGVK)
+
+	// disable the below built-in resources
 	r.DisableGroup(eventsv1.GroupName)
+	r.DisableGroup(coordv1.GroupName)
 	r.DisableGroupVersionKind(corev1PodGVK)
 	r.DisableGroupVersionKind(corev1NodeGVK)
 	return r

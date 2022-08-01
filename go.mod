@@ -17,6 +17,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
 	sigs.k8s.io/controller-runtime v0.11.0
+	sigs.k8s.io/work-api v0.0.0-20220407021756-586d707fdb2c
 )
 
 require (
@@ -108,7 +109,7 @@ require (
 	k8s.io/api v0.23.5
 	k8s.io/apiextensions-apiserver v0.23.5 // indirect
 	k8s.io/component-base v0.23.5
-	k8s.io/klog/v2 v2.60.1
+	k8s.io/klog/v2 v2.70.0
 	k8s.io/kube-openapi v0.0.0-20211115234752-e816edb12b65 // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
@@ -145,4 +146,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.23.0
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.23.0
 	k8s.io/sample-controller => k8s.io/sample-controller v0.23.0
+	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.1.0
 )
