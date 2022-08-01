@@ -127,7 +127,6 @@ local-unit-test: $(ENVTEST) ## Run tests.
 	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -race -coverprofile=coverage.xml -covermode=atomic -v
 
 ## e2e tests
-
 install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
@@ -136,14 +135,14 @@ install-hub-agent-helm:
     --set image.tag=$(HUB_AGENT_IMAGE_VERSION)
 
 .PHONY: e2e-hub-kubeconfig-secret
-e2e-hub-kubeconfig-secret: install-hub-agent-helm
+e2e-hub-kubeconfig-secret:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
 	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
-	kubectl create secret generic hub-kubeconfig-secret --from-literal=kubeconfig=$$TOKEN
+	kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$$TOKEN
 
-install-member-agent-helm: e2e-hub-kubeconfig-secret
+install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	## Get kind cluster IP that docker uses internally so we can talk to the other cluster. the port is the default one.
 	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\

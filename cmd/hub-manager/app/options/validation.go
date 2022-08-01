@@ -25,8 +25,11 @@ func (o *Options) Validate() field.ErrorList {
 	if o.SecurePort < 0 || o.SecurePort > 65535 {
 		errs = append(errs, field.Invalid(newPath.Child("SecurePort"), o.SecurePort, "must be between 0 and 65535 inclusive"))
 	}
-	if o.ClusterDegradedGracePeriod.Duration <= 0 {
-		errs = append(errs, field.Invalid(newPath.Child("ClusterDegradedGracePeriod"), o.ClusterDegradedGracePeriod, "must be greater than 0"))
+	if o.ClusterUnhealthyThreshold.Duration <= 0 {
+		errs = append(errs, field.Invalid(newPath.Child("ClusterUnhealthyThreshold"), o.ClusterUnhealthyThreshold, "must be greater than 0"))
+	}
+	if o.WorkPendingGracePeriod.Duration <= 0 {
+		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "must be greater than 0"))
 	}
 
 	return errs

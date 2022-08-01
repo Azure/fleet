@@ -19,9 +19,9 @@ type ModifyOptions func(option *Options)
 // New an Options with default parameters
 func New(modifyOptions ModifyOptions) Options {
 	option := Options{
-		SkippedPropagatingAPIs:     "fleet.azure.com;multicluster.x-k8s.io",
-		SecurePort:                 8090,
-		ClusterDegradedGracePeriod: metav1.Duration{Duration: 10 * time.Second},
+		SkippedPropagatingAPIs: "fleet.azure.com;multicluster.x-k8s.io",
+		SecurePort:             8090,
+		WorkPendingGracePeriod: metav1.Duration{Duration: 10 * time.Second},
 	}
 
 	if modifyOptions != nil {
@@ -58,11 +58,11 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 			}),
 			expectedErrs: field.ErrorList{field.Invalid(newPath.Child("SecurePort"), -10, "must be between 0 and 65535 inclusive")},
 		},
-		"invalid ClusterDegradedGracePeriod": {
+		"invalid WorkPendingGracePeriod": {
 			opt: New(func(options *Options) {
-				options.ClusterDegradedGracePeriod.Duration = -40 * time.Second
+				options.WorkPendingGracePeriod.Duration = -40 * time.Second
 			}),
-			expectedErrs: field.ErrorList{field.Invalid(newPath.Child("ClusterDegradedGracePeriod"), metav1.Duration{Duration: -40 * time.Second}, "must be greater than 0")},
+			expectedErrs: field.ErrorList{field.Invalid(newPath.Child("WorkPendingGracePeriod"), metav1.Duration{Duration: -40 * time.Second}, "must be greater than 0")},
 		},
 	}
 
