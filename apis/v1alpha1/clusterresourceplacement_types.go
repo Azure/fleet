@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,7 +44,7 @@ type ClusterResourcePlacementSpec struct {
 	// Policy represents the placement policy to select clusters to place all the selected resources.
 	// Default is place to the entire fleet if this field is omitted.
 	// +optional
-	Policy PlacementPolicy `json:"policy,omitempty"`
+	Policy *PlacementPolicy `json:"policy,omitempty"`
 }
 
 // ClusterResourceSelector is used to specify cluster scoped resources to be selected.
@@ -86,7 +87,7 @@ type PlacementPolicy struct {
 	// Affinity represents the selected resources' scheduling constraints.
 	// If not set, the entire fleet can be scheduling candidate.
 	// +optional
-	Affinity *Affinity `json:"Affinity,omitempty"`
+	Affinity *Affinity `json:"affinity,omitempty"`
 }
 
 // Affinity represents the filter to select clusters.
@@ -101,16 +102,15 @@ type Affinity struct {
 type ClusterAffinity struct {
 	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
 	// kubebuilder:validation:MaxItems=10
-	// +required
-	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms"`
+	// +optional
+	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms,omitempty"`
 }
 
 // ClusterSelectorTerm represents the requirements to selected clusters.
 type ClusterSelectorTerm struct {
-	// LabelSelector is a list of cluster requirements by cluster's labels.
-	// kubebuilder:validation:MaxItems=10
-	// +optional
-	LabelSelector metav1.LabelSelector `json:"labelSelector,omitempty"`
+	// LabelSelector is a label query over the clusters.
+	// +required
+	LabelSelector metav1.LabelSelector `json:"labelSelector"`
 }
 
 // ClusterResourcePlacementStatus defines the observed state of resource.
@@ -194,6 +194,16 @@ type ClusterResourcePlacementList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacement `json:"items"`
+}
+
+func (m *ClusterResourcePlacement) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
+
+func (m *ClusterResourcePlacement) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {

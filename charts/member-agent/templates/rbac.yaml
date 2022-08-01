@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: member-agent
+  name: {{ include "member-agent.fullname" . }}-member-agent
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -12,15 +12,18 @@ rules:
   - apiGroups: [ "" ]
     resources: ["nodes"]
     verbs: [ "get", "list", "watch"]
+  - apiGroups: [ "multicluster.x-k8s.io" ]
+    resources: [ "*" ]
+    verbs: [ "*" ]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: member-agent-role-binding
+  name: {{ include "member-agent.fullname" . }}-member-agent-role-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: member-agent
+  name: {{ include "member-agent.fullname" . }}-member-agent
 subjects:
   - kind: ServiceAccount
     name: {{ include "member-agent.fullname" . }}-sa
