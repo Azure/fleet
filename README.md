@@ -490,7 +490,7 @@ Azure fleet is an open source project that is [**not** covered by the Microsoft 
 [1]:  https://img.shields.io/github/v/release/Azure/fleet
 [2]:  https://goreportcard.com/badge/go.goms.io/fleet
 [3]:  https://goreportcard.com/report/go.goms.io/fleet
-[4]:  https://github.com//Azure/fleet/actions/workflows/workflow.yml/badge.svg
+[4]:  https://codecov.io/gh/Azure/fleet/branch/main/graph/badge.svg?token=D3mtbzACjC
 [5]:  https://img.shields.io/github/go-mod/go-version/Azure/fleet
 [6]: https://opensource.microsoft.com/codeofconduct/
 [7]: https://opensource.microsoft.com/codeofconduct/faq
