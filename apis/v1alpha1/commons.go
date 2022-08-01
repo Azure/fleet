@@ -25,8 +25,8 @@ const (
 type ControllerManagerType string
 
 const (
-	// WorkControllerManager (core) handles the join/unjoin and work orchestration of the multi-clusters.
-	WorkControllerManager ControllerManagerType = "WorkControllerManager"
+	// MemberAgent (core) handles the join/unjoin and work orchestration of the multi-clusters.
+	MemberAgent ControllerManagerType = "MemberAgent"
 	// MultiClusterServiceControllerManager (networking) is responsible for exposing multi-cluster services via L4 load
 	// balancer.
 	MultiClusterServiceControllerManager ControllerManagerType = "MultiClusterServiceControllerManager"
@@ -35,10 +35,18 @@ const (
 	ServiceExportImportControllerManager ControllerManagerType = "ServiceExportImportControllerManager"
 )
 
-// Heartbeat contains heartbeat information received for the particular controller manager type .
-type Heartbeat struct {
+// ControllerManagerCondition contains different condition status information received for the particular controller
+// manager type .
+type ControllerManagerCondition struct {
 	// Type of controller manager type.
+	// +required
 	Type ControllerManagerType `json:"type"`
+
+	// Conditions field contains the different condition statuses for this member cluster, eg join and health status.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
 	// Last time we got the heartbeat.
-	LastReceivedTime metav1.Time `json:"lastReceivedTimeTime"`
+	// +optional
+	LastReceivedHeartbeat metav1.Time `json:"lastReceivedHeartbeat,omitempty"`
 }

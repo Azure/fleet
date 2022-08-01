@@ -51,24 +51,27 @@ type MemberClusterSpec struct {
 // MemberClusterStatus defines the observed state of MemberCluster.
 type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for this member cluster.
-
+	// Replaced by the ControllerManagerConditions.
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Heartbeats is an array of the received heartbeats from each controller managers.
-
-	// +optional
-	Heartbeats []Heartbeat `json:"heartbeats,omitempty"`
-
 	// Capacity represents the total resources of all the nodes within the member cluster.
-
+	// Replaced by the ResourceUsage.
 	// +optional
 	Capacity v1.ResourceList `json:"capacity,omitempty"`
 
 	// Allocatable represents the total resources of all the nodes within the member cluster that are available for scheduling.
-
+	// Replaced by the ResourceUsage.
 	// +optional
 	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
+
+	// Resource usage collected from member cluster.
+	// +optional
+	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
+
+	// ControllerManagerConditions field contains the different condition statuses for this member cluster.
+	// +required
+	ControllerManagerConditions []ControllerManagerCondition `json:"controllerManagerConditions"`
 }
 
 const (

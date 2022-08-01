@@ -57,24 +57,41 @@ const (
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
-
+	// Replaced by the ControllerManagerConditions.
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Heartbeats is an array of the received heartbeats from each controller managers.
-
-	// +optional
-	Heartbeats []Heartbeat `json:"heartbeats,omitempty"`
-
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
-
+	// Replaced by the ResourceUsage.
 	// +required
 	Capacity v1.ResourceList `json:"capacity"`
 
 	// Allocatable represents the total allocatable resources on the member cluster.
-
+	// Replaced by the ResourceUsage.
 	// +required
 	Allocatable v1.ResourceList `json:"allocatable"`
+
+	// Resource usage collected from member cluster.
+	ResourceUsage ResourceUsage `json:"resourceUsage"`
+
+	// ControllerManagerConditions field contains the different condition statuses for this member cluster.
+	// +required
+	ControllerManagerConditions []ControllerManagerCondition `json:"controllerManagerConditions"`
+}
+
+// ResourceUsage represents the resource usage collected from the member cluster and its observation time.
+type ResourceUsage struct {
+	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
+	// +required
+	Capacity v1.ResourceList `json:"capacity"`
+
+	// Allocatable represents the total allocatable resources on the member cluster.
+	// +required
+	Allocatable v1.ResourceList `json:"allocatable"`
+
+	// The time we observe the member cluster resource usage, including capacity and allocatable.
+	// +required
+	ObservationTime metav1.Time `json:"observationTime"`
 }
 
 //+kubebuilder:object:root=true
