@@ -832,3 +832,89 @@ func TestCheckJoinConditionUpdateStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestSyncInternalMemberClusterState(t *testing.T) {
+
+	tests := map[string]struct {
+		r                     *Reconciler
+		memberCluster         *fleetv1alpha1.MemberCluster
+		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
+		wantedState           fleetv1alpha1.ClusterState
+		wantedHeartBeatPeriod int32
+	}{
+		"Internal member cluster has not joined but has heartbeat period": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						o := obj.(*fleetv1alpha1.InternalMemberCluster)
+						*o = fleetv1alpha1.InternalMemberCluster{
+							Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+						}
+						return nil
+					},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc-UID"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: 30},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{},
+			wantedState:           fleetv1alpha1.ClusterStateJoin,
+			wantedHeartBeatPeriod: 30,
+		},
+		"Internal member cluster has joined but no heartbeat period": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						o := obj.(*fleetv1alpha1.InternalMemberCluster)
+						*o = fleetv1alpha1.InternalMemberCluster{
+							Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+						}
+						return nil
+					},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc-UID"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+			},
+			wantedState:           fleetv1alpha1.ClusterStateJoin,
+			wantedHeartBeatPeriod: 30,
+		},
+		"Internal member cluster has joined & has heartbeat period": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc-UID"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+			},
+			wantedState:           fleetv1alpha1.ClusterStateJoin,
+			wantedHeartBeatPeriod: 30,
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			tt.r.syncInternalMemberClusterState(context.Background(), tt.memberCluster, tt.internalMemberCluster)
+			assert.Equal(t, tt.wantedState, tt.internalMemberCluster.Spec.State, utils.TestCaseMsg, testName)
+			assert.Equal(t, tt.wantedHeartBeatPeriod, tt.internalMemberCluster.Spec.HeartbeatPeriodSeconds, utils.TestCaseMsg, testName)
+		})
+	}
+}
