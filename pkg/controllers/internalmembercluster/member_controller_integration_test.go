@@ -58,7 +58,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 
 		By("create the internalMemberCluster reconciler")
 		r = NewReconciler(k8sClient, k8sClient)
-		err := r.SetupWithManager(mgr)
+		err := r.SetupUnmanagedController(mgr)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
