@@ -140,7 +140,7 @@ func main() {
 
 // Start Start the member controllers with the supplied config
 func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error {
-	hubMrg, err := ctrl.NewManager(hubCfg, hubOpts)
+	hubMgr, err := ctrl.NewManager(hubCfg, hubOpts)
 	if err != nil {
 		return errors.Wrap(err, "unable to start hub manager")
 	}
@@ -158,15 +158,15 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		return errors.Wrap(err, "unable to start member manager")
 	}
 
-	if err = internalmembercluster.NewReconciler(hubMrg.GetClient(), memberMgr.GetClient()).SetupWithManager(hubMrg); err != nil {
+	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient()).SetupUnmanagedController(hubMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
 
-	if err := hubMrg.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+	if err := hubMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up health check for hub manager")
 		os.Exit(1)
 	}
-	if err := hubMrg.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+	if err := hubMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check for hub manager")
 		os.Exit(1)
 	}
@@ -185,7 +185,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 	startErr := make(chan error)
 	go func() {
 		defer klog.V(3).InfoS("shutting down hub manager")
-		err := hubMrg.Start(ctx)
+		err := hubMgr.Start(ctx)
 		if err != nil {
 			startErr <- errors.Wrap(err, "problem starting hub manager")
 			return

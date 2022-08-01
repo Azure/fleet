@@ -7,7 +7,6 @@ package internalmembercluster
 
 import (
 	"context"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -85,7 +84,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
-		klog.InfoS("stopping member agent controller by cancelling controller context", klog.KObj(&imc))
+		klog.V(3).InfoS("stopping member agent controller by cancelling controller context", klog.KObj(&imc))
 		r.cancel()
 		return ctrl.Result{}, nil
 
@@ -247,13 +246,13 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
 	imc.SetConditions(newCondition)
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+// SetupUnmanagedController sets up an unmanaged controller
+func (r *Reconciler) SetupUnmanagedController(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("InternalMemberClusterController")
 	c, err := controller.NewUnmanaged("member-agent", mgr, controller.Options{Reconciler: r, RecoverPanic: true, MaxConcurrentReconciles: 3})
 	if err != nil {
-		klog.ErrorS(err, "unable to create member-agent controller")
-		os.Exit(1)
+		klog.ErrorS(err, "unable to create member agent controller")
+		return err
 	}
 
 	updatePredicate := predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
@@ -262,26 +261,17 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if err := c.Watch(&source.Kind{Type: &fleetv1alpha1.InternalMemberCluster{}}, &handler.EnqueueRequestForObject{}, updatePredicate); err != nil {
 		klog.ErrorS(err, "unable to watch Internal Member cluster")
-		os.Exit(1)
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Start our controller in a goroutine so that we do not block.
 	go func() {
-		// Block until our controller manager is elected leader. We presume our
-		// entire process will terminate if we lose leadership, so we don't need
-		// to handle that.
 		<-mgr.Elected()
-
-		// Start our controller. This will block until the stop channel is
-		// closed, or the controller returns an error.
 		if err := c.Start(ctx); err != nil {
-			klog.ErrorS(err, "cannot run member-agent controller")
+			klog.ErrorS(err, "cannot run member agent controller")
 		}
 	}()
-
 	r.cancel = cancel
-
-	return err
+	return nil
 }
