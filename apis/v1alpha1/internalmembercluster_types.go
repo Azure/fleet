@@ -76,8 +76,9 @@ type InternalMemberClusterStatus struct {
 
 	// ControllerManagerConditions field contains the different condition statuses for this member cluster.
 	// TODO once we remove the Conditions fields, we could rename this as `Conditions` instead.
-	// +required
-	ControllerManagerConditions []ControllerManagerCondition `json:"controllerManagerConditions"`
+	// Need to change to required type when we do the replacement.
+	// +optional
+	ControllerManagerConditions []ControllerManagerCondition `json:"controllerManagerConditions,omitempty"`
 }
 
 // ResourceUsage represents the resource usage collected from the member cluster and its observation time.

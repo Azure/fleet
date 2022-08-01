@@ -184,7 +184,9 @@ spec:
                 type: array
               controllerManagerConditions:
                 description: ControllerManagerConditions field contains the different
-                  condition statuses for this member cluster.
+                  condition statuses for this member cluster. TODO once we remove
+                  the Conditions fields, we could rename this as `Conditions` instead.
+                  Need to change to required type when we do the replacement.
                 items:
                   description: ControllerManagerCondition contains different condition
                     status information received for the particular controller manager
@@ -311,7 +313,6 @@ spec:
                 type: object
             required:
             - conditions
-            - controllerManagerConditions
             type: object
         required:
         - spec
