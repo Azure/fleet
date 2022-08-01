@@ -73,6 +73,7 @@ type InternalMemberClusterStatus struct {
 
 	// Resource usage collected from member cluster.
 	// Need to change to required type when we do the replacement.
+	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
 	// ControllerManagerConditions field contains the different condition statuses for this member cluster.
