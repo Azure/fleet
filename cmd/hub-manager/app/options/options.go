@@ -39,10 +39,9 @@ type Options struct {
 	SecurePort int
 	// ClusterUnhealthyThreshold is the duration of failure for the cluster to be considered unhealthy.
 	ClusterUnhealthyThreshold metav1.Duration
-	// ClusterDegradedGracePeriod represents the grace period after last cluster health probe time.
-	// If it doesn't receive update for this amount of time, it will start posting
-	// "ClusterReady==ConditionUnknown".
-	ClusterDegradedGracePeriod metav1.Duration
+	// WorkPendingGracePeriod represents the grace period after a work is created/updated.
+	// We consider a work failed if a work's last applied condition doesn't change after period.
+	WorkPendingGracePeriod metav1.Duration
 	// SkippedPropagatingAPIs indicates comma separated resources that should be skipped for propagating.
 	SkippedPropagatingAPIs string
 	// SkippedPropagatingNamespaces is a list of namespaces that will be skipped for propagating.
@@ -64,9 +63,9 @@ type Options struct {
 	// ConcurrentResourceChangeSyncs is the number of resource change reconcilers that are
 	// allowed to sync concurrently.
 	ConcurrentResourceChangeSyncs int
-	// ConcurrentWorkSyncs is the number of `work` reconcilers that are
+	// ConcurrentMemberClusterSyncs is the number of `memberCluster` reconcilers that are
 	// allowed to sync concurrently.
-	ConcurrentWorkSyncs int
+	ConcurrentMemberClusterSyncs int
 	// RateLimiterOpts is the ratelimit parameters for the work queue
 	RateLimiterOpts RateLimitOptions
 }
@@ -80,6 +79,9 @@ func NewOptions() *Options {
 			ResourceNamespace: utils.FleetSystemNamespace,
 			ResourceName:      "fleet-hub-manager",
 		},
+		ConcurrentClusterPlacementSyncs: 1,
+		ConcurrentResourceChangeSyncs:   1,
+		ConcurrentMemberClusterSyncs:    1,
 	}
 }
 
@@ -90,10 +92,10 @@ func (o *Options) AddFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&o.SecurePort, "secure-port", defaultPort,
 		"The secure port on which to serve HTTPS.")
 	flags.BoolVar(&o.LeaderElection.LeaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
-	flags.StringVar(&o.LeaderElection.ResourceNamespace, "leader-elect-resource-namespace", utils.FleetSystemNamespace, "The namespace of resource object that is used for locking during leader election.")
-	flags.DurationVar(&o.ClusterUnhealthyThreshold.Duration, "cluster-unhealthy-threshold", 30*time.Second, "The duration for a member cluster to be in a degraded state before considered unhealthy.")
-	flags.DurationVar(&o.ClusterDegradedGracePeriod.Duration, "cluster-degraded-grace-period", 60*time.Second,
-		"Specifies the grace period of allowing a running cluster to be unresponsive before marking it as degraded.")
+	flags.StringVar(&o.LeaderElection.ResourceName, "leader-elect-resource-name", "fleet-hub-manager", "The name of the resource object that is used for locking during leader election.")
+	flags.DurationVar(&o.ClusterUnhealthyThreshold.Duration, "cluster-unhealthy-threshold", 60*time.Second, "The duration for a member cluster to be in a degraded state before considered unhealthy.")
+	flags.DurationVar(&o.WorkPendingGracePeriod.Duration, "work-pending-grace-period", 15*time.Second,
+		"Specifies the grace period of allowing a manifest to be pending before marking it as failed.")
 	flags.StringVar(&o.SkippedPropagatingAPIs, "skipped-propagating-apis", "", "Semicolon separated resources that should be skipped from propagating in addition to the default skip list(cluster.fleet.io;policy.fleet.io;work.fleet.io). Supported formats are:\n"+
 		"<group> for skip resources with a specific API group(e.g. networking.k8s.io),\n"+
 		"<group>/<version> for skip resources with a specific API version(e.g. networking.k8s.io/v1beta1),\n"+
@@ -106,7 +108,7 @@ func (o *Options) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&o.MetricsBindAddress, "metrics-bind-address", ":8080", "The TCP address that the controller should bind to for serving prometheus metrics(e.g. 127.0.0.1:8088, :8088)")
 	flags.IntVar(&o.ConcurrentClusterPlacementSyncs, "concurrent-cluster-placement-syncs", 5, "The number of cluster placement reconcilers to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
-	flags.IntVar(&o.ConcurrentWorkSyncs, "concurrent-work-syncs", 5, "The number of work reconcilers that are allowed to run concurrently.")
+	flags.IntVar(&o.ConcurrentMemberClusterSyncs, "concurrent-member-cluster-syncs", 1, "The number of member cluster reconcilers that are allowed to run concurrently.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }

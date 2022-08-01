@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	kubeconfigKey = "kubeconfig"
+	tokenKey = "token"
 )
 
 type secretAuthTokenProvider struct {
@@ -43,18 +43,18 @@ func New(secretName, namespace string) (interfaces.AuthTokenProvider, error) {
 }
 
 func (s *secretAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
-	klog.Infof("fetching token from secret %s", s.secretName)
+	klog.V(3).InfoS("fetching token from secret", "secret", klog.KRef(s.secretName, s.secretNamespace))
 	token := interfaces.AuthToken{}
 	secret, err := s.fetchSecret(ctx)
 	if err != nil {
-		return token, errors.Wrapf(err, "cannot get secret, name: %s, namespace: %s", s.secretName, s.secretName)
+		return token, errors.Wrapf(err, "cannot get the secret")
 	}
 
-	if len(secret.Data[kubeconfigKey]) == 0 {
+	if len(secret.Data[tokenKey]) == 0 {
 		return token, fmt.Errorf("the token data is missing or empty in secret %s", secret.Name)
 	}
 
-	token.Token = string(secret.Data[kubeconfigKey])
+	token.Token = string(secret.Data[tokenKey])
 	//add 24 hours to the currentTime
 	token.ExpiresOn = (time.Now()).Local().Add(24 * time.Hour)
 

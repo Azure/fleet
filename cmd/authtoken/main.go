@@ -46,7 +46,7 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 	secretCmd.Flags().StringVar(&secretName, "name", "", "Secret name (required)")
 	_ = secretCmd.MarkFlagRequired("name")
 
-	secretCmd.Flags().StringVar(&secretNamespace, "namespace", "", "Secret namespace (required)")
+	secretCmd.Flags().StringVar(&secretNamespace, "namespace", "default", "Secret namespace (required)")
 	_ = secretCmd.MarkFlagRequired("namespace")
 
 	var clientID string
