@@ -7,6 +7,11 @@ package internalmembercluster
 
 import (
 	"context"
+	"os"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	"github.com/pkg/errors"
@@ -19,8 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -32,6 +36,7 @@ type Reconciler struct {
 	hubClient    client.Client
 	memberClient client.Client
 	recorder     record.EventRecorder
+	cancel       context.CancelFunc
 }
 
 const (
@@ -80,6 +85,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
+		klog.InfoS("stopping member agent controller by cancelling controller context", klog.KObj(&imc))
+		r.cancel()
 		return ctrl.Result{}, nil
 
 	default:
@@ -243,10 +250,38 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("InternalMemberClusterController")
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.InternalMemberCluster{}).
-		WithEventFilter(predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
-			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
-		}}).
-		Complete(r)
+	c, err := controller.NewUnmanaged("member-agent", mgr, controller.Options{Reconciler: r, RecoverPanic: true, MaxConcurrentReconciles: 3})
+	if err != nil {
+		klog.ErrorS(err, "unable to create member-agent controller")
+		os.Exit(1)
+	}
+
+	updatePredicate := predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
+		return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
+	}}
+
+	if err := c.Watch(&source.Kind{Type: &fleetv1alpha1.InternalMemberCluster{}}, &handler.EnqueueRequestForObject{}, updatePredicate); err != nil {
+		klog.ErrorS(err, "unable to watch Internal Member cluster")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start our controller in a goroutine so that we do not block.
+	go func() {
+		// Block until our controller manager is elected leader. We presume our
+		// entire process will terminate if we lose leadership, so we don't need
+		// to handle that.
+		<-mgr.Elected()
+
+		// Start our controller. This will block until the stop channel is
+		// closed, or the controller returns an error.
+		if err := c.Start(ctx); err != nil {
+			klog.ErrorS(err, "cannot run member-agent controller")
+		}
+	}()
+
+	r.cancel = cancel
+
+	return err
 }
