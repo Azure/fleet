@@ -245,7 +245,8 @@ spec:
                   type: object
                 type: array
               resourceUsage:
-                description: Resource usage collected from member cluster.
+                description: Resource usage collected from member cluster. Need to
+                  change to required type when we do the replacement.
                 properties:
                   allocatable:
                     additionalProperties:
@@ -281,7 +282,6 @@ spec:
             - allocatable
             - capacity
             - conditions
-            - resourceUsage
             type: object
         required:
         - spec

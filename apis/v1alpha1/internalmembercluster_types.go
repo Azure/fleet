@@ -72,7 +72,8 @@ type InternalMemberClusterStatus struct {
 	Allocatable v1.ResourceList `json:"allocatable"`
 
 	// Resource usage collected from member cluster.
-	ResourceUsage ResourceUsage `json:"resourceUsage"`
+	// Need to change to required type when we do the replacement.
+	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
 	// ControllerManagerConditions field contains the different condition statuses for this member cluster.
 	// TODO once we remove the Conditions fields, we could rename this as `Conditions` instead.
