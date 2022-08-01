@@ -246,7 +246,7 @@ spec:
                 type: array
               resourceUsage:
                 description: Resource usage collected from member cluster. Need to
-                  change to required type when we do the replacement.
+                  change its type and its fields as required when we do the replacement.
                 properties:
                   allocatable:
                     additionalProperties:
@@ -273,10 +273,6 @@ spec:
                       including capacity and allocatable.
                     format: date-time
                     type: string
-                required:
-                - allocatable
-                - capacity
-                - observationTime
                 type: object
             required:
             - allocatable

@@ -72,7 +72,7 @@ type InternalMemberClusterStatus struct {
 	Allocatable v1.ResourceList `json:"allocatable"`
 
 	// Resource usage collected from member cluster.
-	// Need to change to required type when we do the replacement.
+	// Need to change its type and its fields as required when we do the replacement.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
@@ -86,16 +86,16 @@ type InternalMemberClusterStatus struct {
 // ResourceUsage represents the resource usage collected from the member cluster and its observation time.
 type ResourceUsage struct {
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
-	// +required
-	Capacity v1.ResourceList `json:"capacity"`
+	// +optional
+	Capacity v1.ResourceList `json:"capacity,omitempty"`
 
 	// Allocatable represents the total allocatable resources on the member cluster.
-	// +required
-	Allocatable v1.ResourceList `json:"allocatable"`
+	// +optional
+	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
 
 	// The time we observe the member cluster resource usage, including capacity and allocatable.
-	// +required
-	ObservationTime metav1.Time `json:"observationTime"`
+	// +optional
+	ObservationTime metav1.Time `json:"observationTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -306,10 +306,6 @@ spec:
                       including capacity and allocatable.
                     format: date-time
                     type: string
-                required:
-                - allocatable
-                - capacity
-                - observationTime
                 type: object
             required:
             - conditions
