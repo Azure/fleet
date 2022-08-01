@@ -19,15 +19,59 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
 const (
-	FleetSystemNamespace  = "fleet-system"
-	NamespaceNameFormat   = "fleet-member-%s"
-	RoleNameFormat        = "fleet-role-%s"
+	FleetSystemNamespace = "fleet-system"
+
+	NamespaceNameFormat = "fleet-member-%s"
+
+	RoleNameFormat = "fleet-role-%s"
+
 	RoleBindingNameFormat = "fleet-rolebinding-%s"
+
+	PlacementFieldManagerName = "work-api-agent"
+
+	WorkNameFormat = "work-%s"
+)
+
+const (
+	FleetObjLabelKey   = "kubernetes.azure.com/managed-by"
+	FleetObjLabelValue = "fleet"
+
+	WorkPlaceNameLabelKey = "work.fleet.azure.com/placement-name"
+)
+
+var (
+	FleetRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+		Resources: []string{"*"},
+	}
+	EventRule = rbacv1.PolicyRule{
+		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
+		APIGroups: []string{""},
+		Resources: []string{"events"},
+	}
+	WorkRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{workv1alpha1.GroupName},
+		Resources: []string{"*"},
+	}
+	FleetNetworkRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{"network.fleet.azure.com"},
+		Resources: []string{"*"},
+	}
+	// LeaseRule Leases permissions are required for leader election of hub controller manager in member cluster.
+	LeaseRule = rbacv1.PolicyRule{
+		Verbs:     []string{"create", "get", "list", "update"},
+		APIGroups: []string{"coordination.k8s.io"},
+		Resources: []string{"leases"},
+	}
 )
 
 var (
@@ -54,29 +98,18 @@ var (
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.MemberClusterResource,
 	}
-)
 
-var (
-	FleetRule = rbacv1.PolicyRule{
-		Verbs:     []string{"*"},
-		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
-		Resources: []string{"*"},
+	WorkGVK = schema.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    workv1alpha1.WorkKind,
 	}
-	EventRule = rbacv1.PolicyRule{
-		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
-		APIGroups: []string{""},
-		Resources: []string{"events"},
-	}
-	FleetNetworkRule = rbacv1.PolicyRule{
-		Verbs:     []string{"*"},
-		APIGroups: []string{"networking.fleet.azure.com"},
-		Resources: []string{"*"},
-	}
-	// Leases permissions are required for leader election of hub controller manager in member cluster.
-	LeaseRule = rbacv1.PolicyRule{
-		Verbs:     []string{"create", "get", "list", "update"},
-		APIGroups: []string{"coordination.k8s.io"},
-		Resources: []string{"leases"},
+
+	WorkGVR = schema.GroupVersionResource{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		// TODO: use the const after it's checked in
+		Resource: "works",
 	}
 )
 
