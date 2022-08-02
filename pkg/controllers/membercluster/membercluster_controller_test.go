@@ -895,7 +895,7 @@ func TestSyncInternalMemberClusterState(t *testing.T) {
 			wantedHeartBeatPeriod: 30,
 			wantedErr:             nil,
 		},
-		"Update Error": {
+		"Error updating internal member cluster": {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
