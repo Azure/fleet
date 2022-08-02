@@ -51,19 +51,26 @@ type MemberClusterSpec struct {
 // MemberClusterStatus defines the observed state of MemberCluster.
 type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for this member cluster.
-
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Capacity represents the total resources of all the nodes within the member cluster.
-
+	// TODO: need to be deleted
 	// +optional
 	Capacity v1.ResourceList `json:"capacity,omitempty"`
 
 	// Allocatable represents the total resources of all the nodes within the member cluster that are available for scheduling.
-
+	// TODO: need to be deleted
 	// +optional
 	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
+
+	// Resource usage collected from member cluster.
+	// +optional
+	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
+
+	// AgentConditions field contains the different condition statuses for each agent.
+	// +optional
+	AgentConditions []AgentCondition `json:"agentConditions,omitempty"`
 }
 
 const (

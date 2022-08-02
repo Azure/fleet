@@ -57,19 +57,42 @@ const (
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
-
+	// TODO: need to be deleted
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
-
+	// TODO: need to be deleted
 	// +required
 	Capacity v1.ResourceList `json:"capacity"`
 
 	// Allocatable represents the total allocatable resources on the member cluster.
-
+	// TODO: need to be deleted
 	// +required
 	Allocatable v1.ResourceList `json:"allocatable"`
+
+	// Resource usage collected from member cluster.
+	// +optional
+	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
+
+	// AgentConditions field contains the different condition statuses for each agent running in the member cluster.
+	// +optional
+	AgentConditions []AgentCondition `json:"agentConditions,omitempty"`
+}
+
+// ResourceUsage represents the resource usage collected from the member cluster and its observation time.
+type ResourceUsage struct {
+	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
+	// +optional
+	Capacity v1.ResourceList `json:"capacity,omitempty"`
+
+	// Allocatable represents the total allocatable resources on the member cluster.
+	// +optional
+	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
+
+	// The time we observe the member cluster resource usage, including capacity and allocatable.
+	// +optional
+	ObservationTime metav1.Time `json:"observationTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true
