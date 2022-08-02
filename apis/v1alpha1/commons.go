@@ -22,25 +22,24 @@ const (
 	ClusterResourcePlacementResource = "clusterresourceplacements"
 )
 
-type ControllerManagerType string
+// AgentType defines agent/binary running in the member cluster.
+type AgentType string
 
 const (
 	// MemberAgent (core) handles the join/unjoin and work orchestration of the multi-clusters.
-	MemberAgent ControllerManagerType = "MemberAgent"
-	// MultiClusterServiceControllerManager (networking) is responsible for exposing multi-cluster services via L4 load
+	MemberAgent AgentType = "MemberAgent"
+	// MultiClusterServiceAgent (networking) is responsible for exposing multi-cluster services via L4 load
 	// balancer.
-	MultiClusterServiceControllerManager ControllerManagerType = "MultiClusterServiceControllerManager"
-	// ServiceExportImportControllerManager (networking) is responsible for export or import services across
-	// multi-clusters.
-	ServiceExportImportControllerManager ControllerManagerType = "ServiceExportImportControllerManager"
+	MultiClusterServiceAgent AgentType = "MultiClusterServiceAgent"
+	// ServiceExportImportAgent (networking) is responsible for export or import services across multi-clusters.
+	ServiceExportImportAgent AgentType = "ServiceExportImportAgent"
 )
 
-// ControllerManagerCondition contains different condition status information received for the particular controller
-// manager type .
-type ControllerManagerCondition struct {
-	// Type of controller manager type.
+// AgentCondition contains different condition status information received for the particular agent type .
+type AgentCondition struct {
+	// Type of agent type.
 	// +required
-	Type ControllerManagerType `json:"type"`
+	Type AgentType `json:"type"`
 
 	// Conditions field contains the different condition statuses for this member cluster, eg join and health status.
 	// +optional

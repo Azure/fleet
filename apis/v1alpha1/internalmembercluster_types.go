@@ -57,30 +57,27 @@ const (
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
 	// Conditions field contains the different condition statuses for this member cluster.
-	// Replaced by the ControllerManagerConditions.
+	// TODO: need to be deleted
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
-	// Replaced by the ResourceUsage.
+	// TODO: need to be deleted
 	// +required
 	Capacity v1.ResourceList `json:"capacity"`
 
 	// Allocatable represents the total allocatable resources on the member cluster.
-	// Replaced by the ResourceUsage.
+	// TODO: need to be deleted
 	// +required
 	Allocatable v1.ResourceList `json:"allocatable"`
 
 	// Resource usage collected from member cluster.
-	// Need to change its type and its fields as required when we do the replacement.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
-	// ControllerManagerConditions field contains the different condition statuses for this member cluster.
-	// TODO once we remove the Conditions fields, we could rename this as `Conditions` instead.
-	// Need to change to required type when we do the replacement.
+	// AgentConditions field contains the different condition statuses for each agent running in the member cluster.
 	// +optional
-	ControllerManagerConditions []ControllerManagerCondition `json:"controllerManagerConditions,omitempty"`
+	AgentConditions []AgentCondition `json:"agentConditions,omitempty"`
 }
 
 // ResourceUsage represents the resource usage collected from the member cluster and its observation time.
