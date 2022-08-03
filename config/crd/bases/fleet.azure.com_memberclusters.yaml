@@ -90,12 +90,12 @@ spec:
           status:
             description: MemberClusterStatus defines the observed state of MemberCluster.
             properties:
-              agentConditions:
-                description: AgentConditions field contains the different condition
-                  statuses for each agent.
+              agentStatus:
+                description: AgentStatus field contains the status for each agent
+                  running in the member cluster.
                 items:
-                  description: AgentCondition contains different condition status
-                    information received for the particular agent type .
+                  description: AgentStatus contains status information received for
+                    the particular agent type.
                   properties:
                     conditions:
                       description: Conditions field contains the different condition

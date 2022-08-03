@@ -35,8 +35,8 @@ const (
 	ServiceExportImportAgent AgentType = "ServiceExportImportAgent"
 )
 
-// AgentCondition contains different condition status information received for the particular agent type .
-type AgentCondition struct {
+// AgentStatus contains status information received for the particular agent type.
+type AgentStatus struct {
 	// Type of agent type.
 	// +required
 	Type AgentType `json:"type"`
@@ -49,3 +49,15 @@ type AgentCondition struct {
 	// +optional
 	LastReceivedHeartbeat metav1.Time `json:"lastReceivedHeartbeat,omitempty"`
 }
+
+// AgentConditionType identifies a specific condition on the Agent.
+type AgentConditionType string
+
+const (
+	// AgentJoined is used to track the join state of the agent.
+	// Its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left.
+	AgentJoined AgentConditionType = "Joined"
+	// AgentHealthy is used to track the Health state of the agent.
+	// Its conditionStatus can be "True" == Healthy, "False" == UnHealthy. "Unknown" is unused.
+	AgentHealthy AgentConditionType = "Healthy"
+)

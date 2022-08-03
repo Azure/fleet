@@ -40,6 +40,7 @@ type InternalMemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 
+// TODO need to be removed
 const (
 	// ConditionTypeInternalMemberClusterJoin is used to track the join state of the InternalMemberCluster.
 	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
@@ -75,9 +76,9 @@ type InternalMemberClusterStatus struct {
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
-	// AgentConditions field contains the different condition statuses for each agent running in the member cluster.
+	// AgentStatus field contains the status for each agent running in the member cluster.
 	// +optional
-	AgentConditions []AgentCondition `json:"agentConditions,omitempty"`
+	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`
 }
 
 // ResourceUsage represents the resource usage collected from the member cluster and its observation time.
