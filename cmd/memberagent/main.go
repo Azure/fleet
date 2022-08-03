@@ -15,19 +15,23 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
-
-	"go.goms.io/fleet/pkg/utils"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+	wc "sigs.k8s.io/work-api/pkg/controllers"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -40,6 +44,7 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	workNamespace = flag.String("work-namespace", "", "Namespace to watch for work.")
 )
 
 func init() {
@@ -47,6 +52,7 @@ func init() {
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
@@ -153,9 +159,65 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts ctrl.Options) error
 		LeaderElection:         hubOpts.LeaderElection,
 		LeaderElectionID:       "984738fa.member.fleet.azure.com",
 	}
-	memberMgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), memberOpts)
+
+	memberConfig := ctrl.GetConfigOrDie()
+	memberMgr, err := ctrl.NewManager(memberConfig, memberOpts)
 	if err != nil {
 		return errors.Wrap(err, "unable to start member manager")
+	}
+
+	spokeDynamicClient, err := dynamic.NewForConfig(memberConfig)
+	if err != nil {
+		klog.ErrorS(err, "unable to create spoke dynamic client")
+		os.Exit(1)
+	}
+
+	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, apiutil.WithLazyDiscovery)
+	if err != nil {
+		klog.ErrorS(err, "unable to create spoke rest mapper")
+		os.Exit(1)
+	}
+
+	spokeClient, err := client.New(memberConfig, client.Options{
+		Scheme: memberOpts.Scheme, Mapper: restMapper,
+	})
+
+	if err = wc.NewWorkStatusReconciler(
+		hubMgr.GetClient(),
+		spokeClient,
+		spokeDynamicClient,
+		restMapper,
+		hubMgr.GetEventRecorderFor("work_status_controller"),
+		5,
+	).SetupWithManager(hubMgr); err != nil {
+		klog.ErrorS(err, "unable to create controller", "controller", "WorkStatus")
+		return err
+	}
+
+	if err != nil {
+		klog.ErrorS(err, "unable to create spoke client")
+		os.Exit(1)
+	}
+
+	if err = wc.NewWorkController(
+		hubMgr.GetClient(),
+		spokeDynamicClient,
+		spokeClient,
+		restMapper,
+		hubMgr.GetEventRecorderFor("work_controller"),
+		5,
+	).SetupWithManager(hubMgr); err != nil {
+		klog.ErrorS(err, "unable to create controller", "controller", "Work")
+		return err
+	}
+
+	if err = wc.NewFinalizeWorkReconciler(
+		hubMgr.GetClient(),
+		spokeClient,
+		hubMgr.GetEventRecorderFor("WorkFinalizer_controller"),
+	).SetupWithManager(hubMgr); err != nil {
+		klog.ErrorS(err, "unable to create controller", "controller", "WorkFinalize")
+		return err
 	}
 
 	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient()).SetupUnmanagedController(hubMgr); err != nil {
