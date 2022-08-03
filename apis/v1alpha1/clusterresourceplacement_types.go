@@ -130,6 +130,12 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	TargetClusters []string `json:"targetClusters,omitempty"`
 
+	// PendingResourcePlacements is a list of resources that are still not processed by the target cluster
+	// after workPendingGracePeriod
+	// kubebuilder:validation:MaxItems=1000
+	// +optional
+	PendingResourcePlacements []PendingResourcePlacement `json:"pendingResourcePlacements,omitempty"`
+
 	// FailedResourcePlacements is a list of all failed to place resources status.
 	// kubebuilder:validation:MaxItems=1000
 	// +optional
@@ -157,6 +163,19 @@ type ResourceIdentifier struct {
 	// Namespace is the namespace of the resource, the resource is cluster scoped if the value is empty.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// PendingResourcePlacement represents a resource placement that is still not picked up by the target cluster
+type PendingResourcePlacement struct {
+	ResourceIdentifier `json:",inline"`
+
+	// ClusterName is the name of the cluster that this resource is placed on.
+	// +required
+	ClusterName string `json:"clusterName"`
+
+	// LastUpdateTime represents the last time the placement is still in pending
+	// +required
+	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
 }
 
 // FailedResourcePlacement shows the failure details of a failed resource placement.

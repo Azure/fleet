@@ -385,6 +385,46 @@ spec:
                   - name
                   type: object
                 type: array
+              pendingResourcePlacements:
+                description: PendingResourcePlacements is a list of resources that
+                  are still not processed by the target cluster after workPendingGracePeriod
+                  kubebuilder:validation:MaxItems=1000
+                items:
+                  description: PendingResourcePlacement represents a resource placement
+                    that is still not picked up by the target cluster
+                  properties:
+                    clusterName:
+                      description: ClusterName is the name of the cluster that this
+                        resource is placed on.
+                      type: string
+                    group:
+                      description: Group is the group name of the selected resource.
+                      type: string
+                    kind:
+                      description: Kind represents the Kind of the selected resources.
+                      type: string
+                    lastUpdateTime:
+                      description: LastUpdateTime represents the last time the placement
+                        is still in pending
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name of the target resource.
+                      type: string
+                    namespace:
+                      description: Namespace is the namespace of the resource, the
+                        resource is cluster scoped if the value is empty.
+                      type: string
+                    version:
+                      description: Version is the version of the selected resource.
+                      type: string
+                  required:
+                  - clusterName
+                  - kind
+                  - lastUpdateTime
+                  - name
+                  type: object
+                type: array
               selectedResources:
                 description: SelectedResources is a list of the resources the resource
                   selector selects.
