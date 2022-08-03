@@ -68,9 +68,9 @@ type MemberClusterStatus struct {
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
-	// AgentConditions field contains the different condition statuses for each agent.
+	// AgentStatus field contains the status for each agent running in the member cluster.
 	// +optional
-	AgentConditions []AgentCondition `json:"agentConditions,omitempty"`
+	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`
 }
 
 const (

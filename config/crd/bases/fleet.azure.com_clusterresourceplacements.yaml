@@ -69,8 +69,8 @@ spec:
                                 to selected clusters.
                               properties:
                                 labelSelector:
-                                  description: LabelSelector is the requirements by
-                                    cluster's labels.
+                                  description: LabelSelector is a label query over
+                                    the clusters.
                                   properties:
                                     matchExpressions:
                                       description: matchExpressions is a list of label
