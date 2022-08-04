@@ -107,6 +107,10 @@ func (m *MemberCluster) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
+func (m *MemberCluster) RemoveCondition(conditionType string) {
+	meta.RemoveStatusCondition(&m.Status.Conditions, conditionType)
+}
+
 func init() {
 	SchemeBuilder.Register(&MemberCluster{}, &MemberClusterList{})
 }
