@@ -72,7 +72,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	switch mc.Spec.State {
 	case fleetv1alpha1.ClusterStateJoin:
-		if err := r.join(ctx, &mc, namespaceName, currentImc); err != nil {
+		if err := r.join(ctx, &mc, currentImc); err != nil {
 			klog.ErrorS(err, "failed to join", "MemberCluster", klog.KObj(&mc))
 			return ctrl.Result{}, err
 		}
@@ -90,7 +90,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Copy status from InternalMemberCluster to MemberCluster.
 	r.syncInternalMemberClusterStatus(currentImc, &mc)
-	r.updateMemberClusterStatus(ctx, &mc)
+	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
+		klog.ErrorS(err, "failed to update status for %s", klog.KObj(&mc))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -103,7 +106,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 //
 // Condition ReadyToJoin == true means all the above actions have been done successfully at least once.
 // It will never turn false after true.
-func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster, namespaceName string, imc *fleetv1alpha1.InternalMemberCluster) error {
+func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) error {
 	readyToJoinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
 	// Already joined for the current generation.
 	if readyToJoinCond != nil && readyToJoinCond.ObservedGeneration == mc.ObjectMeta.Generation && readyToJoinCond.Status == metav1.ConditionTrue {
@@ -365,9 +368,8 @@ func (r *Reconciler) syncJoinedCondition(imc *fleetv1alpha1.InternalMemberCluste
 			markMemberClusterJoined(r.recorder, mc)
 		} else if imcCondition.Status == metav1.ConditionFalse {
 			markMemberClusterLeft(r.recorder, mc)
-		} else {
-			// TODO: We didn't handle metav1.ConditionUnknown.
 		}
+		// NOTE: We do not handle metav1.ConditionUnknown as this status is not used.
 	}
 }
 

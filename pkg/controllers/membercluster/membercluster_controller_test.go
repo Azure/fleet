@@ -633,7 +633,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					Conditions: []metav1.Condition{
-						metav1.Condition{
+						{
 							Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 							Status: metav1.ConditionTrue,
 						},
@@ -650,7 +650,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
-						metav1.Condition{
+						{
 							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
 							Status: metav1.ConditionTrue,
 							Reason: reasonMemberClusterJoined,
@@ -670,7 +670,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					Conditions: []metav1.Condition{
-						metav1.Condition{
+						{
 							Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
 							Status: metav1.ConditionTrue,
 						},
