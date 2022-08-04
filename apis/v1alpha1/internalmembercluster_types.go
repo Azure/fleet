@@ -40,38 +40,8 @@ type InternalMemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
 }
 
-// TODO need to be removed
-const (
-	// ConditionTypeInternalMemberClusterJoin is used to track the join state of the InternalMemberCluster.
-	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
-	ConditionTypeInternalMemberClusterJoin string = "Joined"
-
-	// ConditionTypeInternalMemberClusterHeartbeat is used to track the Heartbeat state of the InternalMemberCluster.
-	// Its conditionStatus can be "True" == Heartbeat is received, or "Unknown" == Heartbeat is not received yet. "False" is unused.
-	ConditionTypeInternalMemberClusterHeartbeat string = "HeartbeatReceived"
-
-	// ConditionTypeInternalMemberClusterHealth is used to track the Health state of the InternalMemberCluster.
-	// its conditionStatus can be "True" == Healthy, "False" == UnHealthy. "Unknown" is unused.
-	ConditionTypeInternalMemberClusterHealth string = "Healthy"
-)
-
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
-	// Conditions field contains the different condition statuses for this member cluster.
-	// TODO: need to be deleted
-	// +required
-	Conditions []metav1.Condition `json:"conditions"`
-
-	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
-	// TODO: need to be deleted
-	// +required
-	Capacity v1.ResourceList `json:"capacity"`
-
-	// Allocatable represents the total allocatable resources on the member cluster.
-	// TODO: need to be deleted
-	// +required
-	Allocatable v1.ResourceList `json:"allocatable"`
-
 	// Resource usage collected from member cluster.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
@@ -105,14 +75,28 @@ type InternalMemberClusterList struct {
 	Items           []InternalMemberCluster `json:"items"`
 }
 
-func (m *InternalMemberCluster) SetConditions(conditions ...metav1.Condition) {
-	for _, c := range conditions {
-		meta.SetStatusCondition(&m.Status.Conditions, c)
+func (m *InternalMemberCluster) SetConditions(agentType AgentType, conditions ...metav1.Condition) {
+	var desiredAgentStatus AgentStatus
+	for _, agentStatus := range m.Status.AgentStatus {
+		if agentType == agentStatus.Type {
+			desiredAgentStatus = agentStatus
+		}
+	}
+	if &desiredAgentStatus != nil {
+		for _, c := range conditions {
+			meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
+		}
 	}
 }
 
-func (m *InternalMemberCluster) GetCondition(conditionType string) *metav1.Condition {
-	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+func (m *InternalMemberCluster) GetCondition(agentType AgentType, conditionType string) *metav1.Condition {
+	var desiredAgentStatus AgentStatus
+	for _, agentStatus := range m.Status.AgentStatus {
+		if agentType == agentStatus.Type {
+			desiredAgentStatus = agentStatus
+		}
+	}
+	return meta.FindStatusCondition(desiredAgentStatus.Conditions, conditionType)
 }
 
 func init() {
