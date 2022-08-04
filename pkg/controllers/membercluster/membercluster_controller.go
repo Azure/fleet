@@ -140,7 +140,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster, 
 //
 // Note that leave doesn't delete any of the resources created by join(). Instead, deleting MemberCluster will delete them.
 func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster, imc *fleetv1alpha1.InternalMemberCluster) error {
-	// Never joined before.
+	// Never joined successfully before.
 	if imc == nil {
 		return nil
 	}
