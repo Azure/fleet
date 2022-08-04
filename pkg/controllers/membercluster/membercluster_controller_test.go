@@ -150,7 +150,7 @@ func TestSyncRole(t *testing.T) {
 								Name:      "fleet-role-mc1",
 								Namespace: namespace1,
 							},
-							Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.LeaseRule},
+							Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.LeaseRule, utils.WorkRule},
 						}
 						return nil
 					},
@@ -450,7 +450,7 @@ func TestSyncRoleBinding(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			_, err := tt.r.syncRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName)
+			err := tt.r.syncRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
