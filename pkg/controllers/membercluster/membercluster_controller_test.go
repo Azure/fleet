@@ -8,7 +8,6 @@ package membercluster
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
@@ -34,24 +34,13 @@ const (
 	namespace3 = "fleet-member-mc3"
 )
 
-func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
-	createMock := func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-		o := obj.(*corev1.Namespace)
-		if o.Name == namespace2 {
-			return nil
-		}
-		return errors.New("namespace cannot be created")
-	}
-
-	memberCluster := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
-	expectedEvent := utils.GetEventString(&memberCluster, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created")
-
+func TestSyncNamespace(t *testing.T) {
 	tests := map[string]struct {
 		r                   *Reconciler
 		memberCluster       *fleetv1alpha1.MemberCluster
 		wantedNamespaceName string
 		wantedEvent         string
-		wantedError         error
+		wantedError         string
 	}{
 		"namespace exists": {
 			r: &Reconciler{
@@ -67,33 +56,39 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
-			wantedError:         nil,
+			wantedError:         "",
 		},
 		"namespace doesn't exist": {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+						return apierrors.NewNotFound(schema.GroupResource{}, "")
 					},
-					MockCreate: createMock},
+					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+						return nil
+					},
+				},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster:       &memberCluster,
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}},
 			wantedNamespaceName: namespace2,
-			wantedEvent:         expectedEvent,
-			wantedError:         nil,
+			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
+			wantedError:         "",
 		},
 		"namespace create error": {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
+						return apierrors.NewNotFound(schema.GroupResource{}, "")
 					},
-					MockCreate: createMock},
+					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+						return errors.New("namespace cannot be created")
+					},
+				},
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}},
 			wantedNamespaceName: "",
-			wantedError:         errors.New("namespace cannot be created"),
+			wantedError:         "namespace cannot be created",
 		},
 		"namespace get error": {
 			r: &Reconciler{
@@ -105,41 +100,29 @@ func TestReconcilerCheckAndCreateNamespace(t *testing.T) {
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			wantedNamespaceName: "",
-			wantedError:         errors.New("namespace cannot be retrieved"),
+			wantedError:         "namespace cannot be retrieved",
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got, err := tt.r.checkAndCreateNamespace(context.Background(), tt.memberCluster)
+			got, err := tt.r.syncNamespace(context.Background(), tt.memberCluster)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 			assert.Equalf(t, tt.wantedNamespaceName, got, utils.TestCaseMsg, testName)
 		})
 	}
 }
 
-func TestReconcilerCheckAndCreateRole(t *testing.T) {
-	createMock := func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-		o := obj.(*rbacv1.Role)
-		if o.Name == "fleet-role-mc3" && o.Namespace == namespace3 {
-			return nil
-		}
-		return errors.New("role cannot be created")
-	}
-
-	updateMock := func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-		o := obj.(*rbacv1.Role)
-		if o.Name == "fleet-role-mc6" && o.Namespace == "fleet-mc6" {
-			return errors.New("role cannot be updated")
-		}
-		return nil
-	}
-
+func TestSyncRole(t *testing.T) {
 	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
 	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
@@ -151,7 +134,7 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 		namespaceName  string
 		wantedRoleName string
 		wantedEvent    string
-		wantedError    error
+		wantedError    string
 	}{
 		"role exists but no diff": {
 			r: &Reconciler{
@@ -176,7 +159,7 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			namespaceName:  namespace1,
 			wantedRoleName: "fleet-role-mc1",
-			wantedError:    nil,
+			wantedError:    "",
 		},
 		"role exists but with diff": {
 			r: &Reconciler{
@@ -191,14 +174,17 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 						}
 						return nil
 					},
-					MockUpdate: updateMock},
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster:  &expectedMemberCluster1,
 			namespaceName:  namespace2,
 			wantedRoleName: "fleet-role-mc2",
 			wantedEvent:    expectedEvent1,
-			wantedError:    nil,
+			wantedError:    "",
 		},
 		"role doesn't exist": {
 			r: &Reconciler{
@@ -206,14 +192,17 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
 					},
-					MockCreate: createMock},
+					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+						return nil
+					},
+				},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster:  &expectedMemberCluster2,
 			namespaceName:  namespace3,
 			wantedRoleName: "fleet-role-mc3",
 			wantedEvent:    expectedEvent2,
-			wantedError:    nil,
+			wantedError:    "",
 		},
 		"role create error": {
 			r: &Reconciler{
@@ -221,12 +210,14 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
 					},
-					MockCreate: createMock},
+					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+						return errors.New("role cannot be created")
+					}},
 			},
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			namespaceName:  "fleet-mc4",
 			wantedRoleName: "",
-			wantedError:    errors.New("role cannot be created"),
+			wantedError:    "role cannot be created",
 		},
 		"role get error": {
 			r: &Reconciler{
@@ -239,20 +230,30 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
 			namespaceName:  "fleet-mc5",
 			wantedRoleName: "",
-			wantedError:    errors.New("role cannot be retrieved"),
+			wantedError:    "role cannot be retrieved",
 		},
 		"role update error": {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*rbacv1.Role)
+						*o = rbacv1.Role{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "fleet-role-mc6",
+								Namespace: "fleet-mc6",
+							},
+						}
 						return nil
 					},
-					MockUpdate: updateMock},
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return errors.New("role cannot be updated")
+					},
+				},
 			},
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
 			namespaceName:  "fleet-mc6",
 			wantedRoleName: "",
-			wantedError:    errors.New("role cannot be updated"),
+			wantedError:    "role cannot be updated",
 		},
 	}
 
@@ -264,13 +265,17 @@ func TestReconcilerCheckAndCreateRole(t *testing.T) {
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 			assert.Equalf(t, tt.wantedRoleName, got, utils.TestCaseMsg, testName)
 		})
 	}
 }
 
-func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
+func TestSyncRoleBinding(t *testing.T) {
 	identity := rbacv1.Subject{
 		Kind: "User",
 		Name: "MemberClusterIdentity",
@@ -292,8 +297,14 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		return nil
 	}
 
-	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
-	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "mc2"},
+		Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+	}
+	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
+		Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+	}
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 
@@ -302,9 +313,8 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 		memberCluster *fleetv1alpha1.MemberCluster
 		namespaceName string
 		roleName      string
-		identity      rbacv1.Subject
 		wantedEvent   string
-		wantedError   error
+		wantedError   string
 	}{
 		"role binding but no diff": {
 			r: &Reconciler{
@@ -332,11 +342,13 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "mc1"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+			},
 			namespaceName: namespace1,
 			roleName:      "fleet-role-mc1",
-			identity:      identity,
-			wantedError:   nil,
+			wantedError:   "",
 		},
 		"role binding but with diff": {
 			r: &Reconciler{
@@ -368,9 +380,8 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 			memberCluster: &expectedMemberCluster1,
 			namespaceName: namespace2,
 			roleName:      "fleet-role-mc2",
-			identity:      identity,
 			wantedEvent:   expectedEvent1,
-			wantedError:   nil,
+			wantedError:   "",
 		},
 		"role binding doesn't exist": {
 			r: &Reconciler{
@@ -384,9 +395,8 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 			memberCluster: &expectedMemberCluster2,
 			namespaceName: namespace3,
 			roleName:      "fleet-role-mc3",
-			identity:      identity,
 			wantedEvent:   expectedEvent2,
-			wantedError:   nil,
+			wantedError:   "",
 		},
 		"role binding create error": {
 			r: &Reconciler{
@@ -396,11 +406,13 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 					},
 					MockCreate: createMock},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "mc4"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+			},
 			namespaceName: "fleet-mc4",
 			roleName:      "fleet-role-mc4",
-			identity:      identity,
-			wantedError:   errors.New("role binding cannot be created"),
+			wantedError:   "role binding cannot be created",
 		},
 		"role binding get error": {
 			r: &Reconciler{
@@ -410,11 +422,13 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "mc5"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+			},
 			namespaceName: "fleet-mc5",
 			roleName:      "fleet-role-mc5",
-			identity:      identity,
-			wantedError:   errors.New("role binding cannot be retrieved"),
+			wantedError:   "role binding cannot be retrieved",
 		},
 		"role binding update error": {
 			r: &Reconciler{
@@ -424,28 +438,34 @@ func TestReconcilerCheckAndCreateRolebinding(t *testing.T) {
 					},
 					MockUpdate: updateMock},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
+			memberCluster: &fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "mc6"},
+				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+			},
 			namespaceName: "fleet-mc6",
 			roleName:      "fleet-role-mc6",
-			identity:      identity,
-			wantedError:   errors.New("role binding cannot be updated"),
+			wantedError:   "role binding cannot be updated",
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			err := tt.r.syncRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName, identity)
+			_, err := tt.r.syncRoleBinding(context.Background(), tt.memberCluster, tt.namespaceName, tt.roleName)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 		})
 	}
 }
 
-func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
+func TestSyncInternalMemberCluster(t *testing.T) {
 	updateMock := func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o := obj.(*fleetv1alpha1.InternalMemberCluster)
 		if o.Name == "mc3" {
@@ -465,7 +485,7 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
 	}
 
 	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{
@@ -474,52 +494,37 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
 	}
 
-	controllerBool := true
-	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, fmt.Sprintf("internal member cluster spec is marked as %s", expectedMemberCluster1.Spec.State))
+	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 
 	tests := map[string]struct {
-		r                           *Reconciler
-		memberCluster               *fleetv1alpha1.MemberCluster
-		namespaceName               string
-		wantedEvent                 string
-		wantedInternalMemberCluster *fleetv1alpha1.InternalMemberCluster
-		wantedError                 error
+		r                               *Reconciler
+		memberCluster                   *fleetv1alpha1.MemberCluster
+		namespaceName                   string
+		internalMemberCluster           *fleetv1alpha1.InternalMemberCluster
+		wantedEvent                     string
+		wantedInternalMemberClusterSpec *fleetv1alpha1.InternalMemberClusterSpec
+		wantedError                     string
 	}{
 		"internal member cluster exists and spec is updated": {
 			r: &Reconciler{
 				Client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						o := obj.(*fleetv1alpha1.InternalMemberCluster)
-						*o = fleetv1alpha1.InternalMemberCluster{
-							Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
-							ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
-						}
-						return nil
-					},
 					MockUpdate: updateMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &expectedMemberCluster1,
 			namespaceName: namespace1,
-			wantedEvent:   expectedEvent1,
-			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
 				ObjectMeta: metav1.ObjectMeta{Name: "mc1", Namespace: namespace1},
-				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
-			wantedError: nil,
+			wantedEvent:                     expectedEvent1,
+			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
+			wantedError:                     "",
 		},
 		"internal member cluster exists and spec is not updated ": {
 			r: &Reconciler{
 				Client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						o := obj.(*fleetv1alpha1.InternalMemberCluster)
-						*o = fleetv1alpha1.InternalMemberCluster{
-							Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
-							ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
-						}
-						return nil
-					},
 					MockUpdate: updateMock},
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{
@@ -528,89 +533,70 @@ func TestMarkInternalMemberClusterStateJoin(t *testing.T) {
 				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			namespaceName: namespace2,
-			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "mc2", Namespace: namespace2},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc2", Namespace: namespace2},
 			},
-			wantedError: nil,
+			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+			wantedError:                     "",
 		},
 		"internal member cluster update error": {
 			r: &Reconciler{Client: &test.MockClient{
-				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					o := obj.(*fleetv1alpha1.InternalMemberCluster)
-					*o = fleetv1alpha1.InternalMemberCluster{
-						Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
-						ObjectMeta: metav1.ObjectMeta{Name: key.Name, Namespace: key.Namespace},
-					}
-					return nil
-				},
 				MockUpdate: updateMock}},
 			memberCluster: &fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
 				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
 			},
 			namespaceName: namespace3,
-			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "mc3", Namespace: namespace3},
-				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc3", Namespace: namespace2},
 			},
-			wantedError: errors.New("internal member cluster cannot be updated"),
+			wantedInternalMemberClusterSpec: nil,
+			wantedError:                     "internal member cluster cannot be updated",
 		},
 		"internal member cluster gets created": {
 			r: &Reconciler{
 				Client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "InternalMemberCluster"}, key.Name)
-					},
 					MockCreate: createMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster: &expectedMemberCluster2,
-			namespaceName: "fleet-mc4",
-			wantedInternalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "mc4", Namespace: "fleet-mc4", OwnerReferences: []metav1.OwnerReference{
-					{APIVersion: expectedMemberCluster2.APIVersion, Kind: expectedMemberCluster2.Kind, Name: expectedMemberCluster2.Name, UID: expectedMemberCluster2.UID, Controller: &controllerBool}}},
-				Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
-			},
-			wantedEvent: expectedEvent2,
-			wantedError: nil,
+			memberCluster:                   &expectedMemberCluster2,
+			namespaceName:                   "fleet-mc4",
+			internalMemberCluster:           nil,
+			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+			wantedEvent:                     expectedEvent2,
+			wantedError:                     "",
 		},
 		"internal member cluster create error": {
 			r: &Reconciler{
 				Client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "InternalMemberCluster"}, key.Name)
-					},
 					MockCreate: createMock},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
-			namespaceName: "fleet-mc5",
-			wantedError:   errors.New("internal member cluster cannot be created"),
-		},
-		"internal member cluster get error": {
-			r: &Reconciler{
-				Client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return errors.New("internal member cluster cannot be retrieved")
-					},
-				},
-			},
-			memberCluster: &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
-			namespaceName: "fleet-mc6",
-			wantedError:   errors.New("internal member cluster cannot be retrieved"),
+			memberCluster:                   &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
+			namespaceName:                   "fleet-mc5",
+			internalMemberCluster:           nil,
+			wantedInternalMemberClusterSpec: nil,
+			wantedError:                     "internal member cluster cannot be created",
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			imc, err := tt.r.markInternalMemberClusterStateJoin(context.Background(), tt.memberCluster, tt.namespaceName)
+			got, err := tt.r.syncInternalMemberCluster(context.Background(), tt.memberCluster, tt.namespaceName, tt.internalMemberCluster)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedInternalMemberCluster, imc, utils.TestCaseMsg, testName)
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedInternalMemberClusterSpec != nil {
+				assert.Equal(t, *tt.wantedInternalMemberClusterSpec, got.Spec, utils.TestCaseMsg, testName)
+			}
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 		})
 	}
 }
@@ -627,7 +613,7 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 
 	// check that the correct event is emitted
 	event := <-recorder.Events
-	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster is joined")
+	expected := utils.GetEventString(memberCluster, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster joined")
 	assert.Equal(t, expected, event)
 
 	// Check expected conditions.
@@ -641,13 +627,12 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	}
 }
 
-func TestCopyMemberClusterStatusFromInternalMC(t *testing.T) {
+func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	imc := fleetv1alpha1.InternalMemberCluster{}
 	mc1 := fleetv1alpha1.MemberCluster{}
 	heartBeatCondition := metav1.Condition{
-		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
 		Status: metav1.ConditionTrue,
-		Reason: "InternalMemberClusterHeartbeatReceived",
 	}
 	imc.SetConditions(heartBeatCondition)
 	mc1.SetConditions(heartBeatCondition)
@@ -656,24 +641,68 @@ func TestCopyMemberClusterStatusFromInternalMC(t *testing.T) {
 		r                     *Reconciler
 		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
 		memberCluster         *fleetv1alpha1.MemberCluster
-		wantErr               error
+		wantedMemberCluster   *fleetv1alpha1.MemberCluster
 	}{
-		"nil heartbeat condition for member cluster": {
-			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
-			memberCluster:         &fleetv1alpha1.MemberCluster{},
-			internalMemberCluster: &imc,
+		"copy": {
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+							Status: metav1.ConditionTrue,
+						},
+					},
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("100m"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+					},
+				},
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionTrue,
+							Reason: reasonMemberClusterJoined,
+						},
+					},
+					Capacity: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("100m"),
+					},
+					Allocatable: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+					},
+				},
+			},
 		},
-		"non nil heartbeat condition for member cluster": {
-			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
-			memberCluster:         &mc1,
-			internalMemberCluster: &imc,
+		"do not copy ConditionTypeInternalMemberClusterHeartbeat": {
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			memberCluster:       &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{},
 		},
 	}
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			tt.r.copyMemberClusterStatusFromInternalMC(tt.memberCluster, tt.internalMemberCluster)
-			assert.Equal(t, tt.internalMemberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat), tt.memberCluster.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat))
+			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
+			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), tt.memberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), cmpopts.IgnoreTypes(time.Time{})))
+			assert.Equal(t, tt.wantedMemberCluster.Status.Capacity, tt.memberCluster.Status.Capacity)
+			assert.Equal(t, tt.wantedMemberCluster.Status.Allocatable, tt.memberCluster.Status.Allocatable)
 		})
 	}
 }
@@ -683,7 +712,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 	tests := map[string]struct {
 		r                   *Reconciler
 		memberCluster       *fleetv1alpha1.MemberCluster
-		wantErr             error
+		wantedError         string
 		verifyNumberOfRetry func() bool
 	}{
 		"update member cluster status": {
@@ -695,7 +724,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantErr:       nil,
+			wantedError:   "",
 			verifyNumberOfRetry: func() bool {
 				return count == 0
 			},
@@ -707,12 +736,12 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 					if count == 3 {
 						return nil
 					}
-					return apierrors.NewConflict(schema.GroupResource{}, "", errors.New("error"))
+					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
 				}},
 				recorder: utils.NewFakeRecorder(10),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
-			wantErr:       nil,
+			wantedError:   "",
 			verifyNumberOfRetry: func() bool {
 				return count == 3
 			},
@@ -726,7 +755,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(10),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantErr:       apierrors.NewServerTimeout(schema.GroupResource{}, "", 1),
+			wantedError:   "The  operation against  could not be completed at this time, please try again.",
 			verifyNumberOfRetry: func() bool {
 				return count > 0
 			},
@@ -740,7 +769,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantErr:       errors.New("random update error"),
+			wantedError:   "random update error",
 			verifyNumberOfRetry: func() bool {
 				return count == 0
 			},
@@ -751,173 +780,12 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			count = -1
 			err := tt.r.updateMemberClusterStatus(context.Background(), tt.memberCluster)
-			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
-		})
-	}
-}
-
-func TestCheckJoinConditionUpdateStatus(t *testing.T) {
-	imcJoinCondition := metav1.Condition{
-		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
-		Status: metav1.ConditionTrue,
-		Reason: "InternalMemberClusterJoined",
-	}
-	mcJoinCondition := metav1.Condition{
-		Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
-		Status: metav1.ConditionTrue,
-		Reason: reasonMemberClusterJoined,
-	}
-	mcLeaveCondition := metav1.Condition{
-		Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
-		Status: metav1.ConditionFalse,
-		Reason: reasonMemberClusterJoined,
-	}
-	heartBeatCondition := metav1.Condition{
-		Type:   fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
-		Status: metav1.ConditionTrue,
-		Reason: "InternalMemberClusterHeartbeatReceived",
-	}
-	mc1 := &fleetv1alpha1.MemberCluster{
-		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
-		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
-	}
-	mc2 := &fleetv1alpha1.MemberCluster{
-		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
-		ObjectMeta: metav1.ObjectMeta{Name: "mc2", UID: "mc2-UID"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
-	}
-	imc := &fleetv1alpha1.InternalMemberCluster{}
-	imc.SetConditions(imcJoinCondition)
-	imc.SetConditions(heartBeatCondition)
-	mc1.SetConditions(mcJoinCondition)
-	mc1.SetConditions(heartBeatCondition)
-	mc2.SetConditions(mcLeaveCondition)
-
-	tests := map[string]struct {
-		r                     *Reconciler
-		memberCluster         *fleetv1alpha1.MemberCluster
-		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
-		wantedResult          bool
-	}{
-		"member cluster has not joined": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
-			memberCluster: &fleetv1alpha1.MemberCluster{
-				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
-				ObjectMeta: metav1.ObjectMeta{Name: "mc", UID: "mc-UID"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
-			},
-			internalMemberCluster: imc,
-			wantedResult:          true,
-		},
-		"member cluster has joined": {
-			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
-			memberCluster:         mc1,
-			internalMemberCluster: imc,
-			wantedResult:          false,
-		},
-		"member cluster has left & is joining again": {
-			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
-			memberCluster:         mc2,
-			internalMemberCluster: imc,
-			wantedResult:          true,
-		},
-	}
-
-	for testName, tt := range tests {
-		t.Run(testName, func(t *testing.T) {
-			actualResult := tt.r.checkJoinConditionUpdateStatus(tt.memberCluster, tt.internalMemberCluster)
-			assert.Equal(t, tt.wantedResult, actualResult, utils.TestCaseMsg, testName)
-		})
-	}
-}
-
-func TestSyncInternalMemberClusterState(t *testing.T) {
-	tests := map[string]struct {
-		r                     *Reconciler
-		memberCluster         *fleetv1alpha1.MemberCluster
-		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
-		wantedState           fleetv1alpha1.ClusterState
-		wantedHeartBeatPeriod int32
-		wantedErr             error
-	}{
-		"Internal member cluster has not joined but has heartbeat period": {
-			r: &Reconciler{
-				Client: &test.MockClient{
-					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-						o := obj.(*fleetv1alpha1.InternalMemberCluster)
-						*o = fleetv1alpha1.InternalMemberCluster{
-							Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
-						}
-						return nil
-					},
-				},
-				recorder: utils.NewFakeRecorder(1),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: 30}},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{},
-			wantedState:           fleetv1alpha1.ClusterStateJoin,
-			wantedHeartBeatPeriod: 30,
-			wantedErr:             nil,
-		},
-		"Internal member cluster has joined but no heartbeat period": {
-			r: &Reconciler{
-				Client: &test.MockClient{
-					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-						o := obj.(*fleetv1alpha1.InternalMemberCluster)
-						*o = fleetv1alpha1.InternalMemberCluster{
-							Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
-						}
-						return nil
-					},
-				},
-				recorder: utils.NewFakeRecorder(1),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30}},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin}},
-			wantedState:           fleetv1alpha1.ClusterStateJoin,
-			wantedHeartBeatPeriod: 30,
-			wantedErr:             nil,
-		},
-		"Internal member cluster has joined & has heartbeat period": {
-			r: &Reconciler{
-				Client: &test.MockClient{
-					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-						return nil
-					},
-				},
-				recorder: utils.NewFakeRecorder(1),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30}},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{Spec: fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30}},
-			wantedState:           fleetv1alpha1.ClusterStateJoin,
-			wantedHeartBeatPeriod: 30,
-			wantedErr:             nil,
-		},
-		"Error updating internal member cluster": {
-			r: &Reconciler{
-				Client: &test.MockClient{
-					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-						return errors.New("cannot update internal member cluster")
-					},
-				},
-				recorder: utils.NewFakeRecorder(1),
-			},
-			memberCluster:         &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30}},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{},
-			wantedState:           fleetv1alpha1.ClusterStateJoin,
-			wantedHeartBeatPeriod: 30,
-			wantedErr:             errors.New("cannot update internal member cluster"),
-		},
-	}
-
-	for testName, tt := range tests {
-		t.Run(testName, func(t *testing.T) {
-			actualErr := tt.r.syncInternalMemberClusterState(context.Background(), tt.memberCluster, tt.internalMemberCluster)
-			assert.Equal(t, tt.wantedErr, actualErr, utils.TestCaseMsg, testName)
-			assert.Equal(t, tt.wantedState, tt.internalMemberCluster.Spec.State, utils.TestCaseMsg, testName)
-			assert.Equal(t, tt.wantedHeartBeatPeriod, tt.internalMemberCluster.Spec.HeartbeatPeriodSeconds, utils.TestCaseMsg, testName)
 		})
 	}
 }

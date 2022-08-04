@@ -134,11 +134,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		Expect(joinCondition).NotTo(BeNil())
 		Expect(joinCondition.Status).To(Equal(metav1.ConditionTrue))
 		Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
-
-		heartBeatCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
-		Expect(heartBeatCondition).NotTo(BeNil())
-		Expect(heartBeatCondition.Status).To(Equal(metav1.ConditionTrue))
-		Expect(heartBeatCondition.Reason).To(Equal("InternalMemberClusterHeartbeatReceived"))
 	})
 
 	It("member cluster is marked as left after leave workflow is completed", func() {
