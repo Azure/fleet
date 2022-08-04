@@ -128,7 +128,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster, 
 		return errors.Wrapf(err, "failed to sync role binding %s", roleBindingName)
 	}
 
-	if _, err := r.syncInternalMemberClusterSpec(ctx, mc, namespaceName, imc); err != nil {
+	if _, err := r.syncInternalMemberCluster(ctx, mc, namespaceName, imc); err != nil {
 		return errors.Wrapf(err, "failed to sync internal member cluster spec")
 	}
 
@@ -148,7 +148,7 @@ func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster,
 
 	// Copy spec from member cluster to internal member cluster.
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
-	if _, err := r.syncInternalMemberClusterSpec(ctx, mc, namespaceName, imc); err != nil {
+	if _, err := r.syncInternalMemberCluster(ctx, mc, namespaceName, imc); err != nil {
 		return errors.Wrapf(err, "failed to sync internal member cluster spec")
 	}
 
@@ -278,8 +278,8 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	return roleBindingName, nil
 }
 
-// syncInternalMemberClusterSpec is used to sync spec from MemberCluster to InternalMemberCluster.
-func (r *Reconciler) syncInternalMemberClusterSpec(ctx context.Context, mc *fleetv1alpha1.MemberCluster, namespaceName string, current *fleetv1alpha1.InternalMemberCluster) (*fleetv1alpha1.InternalMemberCluster, error) {
+// syncInternalMemberCluster is used to sync spec from MemberCluster to InternalMemberCluster.
+func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1alpha1.MemberCluster, namespaceName string, current *fleetv1alpha1.InternalMemberCluster) (*fleetv1alpha1.InternalMemberCluster, error) {
 	expected := fleetv1alpha1.InternalMemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mc.Name,

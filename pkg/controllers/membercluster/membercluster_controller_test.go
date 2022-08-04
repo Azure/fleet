@@ -465,7 +465,7 @@ func TestSyncRoleBinding(t *testing.T) {
 	}
 }
 
-func TestSyncInternalMemberClusterSpec(t *testing.T) {
+func TestSyncInternalMemberCluster(t *testing.T) {
 	updateMock := func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o := obj.(*fleetv1alpha1.InternalMemberCluster)
 		if o.Name == "mc3" {
@@ -583,7 +583,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got, err := tt.r.syncInternalMemberClusterSpec(context.Background(), tt.memberCluster, tt.namespaceName, tt.internalMemberCluster)
+			got, err := tt.r.syncInternalMemberCluster(context.Background(), tt.memberCluster, tt.namespaceName, tt.internalMemberCluster)
 			if tt.r.recorder != nil {
 				fakeRecorder := tt.r.recorder.(*record.FakeRecorder)
 				event := <-fakeRecorder.Events
