@@ -110,6 +110,12 @@ create-hub-kind-cluster:
 create-member-kind-cluster:
 	kind create cluster --name $(MEMBER_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
+delete-hub-kind-cluster:
+	kind delete cluster --name $(HUB_KIND_CLUSTER_NAME)
+
+delete-member-kind-cluster:
+	kind delete cluster --name $(MEMBER_KIND_CLUSTER_NAME)
+
 load-hub-docker-image:
 	kind load docker-image  --name $(HUB_KIND_CLUSTER_NAME) $(REGISTRY)/$(HUB_AGENT_IMAGE_NAME):$(HUB_AGENT_IMAGE_VERSION)
 
@@ -165,7 +171,7 @@ run-e2e: build-e2e
 	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e.test -test.v -ginkgo.v
 
 .PHONY: e2e-tests
-e2e-tests: create-hub-kind-cluster create-member-kind-cluster load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e
+e2e-tests: create-hub-kind-cluster create-member-kind-cluster load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e delete-member-kind-cluster delete-hub-kind-cluster
 
 ## reviewable
 .PHONY: reviewable
