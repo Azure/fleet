@@ -40,7 +40,7 @@ func TestSyncNamespace(t *testing.T) {
 		memberCluster       *fleetv1alpha1.MemberCluster
 		wantedNamespaceName string
 		wantedEvent         string
-		wantedError         error
+		wantedError         string
 	}{
 		"namespace exists": {
 			r: &Reconciler{
@@ -56,7 +56,7 @@ func TestSyncNamespace(t *testing.T) {
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
-			wantedError:         nil,
+			wantedError:         "",
 		},
 		"namespace doesn't exist": {
 			r: &Reconciler{
@@ -73,7 +73,7 @@ func TestSyncNamespace(t *testing.T) {
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}},
 			wantedNamespaceName: namespace2,
 			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
-			wantedError:         nil,
+			wantedError:         "",
 		},
 		"namespace create error": {
 			r: &Reconciler{
@@ -88,7 +88,7 @@ func TestSyncNamespace(t *testing.T) {
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}},
 			wantedNamespaceName: "",
-			wantedError:         errors.New("namespace cannot be created"),
+			wantedError:         "namespace cannot be created",
 		},
 		"namespace get error": {
 			r: &Reconciler{
@@ -100,7 +100,7 @@ func TestSyncNamespace(t *testing.T) {
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			wantedNamespaceName: "",
-			wantedError:         errors.New("namespace cannot be retrieved"),
+			wantedError:         "namespace cannot be retrieved",
 		},
 	}
 
@@ -112,7 +112,11 @@ func TestSyncNamespace(t *testing.T) {
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 			assert.Equalf(t, tt.wantedNamespaceName, got, utils.TestCaseMsg, testName)
 		})
 	}
@@ -130,7 +134,7 @@ func TestSyncRole(t *testing.T) {
 		namespaceName  string
 		wantedRoleName string
 		wantedEvent    string
-		wantedError    error
+		wantedError    string
 	}{
 		"role exists but no diff": {
 			r: &Reconciler{
@@ -155,7 +159,7 @@ func TestSyncRole(t *testing.T) {
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			namespaceName:  namespace1,
 			wantedRoleName: "fleet-role-mc1",
-			wantedError:    nil,
+			wantedError:    "",
 		},
 		"role exists but with diff": {
 			r: &Reconciler{
@@ -180,7 +184,7 @@ func TestSyncRole(t *testing.T) {
 			namespaceName:  namespace2,
 			wantedRoleName: "fleet-role-mc2",
 			wantedEvent:    expectedEvent1,
-			wantedError:    nil,
+			wantedError:    "",
 		},
 		"role doesn't exist": {
 			r: &Reconciler{
@@ -198,7 +202,7 @@ func TestSyncRole(t *testing.T) {
 			namespaceName:  namespace3,
 			wantedRoleName: "fleet-role-mc3",
 			wantedEvent:    expectedEvent2,
-			wantedError:    nil,
+			wantedError:    "",
 		},
 		"role create error": {
 			r: &Reconciler{
@@ -213,7 +217,7 @@ func TestSyncRole(t *testing.T) {
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			namespaceName:  "fleet-mc4",
 			wantedRoleName: "",
-			wantedError:    errors.New("role cannot be created"),
+			wantedError:    "role cannot be created",
 		},
 		"role get error": {
 			r: &Reconciler{
@@ -226,7 +230,7 @@ func TestSyncRole(t *testing.T) {
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
 			namespaceName:  "fleet-mc5",
 			wantedRoleName: "",
-			wantedError:    errors.New("role cannot be retrieved"),
+			wantedError:    "role cannot be retrieved",
 		},
 		"role update error": {
 			r: &Reconciler{
@@ -249,7 +253,7 @@ func TestSyncRole(t *testing.T) {
 			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
 			namespaceName:  "fleet-mc6",
 			wantedRoleName: "",
-			wantedError:    errors.New("role cannot be updated"),
+			wantedError:    "role cannot be updated",
 		},
 	}
 
@@ -261,7 +265,11 @@ func TestSyncRole(t *testing.T) {
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 			assert.Equalf(t, tt.wantedRoleName, got, utils.TestCaseMsg, testName)
 		})
 	}
@@ -306,7 +314,7 @@ func TestSyncRoleBinding(t *testing.T) {
 		namespaceName string
 		roleName      string
 		wantedEvent   string
-		wantedError   error
+		wantedError   string
 	}{
 		"role binding but no diff": {
 			r: &Reconciler{
@@ -340,7 +348,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			},
 			namespaceName: namespace1,
 			roleName:      "fleet-role-mc1",
-			wantedError:   nil,
+			wantedError:   "",
 		},
 		"role binding but with diff": {
 			r: &Reconciler{
@@ -373,7 +381,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			namespaceName: namespace2,
 			roleName:      "fleet-role-mc2",
 			wantedEvent:   expectedEvent1,
-			wantedError:   nil,
+			wantedError:   "",
 		},
 		"role binding doesn't exist": {
 			r: &Reconciler{
@@ -388,7 +396,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			namespaceName: namespace3,
 			roleName:      "fleet-role-mc3",
 			wantedEvent:   expectedEvent2,
-			wantedError:   nil,
+			wantedError:   "",
 		},
 		"role binding create error": {
 			r: &Reconciler{
@@ -404,7 +412,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			},
 			namespaceName: "fleet-mc4",
 			roleName:      "fleet-role-mc4",
-			wantedError:   errors.New("role binding cannot be created"),
+			wantedError:   "role binding cannot be created",
 		},
 		"role binding get error": {
 			r: &Reconciler{
@@ -420,7 +428,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			},
 			namespaceName: "fleet-mc5",
 			roleName:      "fleet-role-mc5",
-			wantedError:   errors.New("role binding cannot be retrieved"),
+			wantedError:   "role binding cannot be retrieved",
 		},
 		"role binding update error": {
 			r: &Reconciler{
@@ -436,7 +444,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			},
 			namespaceName: "fleet-mc6",
 			roleName:      "fleet-role-mc6",
-			wantedError:   errors.New("role binding cannot be updated"),
+			wantedError:   "role binding cannot be updated",
 		},
 	}
 
@@ -448,7 +456,11 @@ func TestSyncRoleBinding(t *testing.T) {
 				event := <-fakeRecorder.Events
 				assert.Equal(t, tt.wantedEvent, event)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 		})
 	}
 }
@@ -492,7 +504,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 		internalMemberCluster           *fleetv1alpha1.InternalMemberCluster
 		wantedEvent                     string
 		wantedInternalMemberClusterSpec *fleetv1alpha1.InternalMemberClusterSpec
-		wantedError                     error
+		wantedError                     string
 	}{
 		"internal member cluster exists and spec is updated": {
 			r: &Reconciler{
@@ -508,7 +520,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 			},
 			wantedEvent:                     expectedEvent1,
 			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
-			wantedError:                     nil,
+			wantedError:                     "",
 		},
 		"internal member cluster exists and spec is not updated ": {
 			r: &Reconciler{
@@ -526,7 +538,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "mc2", Namespace: namespace2},
 			},
 			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
-			wantedError:                     nil,
+			wantedError:                     "",
 		},
 		"internal member cluster update error": {
 			r: &Reconciler{Client: &test.MockClient{
@@ -541,7 +553,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "mc3", Namespace: namespace2},
 			},
 			wantedInternalMemberClusterSpec: nil,
-			wantedError:                     errors.New("internal member cluster cannot be updated"),
+			wantedError:                     "internal member cluster cannot be updated",
 		},
 		"internal member cluster gets created": {
 			r: &Reconciler{
@@ -554,7 +566,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 			internalMemberCluster:           nil,
 			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
 			wantedEvent:                     expectedEvent2,
-			wantedError:                     nil,
+			wantedError:                     "",
 		},
 		"internal member cluster create error": {
 			r: &Reconciler{
@@ -565,7 +577,7 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 			namespaceName:                   "fleet-mc5",
 			internalMemberCluster:           nil,
 			wantedInternalMemberClusterSpec: nil,
-			wantedError:                     errors.New("internal member cluster cannot be created"),
+			wantedError:                     "internal member cluster cannot be created",
 		},
 	}
 
@@ -580,7 +592,11 @@ func TestSyncInternalMemberClusterSpec(t *testing.T) {
 			if tt.wantedInternalMemberClusterSpec != nil {
 				assert.Equal(t, *tt.wantedInternalMemberClusterSpec, got.Spec, utils.TestCaseMsg, testName)
 			}
-			assert.Equal(t, tt.wantedError, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 		})
 	}
 }
@@ -626,7 +642,6 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
 		memberCluster         *fleetv1alpha1.MemberCluster
 		wantedMemberCluster   *fleetv1alpha1.MemberCluster
-		wantErr               error
 	}{
 		"copy": {
 			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
@@ -697,7 +712,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 	tests := map[string]struct {
 		r                   *Reconciler
 		memberCluster       *fleetv1alpha1.MemberCluster
-		wantErr             error
+		wantedError         string
 		verifyNumberOfRetry func() bool
 	}{
 		"update member cluster status": {
@@ -709,7 +724,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantErr:       nil,
+			wantedError:   "",
 			verifyNumberOfRetry: func() bool {
 				return count == 0
 			},
@@ -726,7 +741,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(10),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
-			wantErr:       nil,
+			wantedError:   "",
 			verifyNumberOfRetry: func() bool {
 				return count == 3
 			},
@@ -740,7 +755,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(10),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantErr:       apierrors.NewServerTimeout(schema.GroupResource{}, "", 1),
+			wantedError:   "The  operation against  could not be completed at this time, please try again.",
 			verifyNumberOfRetry: func() bool {
 				return count > 0
 			},
@@ -754,7 +769,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			},
 			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantErr:       errors.New("random update error"),
+			wantedError:   "random update error",
 			verifyNumberOfRetry: func() bool {
 				return count == 0
 			},
@@ -765,7 +780,11 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			count = -1
 			err := tt.r.updateMemberClusterStatus(context.Background(), tt.memberCluster)
-			assert.Equal(t, tt.wantErr, err, utils.TestCaseMsg, testName)
+			if tt.wantedError == "" {
+				assert.Equal(t, err, nil, utils.TestCaseMsg, testName)
+			} else {
+				assert.Contains(t, err.Error(), tt.wantedError, utils.TestCaseMsg, testName)
+			}
 			assert.Equal(t, tt.verifyNumberOfRetry(), true, utils.TestCaseMsg, testName)
 		})
 	}
