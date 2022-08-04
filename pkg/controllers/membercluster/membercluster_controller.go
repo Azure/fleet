@@ -132,7 +132,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster, 
 		return errors.Wrapf(err, "failed to sync internal member cluster spec")
 	}
 
-	markMemberClusterReadyToJoin(r.recorder, mc, metav1.ConditionTrue)
+	markMemberClusterReadyToJoin(r.recorder, mc)
 	return nil
 }
 
@@ -171,13 +171,13 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		if !apierrors.IsNotFound(err) {
 			return "", errors.Wrapf(err, "failed to get namespace %s", namespaceName)
 		}
-		klog.V(3).InfoS("creating namespace for member cluster %s", klog.KObj(mc), "namespace", expected)
+		klog.V(2).InfoS("creating namespace for member cluster %s", klog.KObj(mc), "namespace", namespaceName)
 		// Make sure the entire namespace is removed if the member cluster is deleted.
 		if err = r.Client.Create(ctx, &expected, client.FieldOwner(mc.GetUID())); err != nil {
 			return "", errors.Wrapf(err, "failed to create namespace %s", namespaceName)
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created")
-		klog.V(3).InfoS("created namespace for member cluster %s", klog.KObj(mc), "namespace", expected)
+		klog.V(2).InfoS("created namespace for member cluster %s", klog.KObj(mc), "namespace", namespaceName)
 		return namespaceName, nil
 	}
 
@@ -206,7 +206,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 		if !apierrors.IsNotFound(err) {
 			return "", errors.Wrapf(err, "failed to get role %s", roleName)
 		}
-		klog.V(3).InfoS("creating role for member cluster %s", klog.KObj(mc), "role", roleName)
+		klog.V(2).InfoS("creating role for member cluster %s", klog.KObj(mc), "role", roleName)
 		if err = r.Client.Create(ctx, &expected, client.FieldOwner(mc.GetUID())); err != nil {
 			return "", errors.Wrapf(err, "failed to create role %s with rules %+v", roleName, expected.Rules)
 		}
@@ -221,7 +221,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	}
 	current.Rules = expected.Rules
 	fmt.Printf("updating role for member cluster")
-	klog.V(3).InfoS("updating role for member cluster %s", klog.KObj(mc), "role", roleName)
+	klog.V(2).InfoS("updating role for member cluster %s", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &current, client.FieldOwner(mc.GetUID())); err != nil {
 		return "", errors.Wrapf(err, "failed to update role %s with rules %+v", roleName, current.Rules)
 	}
@@ -254,7 +254,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 		if !apierrors.IsNotFound(err) {
 			return "", errors.Wrapf(err, "failed to get role binding %s", roleBindingName)
 		}
-		klog.V(3).InfoS("creating role binding for member cluster %s", klog.KObj(mc), "roleBinding", roleBindingName)
+		klog.V(2).InfoS("creating role binding for member cluster %s", klog.KObj(mc), "roleBinding", roleBindingName)
 		if err = r.Client.Create(ctx, &expected, client.FieldOwner(mc.GetUID())); err != nil {
 			return "", errors.Wrapf(err, "failed to create role binding %s", roleBindingName)
 		}
@@ -269,7 +269,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	}
 	current.Subjects = expected.Subjects
 	current.RoleRef = expected.RoleRef
-	klog.V(3).InfoS("updating role binding for member cluster %s", klog.KObj(mc), "roleBinding", roleBindingName)
+	klog.V(2).InfoS("updating role binding for member cluster %s", klog.KObj(mc), "roleBinding", roleBindingName)
 	if err := r.Client.Update(ctx, &expected, client.FieldOwner(mc.GetUID())); err != nil {
 		return "", errors.Wrapf(err, "failed to update role binding %s", roleBindingName)
 	}
@@ -294,7 +294,7 @@ func (r *Reconciler) syncInternalMemberClusterSpec(ctx context.Context, mc *flee
 
 	// Creates internal member cluster if not found.
 	if current == nil {
-		klog.V(3).InfoS("creating internal member cluster %s", klog.KObj(&expected), "spec", expected.Spec)
+		klog.V(2).InfoS("creating internal member cluster %s", klog.KObj(&expected), "spec", expected.Spec)
 		if err := r.Client.Create(ctx, &expected, client.FieldOwner(mc.GetUID())); err != nil {
 			return nil, errors.Wrapf(err, "failed to create internal member cluster %s with spec %+v", klog.KObj(&expected), expected.Spec)
 		}
@@ -308,7 +308,7 @@ func (r *Reconciler) syncInternalMemberClusterSpec(ctx context.Context, mc *flee
 		return current, nil
 	}
 	current.Spec = expected.Spec
-	klog.V(3).InfoS("updating internal member cluster spec %s", klog.KObj(current), "spec", current.Spec)
+	klog.V(2).InfoS("updating internal member cluster spec %s", klog.KObj(current), "spec", current.Spec)
 	if err := r.Client.Update(ctx, current, client.FieldOwner(mc.GetUID())); err != nil {
 		return nil, errors.Wrapf(err, "failed to update internal member cluster %s with spec %+v", klog.KObj(current), current.Spec)
 	}
@@ -371,16 +371,23 @@ func (r *Reconciler) syncJoinedCondition(imc *fleetv1alpha1.InternalMemberCluste
 }
 
 // markMemberClusterReadyToJoin is used to update the ReadyToJoin condition of member cluster.
-func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj, status metav1.ConditionStatus) {
-	klog.V(2).InfoS("mark member cluster ready to join", "memberService", mc.GetName(), "status", status)
-	recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterReadyToJoin, fmt.Sprintf("member cluster ready to join: %s", status))
-	readyToJoinCondition := &metav1.Condition{
+func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	klog.V(5).InfoS("markMemberClusterReadyToJoin", "MemberCluster", klog.KObj(mc))
+	newCondition := metav1.Condition{
 		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
-		Status:             status,
+		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterReadyToJoin,
 		ObservedGeneration: mc.GetGeneration(),
 	}
-	mc.SetConditions(*readyToJoinCondition)
+
+	// Joined status changed.
+	existingCondition := mc.GetCondition(newCondition.Type)
+	if existingCondition == nil || existingCondition.Status != newCondition.Status {
+		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterReadyToJoin, "member cluster ready to join")
+		klog.V(2).InfoS("member cluster ready to join", "MemberCluster", klog.KObj(mc))
+	}
+
+	mc.SetConditions(newCondition)
 }
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
@@ -418,7 +425,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	existingCondition := mc.GetCondition(newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
-		klog.V(2).InfoS("joined", "MemberCluster", klog.KObj(mc))
+		klog.V(2).InfoS("left", "MemberCluster", klog.KObj(mc))
 		metrics.ReportJoinResultMetric()
 	}
 
