@@ -1,0 +1,27 @@
+# We use a headless service for webhook assuming the apiserver's dns can resolve it.
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+  labels:
+    {{- include "hub-agent.labels" . | nindent 4 }}      
+  name: fleetwebhook
+  namespace: {{ .Values.namespace }} 
+spec:
+  clusterIP: None
+  clusterIPs:
+  - None
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: client
+    port: 9443
+    protocol: TCP
+    targetPort: 9443
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "hub-agent.selectorLabels" . | nindent 4 }}
+  sessionAffinity: None
+  type: ClusterIP

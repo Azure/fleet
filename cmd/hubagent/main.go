@@ -5,6 +5,7 @@ Licensed under the MIT license.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -14,9 +15,11 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/webhook"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
@@ -27,8 +30,14 @@ var (
 	scheme               = runtime.NewScheme()
 	probeAddr            = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	enableLeaderElection = flag.Bool("leader-elect", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	enableLeaderElection = flag.Bool("leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	enableWebhook        = flag.Bool("enable-webhook", false, "If set, the fleet webhook is enabled.")
+)
+
+const (
+	FleetWebhookCertDir     = "/tmp/k8s-webhook-server/serving-certs"
+	FleetWebhookPort        = 9443
+	LeaderElectionNamespace = "kube-system"
 )
 
 func init() {
@@ -47,12 +56,14 @@ func main() {
 	defer klog.Flush()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     *metricsAddr,
-		Port:                   9446,
-		HealthProbeBindAddress: *probeAddr,
-		LeaderElection:         *enableLeaderElection,
-		LeaderElectionID:       "984738fa.hub.fleet.azure.com",
+		Scheme:                  scheme,
+		MetricsBindAddress:      *metricsAddr,
+		Port:                    FleetWebhookPort,
+		CertDir:                 FleetWebhookCertDir,
+		HealthProbeBindAddress:  *probeAddr,
+		LeaderElection:          *enableLeaderElection,
+		LeaderElectionNamespace: LeaderElectionNamespace,
+		LeaderElectionID:        "984738fa.hub.fleet.azure.com",
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start controller manager.")
@@ -76,10 +87,50 @@ func main() {
 		klog.ErrorS(err, "unable to set up ready check")
 		os.Exit(1)
 	}
+
+	if *enableWebhook {
+		// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start
+		caPEM, err := webhook.GenCertificate(FleetWebhookCertDir)
+		if err != nil {
+			klog.ErrorS(err, "fail to generate certificates for webhook server")
+			os.Exit(1)
+		}
+
+		if err := mgr.Add(&webhookApiserverConfigurator{
+			mgr:   mgr,
+			caPEM: caPEM,
+			port:  FleetWebhookPort,
+		}); err != nil {
+			klog.ErrorS(err, "unable to add webhookApiserverConfigurator")
+			os.Exit(1)
+		}
+		if err := webhook.AddToManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to register webhooks to the manager")
+			os.Exit(1)
+		}
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		klog.ErrorS(err, "problem starting manager")
 		os.Exit(1)
 	}
+}
+
+type webhookApiserverConfigurator struct {
+	mgr   manager.Manager
+	caPEM []byte
+	port  int
+}
+
+var _ manager.Runnable = &webhookApiserverConfigurator{}
+
+func (c *webhookApiserverConfigurator) Start(ctx context.Context) error {
+	klog.V(2).InfoS("setting up webhooks in apiserver from the leader")
+	if err := webhook.CreateFleetWebhookConfiguration(ctx, c.mgr.GetClient(), c.caPEM, c.port); err != nil {
+		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
+		os.Exit(1)
+	}
+	return nil
 }

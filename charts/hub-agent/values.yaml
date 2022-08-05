@@ -12,6 +12,8 @@ image:
 
 logVerbosity: 2
 
+enableWebhook: false
+
 namespace:
   fleet-system
 
