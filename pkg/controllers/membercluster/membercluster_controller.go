@@ -46,7 +46,8 @@ const (
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	client.Client
-	recorder record.EventRecorder
+	recorder                 record.EventRecorder
+	NetworkingAgentsRequired bool // whether it needs to handle networking agents join/unjoin
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
