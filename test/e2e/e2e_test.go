@@ -27,10 +27,12 @@ var (
 	HubCluster        = framework.NewCluster(hubClusterName, scheme)
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
-	testManifestFiles embed.FS
 	scheme            = runtime.NewScheme()
 	genericCodecs     = serializer.NewCodecFactory(scheme)
 	genericCodec      = genericCodecs.UniversalDeserializer()
+
+	//go:embed manifests
+	testManifestFiles embed.FS
 )
 
 func init() {
