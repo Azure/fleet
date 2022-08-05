@@ -32,7 +32,7 @@ var (
 	metricsAddr             = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	enableLeaderElection    = flag.Bool("leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	enableWebhook           = flag.Bool("enable-webhook", false, "If set, the fleet webhook is enabled.")
-  networkingAgentsEnabled = flag.Bool("networking-agents-enabled", false, "Whether the networking agents are enabled or not.")
+	networkingAgentsEnabled = flag.Bool("networking-agents-enabled", false, "Whether the networking agents are enabled or not.")
 )
 
 const (
