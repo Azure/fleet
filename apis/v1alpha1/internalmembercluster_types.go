@@ -75,28 +75,31 @@ type InternalMemberClusterList struct {
 	Items           []InternalMemberCluster `json:"items"`
 }
 
-func (m *InternalMemberCluster) SetConditions(agentType AgentType, conditions ...metav1.Condition) {
+func (m *InternalMemberCluster) SetConditionsWithType(agentType AgentType, conditions ...metav1.Condition) {
 	var desiredAgentStatus AgentStatus
 	for _, agentStatus := range m.Status.AgentStatus {
 		if agentType == agentStatus.Type {
 			desiredAgentStatus = agentStatus
 		}
 	}
-	if &desiredAgentStatus != nil {
+	if desiredAgentStatus.Type == agentType {
 		for _, c := range conditions {
 			meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
 		}
 	}
 }
 
-func (m *InternalMemberCluster) GetCondition(agentType AgentType, conditionType string) *metav1.Condition {
+func (m *InternalMemberCluster) GetConditionWithType(agentType AgentType, conditionType string) *metav1.Condition {
 	var desiredAgentStatus AgentStatus
 	for _, agentStatus := range m.Status.AgentStatus {
 		if agentType == agentStatus.Type {
 			desiredAgentStatus = agentStatus
 		}
 	}
-	return meta.FindStatusCondition(desiredAgentStatus.Conditions, conditionType)
+	if desiredAgentStatus.Type == agentType {
+		return meta.FindStatusCondition(desiredAgentStatus.Conditions, conditionType)
+	}
+	return nil
 }
 
 func init() {

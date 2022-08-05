@@ -6,7 +6,6 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,16 +53,6 @@ type MemberClusterStatus struct {
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Capacity represents the total resources of all the nodes within the member cluster.
-	// TODO: need to be deleted
-	// +optional
-	Capacity v1.ResourceList `json:"capacity,omitempty"`
-
-	// Allocatable represents the total resources of all the nodes within the member cluster that are available for scheduling.
-	// TODO: need to be deleted
-	// +optional
-	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
-
 	// Resource usage collected from member cluster.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
@@ -110,6 +99,33 @@ func (m *MemberCluster) GetCondition(conditionType string) *metav1.Condition {
 func (m *MemberCluster) RemoveCondition(conditionType string) {
 	meta.RemoveStatusCondition(&m.Status.Conditions, conditionType)
 }
+
+//func (m *MemberCluster) SetConditionsWithType(agentType AgentType, conditions ...metav1.Condition) {
+//	var desiredAgentStatus AgentStatus
+//	for _, agentStatus := range m.Status.AgentStatus {
+//		if agentType == agentStatus.Type {
+//			desiredAgentStatus = agentStatus
+//		}
+//	}
+//	if desiredAgentStatus.Type == agentType {
+//		for _, c := range conditions {
+//			meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
+//		}
+//	}
+//}
+//
+//func (m *MemberCluster) GetConditionWithType(agentType AgentType, conditionType string) *metav1.Condition {
+//	var desiredAgentStatus AgentStatus
+//	for _, agentStatus := range m.Status.AgentStatus {
+//		if agentType == agentStatus.Type {
+//			desiredAgentStatus = agentStatus
+//		}
+//	}
+//	if desiredAgentStatus.Type == agentType {
+//		return meta.FindStatusCondition(desiredAgentStatus.Conditions, conditionType)
+//	}
+//	return nil
+//}
 
 func init() {
 	SchemeBuilder.Register(&MemberCluster{}, &MemberClusterList{})

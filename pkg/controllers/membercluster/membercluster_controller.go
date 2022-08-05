@@ -8,6 +8,7 @@ package membercluster
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -41,6 +42,10 @@ const (
 	reasonMemberClusterReadyToJoin = "MemberClusterReadyToJoin"
 	reasonMemberClusterJoined      = "MemberClusterJoined"
 	reasonMemberClusterLeft        = "MemberClusterLeft"
+)
+
+const (
+	numberOfAgents = 3
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -330,15 +335,14 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.Internal
 		return
 	}
 
-	// TODO: Use the new agent condition structure
-	r.syncJoinedCondition(imc, mc)
+	// Copy Agent status.
+	mc.Status.AgentStatus = imc.Status.AgentStatus
+	r.syncJoinedCondition(mc)
 	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealth.
 	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHeartbeat as this condition type is not defined at all.
 
-	// TODO: Use the new resource structure
 	// Copy resource usages.
-	mc.Status.Capacity = imc.Status.Capacity
-	mc.Status.Allocatable = imc.Status.Allocatable
+	mc.Status.ResourceUsage = imc.Status.ResourceUsage
 }
 
 // updateMemberClusterStatus is used to update member cluster status.
@@ -356,22 +360,28 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 		})
 }
 
-func (r *Reconciler) syncJoinedCondition(imc *fleetv1alpha1.InternalMemberCluster, mc *fleetv1alpha1.MemberCluster) {
+func (r *Reconciler) syncJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncJoinedCondition", "memberCluster", klog.KObj(mc))
-	// Copy conditions.
-	imcCondition := imc.GetCondition(fleetv1alpha1.ConditionTypeInternalMemberClusterJoin)
-	mcCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-	if imcCondition == nil {
-		if mcCondition != nil {
-			mc.RemoveCondition(mcCondition.Type)
+	if len(mc.Status.AgentStatus) < numberOfAgents {
+		return
+	}
+	joined := true
+	for _, agentStatus := range mc.Status.AgentStatus {
+		conditions := agentStatus.Conditions
+		condition := meta.FindStatusCondition(conditions, string(fleetv1alpha1.AgentJoined))
+		if condition != nil {
+			agentJoin := true
+			if condition.Status == metav1.ConditionFalse {
+				agentJoin = false
+			}
+			joined = joined && agentJoin
 		}
+	}
+
+	if joined {
+		markMemberClusterJoined(r.recorder, mc)
 	} else {
-		if imcCondition.Status == metav1.ConditionTrue {
-			markMemberClusterJoined(r.recorder, mc)
-		} else if imcCondition.Status == metav1.ConditionFalse {
-			markMemberClusterLeft(r.recorder, mc)
-		}
-		// NOTE: We do not handle metav1.ConditionUnknown as this status is not used.
+		markMemberClusterLeft(r.recorder, mc)
 	}
 }
 

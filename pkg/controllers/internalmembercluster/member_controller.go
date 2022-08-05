@@ -59,6 +59,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	var memberAgentStatus fleetv1alpha1.AgentStatus
+	// Need to create Agent status
+	for _, agentStatus := range imc.Status.AgentStatus {
+		if agentStatus.Type == fleetv1alpha1.MemberAgent {
+			memberAgentStatus = agentStatus
+		}
+	}
+	if memberAgentStatus.Type == "" {
+		memberAgentStatus = fleetv1alpha1.AgentStatus{
+			Type:       fleetv1alpha1.MemberAgent,
+			Conditions: []metav1.Condition{},
+		}
+		imc.Status.AgentStatus = append(imc.Status.AgentStatus, memberAgentStatus)
+	}
+
 	switch imc.Spec.State {
 	case fleetv1alpha1.ClusterStateJoin:
 		updateMemberAgentHeartBeat(&imc)
@@ -149,18 +164,18 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 // updateMemberAgentHeartBeat is used to update member agent heart beat for Internal member cluster.
 func updateMemberAgentHeartBeat(imc *fleetv1alpha1.InternalMemberCluster) {
 	klog.V(5).InfoS("update Internal member cluster heartbeat", "InternalMemberCluster", klog.KObj(imc))
-	var desiredStatus fleetv1alpha1.AgentStatus
+	var desiredAgentStatus fleetv1alpha1.AgentStatus
 	for _, agentStatus := range imc.Status.AgentStatus {
 		if agentStatus.Type == fleetv1alpha1.MemberAgent {
-			desiredStatus = agentStatus
+			desiredAgentStatus = agentStatus
 		}
 	}
-	if &desiredStatus != nil {
-		desiredStatus.LastReceivedHeartbeat = metav1.Now()
+	if desiredAgentStatus.Type == fleetv1alpha1.MemberAgent {
+		desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 	}
 }
 
-func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {
+func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedAgentObj) {
 	klog.V(5).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
@@ -170,16 +185,16 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedObj) {
 	}
 
 	// Healthy status changed.
-	existingCondition := imc.GetCondition(fleetv1alpha1.MemberAgent, newCondition.Type)
+	existingCondition := imc.GetConditionWithType(fleetv1alpha1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		klog.V(2).InfoS("healthy", "InternalMemberCluster", klog.KObj(imc))
 		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
 	}
 
-	imc.SetConditions(fleetv1alpha1.MemberAgent, newCondition)
+	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj, err error) {
+func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedAgentObj, err error) {
 	klog.V(5).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentHealthy),
@@ -190,16 +205,16 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedObj,
 	}
 
 	// Healthy status changed.
-	existingCondition := imc.GetCondition(fleetv1alpha1.MemberAgent, newCondition.Type)
+	existingCondition := imc.GetConditionWithType(fleetv1alpha1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		klog.V(2).InfoS("unhealthy", "InternalMemberCluster", klog.KObj(imc))
 		r.recorder.Event(imc, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
 	}
 
-	imc.SetConditions(fleetv1alpha1.MemberAgent, newCondition)
+	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
+func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedAgentObj) {
 	klog.V(5).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
@@ -209,17 +224,17 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedObj) {
 	}
 
 	// Joined status changed.
-	existingCondition := imc.GetCondition(fleetv1alpha1.MemberAgent, newCondition.Type)
+	existingCondition := imc.GetConditionWithType(fleetv1alpha1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster joined")
 		klog.V(2).InfoS("joined", "InternalMemberCluster", klog.KObj(imc))
 		metrics.ReportJoinResultMetric()
 	}
 
-	imc.SetConditions(fleetv1alpha1.MemberAgent, newCondition)
+	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
+func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedAgentObj) {
 	klog.V(5).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
@@ -229,14 +244,14 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedObj) {
 	}
 
 	// Joined status changed.
-	existingCondition := imc.GetCondition(fleetv1alpha1.MemberAgent, newCondition.Type)
+	existingCondition := imc.GetConditionWithType(fleetv1alpha1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
 		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster left")
 		klog.V(2).InfoS("left", "InternalMemberCluster", klog.KObj(imc))
 		metrics.ReportLeaveResultMetric()
 	}
 
-	imc.SetConditions(fleetv1alpha1.MemberAgent, newCondition)
+	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, newCondition)
 }
 
 // SetupWithManager sets up the controller with the Manager.

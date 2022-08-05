@@ -10,12 +10,25 @@ import (
 // A Conditioned may have conditions set or retrieved. Conditions are typically
 // indicate the status of both a resource and its reconciliation process.
 type Conditioned interface {
-	SetConditions(fleetv1alpha1.AgentType, ...metav1.Condition)
-	GetCondition(fleetv1alpha1.AgentType, string) *metav1.Condition
+	SetConditions(...metav1.Condition)
+	GetCondition(string) *metav1.Condition
+}
+
+// A ConditionedWithType may have conditions set or retrieved based on agent type. Conditions are typically
+// indicate the status of both a resource and its reconciliation process.
+type ConditionedWithType interface {
+	SetConditionsWithType(fleetv1alpha1.AgentType, ...metav1.Condition)
+	GetConditionWithType(fleetv1alpha1.AgentType, string) *metav1.Condition
 }
 
 // A ConditionedObj is for kubernetes resource with conditions.
 type ConditionedObj interface {
 	client.Object
 	Conditioned
+}
+
+// A ConditionedAgentObj is for kubernetes resources where multiple agents can set its conditions within AgentStatus.
+type ConditionedAgentObj interface {
+	client.Object
+	ConditionedWithType
 }
