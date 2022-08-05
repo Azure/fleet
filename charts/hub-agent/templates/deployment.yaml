@@ -20,11 +20,19 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
+            - --leader-elect=true
+            - --enable-webhook={{ .Values.enableWebhook }}
             - --v={{ .Values.logVerbosity }}
           ports:
             - name: http
               containerPort: 80
               protocol: TCP
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.affinity }}
