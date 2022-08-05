@@ -164,10 +164,12 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 
 	// PEM encode CA cert
 	caPEM := new(bytes.Buffer)
-	_ = pem.Encode(caPEM, &pem.Block{
+	if err := pem.Encode(caPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: caBytes,
-	})
+	}); err != nil {
+		return nil, nil, nil, err
+	}
 	caPEMByte = caPEM.Bytes()
 
 	dnsNames := []string{
