@@ -5,7 +5,12 @@ Licensed under the MIT license.
 package framework
 
 import (
+	apiextension "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"time"
 
 	"github.com/onsi/gomega"
@@ -24,10 +29,14 @@ var (
 )
 
 type Cluster struct {
-	Scheme      *runtime.Scheme
-	KubeClient  client.Client
-	ClusterName string
-	HubURL      string
+	Scheme             *runtime.Scheme
+	KubeClient         client.Client
+	KubeClientSet      kubernetes.Interface
+	DynamicClient      dynamic.Interface
+	ApiExtensionClient *apiextension.Clientset
+	ClusterName        string
+	HubURL             string
+	RestMapper         meta.RESTMapper
 }
 
 func NewCluster(name string, scheme *runtime.Scheme) *Cluster {
@@ -46,10 +55,22 @@ func GetClusterClient(cluster *Cluster) {
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	}
 
-	client, err := client.New(restConfig, client.Options{Scheme: cluster.Scheme})
+	newClient, err := client.New(restConfig, client.Options{Scheme: cluster.Scheme})
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 
-	cluster.KubeClient = client
+	cluster.KubeClient = newClient
+
+	cluster.KubeClientSet, err = kubernetes.NewForConfig(restConfig)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	cluster.RestMapper, err = apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	cluster.ApiExtensionClient, err = apiextension.NewForConfig(restConfig)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
