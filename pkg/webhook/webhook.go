@@ -67,7 +67,6 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name: FleetWebhookCfgName,
 			Labels: map[string]string{
-				"fleet-webhook":                "true",
 				"admissions.enforcer/disabled": "true",
 			},
 		},
@@ -104,12 +103,12 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 			return err
 		}
 		klog.V(2).InfoS("validatingwebhookconfiguration exists, need to update", "name", FleetWebhookCfgName)
-		// Here we simply use delete/create pattern instead of using update to avoid any retry due to update conflict
-		err := client.Delete(context.TODO(), &whCfg)
+		// Here we simply use delete/create pattern to implement full overwrite
+		err := client.Delete(ctx, &whCfg)
 		if err != nil {
 			return err
 		}
-		err = client.Create(context.TODO(), &whCfg)
+		err = client.Create(ctx, &whCfg)
 		if err != nil {
 			return err
 		}
@@ -123,15 +122,15 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 func GenCertificate(certDir string) ([]byte, error) {
 	caPEM, certPEM, keyPEM, err := genSelfSignedCert()
 	if err != nil {
-		klog.V(2).ErrorS(err, "fail to generate self-signed certificate")
+		klog.ErrorS(err, "fail to generate self-signed cert")
 		return nil, err
 	}
 
 	// generate certificate files (i.e., tls.crt and tls.key)
 	if err := genCertAndKeyFile(certPEM, keyPEM, certDir); err != nil {
-		return nil, fmt.Errorf("fail to generate certificate and key: %w", err)
+		klog.ErrorS(err, "fail to generate certificate and key files")
+		return nil, err
 	}
-
 	return caPEM, nil
 }
 
@@ -184,7 +183,7 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 		},
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().AddDate(10, 0, 0),
-		SubjectKeyId: []byte{1, 2, 3, 4, 6},
+		SubjectKeyId: []byte{1, 2, 3, 4, 5},
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 	}
@@ -203,19 +202,22 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 
 	// PEM encode the  server cert and key
 	certPEM := new(bytes.Buffer)
-	_ = pem.Encode(certPEM, &pem.Block{
+	if err := pem.Encode(certPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
-	})
+	}); err != nil {
+		return nil, nil, nil, err
+	}
 	certPEMByte = certPEM.Bytes()
 
 	certPrvKeyPEM := new(bytes.Buffer)
-	_ = pem.Encode(certPrvKeyPEM, &pem.Block{
+	if err := pem.Encode(certPrvKeyPEM, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(certPrvKey),
-	})
+	}); err != nil {
+		return nil, nil, nil, err
+	}
 	keyPEMByte = certPrvKeyPEM.Bytes()
-
 	return caPEMByte, certPEMByte, keyPEMByte, nil
 }
 
