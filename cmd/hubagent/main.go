@@ -29,6 +29,8 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	networkingAgentsEnabled = flag.Bool("networking-agents-enabled", false,
+		"Whether the networking agents are enabled or not.")
 )
 
 func init() {
@@ -62,7 +64,8 @@ func main() {
 	klog.V(2).InfoS("starting hubagent")
 
 	if err = (&membercluster.Reconciler{
-		Client: mgr.GetClient(),
+		Client:                  mgr.GetClient(),
+		NetworkingAgentsEnabled: *networkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
 		os.Exit(1)
