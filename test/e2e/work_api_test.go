@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"sigs.k8s.io/work-api/pkg/utils"
 
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
@@ -22,7 +23,7 @@ const (
 	eventuallyInterval = 1  // seconds
 )
 
-var defaultWorkNamespace = MemberCluster.ClusterName
+var defaultWorkNamespace = "fleet-member-" + MemberCluster.ClusterName
 
 type manifestDetails struct {
 	Manifest workapi.Manifest
@@ -47,7 +48,9 @@ var _ = Describe("work-api testing", func() {
 					Name: defaultWorkNamespace,
 				},
 			}
-			HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
+
+			_, err = HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
+			Expect(err).Should(SatisfyAny(Succeed(), &utils.AlreadyExistMatcher{}))
 
 			workObj := createWorkObj(
 				getWorkName(5),
@@ -191,6 +194,8 @@ func retrieveWork(workNamespace string, workName string) (*workapi.Work, error) 
 	workRetrieved := workapi.Work{}
 	err := HubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Namespace: workNamespace, Name: workName}, &workRetrieved)
 	if err != nil {
+		println("err still exists")
+		println(err.Error())
 		return nil, err
 	}
 	return &workRetrieved, nil
