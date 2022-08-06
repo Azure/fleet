@@ -471,7 +471,7 @@ func deleteWorkResource(work *workapi.Work) error {
 	return HubCluster.KubeClient.Delete(context.Background(), work)
 }
 func generateManifestDetails(manifestFiles []string) []manifestDetails {
-	var details []manifestDetails
+	details := make([]manifestDetails, 0, len(manifestFiles))
 
 	for _, file := range manifestFiles {
 		detail := manifestDetails{}
