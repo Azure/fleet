@@ -171,7 +171,7 @@ run-e2e: build-e2e
 	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e.test -test.v -ginkgo.v
 
 .PHONY: e2e-tests
-e2e-tests: create-hub-kind-cluster create-member-kind-cluster docker-build-hub-agent docker-build-member-agent docker-build-refresh-token load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e
+e2e-tests: e2e-tests: create-hub-kind-cluster create-member-kind-cluster load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e
 
 ## reviewable
 .PHONY: reviewable
@@ -217,7 +217,7 @@ run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 ## Images
 ## --------------------------------------
 
-OUTPUT_TYPE ?= type=docker
+OUTPUT_TYPE ?= type=registry
 BUILDX_BUILDER_NAME ?= img-builder
 QEMU_VERSION ?= 5.2.0-2
 
