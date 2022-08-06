@@ -4,6 +4,7 @@ import (
 	"context"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -41,6 +42,12 @@ var _ = Describe("work-api testing", func() {
 				"manifests/test-deployment.yaml",
 				"manifests/test-service.yaml",
 			})
+			wns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultWorkNamespace,
+				},
+			}
+			HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
 
 			workObj := createWorkObj(
 				getWorkName(5),
@@ -61,11 +68,7 @@ var _ = Describe("work-api testing", func() {
 		It("should have created: a respective AppliedWork, and the resources specified in the Work's manifests", func() {
 			By("verifying an AppliedWork was created")
 			Eventually(func() error {
-				appliedWork := workapi.AppliedWork{}
-				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
-					Namespace: createdWork.Namespace,
-					Name:      createdWork.Name,
-				}, &appliedWork)
+				_, err := retrieveAppliedWork(createdWork.Name)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -124,6 +127,15 @@ func decodeUnstructured(manifest workapi.Manifest) (*unstructured.Unstructured, 
 	return unstructuredObj, err
 }
 func deleteWorkResource(work *workapi.Work) error {
+	wns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: defaultWorkNamespace,
+		},
+	}
+	err := HubCluster.KubeClient.Delete(context.Background(), wns)
+	if err != nil {
+		return err
+	}
 	return HubCluster.KubeClient.Delete(context.Background(), work)
 }
 func generateManifestDetails(manifestFiles []string) []manifestDetails {
