@@ -24,7 +24,7 @@ var (
 	// PollInterval defines the interval time for a poll operation.
 	PollInterval = 5 * time.Second
 	// PollTimeout defines the time after which the poll operation times out.
-	PollTimeout = 30 * time.Second
+	PollTimeout = 60 * time.Second
 )
 
 type Cluster struct {
