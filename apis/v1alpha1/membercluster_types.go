@@ -100,33 +100,6 @@ func (m *MemberCluster) RemoveCondition(conditionType string) {
 	meta.RemoveStatusCondition(&m.Status.Conditions, conditionType)
 }
 
-//func (m *MemberCluster) SetConditionsWithType(agentType AgentType, conditions ...metav1.Condition) {
-//	var desiredAgentStatus AgentStatus
-//	for _, agentStatus := range m.Status.AgentStatus {
-//		if agentType == agentStatus.Type {
-//			desiredAgentStatus = agentStatus
-//		}
-//	}
-//	if desiredAgentStatus.Type == agentType {
-//		for _, c := range conditions {
-//			meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
-//		}
-//	}
-//}
-//
-//func (m *MemberCluster) GetConditionWithType(agentType AgentType, conditionType string) *metav1.Condition {
-//	var desiredAgentStatus AgentStatus
-//	for _, agentStatus := range m.Status.AgentStatus {
-//		if agentType == agentStatus.Type {
-//			desiredAgentStatus = agentStatus
-//		}
-//	}
-//	if desiredAgentStatus.Type == agentType {
-//		return meta.FindStatusCondition(desiredAgentStatus.Conditions, conditionType)
-//	}
-//	return nil
-//}
-
 func init() {
 	SchemeBuilder.Register(&MemberCluster{}, &MemberClusterList{})
 }

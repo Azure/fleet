@@ -59,21 +59,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var memberAgentStatus fleetv1alpha1.AgentStatus
-	// Need to create Agent status
-	for _, agentStatus := range imc.Status.AgentStatus {
-		if agentStatus.Type == fleetv1alpha1.MemberAgent {
-			memberAgentStatus = agentStatus
-		}
-	}
-	if memberAgentStatus.Type == "" {
-		memberAgentStatus = fleetv1alpha1.AgentStatus{
-			Type:       fleetv1alpha1.MemberAgent,
-			Conditions: []metav1.Condition{},
-		}
-		imc.Status.AgentStatus = append(imc.Status.AgentStatus, memberAgentStatus)
-	}
-
 	switch imc.Spec.State {
 	case fleetv1alpha1.ClusterStateJoin:
 		updateMemberAgentHeartBeat(&imc)

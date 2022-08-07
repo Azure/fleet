@@ -82,6 +82,15 @@ func (m *InternalMemberCluster) SetConditionsWithType(agentType AgentType, condi
 			desiredAgentStatus = agentStatus
 		}
 	}
+
+	if desiredAgentStatus.Type == "" {
+		desiredAgentStatus = AgentStatus{
+			Type:       MemberAgent,
+			Conditions: []metav1.Condition{},
+		}
+		m.Status.AgentStatus = append(m.Status.AgentStatus, desiredAgentStatus)
+	}
+
 	if desiredAgentStatus.Type == agentType {
 		for _, c := range conditions {
 			meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
