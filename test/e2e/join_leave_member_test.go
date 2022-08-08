@@ -88,14 +88,11 @@ var _ = Describe("Join/leave member cluster testing", func() {
 			})
 
 			By("member namespace is deleted from hub cluster", func() {
+				framework.DeleteMemberCluster(*HubCluster, mc)
 				Eventually(func() bool {
 					err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 					return apierrors.IsNotFound(err)
 				}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-			})
-			DeferCleanup(func() {
-				framework.DeleteMemberCluster(*HubCluster, mc)
-				framework.DeleteNamespace(*MemberCluster, memberNS)
 			})
 		})
 	})
