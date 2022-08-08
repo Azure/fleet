@@ -39,8 +39,8 @@ func TestMarkInternalMemberClusterJoined(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 
 	// Check expected condition.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentJoined), Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 }
 
@@ -56,27 +56,21 @@ func TestMarkInternalMemberClusterLeft(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 
 	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentJoined), Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 }
 
-func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
-	r := Reconciler{recorder: utils.NewFakeRecorder(1)}
+func TestUpdateMemberAgentHeartBeat(t *testing.T) {
 	internalMemberCluster := &v1alpha1.InternalMemberCluster{}
 
-	r.markInternalMemberClusterHeartbeatReceived(internalMemberCluster)
+	updateMemberAgentHeartBeat(internalMemberCluster)
+	lastReceivedHeartBeat := internalMemberCluster.Status.AgentStatus[0].LastReceivedHeartbeat
+	assert.NotNil(t, lastReceivedHeartBeat)
 
-	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHBReceived}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
-
-	// Verify last transition time is updated.
-	oldLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
-	r.markInternalMemberClusterHeartbeatReceived(internalMemberCluster)
-	newLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
-	assert.Equal(t, true, newLastTransitionTime.After(oldLastTransitionTime.Time), utils.TestCaseMsg, "last transition time updated")
+	updateMemberAgentHeartBeat(internalMemberCluster)
+	newLastReceivedHeartBeat := internalMemberCluster.Status.AgentStatus[0].LastReceivedHeartbeat
+	assert.NotEqual(t, lastReceivedHeartBeat, newLastReceivedHeartBeat)
 }
 
 func TestMarkInternalMemberClusterHealthy(t *testing.T) {
@@ -91,8 +85,8 @@ func TestMarkInternalMemberClusterHealthy(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 
 	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeMemberClusterHealth, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentHealthy), Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 }
 
@@ -109,8 +103,8 @@ func TestMarkInternalMemberClusterHeartbeatUnhealthy(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 
 	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterHealth, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentHealthy), Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 }
 

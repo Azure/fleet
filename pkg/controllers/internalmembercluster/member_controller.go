@@ -35,11 +35,10 @@ type Reconciler struct {
 }
 
 const (
-	eventReasonInternalMemberClusterHBReceived = "InternalMemberClusterHeartbeatReceived"
-	eventReasonInternalMemberClusterHealthy    = "InternalMemberClusterHealthy"
-	eventReasonInternalMemberClusterUnhealthy  = "InternalMemberClusterUnhealthy"
-	eventReasonInternalMemberClusterJoined     = "InternalMemberClusterJoined"
-	eventReasonInternalMemberClusterLeft       = "InternalMemberClusterLeft"
+	eventReasonInternalMemberClusterHealthy   = "InternalMemberClusterHealthy"
+	eventReasonInternalMemberClusterUnhealthy = "InternalMemberClusterUnhealthy"
+	eventReasonInternalMemberClusterJoined    = "InternalMemberClusterJoined"
+	eventReasonInternalMemberClusterLeft      = "InternalMemberClusterLeft"
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
