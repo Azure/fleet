@@ -27,7 +27,7 @@ type ConditionedObj interface {
 	Conditioned
 }
 
-// A ConditionedAgentObj is for kubernetes resources where multiple agents can set its conditions within AgentStatus.
+// A ConditionedAgentObj is for kubernetes resources where multiple agents can set and update conditions within AgentStatus.
 type ConditionedAgentObj interface {
 	client.Object
 	ConditionedWithType

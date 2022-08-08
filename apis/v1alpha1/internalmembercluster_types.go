@@ -75,6 +75,7 @@ type InternalMemberClusterList struct {
 	Items           []InternalMemberCluster `json:"items"`
 }
 
+// SetConditionsWithType is used to add condition to AgentStatus for given agentType
 func (m *InternalMemberCluster) SetConditionsWithType(agentType AgentType, conditions ...metav1.Condition) {
 	desiredAgentStatus := m.GetAgentStatus(agentType)
 	for _, c := range conditions {
@@ -82,6 +83,7 @@ func (m *InternalMemberCluster) SetConditionsWithType(agentType AgentType, condi
 	}
 }
 
+// GetConditionWithType is used to retrieve the desired condition from AgentStatus for given agentType
 func (m *InternalMemberCluster) GetConditionWithType(agentType AgentType, conditionType string) *metav1.Condition {
 	var desiredAgentStatus AgentStatus
 	for _, agentStatus := range m.Status.AgentStatus {
@@ -95,6 +97,8 @@ func (m *InternalMemberCluster) GetConditionWithType(agentType AgentType, condit
 	return nil
 }
 
+// GetAgentStatus is used to retrieve agent status from internal member cluster,
+// if it doesn't exist it creates the expected agent status and returns it.
 func (m *InternalMemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus {
 	var desiredAgentStatus AgentStatus
 	for _, agentStatus := range m.Status.AgentStatus {
