@@ -50,6 +50,7 @@ func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interf
 	newPlacementMeta, _ := meta.Accessor(newObj)
 	if oldPlacementMeta.GetGeneration() == newPlacementMeta.GetGeneration() &&
 		reflect.DeepEqual(oldPlacementMeta.GetFinalizers(), newPlacementMeta.GetFinalizers()) {
+		// TODO: remove the finalizer check after we continue with finalizer update succeeds
 		klog.V(5).InfoS("ignore a cluster resource placement update event with no spec or finalizer change",
 			"placement", klog.KObj(oldPlacementMeta))
 		return
@@ -116,6 +117,7 @@ func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
 	oldMCMeta, _ := meta.Accessor(oldObj)
 	newMCMeta, _ := meta.Accessor(newObj)
 	// Only enqueue if the change can affect placement decisions. i.e. label and spec
+	// TODO: make sure the CRD spec change triggers generation change.
 	if oldMCMeta.GetGeneration() == newMCMeta.GetGeneration() && reflect.DeepEqual(oldMCMeta.GetLabels(), newMCMeta.GetLabels()) {
 		klog.V(5).InfoS("ignore a memberCluster update event with no real change",
 			"memberCluster", klog.KObj(oldMCMeta), "generation", oldMCMeta.GetGeneration())
