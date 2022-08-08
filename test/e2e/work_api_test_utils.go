@@ -40,15 +40,18 @@ func createWorkObj(workName string, workNamespace string, manifestDetails []mani
 
 	return work
 }
+
 func createWork(work *workapi.Work, hubCluster *framework.Cluster) error {
 	return hubCluster.KubeClient.Create(context.Background(), work)
 }
+
 func decodeUnstructured(manifest workapi.Manifest) (*unstructured.Unstructured, error) {
 	unstructuredObj := &unstructured.Unstructured{}
 	err := unstructuredObj.UnmarshalJSON(manifest.Raw)
 
 	return unstructuredObj, err
 }
+
 func deleteWorkResource(work *workapi.Work, hubCluster *framework.Cluster) error {
 	return hubCluster.KubeClient.Delete(context.Background(), work)
 }
@@ -62,6 +65,7 @@ func retrieveAppliedWork(appliedWorkName string, memberCluster *framework.Cluste
 
 	return &retrievedAppliedWork, nil
 }
+
 func retrieveWork(workNamespace string, workName string, hubCluster *framework.Cluster) (*workapi.Work, error) {
 	workRetrieved := workapi.Work{}
 	err := hubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Namespace: workNamespace, Name: workName}, &workRetrieved)
@@ -72,6 +76,7 @@ func retrieveWork(workNamespace string, workName string, hubCluster *framework.C
 	}
 	return &workRetrieved, nil
 }
+
 func updateWork(work *workapi.Work, hubCluster *framework.Cluster) (*workapi.Work, error) {
 	err := hubCluster.KubeClient.Update(context.Background(), work)
 	if err != nil {
