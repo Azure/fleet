@@ -377,9 +377,9 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 		}
 	}
 
-	if joined == true && left == false {
+	if joined && !left {
 		markMemberClusterJoined(r.recorder, mc)
-	} else if joined == false && left == true {
+	} else if !joined && left {
 		markMemberClusterLeft(r.recorder, mc)
 	} else {
 		markMemberClusterUnknown(r.recorder, mc)
