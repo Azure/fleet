@@ -63,7 +63,7 @@ var (
 	}
 	FleetNetworkRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
-		APIGroups: []string{"network.fleet.azure.com"},
+		APIGroups: []string{"networking.fleet.azure.com"},
 		Resources: []string{"*"},
 	}
 	// LeaseRule Leases permissions are required for leader election of hub controller manager in member cluster.
