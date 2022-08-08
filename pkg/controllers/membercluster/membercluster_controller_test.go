@@ -627,7 +627,6 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	}
 }
 
-// TODO: Needs to updated after code changes
 func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	now := metav1.Now()
 	tests := map[string]struct {
@@ -637,7 +636,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		wantedMemberCluster   *fleetv1alpha1.MemberCluster
 	}{
 		"copy with Joined condition": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 2},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -652,6 +651,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					AgentStatus: []fleetv1alpha1.AgentStatus{
 						{
 							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
 									Type:   string(fleetv1alpha1.AgentJoined),
@@ -695,6 +705,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							},
 							LastReceivedHeartbeat: now,
 						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
 					},
 				},
 			},
@@ -715,6 +736,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					AgentStatus: []fleetv1alpha1.AgentStatus{
 						{
 							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionFalse,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
 									Type:   string(fleetv1alpha1.AgentJoined),
@@ -749,6 +781,102 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					AgentStatus: []fleetv1alpha1.AgentStatus{
 						{
 							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionFalse,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionFalse,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+		},
+		"copy with Unknown condition": {
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionFalse,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionUnknown,
+							Reason: reasonMemberClusterUnknown,
+						},
+					},
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
 									Type:   string(fleetv1alpha1.AgentJoined),

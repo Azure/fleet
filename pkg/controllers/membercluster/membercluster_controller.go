@@ -42,6 +42,7 @@ const (
 	reasonMemberClusterReadyToJoin = "MemberClusterReadyToJoin"
 	reasonMemberClusterJoined      = "MemberClusterJoined"
 	reasonMemberClusterLeft        = "MemberClusterLeft"
+	reasonMemberClusterUnknown     = "MemberClusterUnknown"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -366,19 +367,22 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 		return
 	}
 	joined := true
+	left := true
 	for _, agentStatus := range mc.Status.AgentStatus {
 		conditions := agentStatus.Conditions
 		condition := meta.FindStatusCondition(conditions, string(fleetv1alpha1.AgentJoined))
 		if condition != nil {
 			joined = joined && condition.Status == metav1.ConditionTrue
+			left = left && condition.Status == metav1.ConditionFalse
 		}
 	}
 
-	if joined {
+	if joined == true && left == false {
 		markMemberClusterJoined(r.recorder, mc)
-	} else {
-		// TODO: Fix Logic
+	} else if joined == false && left == true {
 		markMemberClusterLeft(r.recorder, mc)
+	} else {
+		markMemberClusterUnknown(r.recorder, mc)
 	}
 }
 
@@ -439,6 +443,26 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
 		klog.V(2).InfoS("memberCluster left", "memberCluster", klog.KObj(mc))
 		metrics.ReportJoinResultMetric()
+	}
+
+	mc.SetConditions(newCondition)
+}
+
+// markMemberClusterLeft is used to update the status of the member cluster to have the left condition.
+func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
+	klog.V(5).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
+	newCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Status:             metav1.ConditionUnknown,
+		Reason:             reasonMemberClusterUnknown,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+
+	// Joined status changed.
+	existingCondition := mc.GetCondition(newCondition.Type)
+	if existingCondition == nil || existingCondition.Status != newCondition.Status {
+		recorder.Event(mc, corev1.EventTypeWarning, reasonMemberClusterUnknown, "member cluster unknown")
+		klog.V(2).InfoS("memberCluster unknown", "memberCluster", klog.KObj(mc))
 	}
 
 	mc.SetConditions(newCondition)
