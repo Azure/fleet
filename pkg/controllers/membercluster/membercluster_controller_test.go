@@ -627,7 +627,8 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	}
 }
 
-func TestCopyInternalMemberClusterStatus(t *testing.T) {
+// TODO: Needs to updated after code changes
+func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	now := metav1.Now()
 	tests := map[string]struct {
 		r                     *Reconciler
@@ -636,7 +637,7 @@ func TestCopyInternalMemberClusterStatus(t *testing.T) {
 		wantedMemberCluster   *fleetv1alpha1.MemberCluster
 	}{
 		"copy with Joined condition": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -699,7 +700,7 @@ func TestCopyInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"copy with Left condition": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -762,7 +763,7 @@ func TestCopyInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"No Agent Status": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -792,7 +793,7 @@ func TestCopyInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"Internal member cluster is nil": {
-			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1)},
+			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
 			internalMemberCluster: nil,
 			memberCluster:         &fleetv1alpha1.MemberCluster{},
 			wantedMemberCluster:   &fleetv1alpha1.MemberCluster{},
@@ -801,7 +802,7 @@ func TestCopyInternalMemberClusterStatus(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			tt.r.copyInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
+			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
 			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), tt.memberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), cmpopts.IgnoreTypes(time.Time{})))
 			assert.Equal(t, tt.wantedMemberCluster.Status.ResourceUsage, tt.memberCluster.Status.ResourceUsage)
 			assert.Equal(t, tt.wantedMemberCluster.Status.AgentStatus, tt.memberCluster.Status.AgentStatus)

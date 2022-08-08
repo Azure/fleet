@@ -7,14 +7,14 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
-// A Conditioned may have conditions set or retrieved. Conditions are typically used
+// A Conditioned may have conditions set or retrieved. Conditions typically
 // indicate the status of both a resource and its reconciliation process.
 type Conditioned interface {
 	SetConditions(...metav1.Condition)
 	GetCondition(string) *metav1.Condition
 }
 
-// A ConditionedWithType may have conditions set or retrieved based on agent type. Conditions are typically used
+// A ConditionedWithType may have conditions set or retrieved based on agent type. Conditions typically
 // indicate the status of both a resource and its reconciliation process.
 type ConditionedWithType interface {
 	SetConditionsWithType(fleetv1alpha1.AgentType, ...metav1.Condition)

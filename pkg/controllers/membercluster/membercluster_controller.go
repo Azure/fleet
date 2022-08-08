@@ -44,15 +44,12 @@ const (
 	reasonMemberClusterLeft        = "MemberClusterLeft"
 )
 
-var (
-	numberOfAgents = 1
-)
-
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	client.Client
 	recorder                record.EventRecorder
 	NetworkingAgentsEnabled bool // if networking agents are enabled, need to handle unjoin before leave
+	numberOfAgents          int
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -96,7 +93,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
-	r.copyInternalMemberClusterStatus(currentImc, &mc)
+	r.syncInternalMemberClusterStatus(currentImc, &mc)
 	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
 		klog.ErrorS(err, "failed to update status for %s", klog.KObj(&mc))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -329,8 +326,8 @@ func toOwnerReference(memberCluster *fleetv1alpha1.MemberCluster) *metav1.OwnerR
 		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 }
 
-// copyInternalMemberClusterStatus is used to copy status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
-func (r *Reconciler) copyInternalMemberClusterStatus(imc *fleetv1alpha1.InternalMemberCluster, mc *fleetv1alpha1.MemberCluster) {
+// syncInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
+func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.InternalMemberCluster, mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncInternalMemberClusterStatus", "memberCluster", klog.KObj(mc))
 	if imc == nil {
 		return
@@ -364,7 +361,8 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 // aggregateJoinedCondition is used to calculate and mark the joined or left status for member cluster based on join conditions from all agents.
 func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncJoinedCondition", "memberCluster", klog.KObj(mc))
-	if len(mc.Status.AgentStatus) < numberOfAgents {
+	// TODO: Fix condition
+	if len(mc.Status.AgentStatus) < r.numberOfAgents {
 		return
 	}
 	joined := true
@@ -372,17 +370,14 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 		conditions := agentStatus.Conditions
 		condition := meta.FindStatusCondition(conditions, string(fleetv1alpha1.AgentJoined))
 		if condition != nil {
-			agentJoin := true
-			if condition.Status == metav1.ConditionFalse {
-				agentJoin = false
-			}
-			joined = joined && agentJoin
+			joined = joined && condition.Status == metav1.ConditionTrue
 		}
 	}
 
 	if joined {
 		markMemberClusterJoined(r.recorder, mc)
 	} else {
+		// TODO: Fix Logic
 		markMemberClusterLeft(r.recorder, mc)
 	}
 }
@@ -453,7 +448,9 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
 	if r.NetworkingAgentsEnabled {
-		numberOfAgents = 3
+		r.numberOfAgents = 3
+	} else {
+		r.numberOfAgents = 1
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}).

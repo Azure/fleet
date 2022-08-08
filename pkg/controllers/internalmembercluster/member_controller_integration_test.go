@@ -142,7 +142,8 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			var imc v1alpha1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 
-			lastReceivedHeartbeat := imc.Status.AgentStatus[0].LastReceivedHeartbeat
+			memberAgentStatus := imc.GetAgentStatus(v1alpha1.MemberAgent)
+			lastReceivedHeartbeat := memberAgentStatus.LastReceivedHeartbeat
 
 			time.Sleep(time.Second)
 

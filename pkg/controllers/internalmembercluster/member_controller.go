@@ -149,7 +149,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 func updateMemberAgentHeartBeat(imc *fleetv1alpha1.InternalMemberCluster) {
 	klog.V(5).InfoS("update Internal member cluster heartbeat", "InternalMemberCluster", klog.KObj(imc))
 	desiredAgentStatus := imc.GetAgentStatus(fleetv1alpha1.MemberAgent)
-	if desiredAgentStatus.Type == fleetv1alpha1.MemberAgent {
+	if desiredAgentStatus != nil {
 		desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 	}
 }
