@@ -14,10 +14,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 var (

@@ -11,9 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
-	"sigs.k8s.io/work-api/pkg/utils"
-
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/work-api/pkg/utils"
 )
 
 const (
@@ -25,12 +24,13 @@ var defaultWorkNamespace = "fleet-member-" + MemberCluster.ClusterName
 
 var _ = Describe("work-api testing", Ordered, func() {
 
+	wns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: defaultWorkNamespace,
+		},
+	}
+
 	BeforeAll(func() {
-		wns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: defaultWorkNamespace,
-			},
-		}
 		_, err := HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
 		Expect(err).Should(SatisfyAny(Succeed(), &utils.AlreadyExistMatcher{}))
 	})
@@ -436,11 +436,6 @@ var _ = Describe("work-api testing", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		wns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: defaultWorkNamespace,
-			},
-		}
 		err := HubCluster.KubeClient.Delete(context.Background(), wns)
 		Expect(err).ToNot(HaveOccurred())
 	})
