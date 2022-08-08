@@ -8,12 +8,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/work-api/pkg/utils"
 
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -25,13 +22,6 @@ const (
 )
 
 var defaultWorkNamespace = "fleet-member-" + MemberCluster.ClusterName
-
-type manifestDetails struct {
-	Manifest workapi.Manifest
-	GVK      *schema.GroupVersionKind
-	GVR      *schema.GroupVersionResource
-	ObjMeta  metav1.ObjectMeta
-}
 
 var _ = Describe("work-api testing", Ordered, func() {
 
@@ -62,20 +52,20 @@ var _ = Describe("work-api testing", Ordered, func() {
 				mDetails,
 			)
 
-			err = createWork(workObj)
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name)
+			err = createWork(workObj, HubCluster)
+			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork)
+			err = deleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should have created: a respective AppliedWork, and the resources specified in the Work's manifests", func() {
 			By("verifying an AppliedWork was created")
 			Eventually(func() error {
-				_, err := retrieveAppliedWork(createdWork.Name)
+				_, err := retrieveAppliedWork(createdWork.Name, MemberCluster)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -98,7 +88,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 			By("verifying that corresponding conditions were created")
 			Eventually(func() bool {
-				work, err := retrieveWork(createdWork.Namespace, createdWork.Name)
+				work, err := retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 				if err != nil {
 					return false
 				}
@@ -138,30 +128,30 @@ var _ = Describe("work-api testing", Ordered, func() {
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(workOne)
+			err = deleteWorkResource(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = deleteWorkResource(workTwo)
+			err = deleteWorkResource(workTwo, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should ignore the duplicate manifest", func() {
 
 			By("creating the work resources")
-			err = createWork(workOne)
+			err = createWork(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = createWork(workTwo)
+			err = createWork(workTwo, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Checking the Applied Work status of each to see if one of the manifest is abandoned.")
 			Eventually(func() bool {
-				appliedWorkOne, err := retrieveAppliedWork(workOne.Name)
+				appliedWorkOne, err := retrieveAppliedWork(workOne.Name, MemberCluster)
 				if err != nil {
 					return false
 				}
 
-				appliedWorkTwo, err := retrieveAppliedWork(workTwo.Name)
+				appliedWorkTwo, err := retrieveAppliedWork(workTwo.Name, MemberCluster)
 				if err != nil {
 					return false
 				}
@@ -171,11 +161,11 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 			By("Checking the work status of each works for verification")
 			Eventually(func() bool {
-				workOne, err := retrieveWork(workOne.Namespace, workOne.Name)
+				workOne, err := retrieveWork(workOne.Namespace, workOne.Name, HubCluster)
 				if err != nil {
 					return false
 				}
-				workTwo, err := retrieveWork(workTwo.Namespace, workTwo.Name)
+				workTwo, err := retrieveWork(workTwo.Namespace, workTwo.Name, HubCluster)
 				if err != nil {
 					return false
 				}
@@ -217,13 +207,13 @@ var _ = Describe("work-api testing", Ordered, func() {
 				initialManifestDetails,
 			)
 
-			err = createWork(workObj)
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name)
+			err = createWork(workObj, HubCluster)
+			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork)
+			err = deleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = MemberCluster.KubeClientSet.CoreV1().ConfigMaps(addedManifestDetails[0].ObjMeta.Namespace).Delete(context.Background(), addedManifestDetails[0].ObjMeta.Name, metav1.DeleteOptions{})
@@ -233,11 +223,11 @@ var _ = Describe("work-api testing", Ordered, func() {
 		It("should have created the ConfigMap in the new namespace", func() {
 			By("retrieving the existing work and updating it by adding new manifests")
 			Eventually(func() error {
-				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name)
+				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				createdWork.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
-				createdWork, err = updateWork(createdWork)
+				createdWork, err = updateWork(createdWork, HubCluster)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -279,20 +269,20 @@ var _ = Describe("work-api testing", Ordered, func() {
 				manifestDetails,
 			)
 
-			err = createWork(workObj)
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name)
+			err = createWork(workObj, HubCluster)
+			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork)
+			err = deleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should reapply the manifest's updated spec on the spoke cluster", func() {
 			By("retrieving the existing work and modifying the manifest")
 			Eventually(func() error {
-				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name)
+				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 
 				// Extract and modify the ConfigMap by adding a new key value pair.
 				err = json.Unmarshal(createdWork.Spec.Workload.Manifests[0].Raw, &configMap)
@@ -305,7 +295,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 				createdWork.Spec.Workload.Manifests[0].Object = obj
 				createdWork.Spec.Workload.Manifests[0].Raw = rawUpdatedManifest
 
-				createdWork, err = updateWork(createdWork)
+				createdWork, err = updateWork(createdWork, HubCluster)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -341,33 +331,33 @@ var _ = Describe("work-api testing", Ordered, func() {
 				originalManifestDetails,
 			)
 
-			err = createWork(workObj)
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name)
+			err = createWork(workObj, HubCluster)
+			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork)
+			err = deleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should have deleted the original Work's resources, and created new resources with the replaced manifests", func() {
 			By("getting the respective AppliedWork")
 			Eventually(func() int {
-				appliedWork, _ = retrieveAppliedWork(createdWork.Name)
+				appliedWork, _ = retrieveAppliedWork(createdWork.Name, MemberCluster)
 
 				return len(appliedWork.Status.AppliedResources)
 			}, eventuallyTimeout, eventuallyInterval).Should(Equal(len(originalManifestDetails)))
 
 			By("updating the Work resource with replaced manifests")
 			Eventually(func() error {
-				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name)
+				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 				createdWork.Spec.Workload.Manifests = nil
 				for _, mD := range replacedManifestDetails {
 					createdWork.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, mD.Manifest)
 				}
 
-				createdWork, err = updateWork(createdWork)
+				createdWork, err = updateWork(createdWork, HubCluster)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -419,8 +409,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 				manifestDetails,
 			)
 
-			err = createWork(workObj)
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name)
+			err = createWork(workObj, HubCluster)
+			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -433,7 +423,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
 
 			By("deleting the Work resource")
-			err = deleteWorkResource(createdWork)
+			err = deleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("verifying the resource was garbage collected")
@@ -456,32 +446,6 @@ var _ = Describe("work-api testing", Ordered, func() {
 	})
 })
 
-func createWorkObj(workName string, workNamespace string, manifestDetails []manifestDetails) *workapi.Work {
-	work := &workapi.Work{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workName,
-			Namespace: workNamespace,
-		},
-	}
-
-	for _, detail := range manifestDetails {
-		work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, detail.Manifest)
-	}
-
-	return work
-}
-func createWork(work *workapi.Work) error {
-	return HubCluster.KubeClient.Create(context.Background(), work)
-}
-func decodeUnstructured(manifest workapi.Manifest) (*unstructured.Unstructured, error) {
-	unstructuredObj := &unstructured.Unstructured{}
-	err := unstructuredObj.UnmarshalJSON(manifest.Raw)
-
-	return unstructuredObj, err
-}
-func deleteWorkResource(work *workapi.Work) error {
-	return HubCluster.KubeClient.Delete(context.Background(), work)
-}
 func generateManifestDetails(manifestFiles []string) []manifestDetails {
 	details := make([]manifestDetails, 0, len(manifestFiles))
 
@@ -521,39 +485,4 @@ func generateManifestDetails(manifestFiles []string) []manifestDetails {
 	}
 
 	return details
-}
-func retrieveAppliedWork(appliedWorkName string) (*workapi.AppliedWork, error) {
-	retrievedAppliedWork := workapi.AppliedWork{}
-	err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: appliedWorkName}, &retrievedAppliedWork)
-	if err != nil {
-		return &retrievedAppliedWork, err
-	}
-
-	return &retrievedAppliedWork, nil
-}
-func retrieveWork(workNamespace string, workName string) (*workapi.Work, error) {
-	workRetrieved := workapi.Work{}
-	err := HubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Namespace: workNamespace, Name: workName}, &workRetrieved)
-	if err != nil {
-		println("err still exists")
-		println(err.Error())
-		return nil, err
-	}
-	return &workRetrieved, nil
-}
-func updateWork(work *workapi.Work) (*workapi.Work, error) {
-	err := HubCluster.KubeClient.Update(context.Background(), work)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedWork, err := retrieveWork(work.Namespace, work.Name)
-	if err != nil {
-		return nil, err
-	}
-	return updatedWork, err
-}
-
-func getWorkName(length int) string {
-	return "work" + rand.String(length)
 }

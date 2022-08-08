@@ -5,7 +5,6 @@ Licensed under the MIT license.
 package e2e
 
 import (
-	"embed"
 	"os"
 	"testing"
 
@@ -28,8 +27,6 @@ var (
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
-	//go:embed manifests
-	testManifestFiles embed.FS
 	genericCodecs     = serializer.NewCodecFactory(scheme)
 	genericCodec      = genericCodecs.UniversalDeserializer()
 )
