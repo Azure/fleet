@@ -116,12 +116,12 @@ func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
 	oldMCMeta, _ := meta.Accessor(oldObj)
 	newMCMeta, _ := meta.Accessor(newObj)
 	// Only enqueue if the change can affect placement decisions. i.e. label and spec
-	if oldMCMeta.GetGeneration() == newMCMeta.GetGeneration() {
-		if reflect.DeepEqual(oldMCMeta.GetLabels(), newMCMeta.GetLabels()) {
-			klog.V(5).InfoS("ignore a memberCluster update event with no real change", "memberCluster", klog.KObj(oldMCMeta))
-			return
-		}
+	if oldMCMeta.GetGeneration() == newMCMeta.GetGeneration() && reflect.DeepEqual(oldMCMeta.GetLabels(), newMCMeta.GetLabels()) {
+		klog.V(5).InfoS("ignore a memberCluster update event with no real change",
+			"memberCluster", klog.KObj(oldMCMeta), "generation", oldMCMeta.GetGeneration())
+		return
 	}
+
 	klog.V(4).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(oldMCMeta))
 	d.MemberClusterPlacementController.Enqueue(oldMCMeta)
 }
