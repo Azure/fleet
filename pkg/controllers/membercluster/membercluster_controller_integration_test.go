@@ -86,21 +86,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleBindingNameFormat, memberClusterName), Namespace: namespaceName}, &roleBinding)).Should(Succeed())
 
 		By("simulate member agent updating internal member cluster status")
-		imc.Status.Capacity = utils.NewResourceList()
-		imc.Status.Allocatable = utils.NewResourceList()
+		imc.Status.ResourceUsage.Capacity = utils.NewResourceList()
+		imc.Status.ResourceUsage.Allocatable = utils.NewResourceList()
+		imc.Status.ResourceUsage.ObservationTime = metav1.Now()
 		joinedCondition := metav1.Condition{
-			Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+			Type:               string(fleetv1alpha1.AgentJoined),
 			Status:             metav1.ConditionTrue,
 			Reason:             reasonMemberClusterJoined,
 			ObservedGeneration: imc.GetGeneration(),
 		}
 		heartBeatReceivedCondition := metav1.Condition{
-			Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterHeartbeat,
+			Type:               string(fleetv1alpha1.AgentHealthy),
 			Status:             metav1.ConditionTrue,
 			Reason:             "InternalMemberClusterHeartbeatReceived",
 			ObservedGeneration: imc.GetGeneration(),
 		}
-		imc.SetConditions(joinedCondition, heartBeatReceivedCondition)
+		imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition, heartBeatReceivedCondition)
 		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 		By("trigger reconcile again to update member cluster status to joined")
@@ -156,12 +157,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 		By("mark Internal Member Cluster as left")
 		imcLeftCondition := metav1.Condition{
-			Type:               fleetv1alpha1.ConditionTypeInternalMemberClusterJoin,
+			Type:               string(fleetv1alpha1.AgentJoined),
 			Status:             metav1.ConditionFalse,
 			Reason:             "InternalMemberClusterLeft",
 			ObservedGeneration: imc.GetGeneration(),
 		}
-		imc.SetConditions(imcLeftCondition)
+		imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, imcLeftCondition)
 		Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 		By("trigger reconcile again to mark member cluster as left")

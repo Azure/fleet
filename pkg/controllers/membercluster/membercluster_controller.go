@@ -44,8 +44,8 @@ const (
 	reasonMemberClusterLeft        = "MemberClusterLeft"
 )
 
-const (
-	numberOfAgents = 3
+var (
+	numberOfAgents = 1
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -450,6 +450,9 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
+	if r.NetworkingAgentsEnabled {
+		numberOfAgents = 3
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
