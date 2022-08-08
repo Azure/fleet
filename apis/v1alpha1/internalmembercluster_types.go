@@ -76,25 +76,9 @@ type InternalMemberClusterList struct {
 }
 
 func (m *InternalMemberCluster) SetConditionsWithType(agentType AgentType, conditions ...metav1.Condition) {
-	var desiredAgentStatus AgentStatus
-	for _, agentStatus := range m.Status.AgentStatus {
-		if agentType == agentStatus.Type {
-			desiredAgentStatus = agentStatus
-		}
-	}
-
-	if desiredAgentStatus.Type == "" {
-		desiredAgentStatus = AgentStatus{
-			Type:       MemberAgent,
-			Conditions: []metav1.Condition{},
-		}
-		m.Status.AgentStatus = append(m.Status.AgentStatus, desiredAgentStatus)
-	}
-
-	if desiredAgentStatus.Type == agentType {
-		for _, c := range conditions {
-			meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
-		}
+	desiredAgentStatus := m.GetAgentStatus(agentType)
+	for _, c := range conditions {
+		meta.SetStatusCondition(&desiredAgentStatus.Conditions, c)
 	}
 }
 
@@ -107,6 +91,30 @@ func (m *InternalMemberCluster) GetConditionWithType(agentType AgentType, condit
 	}
 	if desiredAgentStatus.Type == agentType {
 		return meta.FindStatusCondition(desiredAgentStatus.Conditions, conditionType)
+	}
+	return nil
+}
+
+func (m *InternalMemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus {
+	var desiredAgentStatus AgentStatus
+	for _, agentStatus := range m.Status.AgentStatus {
+		if agentStatus.Type == agentType {
+			desiredAgentStatus = agentStatus
+		}
+	}
+
+	if desiredAgentStatus.Type == "" {
+		desiredAgentStatus = AgentStatus{
+			Type:       MemberAgent,
+			Conditions: []metav1.Condition{},
+		}
+		m.Status.AgentStatus = append(m.Status.AgentStatus, desiredAgentStatus)
+	}
+
+	for i, _ := range m.Status.AgentStatus {
+		if m.Status.AgentStatus[i].Type == agentType {
+			return &m.Status.AgentStatus[i]
+		}
 	}
 	return nil
 }

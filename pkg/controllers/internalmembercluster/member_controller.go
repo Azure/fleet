@@ -149,12 +149,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 // updateMemberAgentHeartBeat is used to update member agent heart beat for Internal member cluster.
 func updateMemberAgentHeartBeat(imc *fleetv1alpha1.InternalMemberCluster) {
 	klog.V(5).InfoS("update Internal member cluster heartbeat", "InternalMemberCluster", klog.KObj(imc))
-	var desiredAgentStatus fleetv1alpha1.AgentStatus
-	for _, agentStatus := range imc.Status.AgentStatus {
-		if agentStatus.Type == fleetv1alpha1.MemberAgent {
-			desiredAgentStatus = agentStatus
-		}
-	}
+	desiredAgentStatus := imc.GetAgentStatus(fleetv1alpha1.MemberAgent)
 	if desiredAgentStatus.Type == fleetv1alpha1.MemberAgent {
 		desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
 	}
@@ -163,7 +158,7 @@ func updateMemberAgentHeartBeat(imc *fleetv1alpha1.InternalMemberCluster) {
 func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedAgentObj) {
 	klog.V(5).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1alpha1.AgentJoined),
+		Type:               string(fleetv1alpha1.AgentHealthy),
 		Status:             metav1.ConditionTrue,
 		Reason:             eventReasonInternalMemberClusterHealthy,
 		ObservedGeneration: imc.GetGeneration(),

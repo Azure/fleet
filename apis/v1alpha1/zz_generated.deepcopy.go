@@ -12,7 +12,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -439,20 +439,6 @@ func (in *MemberClusterStatus) DeepCopyInto(out *MemberClusterStatus) {
 		*out = make([]v1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-	if in.Capacity != nil {
-		in, out := &in.Capacity, &out.Capacity
-		*out = make(corev1.ResourceList, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val.DeepCopy()
-		}
-	}
-	if in.Allocatable != nil {
-		in, out := &in.Allocatable, &out.Allocatable
-		*out = make(corev1.ResourceList, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val.DeepCopy()
 		}
 	}
 	in.ResourceUsage.DeepCopyInto(&out.ResourceUsage)

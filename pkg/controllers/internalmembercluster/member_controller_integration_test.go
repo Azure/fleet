@@ -113,26 +113,26 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 
 			By("checking updated join condition")
-			updatedJoinedCond := imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterJoin)
+			updatedJoinedCond := imc.GetConditionWithType(v1alpha1.MemberAgent, string(v1alpha1.AgentJoined))
 			Expect(updatedJoinedCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(updatedJoinedCond.Reason).To(Equal(eventReasonInternalMemberClusterJoined))
 
 			By("checking updated heartbeat condition")
-			updatedHBCond := imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat)
-			Expect(updatedHBCond.Status).To(Equal(metav1.ConditionTrue))
-			Expect(updatedHBCond.Reason).To(Equal(eventReasonInternalMemberClusterHBReceived))
+			agentStatus := imc.Status.AgentStatus[0]
+			Expect(agentStatus.LastReceivedHeartbeat).ToNot(Equal(metav1.Now()))
 
 			By("checking updated health condition")
-			updatedHealthCond := imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHealth)
+			updatedHealthCond := imc.GetConditionWithType(v1alpha1.MemberAgent, string(v1alpha1.AgentHealthy))
 			Expect(updatedHealthCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(updatedHealthCond.Reason).To(Equal(eventReasonInternalMemberClusterHealthy))
 
 			By("checking updated member cluster usage")
-			Expect(imc.Status.Allocatable).ShouldNot(BeNil())
-			Expect(imc.Status.Capacity).ShouldNot(BeNil())
+			Expect(imc.Status.ResourceUsage.Allocatable).ShouldNot(BeNil())
+			Expect(imc.Status.ResourceUsage.Capacity).ShouldNot(BeNil())
+			Expect(imc.Status.ResourceUsage.ObservationTime).ToNot(Equal(metav1.Now()))
 		})
 
-		It("last transition time gets updated after heartbeat", func() {
+		It("last received heart beat gets updated after heartbeat", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
@@ -142,7 +142,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			var imc v1alpha1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 
-			lastTransitionTime := imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
+			lastTransitionTime := imc.Status.AgentStatus[0].LastReceivedHeartbeat
 
 			time.Sleep(time.Second)
 
@@ -153,7 +153,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
 			Expect(err).Should(Not(HaveOccurred()))
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
-			Expect(lastTransitionTime).ShouldNot(Equal(imc.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime))
+			Expect(lastTransitionTime).ShouldNot(Equal(imc.Status.AgentStatus[0].LastReceivedHeartbeat))
 		})
 	})
 
@@ -174,9 +174,11 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 
 			By("update internalMemberCluster CR with random usage status")
 			internalMemberCluster.Status = v1alpha1.InternalMemberClusterStatus{
-				Conditions:  []metav1.Condition{},
-				Allocatable: utils.NewResourceList(),
-				Capacity:    utils.NewResourceList(),
+				ResourceUsage: v1alpha1.ResourceUsage{
+					Capacity:        utils.NewResourceList(),
+					Allocatable:     utils.NewResourceList(),
+					ObservationTime: metav1.Now(),
+				},
 			}
 			Expect(k8sClient.Status().Update(ctx, &internalMemberCluster)).Should(Succeed())
 		})
@@ -192,7 +194,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &internalMemberCluster)).Should(Succeed())
 
 			By("checking updated join condition")
-			updatedJoinedCond := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterJoin)
+			updatedJoinedCond := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, string(v1alpha1.AgentJoined))
 			Expect(updatedJoinedCond.Status).Should(Equal(metav1.ConditionFalse))
 			Expect(updatedJoinedCond.Reason).Should(Equal(eventReasonInternalMemberClusterLeft))
 		})
