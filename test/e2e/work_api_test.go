@@ -38,17 +38,17 @@ var _ = Describe("work-api testing", func() {
 		var createdWork *workapi.Work
 		var err error
 		var mDetails []manifestDetails
+		wns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: defaultWorkNamespace,
+			},
+		}
 
 		BeforeEach(func() {
 			mDetails = generateManifestDetails([]string{
 				"manifests/test-deployment.yaml",
 				"manifests/test-service.yaml",
 			})
-			wns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: defaultWorkNamespace,
-				},
-			}
 
 			_, err = HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
 			Expect(err).Should(SatisfyAny(Succeed(), &utils.AlreadyExistMatcher{}))
@@ -66,6 +66,8 @@ var _ = Describe("work-api testing", func() {
 
 		AfterEach(func() {
 			err = deleteWorkResource(createdWork)
+			Expect(err).ToNot(HaveOccurred())
+			err = HubCluster.KubeClient.Delete(context.Background(), wns)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

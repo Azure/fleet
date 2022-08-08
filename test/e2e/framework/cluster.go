@@ -53,10 +53,8 @@ func GetClusterClient(cluster *Cluster) {
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	}
 
-	newClient, err := client.New(restConfig, client.Options{Scheme: cluster.Scheme})
+	cluster.KubeClient, err = client.New(restConfig, client.Options{Scheme: cluster.Scheme})
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
-
-	cluster.KubeClient = newClient
 
 	cluster.KubeClientSet, err = kubernetes.NewForConfig(restConfig)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
