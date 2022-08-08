@@ -13,8 +13,13 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
@@ -39,10 +44,22 @@ const (
 )
 
 const (
-	FleetObjLabelKey   = "kubernetes.azure.com/managed-by"
-	FleetObjLabelValue = "fleet"
+	// LabelFleetObj is a label key indicate the resource is created by the fleet
+	LabelFleetObj      = "kubernetes.azure.com/managed-by"
+	LabelFleetObjValue = "fleet"
 
-	WorkPlaceNameLabelKey = "work.fleet.azure.com/placement-name"
+	// LabelWorkPlacementName is used to indicate which placement created the work.
+	// This label aims to enable different work objects to be managed by different placement.
+	LabelWorkPlacementName = "work.fleet.azure.com/placement-name"
+
+	// AnnotationPlacementList is used to store all the placements that select this resource.
+	// This annotation aims to enable identify the placements that need to notified when a resource
+	// is changed.
+	AnnotationPlacementList = "work.fleet.azure.com/placement-list"
+	PlacementListSep        = ";"
+
+	// PlacementFinalizer is used to make sure that we handle the deleting of an already placed resource
+	PlacementFinalizer = "work.fleet.azure.com/placement-protection"
 )
 
 var (
@@ -111,6 +128,12 @@ var (
 		// TODO: use the const after it's checked in
 		Resource: "works",
 	}
+
+	ServiceGVR = schema.GroupVersionResource{
+		Group:    corev1.GroupName,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "services",
+	}
 )
 
 func RandSecureInt(limit int64) int64 {
@@ -175,4 +198,55 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 		klog.ErrorS(err, "Failed to find resources", "gvk", gvk, "waiting time", time.Since(startTime))
 	}
 	return err
+}
+
+// ShouldPropagateObj decides if one should propagate the object
+func ShouldPropagateObj(informerManager InformerManager, uObj *unstructured.Unstructured) (bool, error) {
+	// TODO:  add more special handling for different resource kind
+	switch uObj.GroupVersionKind() {
+	case corev1.SchemeGroupVersion.WithKind("Secret"):
+		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
+		// prevented from propagating.
+		var secret corev1.Secret
+		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &secret)
+		if err != nil {
+			return false, errors.Wrap(err, fmt.Sprintf(
+				"failed to convert a secret object %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+		}
+		if secret.Type == corev1.SecretTypeServiceAccountToken {
+			return false, nil
+		}
+	case corev1.SchemeGroupVersion.WithKind("Endpoints"):
+		// we assume that all endpoints with the same name of a service is created by the service controller
+		var endpoint corev1.Endpoints
+		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &endpoint)
+		if err != nil {
+			return false, errors.Wrap(err, fmt.Sprintf(
+				"failed to convert an endpoint object %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+		}
+		_, err = informerManager.Lister(ServiceGVR).ByNamespace(endpoint.GetNamespace()).Get(endpoint.GetName())
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// there is no service of the same name as the end point,
+				// we assume that this endpoint is created by the user
+				return true, nil
+			}
+			return false, errors.Wrap(err, fmt.Sprintf("failed to get the serviceo %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+		}
+		// we find a service of the same name as the endpoint, we assume it's created by the service
+		return false, nil
+	case discoveryv1.SchemeGroupVersion.WithKind("EndpointSlice"):
+		// all EndpointSlice created by the EndpointSlice controller has a managed by label
+		var endpointSlice discoveryv1.EndpointSlice
+		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &endpointSlice)
+		if err != nil {
+			return false, errors.Wrap(err, fmt.Sprintf(
+				"failed to convert an endpointSlice object %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+		}
+		if _, exist := endpointSlice.GetLabels()[discoveryv1.LabelManagedBy]; exist {
+			// do not propagate hub cluster generated endpoint slice
+			return false, nil
+		}
+	}
+	return true, nil
 }

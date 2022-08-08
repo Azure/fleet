@@ -42,10 +42,12 @@ GOLANGCI_LINT_VER := v1.47.2
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VER = v0.0.0-20211110210527-619e6b92dab9
-ENVTEST_K8S_BIN := setup-envtest
-ENVTEST :=  $(abspath $(TOOLS_BIN_DIR)/$(ENVTEST_K8S_BIN)-$(ENVTEST_K8S_VER))
+# ENVTEST_K8S_VERSION refers to the version of k8s binary assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.23.x
+# ENVTEST_VER is the version of the ENVTEST binary
+ENVTEST_VER = latest
+ENVTEST_BIN := setup-envtest
+ENVTEST :=  $(abspath $(TOOLS_BIN_DIR)/$(ENVTEST_BIN)-$(ENVTEST_VER))
 
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
@@ -70,7 +72,7 @@ $(GOIMPORTS):
 
 # ENVTEST
 $(ENVTEST):
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) sigs.k8s.io/controller-runtime/tools/setup-envtest $(ENVTEST_K8S_BIN) $(ENVTEST_K8S_VER) 
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) sigs.k8s.io/controller-runtime/tools/setup-envtest $(ENVTEST_BIN) $(ENVTEST_VER)
 
 ## --------------------------------------
 ## Linting
@@ -120,11 +122,15 @@ load-member-docker-image:
 ## --------------------------------------
 
 .PHONY: test
-test: manifests generate fmt vet local-unit-test ## Run tests.
+test: manifests generate fmt vet local-unit-test## Run tests.
 
 .PHONY: local-unit-test
 local-unit-test: $(ENVTEST) ## Run tests.
 	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -race -coverprofile=coverage.xml -covermode=atomic -v
+
+.PHONY: integration-test
+integration-test: $(ENVTEST) ## Run tests.
+	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test  ./test/integration/... -race -v
 
 ## e2e tests
 install-hub-agent-helm:

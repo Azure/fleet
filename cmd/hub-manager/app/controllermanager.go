@@ -23,11 +23,13 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hub-manager/app/options"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
+	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/utils"
@@ -37,6 +39,7 @@ import (
 const (
 	clusterResourcePlacementName = "cluster-resource-placement-controller"
 	resourceChangeName           = "resource-change-controller"
+	memberClusterPlacementName   = "memberCluster-placement-controller"
 )
 
 var (
@@ -47,6 +50,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
+
+	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -104,13 +109,19 @@ func Run(ctx context.Context, opts *options.Options) error {
 		klog.ErrorS(err, "failed to build controller manager")
 		return err
 	}
-
+	// TODO: add real healthy check
 	if err = mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
 		klog.ErrorS(err, "failed to add health check endpoint")
 		return err
 	}
+	// TODO: add real ready check
+	if err = mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+		klog.ErrorS(err, "failed to add ready check endpoint")
+		return err
+	}
 	klog.Info("starting the hub agent")
 
+	// Set up  the memberCluster reconciler with the manager
 	if err = (&membercluster.Reconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
@@ -118,7 +129,7 @@ func Run(ctx context.Context, opts *options.Options) error {
 		return err
 	}
 
-	if err = setupCustomControllers(ctx, mgr, config, opts); err != nil {
+	if err = SetupCustomControllers(ctx, mgr, config, opts); err != nil {
 		klog.ErrorS(err, "problem setting up the custom controllers")
 		return err
 	}
@@ -131,7 +142,8 @@ func Run(ctx context.Context, opts *options.Options) error {
 	return nil
 }
 
-func setupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
+// SetupCustomControllers set up the customized controllers we developed
+func SetupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		klog.ErrorS(err, "unable to create the dynamic client")
@@ -176,7 +188,7 @@ func setupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 	// the manager for all the dynamically created informers
 	dynamicInformerManager := utils.NewInformerManager(dynamicClient, opts.ResyncPeriod.Duration, ctx.Done())
 
-	// Setup a custom controller to reconcile cluster resource placement
+	// Set up  a custom controller to reconcile cluster resource placement
 	klog.Info("Setting up clusterResourcePlacement controller")
 	crpc := &clusterresourceplacement.Reconciler{
 		Recorder:               mgr.GetEventRecorderFor(clusterResourcePlacementName),
@@ -192,12 +204,11 @@ func setupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 		return err
 	}
 
-	// Setup a new controller to reconcile any resources in the cluster
+	// Set up  a new controller to reconcile any resources in the cluster
 	klog.Info("Setting up resource change controller")
 	rcr := &resourcechange.Reconciler{
-		Client:              mgr.GetClient(),
-		Recorder:            mgr.GetEventRecorderFor(resourceChangeName),
 		DynamicClient:       dynamicClient,
+		Recorder:            mgr.GetEventRecorderFor(resourceChangeName),
 		RestMapper:          mgr.GetRESTMapper(),
 		InformerManager:     dynamicInformerManager,
 		PlacementController: clusterResourcePlacementController,
@@ -209,11 +220,26 @@ func setupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 		return err
 	}
 
+	// Set up  a new controller to reconcile memberCluster resources related to placement
+	klog.Info("Setting up member cluster change controller")
+	mcp := &memberclusterplacement.Reconciler{
+		InformerManager:     dynamicInformerManager,
+		PlacementController: clusterResourcePlacementController,
+	}
+
+	memberClusterPlacementController := controller.NewController(memberClusterPlacementName, controller.NamespaceKeyFunc, mcp.Reconcile, ratelimiter)
+	if err != nil {
+		klog.ErrorS(err, "unable to set up resource change  controller")
+		return err
+	}
+
+	// Set up a runner that starts all the custom controllers we created above
 	resourceChangeDetector := &resourcewatcher.ChangeDetector{
-		DiscoveryClientSet:                 discoverClient,
+		DiscoveryClient:                    discoverClient,
 		RESTMapper:                         mgr.GetRESTMapper(),
 		ClusterResourcePlacementController: clusterResourcePlacementController,
 		ResourceChangeController:           resourceChangeController,
+		MemberClusterPlacementController:   memberClusterPlacementController,
 		InformerManager:                    dynamicInformerManager,
 		DisabledResourceConfig:             disabledResourceConfig,
 		SkippedNamespaces:                  skippedNamespaces,

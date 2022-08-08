@@ -68,9 +68,10 @@ func GetClusterWideKeyForObject(obj interface{}) (ClusterWideKey, error) {
 	if !ok { // should not happen
 		return key, fmt.Errorf("object %+v is not a runtime object", obj)
 	}
-	gvk := runtimeObject.GetObjectKind().GroupVersionKind()
+	object := runtimeObject.DeepCopyObject()
+	gvk := object.GetObjectKind().GroupVersionKind()
 
-	metaInfo, err := meta.Accessor(runtimeObject)
+	metaInfo, err := meta.Accessor(object)
 	if err != nil { // should not happen
 		return key, fmt.Errorf("object %s has no meta: %w", gvk.String(), err)
 	}
