@@ -39,8 +39,8 @@ func TestMarkInternalMemberClusterJoined(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 
 	// Check expected condition.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentJoined), Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterJoined}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterJoined")
 }
 
@@ -56,27 +56,21 @@ func TestMarkInternalMemberClusterLeft(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 
 	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterJoin, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentJoined), Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterLeft}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterLeft")
 }
 
-func TestMarkInternalMemberClusterHeartbeatReceived(t *testing.T) {
-	r := Reconciler{recorder: utils.NewFakeRecorder(1)}
+func TestUpdateMemberAgentHeartBeat(t *testing.T) {
 	internalMemberCluster := &v1alpha1.InternalMemberCluster{}
 
-	r.markInternalMemberClusterHeartbeatReceived(internalMemberCluster)
+	updateMemberAgentHeartBeat(internalMemberCluster)
+	lastReceivedHeartBeat := internalMemberCluster.Status.AgentStatus[0].LastReceivedHeartbeat
+	assert.NotNil(t, lastReceivedHeartBeat)
 
-	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterHeartbeat, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHBReceived}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
-	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatReceived")
-
-	// Verify last transition time is updated.
-	oldLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
-	r.markInternalMemberClusterHeartbeatReceived(internalMemberCluster)
-	newLastTransitionTime := internalMemberCluster.GetCondition(v1alpha1.ConditionTypeInternalMemberClusterHeartbeat).LastTransitionTime
-	assert.Equal(t, true, newLastTransitionTime.After(oldLastTransitionTime.Time), utils.TestCaseMsg, "last transition time updated")
+	updateMemberAgentHeartBeat(internalMemberCluster)
+	newLastReceivedHeartBeat := internalMemberCluster.Status.AgentStatus[0].LastReceivedHeartbeat
+	assert.NotEqual(t, lastReceivedHeartBeat, newLastReceivedHeartBeat)
 }
 
 func TestMarkInternalMemberClusterHealthy(t *testing.T) {
@@ -91,8 +85,8 @@ func TestMarkInternalMemberClusterHealthy(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 
 	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeMemberClusterHealth, Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentHealthy), Status: metav1.ConditionTrue, Reason: eventReasonInternalMemberClusterHealthy}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHealthy")
 }
 
@@ -109,8 +103,8 @@ func TestMarkInternalMemberClusterHeartbeatUnhealthy(t *testing.T) {
 	assert.Equal(t, expected, event, utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 
 	// Check expected conditions.
-	expectedCondition := metav1.Condition{Type: v1alpha1.ConditionTypeInternalMemberClusterHealth, Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"}
-	actualCondition := internalMemberCluster.GetCondition(expectedCondition.Type)
+	expectedCondition := metav1.Condition{Type: string(v1alpha1.AgentHealthy), Status: metav1.ConditionFalse, Reason: eventReasonInternalMemberClusterUnhealthy, Message: "rand-err-msg"}
+	actualCondition := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, expectedCondition.Type)
 	assert.Equal(t, "", cmp.Diff(expectedCondition, *(actualCondition), cmpopts.IgnoreTypes(time.Time{})), utils.TestCaseMsg, "TestMarkInternalMemberClusterHeartbeatUnhealthy")
 }
 
@@ -179,6 +173,172 @@ func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			err := testCase.r.updateInternalMemberClusterWithRetry(context.Background(), testCase.internalMemberCluster)
 			assert.Equal(t, testCase.wantErr, err, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestSetConditionWithType(t *testing.T) {
+	testCases := map[string]struct {
+		internalMemberCluster *v1alpha1.InternalMemberCluster
+		condition             metav1.Condition
+		wantedAgentStatus     *v1alpha1.AgentStatus
+	}{
+		"Agent Status array is empty": {
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{},
+			condition: metav1.Condition{
+				Type:   string(v1alpha1.AgentJoined),
+				Status: metav1.ConditionTrue,
+				Reason: eventReasonInternalMemberClusterJoined,
+			},
+			wantedAgentStatus: &v1alpha1.AgentStatus{
+				Type: v1alpha1.MemberAgent,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(v1alpha1.AgentJoined),
+						Status: metav1.ConditionTrue,
+						Reason: eventReasonInternalMemberClusterJoined,
+					},
+				},
+			},
+		},
+		"Agent Status array is non-empty": {
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{
+				Status: v1alpha1.InternalMemberClusterStatus{
+					AgentStatus: []v1alpha1.AgentStatus{
+						{
+							Type:       v1alpha1.MultiClusterServiceAgent,
+							Conditions: []metav1.Condition{},
+						},
+					},
+				},
+			},
+			condition: metav1.Condition{
+				Type:   string(v1alpha1.AgentJoined),
+				Status: metav1.ConditionTrue,
+				Reason: eventReasonInternalMemberClusterJoined,
+			},
+			wantedAgentStatus: &v1alpha1.AgentStatus{
+				Type: v1alpha1.MemberAgent,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(v1alpha1.AgentJoined),
+						Status: metav1.ConditionTrue,
+						Reason: eventReasonInternalMemberClusterJoined,
+					},
+				},
+			},
+		},
+		"Agent Status exists within Internal member cluster": {
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{
+				Status: v1alpha1.InternalMemberClusterStatus{
+					AgentStatus: []v1alpha1.AgentStatus{
+						{
+							Type: v1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(v1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: eventReasonInternalMemberClusterJoined,
+								},
+							},
+						},
+					},
+				},
+			},
+			condition: metav1.Condition{
+				Type:   string(v1alpha1.AgentHealthy),
+				Status: metav1.ConditionTrue,
+				Reason: eventReasonInternalMemberClusterHealthy,
+			},
+			wantedAgentStatus: &v1alpha1.AgentStatus{
+				Type: v1alpha1.MemberAgent,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(v1alpha1.AgentJoined),
+						Status: metav1.ConditionTrue,
+						Reason: eventReasonInternalMemberClusterJoined,
+					},
+					{
+						Type:   string(v1alpha1.AgentHealthy),
+						Status: metav1.ConditionTrue,
+						Reason: eventReasonInternalMemberClusterHealthy,
+					},
+				},
+			},
+		},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			testCase.internalMemberCluster.SetConditionsWithType(v1alpha1.MemberAgent, testCase.condition)
+			assert.Equal(t, "", cmp.Diff(testCase.wantedAgentStatus, testCase.internalMemberCluster.GetAgentStatus(v1alpha1.MemberAgent), cmpopts.IgnoreTypes(time.Time{})))
+		})
+	}
+}
+
+func TestGetConditionWithType(t *testing.T) {
+	testCases := map[string]struct {
+		internalMemberCluster *v1alpha1.InternalMemberCluster
+		conditionType         string
+		wantedCondition       *metav1.Condition
+	}{
+		"Condition exists": {
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{
+				Status: v1alpha1.InternalMemberClusterStatus{
+					AgentStatus: []v1alpha1.AgentStatus{
+						{
+							Type: v1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   v1alpha1.ConditionTypeMemberClusterJoin,
+									Status: metav1.ConditionTrue,
+									Reason: eventReasonInternalMemberClusterJoined,
+								},
+							},
+						},
+					},
+				},
+			},
+			conditionType: string(v1alpha1.AgentJoined),
+			wantedCondition: &metav1.Condition{
+				Type:   v1alpha1.ConditionTypeMemberClusterJoin,
+				Status: metav1.ConditionTrue,
+				Reason: eventReasonInternalMemberClusterJoined,
+			},
+		},
+		"Condition doesn't exist": {
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{
+				Status: v1alpha1.InternalMemberClusterStatus{
+					AgentStatus: []v1alpha1.AgentStatus{
+						{
+							Type: v1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   v1alpha1.ConditionTypeMemberClusterJoin,
+									Status: metav1.ConditionTrue,
+									Reason: eventReasonInternalMemberClusterJoined,
+								},
+							},
+						},
+					},
+				},
+			},
+			conditionType:   string(v1alpha1.AgentHealthy),
+			wantedCondition: nil,
+		},
+		"Agent Status doesn't exist": {
+			internalMemberCluster: &v1alpha1.InternalMemberCluster{
+				Status: v1alpha1.InternalMemberClusterStatus{},
+			},
+			conditionType:   string(v1alpha1.AgentJoined),
+			wantedCondition: nil,
+		},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			actualCondition := testCase.internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, testCase.conditionType)
+			assert.Equal(t, testCase.wantedCondition, actualCondition)
 		})
 	}
 }

@@ -183,27 +183,6 @@ spec:
                   - type
                   type: object
                 type: array
-              allocatable:
-                additionalProperties:
-                  anyOf:
-                  - type: integer
-                  - type: string
-                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                  x-kubernetes-int-or-string: true
-                description: 'Allocatable represents the total resources of all the
-                  nodes within the member cluster that are available for scheduling.
-                  TODO: need to be deleted'
-                type: object
-              capacity:
-                additionalProperties:
-                  anyOf:
-                  - type: integer
-                  - type: string
-                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                  x-kubernetes-int-or-string: true
-                description: 'Capacity represents the total resources of all the nodes
-                  within the member cluster. TODO: need to be deleted'
-                type: object
               conditions:
                 description: Conditions is an array of current observed conditions
                   for this member cluster.

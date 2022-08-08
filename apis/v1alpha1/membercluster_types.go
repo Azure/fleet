@@ -6,7 +6,6 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,16 +52,6 @@ type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for this member cluster.
 	// +required
 	Conditions []metav1.Condition `json:"conditions"`
-
-	// Capacity represents the total resources of all the nodes within the member cluster.
-	// TODO: need to be deleted
-	// +optional
-	Capacity v1.ResourceList `json:"capacity,omitempty"`
-
-	// Allocatable represents the total resources of all the nodes within the member cluster that are available for scheduling.
-	// TODO: need to be deleted
-	// +optional
-	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
 
 	// Resource usage collected from member cluster.
 	// +optional
