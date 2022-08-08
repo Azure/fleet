@@ -33,25 +33,28 @@ type manifestDetails struct {
 	ObjMeta  metav1.ObjectMeta
 }
 
-var _ = Describe("work-api testing", func() {
-	Context("with a Work resource that has two manifests: Deployment & Service", func() {
-		var createdWork *workapi.Work
-		var err error
-		var mDetails []manifestDetails
+var _ = Describe("work-api testing", Ordered, func() {
+
+	BeforeAll(func() {
 		wns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: defaultWorkNamespace,
 			},
 		}
+		_, err := HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
+		Expect(err).Should(SatisfyAny(Succeed(), &utils.AlreadyExistMatcher{}))
+	})
+
+	Context("with a Work resource that has two manifests: Deployment & Service", func() {
+		var createdWork *workapi.Work
+		var err error
+		var mDetails []manifestDetails
 
 		BeforeEach(func() {
 			mDetails = generateManifestDetails([]string{
 				"manifests/test-deployment.yaml",
 				"manifests/test-service.yaml",
 			})
-
-			_, err = HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
-			Expect(err).Should(SatisfyAny(Succeed(), &utils.AlreadyExistMatcher{}))
 
 			workObj := createWorkObj(
 				getWorkName(5),
@@ -66,8 +69,6 @@ var _ = Describe("work-api testing", func() {
 
 		AfterEach(func() {
 			err = deleteWorkResource(createdWork)
-			Expect(err).ToNot(HaveOccurred())
-			err = HubCluster.KubeClient.Delete(context.Background(), wns)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -442,7 +443,16 @@ var _ = Describe("work-api testing", func() {
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
 		})
+	})
 
+	AfterAll(func() {
+		wns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: defaultWorkNamespace,
+			},
+		}
+		err := HubCluster.KubeClient.Delete(context.Background(), wns)
+		Expect(err).ToNot(HaveOccurred())
 	})
 })
 
