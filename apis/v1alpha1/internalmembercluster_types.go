@@ -111,7 +111,7 @@ func (m *InternalMemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus
 		m.Status.AgentStatus = append(m.Status.AgentStatus, desiredAgentStatus)
 	}
 
-	for i, _ := range m.Status.AgentStatus {
+	for i := range m.Status.AgentStatus {
 		if m.Status.AgentStatus[i].Type == agentType {
 			return &m.Status.AgentStatus[i]
 		}
