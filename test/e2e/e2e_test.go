@@ -11,8 +11,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -23,13 +25,16 @@ var (
 	memberClusterName = "kind-member-testing"
 	HubCluster        = framework.NewCluster(hubClusterName, scheme)
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
-	scheme            = runtime.NewScheme()
 	hubURL            string
+	scheme            = runtime.NewScheme()
+	genericCodecs     = serializer.NewCodecFactory(scheme)
+	genericCodec      = genericCodecs.UniversalDeserializer()
 )
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 }
 
 func TestE2E(t *testing.T) {

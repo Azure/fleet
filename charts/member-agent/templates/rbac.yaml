@@ -3,18 +3,22 @@ kind: ClusterRole
 metadata:
   name: {{ include "member-agent.fullname" . }}-member-agent
 rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [ "" ]
-    resources: [ "events" ]
-    verbs: [ "get", "list", "watch", "create", "patch" ]
-  - apiGroups: [ "" ]
-    resources: ["nodes"]
-    verbs: [ "get", "list", "watch"]
   - apiGroups: [ "multicluster.x-k8s.io" ]
     resources: [ "*" ]
     verbs: [ "*" ]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "member-agent.fullname" . }}-cluster-admin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "member-agent.fullname" . }}-sa
+    namespace: {{.Values.namespace}}
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

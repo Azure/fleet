@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 var (
@@ -20,14 +24,17 @@ var (
 	// PollInterval defines the interval time for a poll operation.
 	PollInterval = 5 * time.Second
 	// PollTimeout defines the time after which the poll operation times out.
-	PollTimeout = 30 * time.Second
+	PollTimeout = 60 * time.Second
 )
 
 type Cluster struct {
-	Scheme      *runtime.Scheme
-	KubeClient  client.Client
-	ClusterName string
-	HubURL      string
+	Scheme        *runtime.Scheme
+	KubeClient    client.Client
+	KubeClientSet kubernetes.Interface
+	DynamicClient dynamic.Interface
+	ClusterName   string
+	HubURL        string
+	RestMapper    meta.RESTMapper
 }
 
 func NewCluster(name string, scheme *runtime.Scheme) *Cluster {
@@ -46,10 +53,17 @@ func GetClusterClient(cluster *Cluster) {
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	}
 
-	client, err := client.New(restConfig, client.Options{Scheme: cluster.Scheme})
+	cluster.KubeClient, err = client.New(restConfig, client.Options{Scheme: cluster.Scheme})
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 
-	cluster.KubeClient = client
+	cluster.KubeClientSet, err = kubernetes.NewForConfig(restConfig)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	cluster.RestMapper, err = apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
