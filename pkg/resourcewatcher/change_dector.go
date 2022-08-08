@@ -7,11 +7,9 @@ package resourcewatcher
 
 import (
 	"context"
-	"reflect"
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,19 +32,23 @@ var (
 
 // ChangeDetector is a resource watcher which watches all types of resources in the cluster and reconcile the events.
 type ChangeDetector struct {
-	// DiscoveryClientSet is used to do resource discovery.
-	DiscoveryClientSet *discovery.DiscoveryClient
+	// DiscoveryClient is used to do resource discovery.
+	DiscoveryClient *discovery.DiscoveryClient
 
 	// RESTMapper is used to convert between GVK and GVR
 	RESTMapper meta.RESTMapper
 
-	// ClusterResourcePlacementController maintains a rate limited queue which used to store
-	// the name of the clusterResourcePlacement and a reconcile function to consume the items in queue.
+	// ClusterResourcePlacementController maintains a rate limited queue which is used to store
+	// the name of the changed clusterResourcePlacement and a reconcile function to consume the items in queue.
 	ClusterResourcePlacementController controller.Controller
 
-	// ClusterResourcePlacementController maintains a rate limited queue which used to store any resources'
+	// ClusterResourcePlacementController maintains a rate limited queue which is used to store any resources'
 	// cluster wide key and a reconcile function to consume the items in queue.
 	ResourceChangeController controller.Controller
+
+	// MemberClusterPlacementController maintains a rate limited queue which is used to store
+	// the name of the changed memberCluster and a reconcile function to consume the items in queue.
+	MemberClusterPlacementController controller.Controller
 
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager utils.InformerManager
@@ -64,9 +66,6 @@ type ChangeDetector struct {
 	// ConcurrentResourceChangeWorker is the number of resource change work that are
 	// allowed to sync concurrently.
 	ConcurrentResourceChangeWorker int
-
-	// dynamicResourceChangeEventHandler is the event handler for any resource change informer
-	dynamicResourceChangeEventHandler cache.ResourceEventHandler
 }
 
 // Start runs the detector, never stop until stopCh closed. This is called by the controller manager.
@@ -76,7 +75,8 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	// Ensure all informers are closed when the context closes
 	defer klog.Infof("The api resource change detector is stopped")
 
-	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdd,
+	// create the placement informer that handles placement events and enqueues to the placement queue.
+	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdded,
 		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
 	d.InformerManager.AddStaticResource(
 		utils.APIResourceMeta{
@@ -84,30 +84,39 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 			IsClusterScoped:      true,
 		}, clusterPlacementEventHandler)
 
-	// TODO: use a different event handler that list all placements and enqueue them
+	// create the work informer that handles work event and enqueues the placement name (stored in its label) to
+	// the placement queue. We don't need to handle the add event as they are placed by the placement controller.
+	workEventHandler := newHandlerOnEvents(nil, d.onWorkUpdated, d.onWorkDeleted)
+	d.InformerManager.AddStaticResource(
+		utils.APIResourceMeta{
+			GroupVersionResource: utils.WorkGVR,
+			IsClusterScoped:      false,
+		}, workEventHandler)
+
+	// create the member cluster informer that handles memberCluster add and update. We don't need to handle the
+	// delete event as the work resources in this cluster will all get deleted which will trigger placement reconcile.
+	memberClusterEventHandler := newHandlerOnEvents(d.onMemberClusterAdded, d.onMemberClusterUpdated, nil)
 	d.InformerManager.AddStaticResource(
 		utils.APIResourceMeta{
 			GroupVersionResource: utils.MemberClusterGVR,
 			IsClusterScoped:      true,
-		}, clusterPlacementEventHandler)
+		}, memberClusterEventHandler)
 
-	// TODO: add work informer that enqueue the placement name (stored in its label)
-
-	d.InformerManager.Start()
+	// set up the dynamicResourceChangeEventHandler that enqueue an event to the resource change controller's queue.
+	dynamicResourceChangeEventHandler := newFilteringHandlerOnAllEvents(d.dynamicResourceFilter,
+		d.onResourceAdded, d.onResourceUpdated, d.onResourceDeleted)
+	// run the resource type list once to start informers for the existing resources
+	d.discoverResources(dynamicResourceChangeEventHandler)
 	defer d.InformerManager.Stop()
 
-	// wait for all the static informer cache to sync before we proceed to the dynamic ones
-	// so the static controllers don't need to check cache sync
-	// TODO: implement a better interface to just check the static informers
+	// wait for all the existing informer cache to sync before we proceed to add new ones
+	// so all the static controllers don't need to check cache sync.
 	d.InformerManager.WaitForCacheSync()
 
-	// setup the dynamicResourceChangeEventHandler that enqueue an event to the resource change controller's queue
-	d.dynamicResourceChangeEventHandler = newFilteringHandlerOnAllEvents(d.dynamicResourceFilter,
-		d.onResourceAdd, d.onResourceUpdated, d.onResourceDeleted)
-	// start the resource type list loop
-	go d.discoverAPIResources(ctx, 30*time.Second)
+	// continue the resource type list loop in the background to discovery resources change.
+	go d.discoverAPIResourcesLoop(ctx, 30*time.Second, dynamicResourceChangeEventHandler)
 
-	// We run the two controller in parallel
+	// We run the three controllers in parallel.
 	errs, cctx := errgroup.WithContext(ctx)
 	errs.Go(func() error {
 		return d.ClusterResourcePlacementController.Run(cctx, d.ConcurrentClusterPlacementWorker)
@@ -115,48 +124,56 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	errs.Go(func() error {
 		return d.ResourceChangeController.Run(cctx, d.ConcurrentResourceChangeWorker)
 	})
+	errs.Go(func() error {
+		return d.MemberClusterPlacementController.Run(cctx, 1)
+	})
 
 	return errs.Wait()
 }
 
-// discoverAPIResources goes through all the api resources in the cluster and create informers on selected types
-func (d *ChangeDetector) discoverAPIResources(ctx context.Context, period time.Duration) {
+// discoverAPIResourcesLoop runs discoverResources periodically
+func (d *ChangeDetector) discoverAPIResourcesLoop(ctx context.Context, period time.Duration, dynamicResourceEventHandler cache.ResourceEventHandler) {
 	wait.UntilWithContext(ctx, func(ctx context.Context) {
-		newResources, err := utils.GetWatchableResources(d.DiscoveryClientSet)
-		var dynamicResources []utils.APIResourceMeta
-		if err != nil {
-			klog.Warningf("Failed to get all the api resources from the cluster, err = %v", err)
-		}
-		for _, res := range newResources {
-			// all the static resources are disabled by default
-			if !d.isResourceDisabled(res.GroupVersionResource) {
-				dynamicResources = append(dynamicResources, res)
-			}
-		}
-		d.InformerManager.AddDynamicResources(dynamicResources, d.dynamicResourceChangeEventHandler, err == nil)
-		// this will start the newly added informers if there is any
-		d.InformerManager.Start()
+		d.discoverResources(dynamicResourceEventHandler)
 	}, period)
 }
 
+// discoverResources goes through all the api resources in the cluster and create informers on selected types
+func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.ResourceEventHandler) {
+	newResources, err := d.getWatchableResources()
+	var dynamicResources []utils.APIResourceMeta
+	if err != nil {
+		klog.ErrorS(err, "Failed to get all the api resources from the cluster")
+	}
+	for _, res := range newResources {
+		// all the static resources are disabled by default
+		if d.shouldWatchResource(res.GroupVersionResource) {
+			dynamicResources = append(dynamicResources, res)
+		}
+	}
+	d.InformerManager.AddDynamicResources(dynamicResources, dynamicResourceEventHandler, err == nil)
+	// this will start the newly added informers if there is any
+	d.InformerManager.Start()
+}
+
 // gvrDisabled returns whether GroupVersionResource is disabled.
-func (d *ChangeDetector) isResourceDisabled(gvr schema.GroupVersionResource) bool {
+func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bool {
 	if d.DisabledResourceConfig == nil {
-		return false
+		return true
 	}
 
 	gvks, err := d.RESTMapper.KindsFor(gvr)
 	if err != nil {
-		klog.Errorf("gvr(%s) transform failed: %v", gvr.String(), err)
+		klog.ErrorS(err, "gvr transform failed", "gvr", gvr.String())
 		return false
 	}
 	for _, gvk := range gvks {
 		if d.DisabledResourceConfig.IsResourceDisabled(gvk) {
 			klog.V(4).InfoS("Skip watch resource", "group version kind", gvk.String())
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // dynamicResourceFilter filters out resources that we don't want to watch
@@ -166,71 +183,22 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 		return false
 	}
 
-	clusterWideKey, ok := key.(keys.ClusterWideKey)
-	if !ok {
-		klog.Errorf("Invalid key")
-		return false
-	}
-
+	cwKey, _ := key.(keys.ClusterWideKey)
 	// if SkippedNamespaces is set, skip any events related to the object in these namespaces.
-	if _, ok := d.SkippedNamespaces[clusterWideKey.Namespace]; ok {
-		klog.V(5).InfoS("Skip watch resource in namespace", "namespace", clusterWideKey.Namespace)
+	if _, ok := d.SkippedNamespaces[cwKey.Namespace]; ok {
+		klog.V(5).InfoS("Skip watch resource in namespace", "namespace", cwKey.Namespace,
+			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
 		return false
 	}
 
 	if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-		// TODO:  add more special handling here
-		switch unstructuredObj.GroupVersionKind() {
-		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
-		// prevented from propagating.
-		case corev1.SchemeGroupVersion.WithKind("Secret"):
-			secretType, found, _ := unstructured.NestedString(unstructuredObj.Object, "type")
-			if found && secretType == string(corev1.SecretTypeServiceAccountToken) {
-				return false
-			}
+		shouldPropagate, err := utils.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy())
+		if err != nil || !shouldPropagate {
+			return false
 		}
 	}
 
 	return true
-}
-
-// onClusterResourcePlacementAdd handles object add event and push the object to queue.
-func (d *ChangeDetector) onClusterResourcePlacementAdd(obj interface{}) {
-	klog.V(5).InfoS("ClusterResourcePlacement Added", "obj", obj)
-	d.ClusterResourcePlacementController.Enqueue(obj)
-}
-
-// onClusterResourcePlacementUpdated handles object update event and push the object to queue.
-func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interface{}) {
-	klog.V(5).InfoS("ClusterResourcePlacement Updated", "oldObj", oldObj, "newObj", newObj)
-	d.ClusterResourcePlacementController.Enqueue(newObj)
-}
-
-// onClusterResourcePlacementDeleted handles object delete event and push the object to queue.
-func (d *ChangeDetector) onClusterResourcePlacementDeleted(obj interface{}) {
-	klog.V(5).InfoS("ClusterResourcePlacement Deleted", "obj", obj)
-	d.ClusterResourcePlacementController.Enqueue(obj)
-}
-
-// onResourceAdd handles object add event and push the object to queue.
-func (d *ChangeDetector) onResourceAdd(obj interface{}) {
-	klog.V(5).InfoS("Resource Added", "obj", obj)
-	d.ResourceChangeController.Enqueue(obj)
-}
-
-// onResourceUpdated handles object update event and push the object to queue.
-func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
-	klog.V(5).InfoS("Resource Updated", "oldObj", oldObj, "newObj", newObj)
-	// TODO: see if we can check the generation
-	if !reflect.DeepEqual(oldObj, newObj) {
-		d.ResourceChangeController.Enqueue(newObj)
-	}
-}
-
-// onResourceDeleted handles object delete event and push the object to queue.
-func (d *ChangeDetector) onResourceDeleted(obj interface{}) {
-	klog.V(5).InfoS("Resource Deleted", "obj", obj)
-	d.ResourceChangeController.Enqueue(obj)
 }
 
 // NeedLeaderElection implements LeaderElectionRunnable interface.
