@@ -142,18 +142,18 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			var imc v1alpha1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 
-			lastTransitionTime := imc.Status.AgentStatus[0].LastReceivedHeartbeat
+			lastReceivedHeartbeat := imc.Status.AgentStatus[0].LastReceivedHeartbeat
 
 			time.Sleep(time.Second)
 
-			By("trigger reconcile which should update last transition time")
+			By("trigger reconcile which should update last received heart beat time")
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
 			Expect(err).Should(Not(HaveOccurred()))
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
-			Expect(lastTransitionTime).ShouldNot(Equal(imc.Status.AgentStatus[0].LastReceivedHeartbeat))
+			Expect(lastReceivedHeartbeat).ShouldNot(Equal(imc.Status.AgentStatus[0].LastReceivedHeartbeat))
 		})
 	})
 

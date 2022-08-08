@@ -329,7 +329,7 @@ func toOwnerReference(memberCluster *fleetv1alpha1.MemberCluster) *metav1.OwnerR
 		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 }
 
-// copyInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster.
+// copyInternalMemberClusterStatus is used to copy status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
 func (r *Reconciler) copyInternalMemberClusterStatus(imc *fleetv1alpha1.InternalMemberCluster, mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncInternalMemberClusterStatus", "memberCluster", klog.KObj(mc))
 	if imc == nil {
@@ -361,7 +361,7 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 		})
 }
 
-// aggregateJoinedCondition is used to calculate the joined or left status for member cluster based on conditions from all agents.
+// aggregateJoinedCondition is used to calculate and mark the joined or left status for member cluster based on join conditions from all agents.
 func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncJoinedCondition", "memberCluster", klog.KObj(mc))
 	if len(mc.Status.AgentStatus) < numberOfAgents {
