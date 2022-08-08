@@ -627,7 +627,7 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 	}
 }
 
-func TestSyncInternalMemberClusterStatus(t *testing.T) {
+func TestCopyInternalMemberClusterStatus(t *testing.T) {
 	now := metav1.Now()
 	tests := map[string]struct {
 		r                     *Reconciler
@@ -801,7 +801,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
+			tt.r.copyInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
 			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), tt.memberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), cmpopts.IgnoreTypes(time.Time{})))
 			assert.Equal(t, tt.wantedMemberCluster.Status.ResourceUsage, tt.memberCluster.Status.ResourceUsage)
 			assert.Equal(t, tt.wantedMemberCluster.Status.AgentStatus, tt.memberCluster.Status.AgentStatus)

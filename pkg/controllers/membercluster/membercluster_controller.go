@@ -96,7 +96,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
-	r.syncInternalMemberClusterStatus(currentImc, &mc)
+	r.copyInternalMemberClusterStatus(currentImc, &mc)
 	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
 		klog.ErrorS(err, "failed to update status for %s", klog.KObj(&mc))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -329,8 +329,8 @@ func toOwnerReference(memberCluster *fleetv1alpha1.MemberCluster) *metav1.OwnerR
 		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 }
 
-// syncInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster.
-func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.InternalMemberCluster, mc *fleetv1alpha1.MemberCluster) {
+// copyInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster.
+func (r *Reconciler) copyInternalMemberClusterStatus(imc *fleetv1alpha1.InternalMemberCluster, mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncInternalMemberClusterStatus", "memberCluster", klog.KObj(mc))
 	if imc == nil {
 		return
@@ -338,7 +338,7 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.Internal
 
 	// Copy Agent status.
 	mc.Status.AgentStatus = imc.Status.AgentStatus
-	r.syncJoinedCondition(mc)
+	r.aggregateJoinedCondition(mc)
 	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealth.
 	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHeartbeat as this condition type is not defined at all.
 
@@ -361,7 +361,8 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 		})
 }
 
-func (r *Reconciler) syncJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
+// aggregateJoinedCondition is used to calculate the joined or left status for member cluster based on conditions from all agents.
+func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncJoinedCondition", "memberCluster", klog.KObj(mc))
 	if len(mc.Status.AgentStatus) < numberOfAgents {
 		return
