@@ -122,7 +122,7 @@ load-member-docker-image:
 ## --------------------------------------
 
 .PHONY: test
-test: manifests generate fmt vet local-unit-test## Run tests.
+test: manifests generate fmt vet local-unit-test integration-test## Run tests.
 
 .PHONY: local-unit-test
 local-unit-test: $(ENVTEST) ## Run tests.

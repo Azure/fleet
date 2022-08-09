@@ -1,0 +1,12 @@
+apiVersion: fleet.azure.com/v1alpha1
+kind: ClusterResourcePlacement
+metadata:
+  name: test-select-namespace
+spec:
+  resourceSelectors:
+    - group: ""
+      version: v1
+      kind: Namespace
+      labelSelector:
+        matchLabels:
+          fleet.azure.com/name: test

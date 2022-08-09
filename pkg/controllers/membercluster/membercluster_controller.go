@@ -24,6 +24,7 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -478,6 +479,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)
 }
