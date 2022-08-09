@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -236,7 +237,6 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedAgentObj)
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("InternalMemberClusterController")
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.InternalMemberCluster{}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		For(&fleetv1alpha1.InternalMemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }
