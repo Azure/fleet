@@ -55,13 +55,16 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				framework.CreateMemberCluster(*HubCluster, mc)
 				framework.WaitMemberCluster(*HubCluster, mc)
 
+				By("check if memberCluster is marked as readyToJoin", func() {
+					framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionTrue, 3*framework.PollTimeout)
+				})
+
 				By("check if internalmembercluster created in the hub cluster", func() {
 					imc = NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
 					framework.WaitInternalMemberCluster(*HubCluster, imc)
 				})
 			})
 
-			// TODO: check if readyToJoin is condition is set to true
 			By("check if membercluster condition is updated to Joined", func() {
 				framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 			})
@@ -74,9 +77,12 @@ var _ = Describe("Join/leave member cluster testing", func() {
 		It("leave flow is successful ", func() {
 
 			By("update membercluster in the hub cluster", func() {
-
 				framework.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
 				framework.WaitMemberCluster(*HubCluster, mc)
+
+				By("check if memberCluster is marked as notReadyToJoin", func() {
+					framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, 3*framework.PollTimeout)
+				})
 			})
 
 			By("check if membercluster condition is updated to Left", func() {
