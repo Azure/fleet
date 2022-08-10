@@ -20,7 +20,7 @@ import (
 func CreateNamespace(cluster Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Creating Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), ns)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 

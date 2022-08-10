@@ -276,11 +276,11 @@ uninstall-helm-charts: clean-testing-kind-clusters-resources
 .PHONY: clean-testing-kind-clusters-resources
 clean-testing-kind-clusters-resources:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
-	kubectl delete ns fleet-kind-member-testing --ignore-not-found
+	kubectl delete ns fleet-member-kind-member-testing --ignore-not-found
 	kubectl delete memberclusters.fleet.azure.com kind-$(MEMBER_KIND_CLUSTER_NAME) --ignore-not-found
 
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME)
-	kubectl delete ns fleet-kind-member-testing --ignore-not-found
+	kubectl delete ns fleet-member-kind-member-testing --ignore-not-found
 
 .PHONY: clean-e2e-tests
 clean-e2e-tests: ## Remove
