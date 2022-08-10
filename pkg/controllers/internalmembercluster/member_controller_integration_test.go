@@ -6,6 +6,7 @@ package internalmembercluster
 
 import (
 	"context"
+	"go.goms.io/fleet/apis"
 	"strings"
 	"time"
 
@@ -57,7 +58,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 		}
 
 		By("create the internalMemberCluster reconciler")
-		r = NewReconciler(k8sClient, k8sClient)
+		r = NewReconciler(k8sClient, k8sClient, []apis.Joinable{})
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())
 	})

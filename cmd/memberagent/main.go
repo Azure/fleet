@@ -10,8 +10,9 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"go.goms.io/fleet/apis"
 	"os"
+
+	"go.goms.io/fleet/apis"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -247,7 +248,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 	var workAPIReconcilers []apis.Joinable
 	workAPIReconcilers = append(workAPIReconcilers, workStatusReconciler, applyWorkReconciler, finalizeWorkReconciler)
 
-	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient()).SetupWithManager(hubMgr); err != nil {
+	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workAPIReconcilers).SetupWithManager(hubMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
 
