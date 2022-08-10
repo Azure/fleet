@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"os"
 
-	"go.goms.io/fleet/apis"
-
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -29,6 +27,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 	workcontrollers "sigs.k8s.io/work-api/pkg/controllers"
 
+	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"

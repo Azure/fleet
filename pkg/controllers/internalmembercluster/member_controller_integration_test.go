@@ -6,7 +6,6 @@ package internalmembercluster
 
 import (
 	"context"
-	"go.goms.io/fleet/apis"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"go.goms.io/fleet/apis"
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
