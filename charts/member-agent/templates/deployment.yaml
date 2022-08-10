@@ -24,8 +24,10 @@ spec:
             - name: http
               containerPort: 80
           args:
+            - --leader-elect=true
             - --tls-insecure={{ .Values.tlsClientInsecure }}
             - --v={{ .Values.logVerbosity }}
+            - -add_dir_header
           env:
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"
@@ -37,10 +39,30 @@ spec:
             value: "{{ .Values.config.hubCA }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          ports:
+            - containerPort: 8080
+              name: hubmetrics
+              protocol: TCP
+            - containerPort: 8081
+              name: hubhealthz
+              protocol: TCP
+            - containerPort: 8090
+              name: membermetrics
+              protocol: TCP
+            - containerPort: 8091
+              name: memberhealthz
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: hubhealthz
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: hubhealthz
           volumeMounts:
           - name: provider-token 
             mountPath: /config
-
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}

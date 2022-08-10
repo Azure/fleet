@@ -32,14 +32,14 @@ var (
 	probeAddr               = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	metricsAddr             = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	enableLeaderElection    = flag.Bool("leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
 	enableWebhook           = flag.Bool("enable-webhook", false, "If set, the fleet webhook is enabled.")
 	networkingAgentsEnabled = flag.Bool("networking-agents-enabled", false, "Whether the networking agents are enabled or not.")
 )
 
 const (
-	FleetWebhookCertDir     = "/tmp/k8s-webhook-server/serving-certs"
-	FleetWebhookPort        = 9443
-	LeaderElectionNamespace = "kube-system"
+	FleetWebhookCertDir = "/tmp/k8s-webhook-server/serving-certs"
+	FleetWebhookPort    = 9443
 )
 
 func init() {
@@ -65,8 +65,8 @@ func main() {
 		CertDir:                 FleetWebhookCertDir,
 		HealthProbeBindAddress:  *probeAddr,
 		LeaderElection:          *enableLeaderElection,
-		LeaderElectionNamespace: LeaderElectionNamespace,
-		LeaderElectionID:        "984738fa.hub.fleet.azure.com",
+		LeaderElectionNamespace: *leaderElectionNamespace,
+		LeaderElectionID:        "13622se4848560.hub.fleet.azure.com",
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start controller manager.")

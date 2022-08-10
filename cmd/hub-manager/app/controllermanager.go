@@ -110,12 +110,12 @@ func Run(ctx context.Context, opts *options.Options) error {
 		return err
 	}
 	// TODO: add real healthy check
-	if err = mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "failed to add health check endpoint")
 		return err
 	}
 	// TODO: add real ready check
-	if err = mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "failed to add ready check endpoint")
 		return err
 	}

@@ -23,10 +23,22 @@ spec:
             - --leader-elect=true
             - --enable-webhook={{ .Values.enableWebhook }}
             - --v={{ .Values.logVerbosity }}
+            - -add_dir_header
           ports:
-            - name: http
-              containerPort: 80
+            - name: metrics
+              containerPort: 8080
               protocol: TCP
+            - name: healthz
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
           env:
           - name: POD_NAMESPACE
             valueFrom:

@@ -55,7 +55,7 @@ func AddToManager(m manager.Manager) error {
 	return nil
 }
 
-// CreateValidatingWebhookConfiguration creates the validatingwebhookconfiguration object for the webhook
+// CreateFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook
 func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, caPEM []byte, port int) error {
 	failPolicy := admv1.Fail // reject request if the webhook doesn't work
 	sideEffortsNone := admv1.SideEffectClassNone
