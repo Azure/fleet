@@ -32,3 +32,7 @@ type ConditionedAgentObj interface {
 	client.Object
 	ConditionedWithType
 }
+
+type Joinable interface {
+	Join()
+}

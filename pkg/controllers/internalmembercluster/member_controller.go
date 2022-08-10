@@ -29,9 +29,10 @@ import (
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
-	hubClient    client.Client
-	memberClient client.Client
-	recorder     record.EventRecorder
+	hubClient          client.Client
+	memberClient       client.Client
+	recorder           record.EventRecorder
+	workAPIReconcilers []apis.Joinable
 }
 
 const (
@@ -42,10 +43,11 @@ const (
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
-func NewReconciler(hubClient client.Client, memberClient client.Client) *Reconciler {
+func NewReconciler(hubClient client.Client, memberClient client.Client, workAPIReconcilers []apis.Joinable) *Reconciler {
 	return &Reconciler{
-		hubClient:    hubClient,
-		memberClient: memberClient,
+		hubClient:          hubClient,
+		memberClient:       memberClient,
+		workAPIReconcilers: workAPIReconcilers,
 	}
 }
 
@@ -67,6 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
+		r.startWorkAPIControllers()
 		if updateHealthErr != nil {
 			klog.ErrorS(updateHealthErr, "failed to update health for %s", klog.KObj(&imc))
 			return ctrl.Result{}, updateHealthErr
@@ -143,6 +146,12 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 		func() error {
 			return r.hubClient.Status().Update(ctx, imc)
 		})
+}
+
+func (r *Reconciler) startWorkAPIControllers() {
+	for _, reconciler := range r.workAPIReconcilers {
+		reconciler.Join()
+	}
 }
 
 // updateMemberAgentHeartBeat is used to update member agent heart beat for Internal member cluster.

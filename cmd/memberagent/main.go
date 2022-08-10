@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"go.goms.io/fleet/apis"
 	"os"
 
 	"github.com/pkg/errors"
@@ -201,38 +202,50 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 		os.Exit(1)
 	}
 
-	if err = workcontrollers.NewWorkStatusReconciler(
+	workStatusReconciler := workcontrollers.NewWorkStatusReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
 		memberMgr.GetClient(),
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_status_controller"),
 		3,
-	).SetupWithManager(hubMgr); err != nil {
+		false,
+	)
+
+	if err = workStatusReconciler.SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "WorkStatus")
 		return err
 	}
 
-	if err = workcontrollers.NewApplyWorkReconciler(
+	applyWorkReconciler := workcontrollers.NewApplyWorkReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
 		memberMgr.GetClient(),
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_controller"),
 		3,
-	).SetupWithManager(hubMgr); err != nil {
+		false,
+	)
+
+	if err = applyWorkReconciler.SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Work")
 		return err
 	}
 
-	if err = workcontrollers.NewFinalizeWorkReconciler(
+	finalizeWorkReconciler := workcontrollers.NewFinalizeWorkReconciler(
 		hubMgr.GetClient(),
 		memberMgr.GetClient(),
 		hubMgr.GetEventRecorderFor("WorkFinalizer_controller"),
-	).SetupWithManager(hubMgr); err != nil {
+		false,
+	)
+
+	if err = finalizeWorkReconciler.SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "WorkFinalize")
 		return err
 	}
+
+	var workAPIReconcilers []apis.Joinable
+	workAPIReconcilers = append(workAPIReconcilers, workStatusReconciler, applyWorkReconciler, finalizeWorkReconciler)
 
 	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient()).SetupWithManager(hubMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
