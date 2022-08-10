@@ -727,12 +727,16 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"copy with Left condition": {
+<<<<<<< HEAD
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]string{
 					fleetv1alpha1.MemberAgent: "",
 				},
 			},
+=======
+			r: &Reconciler{recorder: utils.NewFakeRecorder(2), numberOfAgents: 1},
+>>>>>>> a2cae64 (Address comment)
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -778,6 +782,11 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
 							Status: metav1.ConditionFalse,
 							Reason: reasonMemberClusterLeft,
+						},
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+							Status: metav1.ConditionFalse,
+							Reason: reasonMemberClusterNotReadyToJoin,
 						},
 					},
 					ResourceUsage: fleetv1alpha1.ResourceUsage{

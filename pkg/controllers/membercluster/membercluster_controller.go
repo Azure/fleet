@@ -157,7 +157,6 @@ func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster,
 	if _, err := r.syncInternalMemberCluster(ctx, mc, namespaceName, imc); err != nil {
 		return errors.Wrapf(err, "failed to sync internal member cluster spec")
 	}
-	markMemberClusterNotReadyToJoin(r.recorder, mc)
 
 	return nil
 }
@@ -398,6 +397,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	if joined && !left {
 		markMemberClusterJoined(r.recorder, mc)
 	} else if !joined && left {
+		markMemberClusterNotReadyToJoin(r.recorder, mc)
 		markMemberClusterLeft(r.recorder, mc)
 	} else {
 		markMemberClusterUnknown(r.recorder, mc)
