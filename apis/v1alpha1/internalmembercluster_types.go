@@ -110,7 +110,7 @@ func (m *InternalMemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus
 
 	if desiredAgentStatus.Type == "" {
 		desiredAgentStatus = AgentStatus{
-			Type:       MemberAgent,
+			Type:       agentType,
 			Conditions: []metav1.Condition{},
 		}
 		m.Status.AgentStatus = append(m.Status.AgentStatus, desiredAgentStatus)

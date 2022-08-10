@@ -48,9 +48,11 @@ const (
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	client.Client
-	recorder                record.EventRecorder
-	NetworkingAgentsEnabled bool // if networking agents are enabled, need to handle unjoin before leave
-	numberOfAgents          int
+	recorder record.EventRecorder
+	// Need to update MC based on the IMC conditions based on the agent list.
+	NetworkingAgentsEnabled bool
+	// agents are used as hashset to query the expected agent type, so the value will be ignored.
+	agents map[fleetv1alpha1.AgentType]string
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -362,18 +364,31 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1a
 // aggregateJoinedCondition is used to calculate and mark the joined or left status for member cluster based on join conditions from all agents.
 func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	klog.V(5).InfoS("syncJoinedCondition", "memberCluster", klog.KObj(mc))
-	// TODO: Fix condition
-	if len(mc.Status.AgentStatus) < r.numberOfAgents {
+	if len(mc.Status.AgentStatus) < len(r.agents) {
+		markMemberClusterUnknown(r.recorder, mc)
 		return
 	}
 	joined := true
 	left := true
+	mcAgent := make(map[fleetv1alpha1.AgentType]bool)
 	for _, agentStatus := range mc.Status.AgentStatus {
-		conditions := agentStatus.Conditions
-		condition := meta.FindStatusCondition(conditions, string(fleetv1alpha1.AgentJoined))
-		if condition != nil {
-			joined = joined && condition.Status == metav1.ConditionTrue
-			left = left && condition.Status == metav1.ConditionFalse
+		if _, found := r.agents[agentStatus.Type]; !found {
+			continue // ignore any unexpected agent type
+		}
+		condition := meta.FindStatusCondition(agentStatus.Conditions, string(fleetv1alpha1.AgentJoined))
+		if condition == nil {
+			markMemberClusterUnknown(r.recorder, mc)
+			return
+		}
+
+		joined = joined && condition.Status == metav1.ConditionTrue
+		left = left && condition.Status == metav1.ConditionFalse
+		mcAgent[agentStatus.Type] = true
+	}
+	for agent := range r.agents {
+		if exist := mcAgent[agent]; !exist {
+			markMemberClusterUnknown(r.recorder, mc)
+			return
 		}
 	}
 
@@ -471,10 +486,12 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
+	r.agents = make(map[fleetv1alpha1.AgentType]string)
+	r.agents[fleetv1alpha1.MemberAgent] = ""
+
 	if r.NetworkingAgentsEnabled {
-		r.numberOfAgents = 3
-	} else {
-		r.numberOfAgents = 1
+		r.agents[fleetv1alpha1.MultiClusterServiceAgent] = ""
+		r.agents[fleetv1alpha1.ServiceExportImportAgent] = ""
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}).

@@ -636,7 +636,13 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		wantedMemberCluster   *fleetv1alpha1.MemberCluster
 	}{
 		"copy with Joined condition": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 2},
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
+				},
+			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -721,7 +727,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"copy with Left condition": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent: "",
+				},
+			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -806,7 +817,13 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"copy with Unknown condition": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
+				},
+			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -825,7 +842,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 								{
 									Type:   string(fleetv1alpha1.AgentJoined),
 									Status: metav1.ConditionTrue,
-									Reason: "Left",
+									Reason: "Joined",
 								},
 							},
 							LastReceivedHeartbeat: now,
@@ -870,7 +887,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 								{
 									Type:   string(fleetv1alpha1.AgentJoined),
 									Status: metav1.ConditionTrue,
-									Reason: "Left",
+									Reason: "Joined",
 								},
 							},
 							LastReceivedHeartbeat: now,
@@ -891,7 +908,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"No Agent Status": {
-			r: &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent: "",
+				},
+			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
 				Status: fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -917,14 +939,362 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionUnknown,
+							Reason: reasonMemberClusterUnknown,
+						},
+					},
 				},
 			},
 		},
 		"Internal member cluster is nil": {
-			r:                     &Reconciler{recorder: utils.NewFakeRecorder(1), numberOfAgents: 1},
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent: "",
+				},
+			},
 			internalMemberCluster: nil,
 			memberCluster:         &fleetv1alpha1.MemberCluster{},
 			wantedMemberCluster:   &fleetv1alpha1.MemberCluster{},
+		},
+		"other agent type reported in the status and should be ignored": {
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
+				},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.MultiClusterServiceAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionFalse,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionTrue,
+							Reason: reasonMemberClusterJoined,
+						},
+					},
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type: fleetv1alpha1.MultiClusterServiceAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionFalse,
+									Reason: "Left",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+		},
+		"less agent type reported in the status": {
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
+				},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionUnknown,
+							Reason: reasonMemberClusterUnknown,
+						},
+					},
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+		},
+		"condition is not reported in the status": {
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
+				},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type:                  fleetv1alpha1.ServiceExportImportAgent,
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionUnknown,
+							Reason: reasonMemberClusterUnknown,
+						},
+					},
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type:                  fleetv1alpha1.ServiceExportImportAgent,
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+		},
+		"agent type is not reported in the status": {
+			r: &Reconciler{
+				recorder: utils.NewFakeRecorder(1),
+				agents: map[fleetv1alpha1.AgentType]string{
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
+				},
+			},
+			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
+				Status: fleetv1alpha1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type:                  fleetv1alpha1.MultiClusterServiceAgent,
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
+			memberCluster: &fleetv1alpha1.MemberCluster{},
+			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Status: metav1.ConditionUnknown,
+							Reason: reasonMemberClusterUnknown,
+						},
+					},
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("100m"),
+						},
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						ObservationTime: now,
+					},
+					AgentStatus: []fleetv1alpha1.AgentStatus{
+						{
+							Type: fleetv1alpha1.MemberAgent,
+							Conditions: []metav1.Condition{
+								{
+									Type:   string(fleetv1alpha1.AgentJoined),
+									Status: metav1.ConditionTrue,
+									Reason: "Joined",
+								},
+							},
+							LastReceivedHeartbeat: now,
+						},
+						{
+							Type:                  fleetv1alpha1.MultiClusterServiceAgent,
+							LastReceivedHeartbeat: now,
+						},
+					},
+				},
+			},
 		},
 	}
 
