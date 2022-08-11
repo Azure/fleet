@@ -23,7 +23,9 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -463,7 +465,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	mc.SetConditions(newCondition)
 }
 
-// markMemberClusterLeft is used to update the status of the member cluster to have the left condition.
+// markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
 func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
@@ -494,7 +496,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.agents[fleetv1alpha1.ServiceExportImportAgent] = ""
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1alpha1.MemberCluster{}).
+		For(&fleetv1alpha1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&fleetv1alpha1.InternalMemberCluster{}).
 		Complete(r)
 }

@@ -191,10 +191,12 @@ func SetupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 	// Set up  a custom controller to reconcile cluster resource placement
 	klog.Info("Setting up clusterResourcePlacement controller")
 	crpc := &clusterresourceplacement.Reconciler{
+		Client:                 mgr.GetClient(),
 		Recorder:               mgr.GetEventRecorderFor(clusterResourcePlacementName),
 		RestMapper:             mgr.GetRESTMapper(),
 		InformerManager:        dynamicInformerManager,
 		DisabledResourceConfig: disabledResourceConfig,
+		WorkPendingGracePeriod: opts.WorkPendingGracePeriod,
 	}
 
 	ratelimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)

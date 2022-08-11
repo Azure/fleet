@@ -117,7 +117,6 @@ func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
 	oldMCMeta, _ := meta.Accessor(oldObj)
 	newMCMeta, _ := meta.Accessor(newObj)
 	// Only enqueue if the change can affect placement decisions. i.e. label and spec
-	// TODO: make sure the CRD spec change triggers generation change.
 	if oldMCMeta.GetGeneration() == newMCMeta.GetGeneration() && reflect.DeepEqual(oldMCMeta.GetLabels(), newMCMeta.GetLabels()) {
 		klog.V(5).InfoS("ignore a memberCluster update event with no real change",
 			"memberCluster", klog.KObj(oldMCMeta), "generation", oldMCMeta.GetGeneration())
@@ -141,7 +140,8 @@ func (d *ChangeDetector) onResourceAdded(obj interface{}) {
 		klog.ErrorS(err, "skip process an unknown obj", "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 		return
 	}
-	klog.V(5).InfoS("A resource is added", "obj", klog.KObj(metaInfo))
+	klog.V(5).InfoS("A resource is added", "obj", klog.KObj(metaInfo),
+		"gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 	d.ResourceChangeController.Enqueue(obj)
 }
 
@@ -157,8 +157,14 @@ func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
 		klog.ErrorS(err, "failed to handle an object update event", "newObj", newObj)
 		return
 	}
+	runtimeObject, ok := oldObj.(runtime.Object)
+	if !ok {
+		klog.ErrorS(fmt.Errorf("resource %+v is not a runtime object", oldObj), "skip process an unknown obj")
+		return
+	}
 	if oldObjMeta.GetResourceVersion() != newObjMeta.GetResourceVersion() {
-		klog.V(5).InfoS("A resource is updated", "obj", klog.KObj(oldObjMeta))
+		klog.V(5).InfoS("A resource is updated", "obj", klog.KObj(oldObjMeta),
+			"gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 		d.ResourceChangeController.Enqueue(newObj)
 		return
 	}
@@ -172,6 +178,6 @@ func (d *ChangeDetector) onResourceDeleted(obj interface{}) {
 		klog.ErrorS(err, "failed to handle an object delete event")
 		return
 	}
-	klog.V(5).InfoS("A resource is deleted", "obj", klog.KObj(clientObj))
+	klog.V(5).InfoS("A resource is deleted", "obj", klog.KObj(clientObj), "gvk", clientObj.GetObjectKind().GroupVersionKind().String())
 	d.ResourceChangeController.Enqueue(clientObj)
 }

@@ -12,6 +12,8 @@ on:
       - release-*
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
+env:
+  GO_VERSION: '1.18'
 
 jobs:
   detect-noop:
@@ -49,7 +51,7 @@ jobs:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
           ## Comma-separated list of files to upload
-          files: ./coverage.xml
+          files: ./it-coverage.xml;./ut-coverage.xml
   
   e2e-tests:
     runs-on: ubuntu-latest

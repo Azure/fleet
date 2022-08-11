@@ -56,7 +56,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	for i, crp := range crpList {
 		placement := crp.(*unstructured.Unstructured)
 		klog.V(4).InfoS("enqueue a placement to reconcile", "memberCluster", memberClusterName, "placement", klog.KObj(placement))
-		r.PlacementController.Enqueue(&crpList[i])
+		r.PlacementController.Enqueue(crpList[i])
 	}
 
 	return ctrl.Result{}, nil
