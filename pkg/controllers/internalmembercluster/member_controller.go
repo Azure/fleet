@@ -69,6 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
+		// Allow work controllers to reconcile
 		r.startWorkAPIControllers()
 		if updateHealthErr != nil {
 			klog.ErrorS(updateHealthErr, "failed to update health for %s", klog.KObj(&imc))
@@ -77,6 +78,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)}, nil
 
 	case fleetv1alpha1.ClusterStateLeave:
+		// Stop work controllers from reconciling
+		// TODO: wait for work controllers to stop/
+		// TODO: rejoin won't work now.
+		r.stopWorkAPIControllers()
 		r.markInternalMemberClusterLeft(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
 			klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
@@ -150,7 +155,13 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 
 func (r *Reconciler) startWorkAPIControllers() {
 	for _, reconciler := range r.workAPIReconcilers {
-		reconciler.Join()
+		reconciler.Start()
+	}
+}
+
+func (r *Reconciler) stopWorkAPIControllers() {
+	for _, reconciler := range r.workAPIReconcilers {
+		reconciler.Stop()
 	}
 }
 

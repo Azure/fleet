@@ -34,5 +34,6 @@ type ConditionedAgentObj interface {
 }
 
 type Joinable interface {
-	Join()
+	Start()
+	Stop()
 }

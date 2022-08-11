@@ -145,5 +145,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.23.0
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.23.0
 	k8s.io/sample-controller => k8s.io/sample-controller v0.23.0
-	sigs.k8s.io/work-api => github.com/Arvindthiru/k8s-work-api v0.0.0-20220810205416-71aaba7088c1
+	sigs.k8s.io/work-api => github.com/Arvindthiru/k8s-work-api v0.0.0-20220811004831-ccf855913c00
 )
