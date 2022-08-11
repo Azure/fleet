@@ -212,7 +212,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 		false,
 	)
 
-	if err = workStatusReconciler.SetupWithManager(hubMgr); err != nil {
+	if err = workStatusReconciler.SetupUnmanagedController(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "WorkStatus")
 		return err
 	}
@@ -227,7 +227,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 		false,
 	)
 
-	if err = applyWorkReconciler.SetupWithManager(hubMgr); err != nil {
+	if err = applyWorkReconciler.SetupUnmanagedController(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Work")
 		return err
 	}
@@ -239,7 +239,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 		false,
 	)
 
-	if err = finalizeWorkReconciler.SetupWithManager(hubMgr); err != nil {
+	if err = finalizeWorkReconciler.SetupUnmanagedController(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "WorkFinalize")
 		return err
 	}

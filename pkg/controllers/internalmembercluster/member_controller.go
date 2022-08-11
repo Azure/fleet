@@ -33,6 +33,7 @@ type Reconciler struct {
 	memberClient       client.Client
 	recorder           record.EventRecorder
 	workAPIReconcilers []apis.Joinable
+	worKAPIStarted     bool
 }
 
 const (
@@ -79,7 +80,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	case fleetv1alpha1.ClusterStateLeave:
 		// Stop work controllers from reconciling
-		// TODO: wait for work controllers to stop/
+		// TODO: wait for work controllers to stop
 		// TODO: rejoin won't work now.
 		r.stopWorkAPIControllers()
 		r.markInternalMemberClusterLeft(&imc)
@@ -154,8 +155,11 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 }
 
 func (r *Reconciler) startWorkAPIControllers() {
-	for _, reconciler := range r.workAPIReconcilers {
-		reconciler.Start()
+	if !r.worKAPIStarted {
+		for _, reconciler := range r.workAPIReconcilers {
+			reconciler.Start()
+		}
+		r.worKAPIStarted = true
 	}
 }
 
@@ -256,6 +260,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedAgentObj)
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("InternalMemberClusterController")
+	r.worKAPIStarted = false
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.InternalMemberCluster{}).
 		WithEventFilter(predicate.Funcs{UpdateFunc: func(e event.UpdateEvent) bool {
