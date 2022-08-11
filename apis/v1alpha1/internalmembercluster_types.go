@@ -100,28 +100,17 @@ func (m *InternalMemberCluster) GetConditionWithType(agentType AgentType, condit
 // GetAgentStatus is used to retrieve agent status from internal member cluster,
 // if it doesn't exist it creates the expected agent status and returns it.
 func (m *InternalMemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus {
-	// TODO: Refactor method
-	var desiredAgentStatus AgentStatus
-	for _, agentStatus := range m.Status.AgentStatus {
-		if agentStatus.Type == agentType {
-			desiredAgentStatus = agentStatus
-		}
-	}
-
-	if desiredAgentStatus.Type == "" {
-		desiredAgentStatus = AgentStatus{
-			Type:       agentType,
-			Conditions: []metav1.Condition{},
-		}
-		m.Status.AgentStatus = append(m.Status.AgentStatus, desiredAgentStatus)
-	}
-
 	for i := range m.Status.AgentStatus {
 		if m.Status.AgentStatus[i].Type == agentType {
 			return &m.Status.AgentStatus[i]
 		}
 	}
-	return nil
+	agentStatus := AgentStatus{
+		Type:       agentType,
+		Conditions: []metav1.Condition{},
+	}
+	m.Status.AgentStatus = append(m.Status.AgentStatus, agentStatus)
+	return &m.Status.AgentStatus[len(m.Status.AgentStatus)-1]
 }
 
 func init() {

@@ -370,9 +370,10 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	}
 	joined := true
 	left := true
-	mcAgent := make(map[fleetv1alpha1.AgentType]bool)
+	reportedAgents := make(map[fleetv1alpha1.AgentType]bool)
 	for _, agentStatus := range mc.Status.AgentStatus {
 		if _, found := r.agents[agentStatus.Type]; !found {
+			klog.V(2).InfoS("Ignoring unexpected agent type status", "agentStatus", agentStatus)
 			continue // ignore any unexpected agent type
 		}
 		condition := meta.FindStatusCondition(agentStatus.Conditions, string(fleetv1alpha1.AgentJoined))
@@ -383,13 +384,12 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 
 		joined = joined && condition.Status == metav1.ConditionTrue
 		left = left && condition.Status == metav1.ConditionFalse
-		mcAgent[agentStatus.Type] = true
+		reportedAgents[agentStatus.Type] = true
 	}
-	for agent := range r.agents {
-		if exist := mcAgent[agent]; !exist {
-			markMemberClusterUnknown(r.recorder, mc)
-			return
-		}
+
+	if len(reportedAgents) < len(r.agents) {
+		markMemberClusterUnknown(r.recorder, mc)
+		return
 	}
 
 	if joined && !left {

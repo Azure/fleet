@@ -100,13 +100,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			heartBeatReceivedCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentHealthy),
-				Status:             metav1.ConditionTrue,
-				Reason:             "InternalMemberClusterHeartbeatReceived",
-				ObservedGeneration: imc.GetGeneration(),
-			}
-			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition, heartBeatReceivedCondition)
+			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status to joined")
@@ -114,7 +108,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 		})
 
 		AfterEach(func() {
@@ -250,13 +244,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			heartBeatReceivedCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentHealthy),
-				Status:             metav1.ConditionTrue,
-				Reason:             "InternalMemberClusterHeartbeatReceived",
-				ObservedGeneration: imc.GetGeneration(),
-			}
-			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition, heartBeatReceivedCondition)
+			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status to joined")
@@ -507,15 +495,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(fleetv1alpha1.MultiClusterServiceAgent, imcLeftCondition)
-
-			By("serviceExportImport agent marks Internal Member Cluster as unknown")
-			imcLeftCondition = metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
-				Status:             metav1.ConditionUnknown,
-				Reason:             "InternalMemberClusterUnknown",
-				ObservedGeneration: imc.GetGeneration(),
-			}
-			imc.SetConditionsWithType(fleetv1alpha1.ServiceExportImportAgent, imcLeftCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
