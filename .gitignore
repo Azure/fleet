@@ -23,6 +23,8 @@ hack/tools/bin/
 
 # cover profile
 coverage.xml
+it-coverage.xml
+ut-coverage.xml
 
 # editor and IDE paraphernalia
 .idea

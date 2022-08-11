@@ -28,16 +28,17 @@ import (
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
+const (
+	eventReasonResourceScheduled = "ResourceScheduled"
+	eventReasonResourceApplied   = "ResourceApplied"
+)
+
 var (
 	ErrStillPendingManifest = fmt.Errorf("there are still manifest pending to be processed by the member cluster")
 	ErrFailedManifest       = fmt.Errorf("there are still failed to apply manifests")
 )
 
-const (
-	eventReasonResourceSelected  = "ResourceSelected"
-	eventReasonClusterSelected   = "ClusterSelected"
-	eventReasonResourceScheduled = "ResourceScheduled"
-)
+// TODO: add a sanity check loop to go through all CRPS and check all the cluster namespace that there are no orphaned work
 
 // Reconciler reconciles a cluster resource placement object
 type Reconciler struct {
@@ -64,130 +65,144 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		return ctrl.Result{RequeueAfter: time.Hour * 24}, nil
 	}
 
-	placement, scheduleErr := r.getPlacement(name)
-	if scheduleErr != nil {
-		if !apierrors.IsNotFound(scheduleErr) {
-			klog.ErrorS(scheduleErr, "Failed to get the cluster resource placement in hub agent", "placement", name)
+	placementOld, err := r.getPlacement(name)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to get the cluster resource placementOld in hub agent", "placement", name)
 		}
-		return ctrl.Result{}, client.IgnoreNotFound(scheduleErr)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	placeRef := klog.KObj(placement)
-	placementCopy := placement.DeepCopy()
+	placeRef := klog.KObj(placementOld)
+	placementNew := placementOld.DeepCopy()
 
-	if placement.GetDeletionTimestamp() != nil {
-		klog.V(2).InfoS("Placement is being deleted", "placement", placeRef)
-		// remove all the placement annotation on the still selected resource
-		released, applyErr := r.removeResourcesClaims(ctx, placement, placementCopy.Status.SelectedResources, make([]fleetv1alpha1.ResourceIdentifier, 0))
-		if applyErr != nil {
-			klog.ErrorS(applyErr, "failed to release claims on the no longer selected cluster scoped resources on placement deletion",
-				"placement", placeRef, "total resources", len(placement.Status.SelectedResources), "released resources", released)
-			_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
-			return ctrl.Result{}, applyErr
-		}
-		klog.V(3).InfoS("Successfully released claims on no longer selected cluster scoped resources on placement deletion",
-			"placement", placement.Name, "released resources", released)
-		controllerutil.RemoveFinalizer(placement, utils.PlacementFinalizer)
-		return ctrl.Result{}, r.Client.Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
+	// Handle placement deleting
+	if placementOld.GetDeletionTimestamp() != nil {
+		return r.garbageCollect(ctx, placementOld)
 	}
 
-	if !controllerutil.ContainsFinalizer(placement, utils.PlacementFinalizer) {
-		controllerutil.AddFinalizer(placement, utils.PlacementFinalizer)
-		updateErr := r.Client.Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
-		if updateErr != nil {
-			klog.ErrorS(updateErr, "Failed to add the cluster resource placement finalizer", "placement", name)
-			return ctrl.Result{}, updateErr
+	// Makes sure that the finalizer is added before we do anything else
+	if !controllerutil.ContainsFinalizer(placementOld, utils.PlacementFinalizer) {
+		controllerutil.AddFinalizer(placementOld, utils.PlacementFinalizer)
+		if err := r.Client.Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName)); err != nil {
+			klog.ErrorS(err, "Failed to add the cluster resource placement finalizer", "placement", placeRef)
+			return ctrl.Result{}, err
 		}
 	}
 
 	// TODO: move this to webhook
-	if err := validator.ValidateClusterResourcePlacement(placement); err != nil {
+	if err := validator.ValidateClusterResourcePlacement(placementOld); err != nil {
 		invalidSpec := "the spec is invalid"
 		klog.ErrorS(err, invalidSpec, "placement", placeRef)
-		r.Recorder.Event(placement, corev1.EventTypeWarning, invalidSpec, err.Error())
+		r.Recorder.Event(placementOld, corev1.EventTypeWarning, invalidSpec, err.Error())
 		return ctrl.Result{}, nil
 	}
 
 	klog.V(2).InfoS("Start to reconcile a ClusterResourcePlacement", "placement", placeRef)
-	// select the new clusters and record that in the placementCopy status
-	selectedClusters, scheduleErr := r.selectClusters(placementCopy)
+	// select the new clusters and record that in the placementNew status
+	selectedClusters, scheduleErr := r.selectClusters(placementNew)
 	if scheduleErr != nil {
 		klog.ErrorS(scheduleErr, "Failed to select the clusters", "placement", placeRef)
-		updatePlacementScheduledCondition(placement, scheduleErr)
-		_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
+		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
 	if len(selectedClusters) == 0 {
 		scheduleErr = fmt.Errorf("no matching cluster")
 		klog.ErrorS(scheduleErr, "Failed to select the clusters", "placement", placeRef)
-		updatePlacementScheduledCondition(placement, scheduleErr)
-		_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
+		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
-	klog.V(3).InfoS("Successfully selected clusters", "placement", placement.Name, "number of clusters", len(selectedClusters))
+	klog.V(3).InfoS("Successfully selected clusters", "placement", placementOld.Name, "number of clusters", len(selectedClusters))
 
-	// select the new resources and record the result in the placementCopy status
-	manifests, scheduleErr := r.selectResources(ctx, placementCopy)
+	// select the new resources and record the result in the placementNew status
+	manifests, scheduleErr := r.selectResources(ctx, placementNew)
 	if scheduleErr != nil {
-		klog.ErrorS(scheduleErr, "failed to generate the work resource for this placement", "placement", placeRef)
-		updatePlacementScheduledCondition(placement, scheduleErr)
-		_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
+		klog.ErrorS(scheduleErr, "failed to generate the work resource for this placementOld", "placement", placeRef)
+		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
-	klog.V(3).InfoS("Successfully selected resources", "placement", placement.Name, "number of resources", len(manifests))
+	klog.V(3).InfoS("Successfully selected resources", "placement", placementOld.Name, "number of resources", len(manifests))
 
 	// schedule works for each cluster by placing them in the cluster scoped namespace
-	applyErr := r.createOrUpdateWorkSpec(ctx, placementCopy, manifests, selectedClusters)
-	if applyErr != nil {
-		klog.ErrorS(applyErr, "failed to apply work resources ", "placement", placeRef)
-		updatePlacementScheduledCondition(placement, applyErr)
-		_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
-		return ctrl.Result{}, applyErr
+	scheduleErr = r.createOrUpdateWorkSpec(ctx, placementNew, manifests, selectedClusters)
+	if scheduleErr != nil {
+		klog.ErrorS(scheduleErr, "failed to apply work resources ", "placement", placeRef)
+		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
+		return ctrl.Result{}, scheduleErr
 	}
-	klog.V(3).InfoS("Successfully applied work resources", "placement", placement.Name, "number of clusters", len(selectedClusters))
+	klog.V(3).InfoS("Successfully applied work resources", "placement", placementOld.Name, "number of clusters", len(selectedClusters))
 
 	// go through the existing selected resource list and release the claim from those no longer scheduled cluster scoped objects
-	// by removing the finalizer and placement name in the annotation.
-	released, applyErr := r.removeResourcesClaims(ctx, placementCopy, placement.Status.SelectedResources, placementCopy.Status.SelectedResources)
-	if applyErr != nil {
-		klog.ErrorS(applyErr, "failed to release claims on no longer selected cluster scoped resources", "placement", placeRef)
-		updatePlacementScheduledCondition(placement, scheduleErr)
-		_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
-		return ctrl.Result{}, applyErr
+	// by removing the finalizer and placementOld name in the annotation.
+	released, scheduleErr := r.removeResourcesClaims(ctx, placementNew, placementOld.Status.SelectedResources, placementNew.Status.SelectedResources)
+	if scheduleErr != nil {
+		//  if we fail here, the newly selected resources' claim may stick to them if they are not picked by the next reconcile loop
+		//  as they are not recorded in the old placement status.
+		// TODO: add them to the old placement selected resources since the work has been created although the update can still fail
+		klog.ErrorS(scheduleErr, "failed to release claims on no longer selected cluster scoped resources", "placement", placeRef)
+		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
+		return ctrl.Result{}, scheduleErr
 	}
-	klog.V(3).InfoS("Successfully released claims on no longer selected cluster scoped resources", "placement", placement.Name, "released resources", released)
+	klog.V(3).InfoS("Successfully released claims on no longer selected cluster scoped resources", "placement", placementOld.Name, "released resources", released)
 
 	// go through the existing cluster list and remove work from no longer scheduled clusters.
-	removed, applyErr := r.removeWorkResources(ctx, placementCopy, placement.Status.TargetClusters, placementCopy.Status.TargetClusters)
-	if applyErr != nil {
-		klog.ErrorS(applyErr, "failed to remove work resources from previously selected clusters", "placement", placeRef)
-		updatePlacementScheduledCondition(placement, scheduleErr)
-		updatePlacementScheduledCondition(placement, applyErr)
-		_ = r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
-		return ctrl.Result{}, applyErr
+	removed, scheduleErr := r.removeWorkResources(ctx, placementNew, placementOld.Status.TargetClusters, placementNew.Status.TargetClusters)
+	if scheduleErr != nil {
+		//  if we fail here, the newly selected cluster's work are not removed if they are not picked by the next reconcile loop
+		//  as they are not recorded in the old placement status.
+		// TODO: add them to the old placement selected clusters since the work has been created although the update can still fail
+		klog.ErrorS(scheduleErr, "failed to remove work resources from previously selected clusters", "placement", placeRef)
+		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
+		return ctrl.Result{}, scheduleErr
 	}
-	klog.V(3).InfoS("Successfully removed work resources from previously selected clusters", "placement", placement.Name, "removed clusters", removed)
+	klog.V(3).InfoS("Successfully removed work resources from previously selected clusters", "placement", placementOld.Name, "removed clusters", removed)
 
-	// the schedule has succeeded so we now can use the new placement status
-	updatePlacementScheduledCondition(placementCopy, nil)
-	r.Recorder.Event(placement, corev1.EventTypeNormal, eventReasonResourceScheduled, "successfully scheduled all selected resources to their clusters")
+	// the schedule has succeeded, so we now can use the placementNew status that contains all the newly selected cluster and resources
+	updatePlacementScheduledCondition(placementNew, nil)
+	r.Recorder.Event(placementNew, corev1.EventTypeNormal, eventReasonResourceScheduled, "successfully scheduled all selected resources to their clusters")
 
 	// go through all the valid works, get the failed and pending manifests
-	hasPending, applyErr := r.collectAllManifestsStatus(placementCopy)
+	hasPending, applyErr := r.collectAllManifestsStatus(placementNew)
 	if applyErr != nil {
 		klog.ErrorS(applyErr, "failed to collect work resources status from all selected clusters", "placement", placeRef)
-		updatePlacementAppliedCondition(placementCopy, applyErr)
-		_ = r.Client.Status().Update(ctx, placementCopy, client.FieldOwner(utils.PlacementFieldManagerName))
+		updatePlacementAppliedCondition(placementNew, applyErr)
+		_ = r.Client.Status().Update(ctx, placementNew, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, applyErr
 	}
-	klog.V(3).InfoS("Successfully collected work resources status from all selected clusters", "placement", placement.Name, "number of clusters", len(selectedClusters))
+	klog.V(3).InfoS("Successfully collected work resources status from all selected clusters", "placement", placementOld.Name, "number of clusters", len(selectedClusters))
 
-	if !hasPending && len(placementCopy.Status.FailedResourcePlacements) == 0 {
-		updatePlacementAppliedCondition(placementCopy, nil)
+	if !hasPending && len(placementNew.Status.FailedResourcePlacements) == 0 {
+		updatePlacementAppliedCondition(placementNew, nil)
+		r.Recorder.Event(placementNew, corev1.EventTypeNormal, eventReasonResourceApplied, "successfully applied all selected resources")
 	} else {
-		updatePlacementAppliedCondition(placementCopy, ErrFailedManifest)
+		updatePlacementAppliedCondition(placementNew, ErrFailedManifest)
 	}
 
-	return ctrl.Result{}, r.Client.Status().Update(ctx, placementCopy, client.FieldOwner(utils.PlacementFieldManagerName))
+	// we stop reconcile here if the update succeeds as any update on the work will trigger a new reconcile
+	return ctrl.Result{}, r.Client.Status().Update(ctx, placementNew, client.FieldOwner(utils.PlacementFieldManagerName))
+}
+
+// garbageCollect makes sure that we garbage-collects all the side effects of the placement resources before it's deleted
+func (r *Reconciler) garbageCollect(ctx context.Context, placementOld *fleetv1alpha1.ClusterResourcePlacement) (ctrl.Result, error) {
+	placeRef := klog.KObj(placementOld)
+	klog.V(2).InfoS("Placement is being deleted", "placement", placeRef)
+	// remove all the placement annotation on the still selected resource
+	released, err := r.removeResourcesClaims(ctx, placementOld, placementOld.Status.SelectedResources, make([]fleetv1alpha1.ResourceIdentifier, 0))
+	if err != nil {
+		klog.ErrorS(err, "failed to release claims on the no longer selected cluster scoped resources on placementOld deletion",
+			"placement", placeRef, "total resources", len(placementOld.Status.SelectedResources), "number of released resources", released)
+		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
+		return ctrl.Result{}, err
+	}
+	klog.V(3).InfoS("Successfully released claims on no longer selected cluster scoped resources on placement deletion",
+		"placement", placeRef, "number of released resources", released)
+	controllerutil.RemoveFinalizer(placementOld, utils.PlacementFinalizer)
+	return ctrl.Result{}, r.Client.Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 }
 
 // getPlacement retrieves a ClusterResourcePlacement object by its name, this will hit the informer cache.

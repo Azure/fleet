@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -24,12 +23,9 @@ import (
 // update the results in its status
 func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlacement) (clusterNames []string, err error) {
 	defer func() {
-		if err == nil && len(clusterNames) != 0 {
+		if err == nil {
 			// Set the status
 			placement.Status.TargetClusters = clusterNames
-			r.Recorder.Event(placement, corev1.EventTypeNormal, eventReasonClusterSelected, "successfully selected all the clusters")
-		} else {
-			placement.Status.TargetClusters = make([]string, 0)
 		}
 	}()
 	// no policy set

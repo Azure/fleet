@@ -58,6 +58,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	}
 	klog.V(3).InfoS("Reconciling object", "obj", clusterWideKey)
 
+	// the clusterObj is set to be the object that the placement direct selects,
+	// in the case of a deleted namespace scoped object, the clusterObj is set to be its parent namespace object.
 	var clusterObj runtime.Object
 	object, isClusterScoped, err := r.getUnstructuredObject(clusterWideKey)
 	if err != nil {
@@ -65,7 +67,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 			klog.ErrorS(err, "Failed to get unstructured object", "obj", clusterWideKey)
 			return ctrl.Result{}, err
 		}
-		// we have put a finalizer on all selected resources
+		// we have put a finalizer on all selected cluster scope resources, so it's okay to not handle this
 		if isClusterScoped {
 			klog.V(5).InfoS("Cluster scoped object is deleted", "obj", clusterWideKey)
 			return ctrl.Result{}, nil
@@ -77,23 +79,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		}
 		klog.V(3).InfoS("A namespace scoped object is deleted, find placement that select its namespace", "obj", clusterWideKey)
 		clusterObj = nameSpaceObj
-	}
-
-	// the clusterObj is set to be the object that the placement direct select
-	// in the case of a deleted namespace scoped object, the clusterObj is already set to be its parent namespace object.
-	if clusterObj == nil {
-		if isClusterScoped {
-			clusterObj = object
-		} else {
-			clusterObj, err = r.InformerManager.Lister(utils.NamespaceGVR).Get(clusterWideKey.Namespace)
-			if err != nil {
-				klog.ErrorS(err, "Failed to find the namespace the resource belongs to", "obj", clusterWideKey)
-				return ctrl.Result{}, client.IgnoreNotFound(err)
-			}
-			klog.V(3).InfoS("Find placement that select the namespace that contains a namespace scoped object", "obj", clusterWideKey)
+	} else if isClusterScoped {
+		clusterObj = object
+	} else {
+		clusterObj, err = r.InformerManager.Lister(utils.NamespaceGVR).Get(clusterWideKey.Namespace)
+		if err != nil {
+			klog.ErrorS(err, "Failed to find the namespace the resource belongs to", "obj", clusterWideKey)
+			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
+		klog.V(3).InfoS("Find placement that select the namespace that contains a namespace scoped object", "obj", clusterWideKey)
 	}
-
 	matchedCrps, isDeleted, err := r.findAffectedPlacements(ctx, clusterObj.DeepCopyObject().(*unstructured.Unstructured), clusterWideKey)
 	if isDeleted {
 		return ctrl.Result{}, err
@@ -152,6 +147,7 @@ func (r *Reconciler) findAffectedPlacements(ctx context.Context, clusterObj *uns
 			r.PlacementController.Enqueue(placement)
 		}
 		// update the cluster object to remove the finalizer and the placement annotation
+		utils.RemoveAllPlacement(clusterObj)
 		if _, err := r.DynamicClient.Resource(restMapping.Resource).Update(ctx, clusterObj, metav1.UpdateOptions{}); err != nil {
 			klog.ErrorS(err, "Failed to remove the placement finalizer from a cluster scoped resource", "obj", klog.KObj(clusterObj))
 			return nil, true, client.IgnoreNotFound(err)

@@ -33,13 +33,13 @@ import (
 // It also generates an array of manifests obj based on the selected resources.
 func (r *Reconciler) selectResources(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement) ([]workv1alpha1.Manifest, error) {
 	selectedObjects, err := r.gatherSelectedResource(ctx, placement)
-	placement.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, 0)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to gather all the selected resource")
 	}
 	if len(selectedObjects) == 0 {
 		return nil, fmt.Errorf("failed to select any resources")
 	}
+	placement.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, 0)
 	manifests := make([]workv1alpha1.Manifest, len(selectedObjects))
 	for i, obj := range selectedObjects {
 		unstructuredObj := obj.DeepCopyObject().(*unstructured.Unstructured)
@@ -59,7 +59,6 @@ func (r *Reconciler) selectResources(ctx context.Context, placement *fleetv1alph
 		}
 		manifests[i] = *manifest
 	}
-	r.Recorder.Event(placement, corev1.EventTypeNormal, eventReasonResourceSelected, "successfully gathered all selected resources")
 	return manifests, nil
 }
 
@@ -103,15 +102,9 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 		if gvkComp < 0 {
 			return false
 		}
-		// same gvk, compare namespace
-		nsComp := strings.Compare(obj1.GetNamespace(), obj2.GetNamespace())
-		if nsComp > 0 {
-			return true
-		}
-		if nsComp < 0 {
-			return false
-		}
-		return strings.Compare(obj1.GetName(), obj2.GetName()) > 0
+		// same gvk, compare namespace/name
+		return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
+			fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) > 0
 	})
 	return resources, nil
 }
@@ -302,11 +295,7 @@ func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool 
 	return true
 }
 
-// claimSelectedResource add the placement itself to the annotation of the selected object
-// and make sure that there is a finalizer on
-
-// selectResources selects the resources according to the placement resourceSelectors,
-// creates a work obj for the resources and updates the results in its status.
+// removeResourcesClaims finds all the resources that we no longer place and removes this placement from the resource's placement annotation
 func (r *Reconciler) removeResourcesClaims(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
 	existingResources, newResources []fleetv1alpha1.ResourceIdentifier) (int, error) {
 	var allErr []error
@@ -346,7 +335,7 @@ func (r *Reconciler) removeResourcesClaims(ctx context.Context, placement *fleet
 					continue
 				}
 				released++
-				klog.V(2).InfoS("release a no longer selected cluster scoped obj", "resource", oldResource, "placement", klog.KObj(placement))
+				klog.V(3).InfoS("release a no longer selected cluster scoped obj", "resource", oldResource, "placement", klog.KObj(placement))
 			}
 		}
 	}

@@ -177,7 +177,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 				klog.Error(err, "the work does not exist", "work", klog.KRef(memberClusterNsName, workName))
 				continue
 			}
-			return true, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s from namespace %s", workName, memberClusterNsName))
+			return false, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s from namespace %s", workName, memberClusterNsName))
 		}
 		// check the overall condition
 		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workController.ConditionTypeApplied)
@@ -231,9 +231,8 @@ func (r *Reconciler) getWork(namespace, name string) (*workv1alpha1.Work, error)
 	if err != nil {
 		return nil, err
 	}
-	uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 	var workObj workv1alpha1.Work
-	err = runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &workObj)
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.DeepCopyObject().(*unstructured.Unstructured).Object, &workObj)
 	if err != nil {
 		return nil, err
 	}

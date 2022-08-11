@@ -264,22 +264,25 @@ func FindSelectedPlacements(uObj *unstructured.Unstructured) ([]string, bool) {
 	selectedPlacements := strings.Split(placementList, PlacementListSep)
 
 	if !uObj.GetDeletionTimestamp().IsZero() {
-		klog.V(3).InfoS("Object selected by placements is being deleted", "resource", uObj.GetName())
-		if !controllerutil.ContainsFinalizer(uObj, PlacementFinalizer) {
-			klog.Errorf("selected resource %s is being deleted without the placement finalizer", uObj.GetName())
-		}
-		// remove the finalizer and the placement annotation
-		controllerutil.RemoveFinalizer(uObj, PlacementFinalizer)
-		a := uObj.GetAnnotations()
-		delete(a, AnnotationPlacementList)
-		uObj.SetAnnotations(a)
 		return selectedPlacements, true
 	}
 	return selectedPlacements, false
 }
 
+// RemoveAllPlacement removes the placement finalizer and the placement annotation from the object
+func RemoveAllPlacement(uObj *unstructured.Unstructured) {
+	klog.V(3).InfoS("Object selected by placements is being deleted", "resource", uObj.GetName())
+	if !controllerutil.ContainsFinalizer(uObj, PlacementFinalizer) {
+		klog.Errorf("selected resource %s is being deleted without the placement finalizer", uObj.GetName())
+	}
+	controllerutil.RemoveFinalizer(uObj, PlacementFinalizer)
+	a := uObj.GetAnnotations()
+	delete(a, AnnotationPlacementList)
+	uObj.SetAnnotations(a)
+}
+
 // AddPlacement accepts an unstructured and adds the newPlacement to its annotation if not present.
-// It will also add the PlacementFinalizer no matter what
+// It will also add the PlacementFinalizer no matter what.
 func AddPlacement(uObj *unstructured.Unstructured, newPlacement string) {
 	anno := uObj.GetAnnotations()
 	controllerutil.AddFinalizer(uObj, PlacementFinalizer)
@@ -307,7 +310,7 @@ func AddPlacement(uObj *unstructured.Unstructured, newPlacement string) {
 }
 
 // RemovePlacement accepts an unstructured and removes the removed placement from its annotation if present.
-// it will remove the PlacementFinalizer if there are no more placement select this
+// it will remove the PlacementFinalizer if there are no more placement select this.
 func RemovePlacement(uObj *unstructured.Unstructured, removedPlacement string) {
 	anno := uObj.GetAnnotations()
 	placementList, exist := anno[AnnotationPlacementList]
