@@ -110,7 +110,9 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	defer d.InformerManager.Stop()
 
 	// wait for all the existing informer cache to sync before we proceed to add new ones
-	// so all the static controllers don't need to check cache sync.
+	// so all the controllers don't need to check cache sync for any static resources.
+	// TODO: Controllers also don't need to check any k8s built-in resource but there is no easy way to know
+	//      if any gvr is a built-in or a custom resource. We could use a pre-built built-in resources map.
 	d.InformerManager.WaitForCacheSync()
 
 	// continue the resource type list loop in the background to discovery resources change.
