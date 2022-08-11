@@ -53,7 +53,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Client: k8sClient,
 			}
 			err := r.SetupWithManager(mgr)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")
 			mc := &fleetv1alpha1.MemberCluster{
@@ -79,7 +79,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			var ns corev1.Namespace
 			var role rbacv1.Role
@@ -148,7 +148,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			var imc fleetv1alpha1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
@@ -169,7 +169,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 			mcLeftCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
@@ -193,7 +193,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NetworkingAgentsEnabled: true,
 			}
 			err := r.SetupWithManager(mgr)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")
 			mc := &fleetv1alpha1.MemberCluster{
@@ -219,7 +219,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			var ns corev1.Namespace
 			var role rbacv1.Role
@@ -252,7 +252,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 		})
 
 		AfterEach(func() {
@@ -309,7 +309,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			By("getting imc status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
@@ -352,7 +352,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			By("getting imc status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
@@ -395,7 +395,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			By("getting imc status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
@@ -436,7 +436,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			var imc fleetv1alpha1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
@@ -460,7 +460,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
@@ -502,7 +502,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
@@ -551,7 +551,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
-			Expect(err).Should(Not(HaveOccurred()))
+			Expect(err).Should(Succeed())
 
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
