@@ -30,6 +30,7 @@ require (
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 	sigs.k8s.io/controller-runtime v0.12.2
 	sigs.k8s.io/work-api v0.0.0-20220407021756-586d707fdb2c
+
 )
 
 require (
@@ -102,7 +103,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220107163113-42d7afdf6368 // indirect
-	google.golang.org/grpc v1.41.0 // indirect
+	google.golang.org/grpc v1.42.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -115,6 +116,6 @@ require (
 )
 
 replace (
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.2 // weird bug that the goland won't compile without this
 	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.2.0
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.2 // weird bug that the goland won't compile without this
 )
