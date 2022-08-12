@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.goms.io/fleet/cmd/hubagent/options"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
@@ -26,8 +28,7 @@ import (
 	// +kubebuilder:scaffold:imports
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/cmd/hub-manager/app"
-	"go.goms.io/fleet/cmd/hub-manager/app/options"
+	"go.goms.io/fleet/cmd/hubagent/workload"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
 )
 
@@ -101,7 +102,7 @@ var _ = BeforeSuite(func() {
 	By("Setup custom controllers")
 	opts := options.NewOptions()
 	opts.LeaderElection.LeaderElect = false
-	err = app.SetupCustomControllers(ctx, mgr, cfg, opts)
+	err = workload.SetupControllers(ctx, mgr, cfg, opts)
 	Expect(err).Should(Succeed())
 
 	By("Start the controller manager")

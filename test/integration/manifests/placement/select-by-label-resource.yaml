@@ -15,5 +15,5 @@ spec:
       kind: CustomResourceDefinition
       labelSelector:
         matchExpressions:
-          key: "fleet.azure.com/name"
-          operator: "Exists"
+          - key: "fleet.azure.com/name"
+            operator: "Exists"

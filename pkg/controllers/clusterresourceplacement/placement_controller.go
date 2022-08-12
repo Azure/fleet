@@ -125,6 +125,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	}
 	klog.V(3).InfoS("Successfully selected resources", "placement", placementOld.Name, "number of resources", len(manifests))
 
+	//TODO: persist union of the all the selected clusters between placementNew and placementOld
+
 	// schedule works for each cluster by placing them in the cluster scoped namespace
 	scheduleErr = r.createOrUpdateWorkSpec(ctx, placementNew, manifests, selectedClusters)
 	if scheduleErr != nil {
@@ -222,17 +224,19 @@ func (r *Reconciler) getPlacement(name string) (*fleetv1alpha1.ClusterResourcePl
 func updatePlacementScheduledCondition(placement *fleetv1alpha1.ClusterResourcePlacement, scheduleErr error) {
 	if scheduleErr == nil {
 		placement.SetConditions(metav1.Condition{
-			Status:  metav1.ConditionTrue,
-			Type:    string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
-			Reason:  "scheduleSucceeded",
-			Message: "Successfully scheduled resources for placement",
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+			Reason:             "scheduleSucceeded",
+			Message:            "Successfully scheduled resources for placement",
+			ObservedGeneration: placement.Generation,
 		})
 	} else {
 		placement.SetConditions(metav1.Condition{
-			Status:  metav1.ConditionFalse,
-			Type:    string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
-			Reason:  "scheduleFailed",
-			Message: scheduleErr.Error(),
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+			Reason:             "scheduleFailed",
+			Message:            scheduleErr.Error(),
+			ObservedGeneration: placement.Generation,
 		})
 	}
 }
@@ -240,17 +244,19 @@ func updatePlacementScheduledCondition(placement *fleetv1alpha1.ClusterResourceP
 func updatePlacementAppliedCondition(placement *fleetv1alpha1.ClusterResourcePlacement, applyErr error) {
 	if applyErr == nil {
 		placement.SetConditions(metav1.Condition{
-			Status:  metav1.ConditionTrue,
-			Type:    string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:  "applySucceeded",
-			Message: "Successfully applied resources to member clusters",
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+			Reason:             "applySucceeded",
+			Message:            "Successfully applied resources to member clusters",
+			ObservedGeneration: placement.Generation,
 		})
 	} else {
 		placement.SetConditions(metav1.Condition{
-			Status:  metav1.ConditionFalse,
-			Type:    string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:  "applyFailed",
-			Message: applyErr.Error(),
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+			Reason:             "applyFailed",
+			Message:            applyErr.Error(),
+			ObservedGeneration: placement.Generation,
 		})
 	}
 }

@@ -3,32 +3,22 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package app
+package workload
 
 import (
 	"context"
-	"flag"
-	"net"
-	"os"
-	"strconv"
 
-	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"strings"
+
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/cmd/hub-manager/app/options"
+	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
-	"go.goms.io/fleet/pkg/controllers/membercluster"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/resourcewatcher"
@@ -42,108 +32,8 @@ const (
 	memberClusterPlacementName   = "memberCluster-placement-controller"
 )
 
-var (
-	scheme = runtime.NewScheme()
-)
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
-
-	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
-	//+kubebuilder:scaffold:scheme
-}
-
-// NewhubManagerCommand creates a *cobra.Command object with default parameters
-func NewhubManagerCommand(ctx context.Context) *cobra.Command {
-	opts := options.NewOptions()
-
-	cmd := &cobra.Command{
-		Use:  "fleet-hub-manager",
-		Long: `The fleet hub manager runs a bunch of controllers`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// validate options
-			if errs := opts.Validate(); len(errs) != 0 {
-				return errs.ToAggregate()
-			}
-
-			return Run(ctx, opts)
-		},
-	}
-
-	fss := cliflag.NamedFlagSets{}
-
-	genericFlagSet := fss.FlagSet("generic")
-	genericFlagSet.AddGoFlagSet(flag.CommandLine)
-	opts.AddFlags(genericFlagSet)
-
-	// Set klog flags
-	logsFlagSet := fss.FlagSet("logs")
-	flagSetShim := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	klog.InitFlags(flagSetShim)
-	logsFlagSet.AddGoFlagSet(flagSetShim)
-
-	cmd.Flags().AddFlagSet(logsFlagSet)
-
-	return cmd
-}
-
-// Run runs the controller-manager with options. This should never exit.
-func Run(ctx context.Context, opts *options.Options) error {
-	config := ctrl.GetConfigOrDie()
-	config.QPS, config.Burst = opts.HubQPS, opts.HubBurst
-
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:                     scheme,
-		SyncPeriod:                 &opts.ResyncPeriod.Duration,
-		LeaderElection:             opts.LeaderElection.LeaderElect,
-		LeaderElectionID:           opts.LeaderElection.ResourceName,
-		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
-		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
-		HealthProbeBindAddress:     net.JoinHostPort(opts.BindAddress, strconv.Itoa(opts.SecurePort)),
-		LivenessEndpointName:       "/healthz",
-		MetricsBindAddress:         opts.MetricsBindAddress,
-	})
-	if err != nil {
-		klog.ErrorS(err, "failed to build controller manager")
-		return err
-	}
-	// TODO: add real healthy check
-	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "failed to add health check endpoint")
-		return err
-	}
-	// TODO: add real ready check
-	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "failed to add ready check endpoint")
-		return err
-	}
-	klog.Info("starting the hub agent")
-
-	// Set up  the memberCluster reconciler with the manager
-	if err = (&membercluster.Reconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
-		return err
-	}
-
-	if err = SetupCustomControllers(ctx, mgr, config, opts); err != nil {
-		klog.ErrorS(err, "problem setting up the custom controllers")
-		return err
-	}
-
-	if err = mgr.Start(ctx); err != nil {
-		klog.ErrorS(err, "problem starting manager")
-		return err
-	}
-
-	return nil
-}
-
-// SetupCustomControllers set up the customized controllers we developed
-func SetupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
+// SetupControllers set up the customized controllers we developed
+func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		klog.ErrorS(err, "unable to create the dynamic client")
@@ -174,15 +64,18 @@ func SetupCustomControllers(ctx context.Context, mgr ctrl.Manager, config *rest.
 		return err
 	}
 
-	skippedNamespaces := make(map[string]bool, len(opts.SkippedPropagatingNamespaces))
+	skippedNamespaces := make(map[string]bool)
 	skippedNamespaces["fleet-system"] = true
 	skippedNamespaces["kube-system"] = true
 	skippedNamespaces["kube-public"] = true
 	skippedNamespaces["kube-node-lease"] = true
 	skippedNamespaces["default"] = true
-
-	for _, ns := range opts.SkippedPropagatingNamespaces {
-		skippedNamespaces[ns] = true
+	optionalSkipNS := strings.Split(opts.SkippedPropagatingNamespaces, ";")
+	for _, ns := range optionalSkipNS {
+		if len(ns) > 0 {
+			klog.InfoS("user specified a namespace to skip", "namespace", ns)
+			skippedNamespaces[ns] = true
+		}
 	}
 
 	// the manager for all the dynamically created informers

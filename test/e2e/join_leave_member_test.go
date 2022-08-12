@@ -16,9 +16,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.goms.io/fleet/pkg/utils"
-
 	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 

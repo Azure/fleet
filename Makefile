@@ -138,7 +138,8 @@ install-hub-agent-helm:
 	helm install hub-agent ./charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
-    --set image.tag=$(HUB_AGENT_IMAGE_VERSION)
+    --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
+    --set logVerbosity=5
 
 .PHONY: e2e-hub-kubeconfig-secret
 e2e-hub-kubeconfig-secret:
@@ -160,7 +161,8 @@ install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
     --set refreshtoken.repository=$(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME) \
     --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
     --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
-    --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)"
+    --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
+    --set logVerbosity=5
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
@@ -170,8 +172,14 @@ build-e2e:
 run-e2e: build-e2e
 	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e.test -test.v -ginkgo.v
 
+.PHONY: creat-kind-cluster
+creat-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
+
+.PHONY: install-helm
+install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
+
 .PHONY: e2e-tests
-e2e-tests: create-hub-kind-cluster create-member-kind-cluster load-hub-docker-image load-member-docker-image install-member-agent-helm run-e2e
+e2e-tests: creat-kind-cluster run-e2e
 
 ## reviewable
 .PHONY: reviewable
@@ -265,16 +273,16 @@ clean-bin: ## Remove all generated binaries
 	rm -rf $(TOOLS_BIN_DIR)
 	rm -rf ./bin
 
-.PHONY: uninstall-helm-charts
-uninstall-helm-charts: clean-testing-kind-clusters-resources
+.PHONY: uninstall-helm
+uninstall-helm: clean-testing-resources
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm uninstall hub-agent
 
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME)
 	helm uninstall member-agent
 
-.PHONY: clean-testing-kind-clusters-resources
-clean-testing-kind-clusters-resources:
+.PHONY: clean-testing-resources
+clean-testing-resources:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	kubectl delete ns fleet-member-kind-member-testing --ignore-not-found
 	kubectl delete memberclusters.fleet.azure.com kind-$(MEMBER_KIND_CLUSTER_NAME) --ignore-not-found

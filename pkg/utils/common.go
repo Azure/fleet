@@ -125,10 +125,9 @@ var (
 	}
 
 	WorkGVR = schema.GroupVersionResource{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		// TODO: use the const after it's checked in
-		Resource: "works",
+		Group:    workv1alpha1.GroupVersion.Group,
+		Version:  workv1alpha1.GroupVersion.Version,
+		Resource: workv1alpha1.WorkResource,
 	}
 
 	ServiceGVR = schema.GroupVersionResource{
@@ -206,6 +205,16 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 func ShouldPropagateObj(informerManager InformerManager, uObj *unstructured.Unstructured) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
+	case corev1.SchemeGroupVersion.WithKind("ConfigMap"):
+		// Skip the built-in custom CA certificate created in the namespace
+		if uObj.GetName() == "kube-root-ca.crt" {
+			return false, nil
+		}
+	case corev1.SchemeGroupVersion.WithKind("ServiceAccount"):
+		// Skip the default service account created in the namespace
+		if uObj.GetName() == "default" {
+			return false, nil
+		}
 	case corev1.SchemeGroupVersion.WithKind("Secret"):
 		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
 		// prevented from propagating.
@@ -220,32 +229,20 @@ func ShouldPropagateObj(informerManager InformerManager, uObj *unstructured.Unst
 		}
 	case corev1.SchemeGroupVersion.WithKind("Endpoints"):
 		// we assume that all endpoints with the same name of a service is created by the service controller
-		var endpoint corev1.Endpoints
-		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &endpoint)
-		if err != nil {
-			return false, errors.Wrap(err, fmt.Sprintf(
-				"failed to convert an endpoint object %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
-		}
-		_, err = informerManager.Lister(ServiceGVR).ByNamespace(endpoint.GetNamespace()).Get(endpoint.GetName())
+		_, err := informerManager.Lister(ServiceGVR).ByNamespace(uObj.GetNamespace()).Get(uObj.GetName())
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// there is no service of the same name as the end point,
 				// we assume that this endpoint is created by the user
 				return true, nil
 			}
-			return false, errors.Wrap(err, fmt.Sprintf("failed to get the serviceo %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+			return false, errors.Wrap(err, fmt.Sprintf("failed to get the service %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
 		}
 		// we find a service of the same name as the endpoint, we assume it's created by the service
 		return false, nil
 	case discoveryv1.SchemeGroupVersion.WithKind("EndpointSlice"):
 		// all EndpointSlice created by the EndpointSlice controller has a managed by label
-		var endpointSlice discoveryv1.EndpointSlice
-		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &endpointSlice)
-		if err != nil {
-			return false, errors.Wrap(err, fmt.Sprintf(
-				"failed to convert an endpointSlice object %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
-		}
-		if _, exist := endpointSlice.GetLabels()[discoveryv1.LabelManagedBy]; exist {
+		if _, exist := uObj.GetLabels()[discoveryv1.LabelManagedBy]; exist {
 			// do not propagate hub cluster generated endpoint slice
 			return false, nil
 		}
