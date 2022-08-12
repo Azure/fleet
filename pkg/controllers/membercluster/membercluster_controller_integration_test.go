@@ -563,13 +563,15 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
+			options = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+
 			wantMC = fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
 						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
 						Status:             metav1.ConditionFalse,
-						Reason:             reasonMemberClusterReadyToJoin,
-						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
+						Reason:             reasonMemberClusterNotReadyToJoin,
+						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
 						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
@@ -581,7 +583,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
-			Expect(cmp.Diff(wantMC, mc.Status)).Should(BeEmpty())
+			Expect(cmp.Diff(wantMC, mc.Status, options)).Should(BeEmpty())
 		})
 	})
 
