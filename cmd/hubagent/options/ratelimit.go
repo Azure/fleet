@@ -6,9 +6,9 @@ Licensed under the MIT license.
 package options
 
 import (
+	"flag"
 	"time"
 
-	"github.com/spf13/pflag"
 	"golang.org/x/time/rate"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -29,7 +29,7 @@ type RateLimitOptions struct {
 }
 
 // AddFlags adds flags to the specified FlagSet.
-func (o *RateLimitOptions) AddFlags(fs *pflag.FlagSet) {
+func (o *RateLimitOptions) AddFlags(fs *flag.FlagSet) {
 	fs.DurationVar(&o.RateLimiterBaseDelay, "rate-limiter-base-delay", 5*time.Millisecond, "The base delay for rate limiter.")
 	fs.DurationVar(&o.RateLimiterMaxDelay, "rate-limiter-max-delay", 60*time.Second, "The max delay for rate limiter.")
 	fs.IntVar(&o.RateLimiterQPS, "rate-limiter-qps", 10, "The QPS for rate limier.")

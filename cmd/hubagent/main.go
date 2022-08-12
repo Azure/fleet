@@ -19,22 +19,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/cmd/hubagent/workload"
+	"go.goms.io/fleet/pkg/controllers/membercluster"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
-
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/membercluster"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
-	scheme                  = runtime.NewScheme()
-	probeAddr               = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	metricsAddr             = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	enableLeaderElection    = flag.Bool("leader-elect", false, "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
-	enableWebhook           = flag.Bool("enable-webhook", false, "If set, the fleet webhook is enabled.")
-	networkingAgentsEnabled = flag.Bool("networking-agents-enabled", false, "Whether the networking agents are enabled or not.")
+	scheme         = runtime.NewScheme()
+	handleExitFunc = func() {
+		klog.Flush()
+	}
+
+	exitWithErrorFunc = func() {
+		handleExitFunc()
+		os.Exit(1)
+	}
 )
 
 const (
@@ -43,83 +46,111 @@ const (
 )
 
 func init() {
-	klog.InitFlags(nil)
-
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+	klog.InitFlags(nil)
 
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics)
 }
 
 func main() {
-	flag.Parse()
-	defer klog.Flush()
+	opts := options.NewOptions()
+	opts.AddFlags(flag.CommandLine)
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                  scheme,
-		MetricsBindAddress:      *metricsAddr,
-		Port:                    FleetWebhookPort,
-		CertDir:                 FleetWebhookCertDir,
-		HealthProbeBindAddress:  *probeAddr,
-		LeaderElection:          *enableLeaderElection,
-		LeaderElectionNamespace: *leaderElectionNamespace,
-		LeaderElectionID:        "13622se4848560.hub.fleet.azure.com",
+	flag.Parse()
+	defer handleExitFunc()
+
+	flag.VisitAll(func(f *flag.Flag) {
+		klog.InfoS("flag:", "name", f.Name, "value", f.Value)
+	})
+	if errs := opts.Validate(); len(errs) != 0 {
+		klog.ErrorS(errs.ToAggregate(), "invalid parameter")
+		exitWithErrorFunc()
+	}
+	config := ctrl.GetConfigOrDie()
+	config.QPS, config.Burst = float32(opts.HubQPS), opts.HubBurst
+
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:                     scheme,
+		SyncPeriod:                 &opts.ResyncPeriod.Duration,
+		LeaderElection:             opts.LeaderElection.LeaderElect,
+		LeaderElectionID:           opts.LeaderElection.ResourceName,
+		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
+		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
+		HealthProbeBindAddress:     opts.HealthProbeAddress,
+		MetricsBindAddress:         opts.MetricsBindAddress,
+		Port:                       FleetWebhookPort,
+		CertDir:                    FleetWebhookCertDir,
 	})
 	if err != nil {
 		klog.ErrorS(err, "unable to start controller manager.")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 
 	klog.V(2).InfoS("starting hubagent")
 
 	if err = (&membercluster.Reconciler{
 		Client:                  mgr.GetClient(),
-		NetworkingAgentsEnabled: *networkingAgentsEnabled,
+		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up health check")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 
-	if *enableWebhook {
-		// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start
-		caPEM, err := webhook.GenCertificate(FleetWebhookCertDir)
-		if err != nil {
-			klog.ErrorS(err, "fail to generate certificates for webhook server")
-			os.Exit(1)
+	if opts.EnableWebhook {
+		if err := SetupWebhook(mgr); err != nil {
+			klog.ErrorS(err, "unable to set up webhook")
+			exitWithErrorFunc()
 		}
+	}
 
-		if err := mgr.Add(&webhookApiserverConfigurator{
-			mgr:   mgr,
-			caPEM: caPEM,
-			port:  FleetWebhookPort,
-		}); err != nil {
-			klog.ErrorS(err, "unable to add webhookApiserverConfigurator")
-			os.Exit(1)
-		}
-		if err := webhook.AddToManager(mgr); err != nil {
-			klog.ErrorS(err, "unable to register webhooks to the manager")
-			os.Exit(1)
-		}
+	ctx := ctrl.SetupSignalHandler()
+	if err := workload.SetupControllers(ctx, mgr, config, opts); err != nil {
+		klog.ErrorS(err, "unable to set up ready check")
+		exitWithErrorFunc()
 	}
 
 	//+kubebuilder:scaffold:builder
 
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		klog.ErrorS(err, "problem starting manager")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
+}
+
+// SetupWebhook generate the webhook cert and then setup the webhook configurator
+func SetupWebhook(mgr manager.Manager) error {
+	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start
+	caPEM, err := webhook.GenCertificate(FleetWebhookCertDir)
+	if err != nil {
+		klog.ErrorS(err, "fail to generate certificates for webhook server")
+		return err
+	}
+
+	if err := mgr.Add(&webhookApiserverConfigurator{
+		mgr:   mgr,
+		caPEM: caPEM,
+		port:  FleetWebhookPort,
+	}); err != nil {
+		klog.ErrorS(err, "unable to add webhookApiserverConfigurator")
+		return err
+	}
+	if err := webhook.AddToManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to register webhooks to the manager")
+		return err
+	}
+	return nil
 }
 
 type webhookApiserverConfigurator struct {
@@ -134,7 +165,7 @@ func (c *webhookApiserverConfigurator) Start(ctx context.Context) error {
 	klog.V(2).InfoS("setting up webhooks in apiserver from the leader")
 	if err := webhook.CreateFleetWebhookConfiguration(ctx, c.mgr.GetClient(), c.caPEM, c.port); err != nil {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
-		os.Exit(1)
+		return err
 	}
 	return nil
 }

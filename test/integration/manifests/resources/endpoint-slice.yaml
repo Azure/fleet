@@ -3,7 +3,7 @@ kind: EndpointSlice
 metadata:
   labels:
     service-name: test-nginx-export
-  name: test-nginx-export-4vqf7
+  name: test-user-created-endpointslice
   namespace: app
 addressType: IPv4
 ports:

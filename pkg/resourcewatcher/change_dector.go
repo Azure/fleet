@@ -188,7 +188,7 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	cwKey, _ := key.(keys.ClusterWideKey)
 	// if SkippedNamespaces is set, skip any events related to the object in these namespaces.
 	if _, ok := d.SkippedNamespaces[cwKey.Namespace]; ok {
-		klog.V(5).InfoS("Skip watch resource in namespace", "namespace", cwKey.Namespace,
+		klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
 			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
 		return false
 	}
@@ -196,6 +196,8 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
 		shouldPropagate, err := utils.ShouldPropagateObj(d.InformerManager, unstructuredObj.DeepCopy())
 		if err != nil || !shouldPropagate {
+			klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
+				"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
 			return false
 		}
 	}

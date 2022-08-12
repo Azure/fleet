@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,6 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/work-api/pkg/utils"
+
+	fleetutil "go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -20,7 +23,7 @@ const (
 	eventuallyInterval = 1  // seconds
 )
 
-var defaultWorkNamespace = "fleet-member-" + MemberCluster.ClusterName
+var defaultWorkNamespace = fmt.Sprintf(fleetutil.NamespaceNameFormat, MemberCluster.ClusterName)
 
 var _ = Describe("work-api testing", Ordered, func() {
 
