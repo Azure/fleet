@@ -730,7 +730,8 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(2),
 				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent: "",
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
