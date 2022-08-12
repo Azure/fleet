@@ -397,7 +397,6 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	if joined && !left {
 		markMemberClusterJoined(r.recorder, mc)
 	} else if !joined && left {
-		markMemberClusterNotReadyToJoin(r.recorder, mc)
 		markMemberClusterLeft(r.recorder, mc)
 	} else {
 		markMemberClusterUnknown(r.recorder, mc)
@@ -424,26 +423,6 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 	mc.SetConditions(newCondition)
 }
 
-// markMemberClusterNotReadyToJoin is used to update the ReadyToJoin condition as false of member cluster.
-func markMemberClusterNotReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
-	klog.V(5).InfoS("markMemberClusterNotReadyToJoin", "memberCluster", klog.KObj(mc))
-	newCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
-		Status:             metav1.ConditionFalse,
-		Reason:             reasonMemberClusterNotReadyToJoin,
-		ObservedGeneration: mc.GetGeneration(),
-	}
-
-	// Joined status changed.
-	existingCondition := mc.GetCondition(newCondition.Type)
-	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterNotReadyToJoin, "member cluster not ready to join")
-		klog.V(2).InfoS("member cluster not ready to join", "memberCluster", klog.KObj(mc))
-	}
-
-	mc.SetConditions(newCondition)
-}
-
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterJoined", "memberCluster", klog.KObj(mc))
@@ -465,7 +444,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 	mc.SetConditions(newCondition)
 }
 
-// markMemberClusterLeft is used to update the status of the member cluster to have the left condition.
+// markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
 func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
@@ -483,7 +462,14 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		metrics.ReportJoinResultMetric()
 	}
 
-	mc.SetConditions(newCondition)
+	notReadyCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             reasonMemberClusterNotReadyToJoin,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+
+	mc.SetConditions(newCondition, notReadyCondition)
 }
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
