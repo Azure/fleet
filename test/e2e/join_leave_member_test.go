@@ -55,9 +55,8 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				framework.CreateMemberCluster(*HubCluster, mc)
 				framework.WaitMemberCluster(*HubCluster, mc)
 
-				By("check if memberCluster is marked as readyToJoin", func() {
-					framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionTrue, 3*framework.PollTimeout)
-				})
+				By("check if memberCluster is marked as readyToJoin")
+				framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 
 				By("check if internalmembercluster created in the hub cluster", func() {
 					imc = NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
@@ -85,13 +84,11 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				framework.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionFalse, 3*framework.PollTimeout)
 			})
 
-			By("check if memberCluster is marked as notReadyToJoin", func() {
-				framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, 3*framework.PollTimeout)
-			})
+			By("check if memberCluster is marked as notReadyToJoin")
+			framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, 3*framework.PollTimeout)
 
-			By("check if membercluster condition is updated to Left", func() {
-				framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
-			})
+			By("check if membercluster condition is updated to Left")
+			framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
 
 			By("member namespace is deleted from hub cluster", func() {
 				framework.DeleteMemberCluster(*HubCluster, mc)
