@@ -26,19 +26,14 @@ var _ = Describe("workload orchestration testing", func() {
 	var cr *rbacv1.ClusterRole
 	var crp *v1alpha1.ClusterResourcePlacement
 
+	memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+
 	BeforeEach(func() {
 		memberIdentity = rbacv1.Subject{
 			Name:      MemberCluster.ClusterName,
 			Kind:      "ServiceAccount",
 			Namespace: "fleet-system",
 		}
-	})
-
-	It("Apply CRP and check if work gets propagated", func() {
-		clusterRoleName := "test-cluster-role"
-		placementName := "resource-label-selector"
-		memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-		workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
 
 		By("Prepare resources in member cluster")
 		// create testing NS in member cluster
@@ -47,20 +42,26 @@ var _ = Describe("workload orchestration testing", func() {
 		sa = NewServiceAccount(memberIdentity.Name, memberNS.Name)
 		framework.CreateServiceAccount(*MemberCluster, sa)
 
-		By("deploy memberCluster in the hub cluster")
+		By("deploy member cluster in the hub cluster")
 		mc = NewMemberCluster(MemberCluster.ClusterName, 60, memberIdentity, v1alpha1.ClusterStateJoin)
 		framework.CreateMemberCluster(*HubCluster, mc)
 		framework.WaitMemberCluster(*HubCluster, mc)
 
-		By("check if internalmembercluster created in the hub cluster")
+		By("check if internal member cluster created in the hub cluster")
 		imc = NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
 		framework.WaitInternalMemberCluster(*HubCluster, imc)
 
-		By("check if membercluster condition is updated to Joined")
+		By("check if member cluster condition is updated to Joined")
 		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 
-		By("check if internalMemberCluster condition is updated to Joined")
+		By("check if internal member cluster condition is updated to Joined")
 		framework.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*framework.PollTimeout)
+	})
+
+	It("Apply CRP and check if work gets propagated", func() {
+		clusterRoleName := "test-cluster-role"
+		placementName := "resource-label-selector"
+		workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
 
 		By("create the resources to be propagated")
 		cr = NewClusterRole(clusterRoleName)
@@ -71,7 +72,7 @@ var _ = Describe("workload orchestration testing", func() {
 		framework.CreateClusterResourcePlacement(*HubCluster, crp)
 		framework.WaitClusterResourcePlacement(*HubCluster, crp)
 
-		By("check if work get created for cluster resource placement")
+		By("check if work gets created for cluster resource placement")
 		framework.WaitWork(*HubCluster, workName, memberNS.Name)
 
 		By("check if cluster resource placement is updated to Scheduled & Applied")
