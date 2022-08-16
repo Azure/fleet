@@ -7,6 +7,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -26,6 +27,40 @@ func CreateMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
 		err := cluster.KubeClient.Create(context.TODO(), mc)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
+}
+
+func CreateClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
+	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
+		err := cluster.KubeClient.Create(context.TODO(), cr)
+		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	})
+}
+
+func CreateClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
+	ginkgo.By(fmt.Sprintf("Creating Cluster Resource Placement (%s)", crp.Name), func() {
+		err := cluster.KubeClient.Create(context.TODO(), crp)
+		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	})
+}
+
+// WaitClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster.
+func WaitClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
+	klog.Infof("Waiting for Cluster Resource Placement (%s) to be synced", crp.Name)
+	gomega.Eventually(func() error {
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
+		return err
+	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+}
+
+// WaitConditionClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster with a specific condition.
+func WaitConditionClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
+	klog.Infof("Waiting for ClusterResourcePlacement(%s) condition(%s) status(%s) to be synced", crp.Name, conditionName, status)
+	gomega.Eventually(func() bool {
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		cond := crp.GetCondition(conditionName)
+		return cond != nil && cond.Status == status
+	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
 
 // UpdateMemberCluster updates MemberCluster in the hub cluster.

@@ -43,6 +43,40 @@ func NewServiceAccount(name, namespace string) *corev1.ServiceAccount {
 	}
 }
 
+func NewClusterRole(name string) *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: v1.ObjectMeta{
+			Name:   name,
+			Labels: map[string]string{"fleet.azure.com/name": "test"},
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+			},
+		},
+	}
+}
+
+func NewClusterResourcePlacement(name string) *v1alpha1.ClusterResourcePlacement {
+	return &v1alpha1.ClusterResourcePlacement{
+		ObjectMeta: v1.ObjectMeta{Name: name},
+		Spec: v1alpha1.ClusterResourcePlacementSpec{
+			ResourceSelectors: []v1alpha1.ClusterResourceSelector{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					LabelSelector: &v1.LabelSelector{
+						MatchLabels: map[string]string{"fleet.azure.com/name": "test"},
+					},
+				},
+			},
+		},
+	}
+}
+
 func NewNamespace(name string) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: v1.ObjectMeta{
