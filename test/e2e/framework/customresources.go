@@ -7,7 +7,6 @@ package framework
 import (
 	"context"
 	"fmt"
-	"go.goms.io/fleet/pkg/utils"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -20,6 +19,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // MEMBER CLUSTER
