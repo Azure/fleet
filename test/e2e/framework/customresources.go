@@ -7,16 +7,19 @@ package framework
 import (
 	"context"
 	"fmt"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 // MEMBER CLUSTER
@@ -61,6 +64,27 @@ func WaitConditionClusterResourcePlacement(cluster Cluster, crp *v1alpha1.Cluste
 		cond := crp.GetCondition(conditionName)
 		return cond != nil && cond.Status == status
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
+}
+
+func GetWork(cluster Cluster, workName, workNamespace string) *workapi.Work {
+	var work workapi.Work
+	klog.Infof("Waiting for Work(%s/%s) to be synced", workName, workNamespace)
+	gomega.Eventually(func() error {
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
+		return err
+	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+	return &work
+}
+
+// DeleteMemberCluster deletes MemberCluster in the hub cluster.
+func DeleteWork(cluster Cluster, work *workapi.Work) {
+	cond := controllerutil.RemoveFinalizer(work, utils.WorkFinalizer)
+	klog.Infof("Waiting for Work(%s/%s) to be synced", work.Name, work.Namespace)
+	klog.Infof("Remove finalizer %s", cond)
+	ginkgo.By(fmt.Sprintf("Deleting Work(%s/%s)", work.Name, work.Namespace), func() {
+		err := cluster.KubeClient.Delete(context.TODO(), work)
+		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	})
 }
 
 // UpdateMemberCluster updates MemberCluster in the hub cluster.

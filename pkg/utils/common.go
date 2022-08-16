@@ -62,6 +62,8 @@ const (
 
 	// PlacementFinalizer is used to make sure that we handle the deleting of an already placed resource
 	PlacementFinalizer = "work.fleet.azure.com/placement-protection"
+
+	WorkFinalizer = "multicluster.x-k8s.io/work-cleanup"
 )
 
 var (
