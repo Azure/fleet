@@ -79,7 +79,7 @@ var _ = Describe("workload orchestration testing", func() {
 		framework.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementConditionTypeScheduled), v1.ConditionTrue, 3*framework.PollTimeout)
 		framework.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), v1.ConditionTrue, 3*framework.PollTimeout)
 
-		By("check if resource got propagated to member cluster")
+		By("check if resource is propagated to member cluster")
 		framework.WaitClusterRole(*MemberCluster, cr)
 	})
 
