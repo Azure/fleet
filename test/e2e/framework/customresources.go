@@ -7,6 +7,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	"go.goms.io/fleet/pkg/utils"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -19,7 +20,6 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 // MEMBER CLUSTER
@@ -32,6 +32,7 @@ func CreateMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
 	})
 }
 
+// CreateClusterRole create cluster role in the hub cluster
 func CreateClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), cr)
@@ -39,6 +40,23 @@ func CreateClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
 	})
 }
 
+// WaitClusterRole waits for cluster roles to be created.
+func WaitClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
+	gomega.Eventually(func() error {
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
+		return err
+	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+}
+
+// DeleteClusterRole deletes cluster role on cluster.
+func DeleteClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
+	ginkgo.By(fmt.Sprintf("Deleting ClusterRole(%s)", cr.Name), func() {
+		err := cluster.KubeClient.Delete(context.TODO(), cr)
+		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	})
+}
+
+// CreateClusterResourcePlacement created cluster resource placement on hub cluster.
 func CreateClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Creating Cluster Resource Placement (%s)", crp.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), crp)
@@ -66,23 +84,21 @@ func WaitConditionClusterResourcePlacement(cluster Cluster, crp *v1alpha1.Cluste
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
 
-func GetWork(cluster Cluster, workName, workNamespace string) *workapi.Work {
+// WaitWork waits for Work to be present on the hub cluster.
+func WaitWork(cluster Cluster, workName, workNamespace string) {
 	var work workapi.Work
 	klog.Infof("Waiting for Work(%s/%s) to be synced", workName, workNamespace)
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
 		return err
 	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
-	return &work
 }
 
-// DeleteMemberCluster deletes MemberCluster in the hub cluster.
-func DeleteWork(cluster Cluster, work *workapi.Work) {
-	cond := controllerutil.RemoveFinalizer(work, utils.WorkFinalizer)
-	klog.Infof("Waiting for Work(%s/%s) to be synced", work.Name, work.Namespace)
-	klog.Infof("Remove finalizer %s", cond)
-	ginkgo.By(fmt.Sprintf("Deleting Work(%s/%s)", work.Name, work.Namespace), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), work)
+// DeleteClusterResourcePlacement is used delete cluster resource placement on the hub cluster.
+func DeleteClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
+	controllerutil.RemoveFinalizer(crp, utils.PlacementFinalizer)
+	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
+		err := cluster.KubeClient.Delete(context.TODO(), crp)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
 }
