@@ -92,7 +92,7 @@ func WaitConditionInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalM
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
 
-// CreateClusterRole create cluster role in the hub cluster
+// CreateClusterRole create cluster role in the hub cluster.
 func CreateClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), cr)
@@ -102,6 +102,7 @@ func CreateClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
 
 // WaitClusterRole waits for cluster roles to be created.
 func WaitClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
+	klog.Infof("Waiting for ClusterRole(%s) to be synced", cr.Name)
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
 		return err
@@ -118,7 +119,7 @@ func DeleteClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
 
 // CreateClusterResourcePlacement created cluster resource placement on hub cluster.
 func CreateClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	ginkgo.By(fmt.Sprintf("Creating Cluster Resource Placement (%s)", crp.Name), func() {
+	ginkgo.By(fmt.Sprintf("Creating ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), crp)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
@@ -126,7 +127,7 @@ func CreateClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResour
 
 // WaitClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster.
 func WaitClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	klog.Infof("Waiting for Cluster Resource Placement (%s) to be synced", crp.Name)
+	klog.Infof("Waiting for ClusterResourcePlacement(%s) to be synced", crp.Name)
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
 		return err

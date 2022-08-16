@@ -26,11 +26,6 @@ var _ = Describe("workload orchestration testing", func() {
 	var cr *rbacv1.ClusterRole
 	var crp *v1alpha1.ClusterResourcePlacement
 
-	memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-	clusterRoleName := "test-cluster-role"
-	placementName := "resource-label-selector"
-	workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
-
 	BeforeEach(func() {
 		memberIdentity = rbacv1.Subject{
 			Name:      MemberCluster.ClusterName,
@@ -40,6 +35,11 @@ var _ = Describe("workload orchestration testing", func() {
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
+		clusterRoleName := "test-cluster-role"
+		placementName := "resource-label-selector"
+		memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+		workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
+
 		By("Prepare resources in member cluster")
 		// create testing NS in member cluster
 		framework.CreateNamespace(*MemberCluster, memberNS)
