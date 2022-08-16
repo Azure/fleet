@@ -5,20 +5,20 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"context"
 	"fmt"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"golang.org/x/net/context"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Join/leave member cluster testing", func() {
@@ -94,6 +94,11 @@ var _ = Describe("Join/leave member cluster testing", func() {
 				framework.DeleteMemberCluster(*HubCluster, mc)
 				Eventually(func() bool {
 					err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
+					return apierrors.IsNotFound(err)
+				}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+				framework.DeleteNamespace(*MemberCluster, memberNS)
+				Eventually(func() bool {
+					err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 					return apierrors.IsNotFound(err)
 				}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
 			})
