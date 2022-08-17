@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -27,8 +26,6 @@ var (
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
-	genericCodecs     = serializer.NewCodecFactory(scheme)
-	genericCodec      = genericCodecs.UniversalDeserializer()
 )
 
 func init() {
