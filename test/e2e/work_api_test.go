@@ -170,13 +170,11 @@ var _ = Describe("Work API test", func() {
 	})
 
 	ginkgo.Context("Work Delete Test", func() {
-		ginkgo.It("deleting the Work", func() {
-			framework.RemoveWork(testWorkName, testWorkNamespace.Name, *HubCluster)
-			framework.WaitAppliedWorkAbsent(testWorkName, testWorkName, *MemberCluster)
+		framework.RemoveWork(testWorkName, testWorkNamespace.Name, *HubCluster)
+		framework.WaitAppliedWorkAbsent(testWorkName, testWorkName, *MemberCluster)
 
-			ginkgo.By("check if resource was garbage collected from the member cluster")
-			_, err := framework.GetConfigMap(MemberCluster, testManifestConfigMapName, testManifestNamespace.Name)
-			gomega.Expect(err).ToNot(gomega.BeNil())
-		})
+		ginkgo.By("check if resource was garbage collected from the member cluster")
+		_, err := framework.GetConfigMap(MemberCluster, testManifestConfigMapName, testManifestNamespace.Name)
+		gomega.Expect(err).ToNot(gomega.BeNil())
 	})
 })
