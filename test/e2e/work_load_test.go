@@ -25,10 +25,9 @@ var _ = Describe("workload orchestration testing", func() {
 	var cr *rbacv1.ClusterRole
 	var crp *v1alpha1.ClusterResourcePlacement
 
-	memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-
 	BeforeEach(func() {
-		By("Prepare resources in member cluster")
+		memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+		By("prepare resources in member cluster")
 		// create testing NS in member cluster
 		framework.CreateNamespace(*MemberCluster, memberNS)
 		framework.WaitNamespace(*MemberCluster, memberNS)
@@ -44,11 +43,10 @@ var _ = Describe("workload orchestration testing", func() {
 		imc = NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
 		framework.WaitInternalMemberCluster(*HubCluster, imc)
 
-		By("check if member cluster condition is updated to Joined")
-		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
-
 		By("check if internal member cluster condition is updated to Joined")
 		framework.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*framework.PollTimeout)
+		By("check if member cluster condition is updated to Joined")
+		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
@@ -58,6 +56,7 @@ var _ = Describe("workload orchestration testing", func() {
 				err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
 				return apierrors.IsNotFound(err)
 			}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+			framework.DeleteClusterRole(*HubCluster, cr)
 		})
 
 		workName := fmt.Sprintf(utils.WorkNameFormat, "resource-label-selector")
@@ -118,6 +117,5 @@ var _ = Describe("workload orchestration testing", func() {
 			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 			return apierrors.IsNotFound(err)
 		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-		framework.DeleteClusterRole(*HubCluster, cr)
 	})
 })

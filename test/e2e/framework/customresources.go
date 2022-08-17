@@ -22,11 +22,9 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-// MEMBER CLUSTER
-
 // CreateMemberCluster creates MemberCluster in the hub cluster.
 func CreateMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
-	ginkgo.By(fmt.Sprintf("Creating MemberCluster(%s/%s)", mc.Namespace, mc.Name), func() {
+	ginkgo.By(fmt.Sprintf("Creating MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), mc)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
@@ -68,8 +66,6 @@ func WaitConditionMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster, con
 		return cond != nil && cond.Status == status
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
-
-// INTERNAL MEMBER CLUSTER
 
 // WaitInternalMemberCluster waits for InternalMemberCluster to present on th hub cluster.
 func WaitInternalMemberCluster(cluster Cluster, imc *v1alpha1.InternalMemberCluster) {
