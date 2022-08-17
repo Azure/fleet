@@ -12,7 +12,12 @@ import (
 	"go.goms.io/fleet/apis/v1alpha1"
 )
 
-func NewMemberCluster(name string, heartbeat int32, identity rbacv1.Subject, state v1alpha1.ClusterState) *v1alpha1.MemberCluster {
+func NewMemberCluster(name string, heartbeat int32, state v1alpha1.ClusterState) *v1alpha1.MemberCluster {
+	identity := rbacv1.Subject{
+		Name:      name,
+		Kind:      "ServiceAccount",
+		Namespace: "fleet-system",
+	}
 	return &v1alpha1.MemberCluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name: name,
@@ -39,40 +44,6 @@ func NewServiceAccount(name, namespace string) *corev1.ServiceAccount {
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-		},
-	}
-}
-
-func NewClusterRole(name string) *rbacv1.ClusterRole {
-	return &rbacv1.ClusterRole{
-		ObjectMeta: v1.ObjectMeta{
-			Name:   name,
-			Labels: map[string]string{"fleet.azure.com/name": "test"},
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				Verbs:     []string{"get", "list", "watch"},
-				APIGroups: []string{""},
-				Resources: []string{"secrets"},
-			},
-		},
-	}
-}
-
-func NewClusterResourcePlacement(name string) *v1alpha1.ClusterResourcePlacement {
-	return &v1alpha1.ClusterResourcePlacement{
-		ObjectMeta: v1.ObjectMeta{Name: name},
-		Spec: v1alpha1.ClusterResourcePlacementSpec{
-			ResourceSelectors: []v1alpha1.ClusterResourceSelector{
-				{
-					Group:   "rbac.authorization.k8s.io",
-					Version: "v1",
-					Kind:    "ClusterRole",
-					LabelSelector: &v1.LabelSelector{
-						MatchLabels: map[string]string{"fleet.azure.com/name": "test"},
-					},
-				},
-			},
 		},
 	}
 }

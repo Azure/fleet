@@ -20,7 +20,6 @@ import (
 var _ = Describe("workload orchestration testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
-	var memberIdentity rbacv1.Subject
 	var memberNS *corev1.Namespace
 	var imc *v1alpha1.InternalMemberCluster
 	var cr *rbacv1.ClusterRole
@@ -29,21 +28,15 @@ var _ = Describe("workload orchestration testing", func() {
 	memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 
 	BeforeEach(func() {
-		memberIdentity = rbacv1.Subject{
-			Name:      MemberCluster.ClusterName,
-			Kind:      "ServiceAccount",
-			Namespace: "fleet-system",
-		}
-
 		By("Prepare resources in member cluster")
 		// create testing NS in member cluster
 		framework.CreateNamespace(*MemberCluster, memberNS)
 		framework.WaitNamespace(*MemberCluster, memberNS)
-		sa = NewServiceAccount(memberIdentity.Name, memberNS.Name)
+		sa = NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
 		framework.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
-		mc = NewMemberCluster(MemberCluster.ClusterName, 60, memberIdentity, v1alpha1.ClusterStateJoin)
+		mc = NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
 		framework.CreateMemberCluster(*HubCluster, mc)
 		framework.WaitMemberCluster(*HubCluster, mc)
 
@@ -59,16 +52,47 @@ var _ = Describe("workload orchestration testing", func() {
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
-		clusterRoleName := "test-cluster-role"
-		placementName := "resource-label-selector"
-		workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
+		DeferCleanup(func() {
+			framework.DeleteClusterResourcePlacement(*HubCluster, crp)
+			Eventually(func() bool {
+				err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
+				return apierrors.IsNotFound(err)
+			}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+		})
 
+		workName := fmt.Sprintf(utils.WorkNameFormat, "resource-label-selector")
 		By("create the resources to be propagated")
-		cr = NewClusterRole(clusterRoleName)
+		cr = &rbacv1.ClusterRole{
+			ObjectMeta: v1.ObjectMeta{
+				Name:   "test-cluster-role",
+				Labels: map[string]string{"fleet.azure.com/name": "test"},
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"get", "list", "watch"},
+					APIGroups: []string{""},
+					Resources: []string{"secrets"},
+				},
+			},
+		}
 		framework.CreateClusterRole(*HubCluster, cr)
 
 		By("create the cluster resource placement in the hub cluster")
-		crp = NewClusterResourcePlacement(placementName)
+		crp = &v1alpha1.ClusterResourcePlacement{
+			ObjectMeta: v1.ObjectMeta{Name: "resource-label-selector"},
+			Spec: v1alpha1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []v1alpha1.ClusterResourceSelector{
+					{
+						Group:   "rbac.authorization.k8s.io",
+						Version: "v1",
+						Kind:    "ClusterRole",
+						LabelSelector: &v1.LabelSelector{
+							MatchLabels: map[string]string{"fleet.azure.com/name": "test"},
+						},
+					},
+				},
+			},
+		}
 		framework.CreateClusterResourcePlacement(*HubCluster, crp)
 		framework.WaitClusterResourcePlacement(*HubCluster, crp)
 
@@ -92,11 +116,6 @@ var _ = Describe("workload orchestration testing", func() {
 		framework.DeleteNamespace(*MemberCluster, memberNS)
 		Eventually(func() bool {
 			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-		framework.DeleteClusterResourcePlacement(*HubCluster, crp)
-		Eventually(func() bool {
-			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
 			return apierrors.IsNotFound(err)
 		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
 		framework.DeleteClusterRole(*HubCluster, cr)

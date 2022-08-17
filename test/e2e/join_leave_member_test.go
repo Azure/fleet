@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,33 +23,24 @@ import (
 var _ = Describe("Join/leave member cluster testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
-	var memberIdentity rbacv1.Subject
 	var memberNS *corev1.Namespace
 	var imc *v1alpha1.InternalMemberCluster
 
 	memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 
 	Context("member clusters don't share member identity", func() {
-		BeforeEach(func() {
-			memberIdentity = rbacv1.Subject{
-				Name:      MemberCluster.ClusterName,
-				Kind:      "ServiceAccount",
-				Namespace: "fleet-system",
-			}
-		})
-
 		It("Join flow is successful ", func() {
 			By("Prepare resources in member cluster", func() {
 				// create testing NS in member cluster
 				framework.CreateNamespace(*MemberCluster, memberNS)
 				framework.WaitNamespace(*MemberCluster, memberNS)
 
-				sa = NewServiceAccount(memberIdentity.Name, memberNS.Name)
+				sa = NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
 				framework.CreateServiceAccount(*MemberCluster, sa)
 			})
 
 			By("deploy memberCluster in the hub cluster", func() {
-				mc = NewMemberCluster(MemberCluster.ClusterName, 60, memberIdentity, v1alpha1.ClusterStateJoin)
+				mc = NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
 
 				framework.CreateMemberCluster(*HubCluster, mc)
 				framework.WaitMemberCluster(*HubCluster, mc)
