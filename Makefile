@@ -176,7 +176,7 @@ run-e2e: build-e2e
 creat-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
 
 .PHONY: install-helm
-install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
+install-helm:  docker-build-hub-agent docker-build-member-agent docker-build-refresh-token load-hub-docker-image load-member-docker-image install-member-agent-helm
 
 .PHONY: e2e-tests
 e2e-tests: creat-kind-cluster run-e2e
@@ -225,7 +225,7 @@ run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 ## Images
 ## --------------------------------------
 
-OUTPUT_TYPE ?= type=registry
+OUTPUT_TYPE ?= type=docker
 BUILDX_BUILDER_NAME ?= img-builder
 QEMU_VERSION ?= 5.2.0-2
 

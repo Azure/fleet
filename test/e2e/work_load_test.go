@@ -50,15 +50,6 @@ var _ = Describe("workload orchestration testing", func() {
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
-		DeferCleanup(func() {
-			framework.DeleteClusterResourcePlacement(*HubCluster, crp)
-			Eventually(func() bool {
-				err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
-				return apierrors.IsNotFound(err)
-			}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-			framework.DeleteClusterRole(*HubCluster, cr)
-		})
-
 		workName := fmt.Sprintf(utils.WorkNameFormat, "resource-label-selector")
 		By("create the resources to be propagated")
 		cr = &rbacv1.ClusterRole{
@@ -104,6 +95,14 @@ var _ = Describe("workload orchestration testing", func() {
 
 		By("check if resource is propagated to member cluster")
 		framework.WaitClusterRole(*MemberCluster, cr)
+
+		By("delete cluster resource placement & cluster role on hub cluster")
+		framework.DeleteClusterResourcePlacement(*HubCluster, crp)
+		Eventually(func() bool {
+			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
+			return apierrors.IsNotFound(err)
+		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+		framework.DeleteClusterRole(*HubCluster, cr)
 	})
 
 	AfterEach(func() {
