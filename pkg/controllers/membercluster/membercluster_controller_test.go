@@ -728,9 +728,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		},
 		"copy with Left condition": {
 			r: &Reconciler{
-				recorder: utils.NewFakeRecorder(1),
+				recorder: utils.NewFakeRecorder(2),
 				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent: "",
+					fleetv1alpha1.MemberAgent:              "",
+					fleetv1alpha1.ServiceExportImportAgent: "",
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -778,6 +779,11 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
 							Status: metav1.ConditionFalse,
 							Reason: reasonMemberClusterLeft,
+						},
+						{
+							Type:   fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+							Status: metav1.ConditionFalse,
+							Reason: reasonMemberClusterNotReadyToJoin,
 						},
 					},
 					ResourceUsage: fleetv1alpha1.ResourceUsage{

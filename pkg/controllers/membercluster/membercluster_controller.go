@@ -34,17 +34,18 @@ import (
 )
 
 const (
-	eventReasonNamespaceCreated    = "NamespaceCreated"
-	eventReasonRoleCreated         = "RoleCreated"
-	eventReasonRoleUpdated         = "RoleUpdated"
-	eventReasonRoleBindingCreated  = "RoleBindingCreated"
-	eventReasonRoleBindingUpdated  = "RoleBindingUpdated"
-	eventReasonIMCCreated          = "InternalMemberClusterCreated"
-	eventReasonIMCSpecUpdated      = "InternalMemberClusterSpecUpdated"
-	reasonMemberClusterReadyToJoin = "MemberClusterReadyToJoin"
-	reasonMemberClusterJoined      = "MemberClusterJoined"
-	reasonMemberClusterLeft        = "MemberClusterLeft"
-	reasonMemberClusterUnknown     = "MemberClusterUnknown"
+	eventReasonNamespaceCreated       = "NamespaceCreated"
+	eventReasonRoleCreated            = "RoleCreated"
+	eventReasonRoleUpdated            = "RoleUpdated"
+	eventReasonRoleBindingCreated     = "RoleBindingCreated"
+	eventReasonRoleBindingUpdated     = "RoleBindingUpdated"
+	eventReasonIMCCreated             = "InternalMemberClusterCreated"
+	eventReasonIMCSpecUpdated         = "InternalMemberClusterSpecUpdated"
+	reasonMemberClusterReadyToJoin    = "MemberClusterReadyToJoin"
+	reasonMemberClusterNotReadyToJoin = "MemberClusterNotReadyToJoin"
+	reasonMemberClusterJoined         = "MemberClusterJoined"
+	reasonMemberClusterLeft           = "MemberClusterLeft"
+	reasonMemberClusterUnknown        = "MemberClusterUnknown"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -152,7 +153,6 @@ func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster,
 	}
 
 	// Copy spec from member cluster to internal member cluster.
-	// TODO: mark readToJoin as metav1.ConditionFalse
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	if _, err := r.syncInternalMemberCluster(ctx, mc, namespaceName, imc); err != nil {
 		return errors.Wrapf(err, "failed to sync internal member cluster spec")
@@ -403,7 +403,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	}
 }
 
-// markMemberClusterReadyToJoin is used to update the ReadyToJoin condition of member cluster.
+// markMemberClusterReadyToJoin is used to update the ReadyToJoin condition as true of member cluster.
 func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
@@ -444,7 +444,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 	mc.SetConditions(newCondition)
 }
 
-// markMemberClusterLeft is used to update the status of the member cluster to have the left condition.
+// markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
 func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
@@ -462,7 +462,14 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		metrics.ReportJoinResultMetric()
 	}
 
-	mc.SetConditions(newCondition)
+	notReadyCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             reasonMemberClusterNotReadyToJoin,
+		ObservedGeneration: mc.GetGeneration(),
+	}
+
+	mc.SetConditions(newCondition, notReadyCondition)
 }
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.

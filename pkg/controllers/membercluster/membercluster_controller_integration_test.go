@@ -89,6 +89,19 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleNameFormat, memberClusterName), Namespace: namespaceName}, &role)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleBindingNameFormat, memberClusterName), Namespace: namespaceName}, &roleBinding)).Should(Succeed())
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
+
+			wantMC := fleetv1alpha1.MemberClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Status:             metav1.ConditionTrue,
+						Reason:             reasonMemberClusterReadyToJoin,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+				},
+			}
+			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
 
 			By("simulate member agent updating internal member cluster status")
 			imc.Status.ResourceUsage.Capacity = utils.NewResourceList()
@@ -124,11 +137,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		It("should create namespace, role, role binding and internal member cluster & mark member cluster as joined", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-
-			readyToJoinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin)
-			Expect(readyToJoinCondition).NotTo(BeNil())
-			Expect(readyToJoinCondition.Status).To(Equal(metav1.ConditionTrue))
-			Expect(readyToJoinCondition.Reason).To(Equal(reasonMemberClusterReadyToJoin))
 
 			joinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
 			Expect(joinCondition).NotTo(BeNil())
@@ -172,9 +180,26 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(err).Should(Succeed())
 
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-			mcLeftCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-			Expect(mcLeftCondition.Status).To(Equal(metav1.ConditionFalse))
-			Expect(mcLeftCondition.Reason).To(Equal(reasonMemberClusterLeft))
+
+			wantMC := fleetv1alpha1.MemberClusterStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Status:             metav1.ConditionFalse,
+						Reason:             reasonMemberClusterNotReadyToJoin,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Status:             metav1.ConditionFalse,
+						Reason:             reasonMemberClusterLeft,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+				},
+				ResourceUsage: imc.Status.ResourceUsage,
+				AgentStatus:   imc.Status.AgentStatus,
+			}
+			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
 		})
 	})
 
@@ -560,9 +585,9 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				Conditions: []metav1.Condition{
 					{
 						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
-						Status:             metav1.ConditionTrue,
-						Reason:             reasonMemberClusterReadyToJoin,
-						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
+						Status:             metav1.ConditionFalse,
+						Reason:             reasonMemberClusterNotReadyToJoin,
+						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
 						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
@@ -574,8 +599,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
-			// ignore the ObservedGeneration here cause controller won't update the ReadyToJoin condition.
-			Expect(cmp.Diff(wantMC, mc.Status, options)).Should(BeEmpty())
+			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
 		})
 	})
 
