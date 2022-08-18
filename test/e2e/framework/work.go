@@ -3,6 +3,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -19,8 +20,8 @@ const (
 	interval             = time.Second * 1
 )
 
-func CreateWork(workName string, workNamespace string, hubCluster Cluster, manifestObject runtime.Object) {
-	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s with a manifestObject of %s", workName, workNamespace, manifestObject.GetObjectKind()))
+func CreateWork(workName string, workNamespace string, hubCluster Cluster, manifestObjectList []workapi.Manifest) {
+	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s with a manifestObject of %s", workName, workNamespace, manifestObjectList))
 	work := &workapi.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
@@ -28,11 +29,7 @@ func CreateWork(workName string, workNamespace string, hubCluster Cluster, manif
 		},
 		Spec: workapi.WorkSpec{
 			Workload: workapi.WorkloadTemplate{
-				Manifests: []workapi.Manifest{
-					{
-						RawExtension: runtime.RawExtension{Object: manifestObject},
-					},
-				},
+				Manifests: manifestObjectList,
 			},
 		},
 	}
@@ -93,7 +90,17 @@ func RemoveWork(workName string, workNamespace string, hubCluster Cluster) {
 	work := &workapi.Work{ObjectMeta: metav1.ObjectMeta{Name: workName, Namespace: workNamespace}}
 	ginkgo.By(fmt.Sprintf("Removing work %s in namespace %s", workName, workNamespace))
 	err := hubCluster.KubeClient.Delete(context.Background(), work)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	if !apierrors.IsNotFound(err) {
+		gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed()))
+	}
+}
+
+func WaitWorkPresent(workName string, workNamespace string, hubCluster Cluster) {
+	ginkgo.By(fmt.Sprintf("Waiting for Work to be created with Name %s, %s on hubCluster %s", workName, workNamespace, hubCluster.ClusterName))
+	gomega.Eventually(func() error {
+		_, err := GetWork(workName, workNamespace, hubCluster)
+		return err
+	}, timeout, interval).Should(gomega.BeNil())
 }
 
 func WaitAppliedWorkPresent(workName string, workNamespace string, memberCluster Cluster) {

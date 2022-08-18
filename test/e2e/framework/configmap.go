@@ -30,14 +30,11 @@ func WaitConfigMapUpdated(cluster *Cluster, name, namespace string, newData map[
 		if err != nil {
 			return false
 		}
-		if len(cm.Data) != len(newData) {
-			return false
-		}
-		for k, v := range newData {
-			if cm.Data[k] != v {
-				return false
+		for k, v := range cm.Data {
+			if newData[k] == v {
+				return true
 			}
 		}
-		return true
-	}, timeout, interval).Should(gomega.BeNil())
+		return false
+	}, timeout, interval).Should(gomega.BeTrue())
 }
