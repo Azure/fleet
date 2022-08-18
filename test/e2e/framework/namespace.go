@@ -37,6 +37,17 @@ func WaitNamespace(cluster Cluster, nc *corev1.Namespace) {
 	}, timeout, interval).ShouldNot(gomega.HaveOccurred())
 }
 
+func WaitNamespaceRemoved(cluster Cluster, nc *corev1.Namespace) {
+	klog.Infof("Waiting for Namespace(%s) to be removed", nc.Name)
+	gomega.Eventually(func() error {
+		if !nc.DeletionTimestamp.IsZero() {
+			return fmt.Errorf("namespace is currently being deleted")
+		}
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: nc.Name, Namespace: ""}, nc)
+		return err
+	}, PollTimeout, PollInterval).ShouldNot(gomega.BeNil())
+}
+
 // DeleteNamespace delete namespace.
 func DeleteNamespace(cluster Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Deleting Namespace(%s)", ns.Name), func() {

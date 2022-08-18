@@ -116,6 +116,14 @@ func WaitWorkPresent(workName string, workNamespace string, hubCluster Cluster) 
 	}, timeout, interval).Should(gomega.BeNil())
 }
 
+func WaitWorkRemoved(workName string, workNamespace string, hubCluster Cluster) {
+	ginkgo.By(fmt.Sprintf("Waiting for Work to be deleted with Name %s, %s on hubCluster %s", workName, workNamespace, hubCluster.ClusterName))
+	gomega.Eventually(func() error {
+		_, err := GetWork(workName, workNamespace, hubCluster)
+		return err
+	}, timeout, interval).ShouldNot(gomega.BeNil())
+}
+
 func WaitAppliedWorkPresent(workName string, workNamespace string, memberCluster Cluster) {
 	ginkgo.By(fmt.Sprintf("Waiting for AppliedWork to be created with Name %s, %s on memberCluster %s", workName, workNamespace, memberCluster.ClusterName))
 	gomega.Eventually(func() error {

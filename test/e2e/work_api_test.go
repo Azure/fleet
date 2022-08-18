@@ -13,7 +13,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
-var _ = Describe("Work API test", Ordered, func() {
+var _ = Describe("Work API test", func() {
 	var testMemberClusterName string
 	var testWorkName string
 	var testWorkNamespace corev1.Namespace
@@ -23,7 +23,7 @@ var _ = Describe("Work API test", Ordered, func() {
 	var testManifestSecretName string
 	var testManifestNamespace corev1.Namespace
 
-	BeforeAll(func() {
+	BeforeEach(func() {
 		testMemberClusterName = fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName)
 		testWorkNamespace = corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -32,9 +32,6 @@ var _ = Describe("Work API test", Ordered, func() {
 		}
 
 		framework.CreateNamespace(*HubCluster, &testWorkNamespace)
-	})
-
-	BeforeEach(func() {
 
 		testManifestNamespace = corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -84,11 +81,13 @@ var _ = Describe("Work API test", Ordered, func() {
 
 	AfterEach(func() {
 		framework.RemoveWork(testWorkName, testWorkNamespace.Name, *HubCluster)
-	})
+		framework.WaitWorkRemoved(testWorkName, testWorkNamespace.Name, *HubCluster)
 
-	AfterAll(func() {
 		framework.DeleteNamespace(*HubCluster, &testWorkNamespace)
+		framework.WaitNamespaceRemoved(*HubCluster, &testWorkNamespace)
+
 		framework.DeleteNamespace(*MemberCluster, &testManifestNamespace)
+		framework.WaitNamespaceRemoved(*MemberCluster, &testManifestNamespace)
 	})
 
 	It("Work Creation test", func() {
@@ -200,6 +199,7 @@ var _ = Describe("Work API test", Ordered, func() {
 
 	It("Work Delete Test", func() {
 		framework.RemoveWork(testWorkName, testWorkNamespace.Name, *HubCluster)
+		framework.WaitWorkRemoved(testWorkName, testWorkNamespace.Name, *HubCluster)
 		framework.WaitAppliedWorkAbsent(testWorkName, testWorkName, *MemberCluster)
 
 		By("check if resource was garbage collected from the member cluster")
