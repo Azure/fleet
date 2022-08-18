@@ -7,7 +7,6 @@ package framework
 import (
 	"context"
 	"fmt"
-	"sigs.k8s.io/work-api/pkg/utils"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -15,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
+	"sigs.k8s.io/work-api/pkg/utils"
 )
 
 // CreateNamespace create namespace.

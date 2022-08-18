@@ -3,11 +3,11 @@ package framework
 import (
 	"context"
 	"fmt"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -20,8 +20,13 @@ const (
 	interval             = time.Second * 1
 )
 
+func AddToManifestList(object runtime.Object, manifestList []workapi.Manifest) []workapi.Manifest {
+	manifestList = append(manifestList, workapi.Manifest{RawExtension: runtime.RawExtension{Object: object}})
+	return manifestList
+}
+
 func CreateWork(workName string, workNamespace string, hubCluster Cluster, manifestObjectList []workapi.Manifest) {
-	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s with a manifestObject of %s", workName, workNamespace, manifestObjectList))
+	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s", workName, workNamespace))
 	work := &workapi.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
@@ -55,29 +60,37 @@ func AddManifestToWork(manifestObject runtime.Object, hubCluster Cluster, workNa
 
 	currentWork.Spec.Workload.Manifests = append(currentWork.Spec.Workload.Manifests, workapi.Manifest{RawExtension: runtime.RawExtension{Object: manifestObject}})
 	return UpdateWork(currentWork, hubCluster)
-
 }
 
 func ReplaceWorkManifest(manifestObject runtime.Object, hubCluster Cluster, workName, workNamespace string) error {
 	currentWork, err := GetWork(workName, workNamespace, hubCluster)
 	gomega.Expect(err).To(gomega.BeNil())
-	currentWork.Spec.Workload.Manifests = []workapi.Manifest{{runtime.RawExtension{Object: manifestObject}}}
+	currentWork.Spec.Workload.Manifests = []workapi.Manifest{
+		{
+			RawExtension: runtime.RawExtension{Object: manifestObject},
+		},
+	}
 	return UpdateWork(currentWork, hubCluster)
 }
 
-func GetAppliedCondition(work *workapi.Work) (metav1.Condition, error) {
-	for _, condition := range work.Status.Conditions {
-		if condition.Type == conditionTypeApplied {
-			return condition, nil
+func CheckIfAppliedConditionIsTrue(name string, namespace string, hubCluster *Cluster) {
+	gomega.Eventually(func() bool {
+		work, err := GetWork(name, namespace, *hubCluster)
+		if err != nil {
+			return false
 		}
-	}
-	return metav1.Condition{}, fmt.Errorf("applied Condition does not exist for work %s", work.Name)
-}
 
-func CheckIfAppliedConditionIsTrue(work *workapi.Work) {
-	appliedCondition, err := GetAppliedCondition(work)
-	gomega.Expect(err).To(gomega.BeNil())
-	gomega.Expect(appliedCondition.Status).To(gomega.Equal(metav1.ConditionTrue))
+		if len(work.Status.Conditions) < 1 {
+			return false
+		}
+
+		for _, condition := range work.Status.Conditions {
+			if condition.Type == conditionTypeApplied && condition.Status == metav1.ConditionTrue {
+				return true
+			}
+		}
+		return false
+	}, timeout, interval).Should(gomega.BeTrue())
 }
 
 func GetAppliedWork(workName string, workNamespace string, memberCluster Cluster) (*workapi.AppliedWork, error) {

@@ -2,16 +2,15 @@ package e2e
 
 import (
 	"fmt"
-	"go.goms.io/fleet/pkg/utils"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/rand"
-	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
+	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 var _ = Describe("Work API test", Ordered, func() {
@@ -20,6 +19,8 @@ var _ = Describe("Work API test", Ordered, func() {
 	var testWorkNamespace corev1.Namespace
 	var testManifestConfigMap corev1.ConfigMap
 	var testManifestConfigMapName string
+	var testManifestSecret corev1.Secret
+	var testManifestSecretName string
 	var testManifestNamespace corev1.Namespace
 
 	BeforeAll(func() {
@@ -41,7 +42,7 @@ var _ = Describe("Work API test", Ordered, func() {
 			},
 		}
 
-		testManifestConfigMapName = fmt.Sprintf("test-configmap")
+		testManifestConfigMapName = "test-configmap"
 		framework.CreateNamespace(*MemberCluster, &testManifestNamespace)
 
 		testWorkName = fmt.Sprintf("test-work-" + rand.String(10))
@@ -59,7 +60,23 @@ var _ = Describe("Work API test", Ordered, func() {
 				"test": "test",
 			},
 		}
-		framework.CreateWork(testWorkName, testWorkNamespace.Name, *HubCluster, []workapi.Manifest{{RawExtension: runtime.RawExtension{Object: &testManifestConfigMap}}})
+
+		testManifestSecretName = "test-manifest-deployment"
+		testManifestSecret = corev1.Secret{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testManifestSecretName,
+				Namespace: testManifestNamespace.Name,
+			},
+			Data: map[string][]byte{"secretData": []byte("testByte")},
+		}
+
+		manifestList := framework.AddToManifestList(&testManifestConfigMap, []workapi.Manifest{})
+		manifestList = framework.AddToManifestList(&testManifestSecret, manifestList)
+		framework.CreateWork(testWorkName, testWorkNamespace.Name, *HubCluster, manifestList)
 		framework.WaitWorkPresent(testWorkName, testWorkNamespace.Name, *HubCluster)
 		framework.WaitAppliedWorkPresent(testWorkName, testWorkNamespace.Name, *MemberCluster)
 
@@ -81,22 +98,19 @@ var _ = Describe("Work API test", Ordered, func() {
 		Expect(err).To(BeNil())
 
 		By("check if Work condition of Applied is successful")
-		work, err := framework.GetWork(testWorkName, testWorkNamespace.Name, *HubCluster)
-		Expect(err).To(BeNil())
-
-		framework.CheckIfAppliedConditionIsTrue(work)
+		framework.CheckIfAppliedConditionIsTrue(testWorkName, testWorkNamespace.Name, HubCluster)
 
 		By("check if AppliedWork is created correctly")
 		appliedWork, err := framework.GetAppliedWork(testWorkName, testWorkNamespace.Name, *MemberCluster)
 		Expect(err).To(BeNil())
-		Expect(len(appliedWork.Status.AppliedResources)).To(Equal(1))
+		Expect(len(appliedWork.Status.AppliedResources)).To(Equal(2))
 		Expect(appliedWork.Status.AppliedResources[0].Name).To(Equal(testManifestConfigMapName))
 		Expect(appliedWork.Status.AppliedResources[0].Namespace).To(Equal(testManifestNamespace.Name))
 
 	})
 
 	It("update work by adding new manifest", func() {
-		newObjectName := fmt.Sprintf("test-pod")
+		newObjectName := "test-pod"
 		newPodObject := corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -121,10 +135,10 @@ var _ = Describe("Work API test", Ordered, func() {
 		By("check if Work was updated correctly")
 		updatedWork, err := framework.GetWork(testWorkName, testWorkNamespace.Name, *HubCluster)
 		Expect(err).To(BeNil())
-		Expect(len(updatedWork.Spec.Workload.Manifests)).To(Equal(2))
+		Expect(len(updatedWork.Spec.Workload.Manifests)).To(Equal(3))
 
 		By("check if Condition of Work is set to Applied")
-		framework.CheckIfAppliedConditionIsTrue(updatedWork)
+		framework.CheckIfAppliedConditionIsTrue(testWorkName, testWorkNamespace.Name, HubCluster)
 
 		By("check if existing resource still exists")
 		existingConfigMap, err := framework.GetConfigMap(MemberCluster, testManifestConfigMapName, testManifestNamespace.Name)
@@ -139,9 +153,11 @@ var _ = Describe("Work API test", Ordered, func() {
 		Expect(pod.Spec.Containers[0].Image).To(Equal("testing-image"))
 
 		By("check if AppliedWork is updated correctly")
+		framework.WaitAppliedWorkPresent(testWorkName, testWorkNamespace.Name, *MemberCluster)
+
 		appliedWork, err := framework.GetAppliedWork(testWorkName, testWorkNamespace.Name, *MemberCluster)
 		Expect(err).To(BeNil())
-		Expect(len(appliedWork.Status.AppliedResources)).To(Equal(2))
+		Expect(len(appliedWork.Status.AppliedResources)).To(Equal(3))
 
 		for _, appliedResources := range appliedWork.Status.AppliedResources {
 			switch appliedResources.Name {
@@ -179,9 +195,7 @@ var _ = Describe("Work API test", Ordered, func() {
 		framework.WaitConfigMapUpdated(MemberCluster, testManifestConfigMapName, testManifestNamespace.Name, newObject.Data)
 
 		By("check if Work is updated correctly")
-		updatedWork, err := framework.GetWork(testWorkName, testWorkNamespace.Name, *HubCluster)
-		Expect(err).To(BeNil())
-		framework.CheckIfAppliedConditionIsTrue(updatedWork)
+		framework.CheckIfAppliedConditionIsTrue(testWorkName, testWorkNamespace.Name, HubCluster)
 	})
 
 	It("Work Delete Test", func() {
