@@ -1,5 +1,3 @@
-
-
 REGISTRY ?= ghcr.io
 KIND_IMAGE ?= kindest/node:v1.23.3
 ifndef TAG
