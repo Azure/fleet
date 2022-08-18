@@ -16,19 +16,15 @@ import (
 	"k8s.io/klog"
 )
 
-// CreateNamespace create namespace.
+// CreateNamespace create namespace and waits for namespace to exist.
 func CreateNamespace(cluster Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Creating Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), ns)
 		gomega.Expect(err).Should(gomega.Succeed())
 	})
-}
-
-// WaitNamespace wait Namespace to present on th member cluster.
-func WaitNamespace(cluster Cluster, nc *corev1.Namespace) {
-	klog.Infof("Waiting for Namespace(%s) to be synced", nc.Name)
+	klog.Infof("Waiting for Namespace(%s) to be synced", ns.Name)
 	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: nc.Name, Namespace: ""}, nc)
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name, Namespace: ""}, ns)
 		return err
 	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }

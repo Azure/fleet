@@ -30,17 +30,20 @@ var _ = Describe("workload orchestration testing", func() {
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
 		framework.CreateNamespace(*MemberCluster, memberNS)
-		framework.WaitNamespace(*MemberCluster, memberNS)
 		sa = NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
 		framework.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
 		mc = NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
 		framework.CreateMemberCluster(*HubCluster, mc)
-		framework.WaitMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
+		imc = &v1alpha1.InternalMemberCluster{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      MemberCluster.ClusterName,
+				Namespace: memberNS.Name,
+			},
+		}
 		framework.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if internal member cluster condition is updated to Joined")
@@ -84,7 +87,6 @@ var _ = Describe("workload orchestration testing", func() {
 			},
 		}
 		framework.CreateClusterResourcePlacement(*HubCluster, crp)
-		framework.WaitClusterResourcePlacement(*HubCluster, crp)
 
 		By("check if work gets created for cluster resource placement")
 		framework.WaitWork(*HubCluster, workName, memberNS.Name)

@@ -22,15 +22,20 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-// CreateMemberCluster creates MemberCluster in the hub cluster.
+// CreateMemberCluster creates MemberCluster and waits for MemberCluster to exist in the hub cluster.
 func CreateMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
 	ginkgo.By(fmt.Sprintf("Creating MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), mc)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
+	klog.Infof("Waiting for MemberCluster(%s) to be synced", mc.Name)
+	gomega.Eventually(func() error {
+		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
+		return err
+	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }
 
-// UpdateMemberCluster updates MemberCluster in the hub cluster.
+// UpdateMemberClusterState updates MemberCluster in the hub cluster.
 func UpdateMemberClusterState(cluster Cluster, mc *v1alpha1.MemberCluster, state v1alpha1.ClusterState) {
 	err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
@@ -45,15 +50,6 @@ func DeleteMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
 		err := cluster.KubeClient.Delete(context.TODO(), mc)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
-}
-
-// WaitMemberCluster waits for MemberCluster to present on th hub cluster.
-func WaitMemberCluster(cluster Cluster, mc *v1alpha1.MemberCluster) {
-	klog.Infof("Waiting for MemberCluster(%s) to be synced", mc.Name)
-	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
 }
 
 // WaitConditionMemberCluster waits for MemberCluster to present on th hub cluster with a specific condition.
@@ -113,16 +109,12 @@ func DeleteClusterRole(cluster Cluster, cr *rbacv1.ClusterRole) {
 	})
 }
 
-// CreateClusterResourcePlacement created cluster resource placement on hub cluster.
+// CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.
 func CreateClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), crp)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
-}
-
-// WaitClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster.
-func WaitClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	klog.Infof("Waiting for ClusterResourcePlacement(%s) to be synced", crp.Name)
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
@@ -141,7 +133,7 @@ func WaitConditionClusterResourcePlacement(cluster Cluster, crp *v1alpha1.Cluste
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }
 
-// DeleteClusterResourcePlacement is used delete cluster resource placement on the hub cluster.
+// DeleteClusterResourcePlacement is used delete ClusterResourcePlacement on the hub cluster.
 func DeleteClusterResourcePlacement(cluster Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	controllerutil.RemoveFinalizer(crp, utils.PlacementFinalizer)
 	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
