@@ -121,7 +121,7 @@ func applyTestManifests() {
 func deleteTestManifests() {
 	// check that the manifest is clean
 	By("Delete testClusterRole resource")
-	Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete PodDisruptionBudget")
 	Expect(k8sClient.Delete(ctx, &testPdb)).Should(Succeed())
@@ -223,7 +223,7 @@ func waitForPlacementScheduled(crpName string) (lastTransitionTime metav1.Time) 
 		if scheduledCondition == nil {
 			return false
 		}
-		if scheduledCondition.Status != metav1.ConditionTrue {
+		if scheduledCondition.Status == metav1.ConditionUnknown {
 			return false
 		}
 		lastTransitionTime = scheduledCondition.LastTransitionTime
@@ -284,4 +284,66 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 	lastUpdateTime, err := time.Parse(time.RFC3339, clusterWork.GetAnnotations()[clusterresourceplacement.LastUpdateAnnotationKey])
 	Expect(err).Should(Succeed())
 	return lastUpdateTime
+}
+
+func markInternalMCLeft(mc fleetv1alpha1.MemberCluster) {
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
+	mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+	Expect(k8sClient.Update(ctx, &mc)).Should(Succeed())
+	var imc fleetv1alpha1.InternalMemberCluster
+	nsName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
+	By("Wait for internal member cluster to be created")
+	Eventually(func() error {
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name, Namespace: nsName}, &imc)
+		if err != nil {
+			return err
+		}
+		imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, metav1.Condition{
+			Type:               string(fleetv1alpha1.AgentJoined),
+			Status:             metav1.ConditionFalse,
+			Reason:             "FakeLeave",
+			ObservedGeneration: imc.GetGeneration(),
+		})
+		return k8sClient.Status().Update(ctx, &imc)
+	}, timeout, interval).Should(Succeed())
+	By("Marked internal member cluster as Left")
+	Eventually(func() bool {
+		k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)
+		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
+		return joinCond.Status == metav1.ConditionFalse
+	}, timeout, interval).Should(BeTrue())
+}
+
+func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
+	var imc fleetv1alpha1.InternalMemberCluster
+	nsName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
+	By("Wait for internal member cluster to be created")
+	Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name, Namespace: nsName}, &imc)
+	}, timeout, interval).Should(Succeed())
+	imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, metav1.Condition{
+		Type:               string(fleetv1alpha1.AgentJoined),
+		Status:             metav1.ConditionTrue,
+		Reason:             "FakeJoin",
+		ObservedGeneration: imc.GetGeneration(),
+	})
+	Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
+	By("Marked internal member cluster as joined")
+	Eventually(func() bool {
+		k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)
+		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
+		return joinCond.Status == metav1.ConditionTrue
+	}, timeout, interval).Should(BeTrue())
+}
+
+func examinePlacementScheduleStatus(crp *fleetv1alpha1.ClusterResourcePlacement, selectedResourceCount, targetClusterCount int, scheduleStatus metav1.ConditionStatus) {
+	status := crp.Status
+	Expect(len(status.SelectedResources)).Should(Equal(selectedResourceCount))
+	Expect(len(status.TargetClusters)).Should(Equal(targetClusterCount))
+	Expect(len(status.FailedResourcePlacements)).Should(Equal(0))
+	schedCond := crp.GetCondition(string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled))
+	Expect(schedCond).ShouldNot(BeNil())
+	Expect(schedCond.Status).Should(Equal(scheduleStatus))
 }

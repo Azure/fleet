@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,52 +59,76 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 
 	// the clusterObj is set to be the object that the placement direct selects,
 	// in the case of a deleted namespace scoped object, the clusterObj is set to be its parent namespace object.
-	var clusterObj runtime.Object
-	object, isClusterScoped, err := r.getUnstructuredObject(clusterWideKey)
-	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to get unstructured object", "obj", clusterWideKey)
-			return ctrl.Result{}, err
-		}
-		// we have put a finalizer on all selected cluster scope resources, so it's okay to not handle this
+	clusterObj, isClusterScoped, err := r.getUnstructuredObject(clusterWideKey)
+	switch {
+	case apierrors.IsNotFound(err):
 		if isClusterScoped {
-			klog.V(5).InfoS("Cluster scoped object is deleted", "obj", clusterWideKey)
-			return ctrl.Result{}, nil
+			// We only care about cluster scoped resources here, and we need to find out which placements have selected this resource.
+			// For namespaces resources, we just need to find its parent namespace just like a normal resource.
+			return r.triggerAffectedPlacementsForDeletedClusterRes(clusterWideKey)
 		}
-		nameSpaceObj, err := r.InformerManager.Lister(utils.NamespaceGVR).Get(clusterWideKey.Namespace)
-		if err != nil {
-			klog.ErrorS(err, "Failed to find the namespace the resource belongs to", "obj", clusterWideKey)
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		klog.V(3).InfoS("A namespace scoped object is deleted, find placement that select its namespace", "obj", clusterWideKey)
-		clusterObj = nameSpaceObj
-	} else if isClusterScoped {
-		clusterObj = object
-	} else {
+	case err != nil:
+		klog.ErrorS(err, "Failed to get unstructured object", "obj", clusterWideKey)
+		return ctrl.Result{}, err
+	}
+	// we will use the parent namespace object to search for the affected placements
+	if !isClusterScoped {
 		clusterObj, err = r.InformerManager.Lister(utils.NamespaceGVR).Get(clusterWideKey.Namespace)
 		if err != nil {
 			klog.ErrorS(err, "Failed to find the namespace the resource belongs to", "obj", clusterWideKey)
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
-		klog.V(3).InfoS("Find placement that select the namespace that contains a namespace scoped object", "obj", clusterWideKey)
+		klog.V(4).InfoS("Find placement that select the namespace that contains a namespace scoped object", "obj", clusterWideKey)
 	}
-	matchedCrps, isDeleted, err := r.findAffectedPlacements(ctx, clusterObj.DeepCopyObject().(*unstructured.Unstructured), clusterWideKey)
-	if isDeleted {
+	matchedCrps, err := r.findAffectedPlacements(clusterObj.DeepCopyObject().(*unstructured.Unstructured))
+	if err != nil {
+		klog.ErrorS(err, "Failed to find the affected placement the resource change triggers", "obj", clusterWideKey)
 		return ctrl.Result{}, err
 	}
-
 	if len(matchedCrps) == 0 {
 		klog.V(4).InfoS("change in object does not affect any placement", "obj", clusterWideKey)
 		return ctrl.Result{}, nil
 	}
-
-	r.Recorder.Event(object, corev1.EventTypeNormal, "try to place this object", fmt.Sprintf("find %d matching placement", len(matchedCrps)))
 	// enqueue each CRP object into the CRP controller queue to get reconciled
 	for crp := range matchedCrps {
 		klog.V(3).InfoS("Change in object triggered placement reconcile", "obj", clusterWideKey, "crp", crp)
 		r.PlacementController.Enqueue(crp)
 	}
 
+	return ctrl.Result{}, nil
+}
+
+// triggerAffectedPlacementsForDeletedClusterRes find the affected placements for a given deleted cluster scoped resources
+func (r *Reconciler) triggerAffectedPlacementsForDeletedClusterRes(res keys.ClusterWideKey) (ctrl.Result, error) {
+	crpList, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "failed to list all the cluster placement", "obj", res)
+		return ctrl.Result{}, err
+	}
+	return r.findExistingPlacements(res, crpList)
+}
+
+// findExistingPlacements finds the placements which has selected this resource before it's deleted
+func (r *Reconciler) findExistingPlacements(res keys.ClusterWideKey, crpList []runtime.Object) (ctrl.Result, error) {
+	matchedCrps := make([]string, 0)
+	for _, crp := range crpList {
+		var placement fleetv1alpha1.ClusterResourcePlacement
+		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(crp.(*unstructured.Unstructured).Object, &placement)
+		for _, selectedRes := range placement.Status.SelectedResources {
+			if selectedRes == res.ResourceIdentifier {
+				matchedCrps = append(matchedCrps, placement.Name)
+				break
+			}
+		}
+	}
+	if len(matchedCrps) == 0 {
+		klog.V(4).InfoS("change in deleted object does not affect any placement", "obj", res)
+		return ctrl.Result{}, nil
+	}
+	for _, crp := range matchedCrps {
+		klog.V(3).InfoS("Change in deleted object triggered placement reconcile", "obj", res, "crp", crp)
+		r.PlacementController.Enqueue(crp)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -136,86 +159,56 @@ func (r *Reconciler) getUnstructuredObject(objectKey keys.ClusterWideKey) (runti
 // findAffectedPlacements find all the placement by which that this object change may affect which includes
 // 1. The placements selected this resource (before this change)
 // 2. The placements whose selectors will select this resource (after this change)
-func (r *Reconciler) findAffectedPlacements(ctx context.Context, clusterObj *unstructured.Unstructured, clusterWideKey keys.ClusterWideKey) (map[string]bool, bool, error) {
-	existingPlacements, isDeleted := utils.FindSelectedPlacements(clusterObj)
-	restMapping, _ := r.RestMapper.RESTMapping(clusterObj.GroupVersionKind().GroupKind(), clusterObj.GroupVersionKind().Version)
-	if isDeleted {
-		// enqueue placement first before really delete it
-		for _, placement := range existingPlacements {
-			klog.V(3).InfoS("deleting object triggered placement reconcile",
-				"obj", clusterWideKey, "clusterObj", klog.KObj(clusterObj), "placement", placement)
-			r.PlacementController.Enqueue(placement)
-		}
-		// update the cluster object to remove the finalizer and the placement annotation
-		utils.RemoveAllPlacement(clusterObj)
-		if _, err := r.DynamicClient.Resource(restMapping.Resource).Update(ctx, clusterObj, metav1.UpdateOptions{}); err != nil {
-			klog.ErrorS(err, "Failed to remove the placement finalizer from a cluster scoped resource", "obj", klog.KObj(clusterObj))
-			return nil, true, client.IgnoreNotFound(err)
-		}
-		return nil, true, nil
-	}
-
-	matchedCrps, err := r.findMatchingPlacements(clusterObj)
-	if err != nil {
-		klog.ErrorS(err, "Failed to find the matching cluster resource placement object", "obj", clusterWideKey)
-		return nil, false, err
-	}
-	for _, existingPlacement := range existingPlacements {
-		_, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).Get(existingPlacement)
-		if apierrors.IsNotFound(err) {
-			// only handle not found error as a safety check that the crp in the placement annotation exists
-			// in case placement GC miss some resources on race conditions
-			utils.RemovePlacement(clusterObj, existingPlacement)
-			// update the cluster object to remove the deleted placement from the placement annotation
-			// TODO: use a get/update retry loop to solve conflict error
-			if _, err := r.DynamicClient.Resource(restMapping.Resource).Update(ctx, clusterObj, metav1.UpdateOptions{}); err != nil {
-				klog.ErrorS(err, "Failed to remove the placement from a cluster scoped resource", "obj", klog.KObj(clusterObj))
-				return nil, true, client.IgnoreNotFound(err)
-			}
-			continue
-		}
-		matchedCrps[existingPlacement] = true
-	}
-	return matchedCrps, false, nil
-}
-
-// findMatchingPlacements finds the placements which will select this resource
-func (r *Reconciler) findMatchingPlacements(uObj *unstructured.Unstructured) (map[string]bool, error) {
-	placements := make(map[string]bool, 0)
+func (r *Reconciler) findAffectedPlacements(res *unstructured.Unstructured) (map[string]bool, error) {
 	// we have to list all the CRPs
 	crpList, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).List(labels.Everything())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list all the cluster placement")
 	}
+	return collectAllAffectedPlacements(res, crpList), nil
+}
+
+// collectAllAffectedPlacements goes through all the placements and collect the ones whose resource selector matches the object given its gvk
+func collectAllAffectedPlacements(res *unstructured.Unstructured, crpList []runtime.Object) map[string]bool {
+	placements := make(map[string]bool)
 	for _, crp := range crpList {
+		match := false
 		var placement fleetv1alpha1.ClusterResourcePlacement
 		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(crp.DeepCopyObject().(*unstructured.Unstructured).Object, &placement)
-		// TODO: remove after we have webhooks
+		// TODO: remove after we add validation webhooks
 		if err := validator.ValidateClusterResourcePlacement(&placement); err != nil {
 			klog.ErrorS(err, "find one invalid cluster resource placement", "placement", klog.KObj(&placement))
 			continue
 		}
+		// find the placements selected this resource (before this change)
+		for _, selectedRes := range placement.Status.SelectedResources {
+			if selectedRes.Group == res.GroupVersionKind().Group && selectedRes.Version == res.GroupVersionKind().Version &&
+				selectedRes.Kind == res.GroupVersionKind().Kind && selectedRes.Name == res.GetName() {
+				placements[placement.Name] = true
+				match = true
+				break
+			}
+		}
+		if match {
+			continue
+		}
 		// check if object match any placement's resource selectors
 		for _, selector := range placement.Spec.ResourceSelectors {
-			if matchClusterResourceSelector(selector, uObj) {
-				// if there is 1 selector match, it is a placement match, add only once
+			if !matchSelectorGVK(res.GetObjectKind().GroupVersionKind(), selector) {
+				continue
+			}
+			// if there is 1 selector match, it is a placement match, add only once
+			if selector.Name == res.GetName() {
+				placements[placement.Name] = true
+				break
+			}
+			if matchSelectorLabelSelector(res.GetLabels(), selector) {
 				placements[placement.Name] = true
 				break
 			}
 		}
 	}
-	return placements, nil
-}
-
-// matchClusterResourceSelector indicates if the resource selector matches the object given its gvk
-func matchClusterResourceSelector(selector fleetv1alpha1.ClusterResourceSelector, uObj *unstructured.Unstructured) bool {
-	if !matchSelectorGVK(uObj.GetObjectKind().GroupVersionKind(), selector) {
-		return false
-	}
-	if selector.Name == uObj.GetName() {
-		return true
-	}
-	return matchSelectorLabelSelector(uObj.GetLabels(), selector)
+	return placements
 }
 
 func matchSelectorGVK(targetGVK schema.GroupVersionKind, selector fleetv1alpha1.ClusterResourceSelector) bool {

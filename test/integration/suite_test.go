@@ -92,7 +92,8 @@ var _ = BeforeSuite(func() {
 	By("Construct the controller manager")
 	// Set up  the memberCluster reconciler with the manager
 	err = (&membercluster.Reconciler{
-		Client: mgr.GetClient(),
+		Client:                  mgr.GetClient(),
+		NetworkingAgentsEnabled: false,
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 

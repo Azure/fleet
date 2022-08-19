@@ -55,7 +55,7 @@ type Reconciler struct {
 	// Need to update MC based on the IMC conditions based on the agent list.
 	NetworkingAgentsEnabled bool
 	// agents are used as hashset to query the expected agent type, so the value will be ignored.
-	agents map[fleetv1alpha1.AgentType]string
+	agents map[fleetv1alpha1.AgentType]bool
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -338,12 +338,10 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.Internal
 		return
 	}
 
+	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealth.
 	// Copy Agent status.
 	mc.Status.AgentStatus = imc.Status.AgentStatus
 	r.aggregateJoinedCondition(mc)
-	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealth.
-	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHeartbeat as this condition type is not defined at all.
-
 	// Copy resource usages.
 	mc.Status.ResourceUsage = imc.Status.ResourceUsage
 }
@@ -374,7 +372,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 	left := true
 	reportedAgents := make(map[fleetv1alpha1.AgentType]bool)
 	for _, agentStatus := range mc.Status.AgentStatus {
-		if _, found := r.agents[agentStatus.Type]; !found {
+		if !r.agents[agentStatus.Type] {
 			klog.V(2).InfoS("Ignoring unexpected agent type status", "agentStatus", agentStatus)
 			continue // ignore any unexpected agent type
 		}
@@ -453,6 +451,12 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		Reason:             reasonMemberClusterLeft,
 		ObservedGeneration: mc.GetGeneration(),
 	}
+	notReadyCondition := metav1.Condition{
+		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+		Status:             metav1.ConditionFalse,
+		Reason:             reasonMemberClusterNotReadyToJoin,
+		ObservedGeneration: mc.GetGeneration(),
+	}
 
 	// Joined status changed.
 	existingCondition := mc.GetCondition(newCondition.Type)
@@ -460,13 +464,6 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
 		klog.V(2).InfoS("memberCluster left", "memberCluster", klog.KObj(mc))
 		metrics.ReportJoinResultMetric()
-	}
-
-	notReadyCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
-		Status:             metav1.ConditionFalse,
-		Reason:             reasonMemberClusterNotReadyToJoin,
-		ObservedGeneration: mc.GetGeneration(),
 	}
 
 	mc.SetConditions(newCondition, notReadyCondition)
@@ -495,12 +492,12 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("memberCluster")
-	r.agents = make(map[fleetv1alpha1.AgentType]string)
-	r.agents[fleetv1alpha1.MemberAgent] = ""
+	r.agents = make(map[fleetv1alpha1.AgentType]bool)
+	r.agents[fleetv1alpha1.MemberAgent] = true
 
 	if r.NetworkingAgentsEnabled {
-		r.agents[fleetv1alpha1.MultiClusterServiceAgent] = ""
-		r.agents[fleetv1alpha1.ServiceExportImportAgent] = ""
+		r.agents[fleetv1alpha1.MultiClusterServiceAgent] = true
+		r.agents[fleetv1alpha1.ServiceExportImportAgent] = true
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1alpha1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).

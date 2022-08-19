@@ -10,10 +10,13 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -48,10 +51,8 @@ func (d *ChangeDetector) onClusterResourcePlacementAdded(obj interface{}) {
 func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interface{}) {
 	oldPlacementMeta, _ := meta.Accessor(oldObj)
 	newPlacementMeta, _ := meta.Accessor(newObj)
-	if oldPlacementMeta.GetGeneration() == newPlacementMeta.GetGeneration() &&
-		reflect.DeepEqual(oldPlacementMeta.GetFinalizers(), newPlacementMeta.GetFinalizers()) {
-		// TODO: remove the finalizer check after we continue with finalizer update succeeds
-		klog.V(5).InfoS("ignore a cluster resource placement update event with no spec or finalizer change",
+	if oldPlacementMeta.GetGeneration() == newPlacementMeta.GetGeneration() {
+		klog.V(5).InfoS("ignore a cluster resource placement update event with no spec change",
 			"placement", klog.KObj(oldPlacementMeta))
 		return
 	}
@@ -104,27 +105,23 @@ func (d *ChangeDetector) onWorkDeleted(obj interface{}) {
 	}
 }
 
-// The next three are for the memberCluster informer
-// onClusterResourcePlacementAdded handles object add event and push the memberCluster name to the memberCluster controller queue.
-func (d *ChangeDetector) onMemberClusterAdded(obj interface{}) {
-	memberClusterMeta, _ := meta.Accessor(obj)
-	klog.V(4).InfoS("a memberCluster is added", "memberCluster", klog.KObj(memberClusterMeta))
-	d.MemberClusterPlacementController.Enqueue(memberClusterMeta)
-}
-
+// The next one is for the memberCluster informer
 // onMemberClusterUpdated handles object update event and push the memberCluster name to the memberCluster controller queue.
 func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
-	oldMCMeta, _ := meta.Accessor(oldObj)
-	newMCMeta, _ := meta.Accessor(newObj)
-	// Only enqueue if the change can affect placement decisions. i.e. label and spec
-	if oldMCMeta.GetGeneration() == newMCMeta.GetGeneration() && reflect.DeepEqual(oldMCMeta.GetLabels(), newMCMeta.GetLabels()) {
+	// Only enqueue if the change can affect placement decisions. i.e. label and spec and condition
+	var oldMC, newMC fleetv1alpha1.MemberCluster
+	runtime.DefaultUnstructuredConverter.FromUnstructured(oldObj.(*unstructured.Unstructured).Object, &oldMC)
+	runtime.DefaultUnstructuredConverter.FromUnstructured(newObj.(*unstructured.Unstructured).Object, &newMC)
+	if oldMC.GetGeneration() == newMC.GetGeneration() &&
+		reflect.DeepEqual(oldMC.GetLabels(), newMC.GetLabels()) &&
+		reflect.DeepEqual(oldMC.Status.Conditions, newMC.Status.Conditions) {
 		klog.V(5).InfoS("ignore a memberCluster update event with no real change",
-			"memberCluster", klog.KObj(oldMCMeta), "generation", oldMCMeta.GetGeneration())
+			"memberCluster", klog.KObj(&oldMC), "generation", oldMC.GetGeneration())
 		return
 	}
 
-	klog.V(4).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(oldMCMeta))
-	d.MemberClusterPlacementController.Enqueue(oldMCMeta)
+	klog.V(4).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(&oldMC))
+	d.MemberClusterPlacementController.Enqueue(oldObj)
 }
 
 // The next three are for any dynamic resource informer

@@ -35,9 +35,11 @@ const (
 	SpecHashAnnotationKey   = "work.fleet.azure.com/spec-hash-value"
 )
 
-func (r *Reconciler) createOrUpdateWorkSpec(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
-	manifests []workv1alpha1.Manifest, memberClusterNames []string) error {
+// scheduleWork creates or updates the work object to reflect the new placement decision.
+func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
+	manifests []workv1alpha1.Manifest) error {
 	var allErr []error
+	memberClusterNames := placement.Status.TargetClusters
 	workName := fmt.Sprintf(utils.WorkNameFormat, placement.Name)
 	workerOwnerRef := metav1.OwnerReference{
 		APIVersion:         placement.GroupVersionKind().GroupVersion().String(),
@@ -67,7 +69,7 @@ func (r *Reconciler) createOrUpdateWorkSpec(ctx context.Context, placement *flee
 	changed := false
 	for _, memberClusterName := range memberClusterNames {
 		memberClusterNsName := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
-		curWork, err := r.getWork(memberClusterNsName, workName)
+		curWork, err := r.getResourceBinding(memberClusterNsName, workName)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
 				allErr = append(allErr, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s in namespace %s", workName, memberClusterName)))
@@ -87,6 +89,7 @@ func (r *Reconciler) createOrUpdateWorkSpec(ctx context.Context, placement *flee
 				Spec: workerSpec,
 			}
 			if createErr := r.Client.Create(ctx, workCR, client.FieldOwner(utils.PlacementFieldManagerName)); createErr != nil {
+				klog.ErrorS(createErr, "failed to create the work", "work", workName, "namespace", memberClusterNsName)
 				allErr = append(allErr, errors.Wrap(createErr, fmt.Sprintf("failed to create the work obj %s in namespace %s", workName, memberClusterNsName)))
 				continue
 			}
@@ -115,13 +118,6 @@ func (r *Reconciler) createOrUpdateWorkSpec(ctx context.Context, placement *flee
 	}
 	if changed {
 		klog.V(2).InfoS("Applied all work to the selected cluster namespaces", "placement", klog.KObj(placement), "number of clusters", len(memberClusterNames))
-		// this is a trick to record every new schedule time if there is any change
-		placement.SetConditions(metav1.Condition{
-			Status:  metav1.ConditionUnknown,
-			Type:    string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
-			Reason:  "scheduling",
-			Message: "we have generated a new set of to be scheduled resources",
-		})
 	} else {
 		klog.V(3).InfoS("Nothing new to apply for the cluster resource placement", "placement", klog.KObj(placement), "number of clusters", len(memberClusterNames))
 	}
@@ -129,9 +125,8 @@ func (r *Reconciler) createOrUpdateWorkSpec(ctx context.Context, placement *flee
 	return apiErrors.NewAggregate(allErr)
 }
 
-// selectResources selects the resources according to the placement resourceSelectors,
-// creates a work obj for the resources and updates the results in its status.
-func (r *Reconciler) removeWorkResources(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
+// removeStaleWorks removes all the work objects from the clusters that are no longer selected.
+func (r *Reconciler) removeStaleWorks(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
 	existingClusters, newClusters []string) (int, error) {
 	var allErr []error
 	workName := fmt.Sprintf(utils.WorkNameFormat, placement.GetName())
@@ -171,7 +166,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 	workName := fmt.Sprintf(utils.WorkNameFormat, placement.GetName())
 	for _, cluster := range placement.Status.TargetClusters {
 		memberClusterNsName := fmt.Sprintf(utils.NamespaceNameFormat, cluster)
-		work, err := r.getWork(memberClusterNsName, workName)
+		work, err := r.getResourceBinding(memberClusterNsName, workName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				klog.Error(err, "the work does not exist", "work", klog.KRef(memberClusterNsName, workName))
@@ -225,8 +220,8 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 	return hasPending, nil
 }
 
-// getWork retrieves a work object by its name and namespace, this will hit the informer cache.
-func (r *Reconciler) getWork(namespace, name string) (*workv1alpha1.Work, error) {
+// getResourceBinding retrieves a work object by its name and namespace, this will hit the informer cache.
+func (r *Reconciler) getResourceBinding(namespace, name string) (*workv1alpha1.Work, error) {
 	obj, err := r.InformerManager.Lister(utils.WorkGVR).ByNamespace(namespace).Get(name)
 	if err != nil {
 		return nil, err

@@ -36,12 +36,13 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		}
 		klog.V(4).InfoS("we select all the available clusters in the fleet without a policy",
 			"placement", placement.Name, "clusters", clusterNames)
-		return clusterNames, nil
+		return
 	}
 	// a fix list of clusters set
 	if len(placement.Spec.Policy.ClusterNames) != 0 {
 		klog.V(4).InfoS("use the cluster names provided as the list of cluster we select",
 			"placement", placement.Name, "clusters", placement.Spec.Policy.ClusterNames)
+		// TODO: filter by cluster health
 		return placement.Spec.Policy.ClusterNames, nil
 	}
 
@@ -53,7 +54,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		}
 		klog.V(4).InfoS("we select all the available clusters in the fleet without a cluster affinity",
 			"placement", placement.Name, "clusters", clusterNames)
-		return clusterNames, nil
+		return
 	}
 
 	selectedClusters := make(map[string]bool)
@@ -62,20 +63,20 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot convert the label clusterSelector to a clusterSelector")
 		}
-		clusterNames, err := r.listClusters(selector)
+		matchClusters, err := r.listClusters(selector)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("selector = %v", clusterSelector.LabelSelector))
 		}
-		for _, clusterName := range clusterNames {
+		klog.V(4).InfoS("selector matches some cluster", "clusterNum", len(matchClusters), "placement", placement.Name, "selector", clusterSelector.LabelSelector)
+		for _, clusterName := range matchClusters {
 			selectedClusters[clusterName] = true
 		}
 	}
-
 	for cluster := range selectedClusters {
 		klog.V(4).InfoS("matched a cluster", "cluster", cluster, "placement", placement.Name)
 		clusterNames = append(clusterNames, cluster)
 	}
-	return clusterNames, nil
+	return
 }
 
 // listClusters retrieves the clusters according to its label selector, this will hit the informer cache.
@@ -85,18 +86,19 @@ func (r *Reconciler) listClusters(labelSelector labels.Selector) ([]string, erro
 		return nil, errors.Wrap(err, "failed to list the clusters according to obj label selector")
 	}
 
-	clusterNames := make([]string, len(objs))
-	for i, obj := range objs {
+	clusterNames := make([]string, 0)
+	for _, obj := range objs {
 		uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 		var clusterObj fleetv1alpha1.MemberCluster
 		err = runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &clusterObj)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot decode the member cluster object")
 		}
-		// only schedule the resource to a joined cluster
-		// TODO: check the health/condition of the cluster too
-		if clusterObj.Spec.State == fleetv1alpha1.ClusterStateJoin {
-			clusterNames[i] = clusterObj.GetName()
+		// only schedule the resource to an eligible cluster
+		// TODO: check the health condition of the cluster when its aggregated
+		joinCond := clusterObj.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		if joinCond != nil && joinCond.Status == metav1.ConditionTrue && joinCond.ObservedGeneration == clusterObj.Generation {
+			clusterNames = append(clusterNames, clusterObj.GetName())
 		}
 	}
 	return clusterNames, nil

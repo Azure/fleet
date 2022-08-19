@@ -13,14 +13,12 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -35,9 +33,6 @@ func (r *Reconciler) selectResources(ctx context.Context, placement *fleetv1alph
 	selectedObjects, err := r.gatherSelectedResource(ctx, placement)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to gather all the selected resource")
-	}
-	if len(selectedObjects) == 0 {
-		return nil, fmt.Errorf("failed to select any resources")
 	}
 	placement.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, 0)
 	manifests := make([]workv1alpha1.Manifest, len(selectedObjects))
@@ -139,11 +134,6 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 				"selector", selector, "placeName", placeName, "resource name", uObj.GetName())
 			return []runtime.Object{}, nil
 		}
-		utils.AddPlacement(uObj, placeName)
-		// TODO: use a get/update retry loop to solve conflict error
-		if _, err = r.InformerManager.GetClient().Resource(gvr).Update(ctx, uObj, metav1.UpdateOptions{}); err != nil {
-			return nil, errors.Wrapf(err, "cannot claim the cluster scoped object %+v as selected by the placement", selector)
-		}
 		return []runtime.Object{obj}, nil
 	}
 
@@ -172,11 +162,6 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 			continue
 		}
 		selectedObjs = append(selectedObjs, objects[i])
-		utils.AddPlacement(uObj, placeName)
-		// TODO: use a get/update retry loop to solve conflict error
-		if _, err = r.InformerManager.GetClient().Resource(gvr).Update(ctx, uObj, metav1.UpdateOptions{}); err != nil {
-			return nil, errors.Wrapf(err, "cannot claim the cluster scoped object %+v as selected by the placement", selector)
-		}
 	}
 
 	return selectedObjs, nil
@@ -241,11 +226,6 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 			"placeName", placeName, "namespace", namespaceName)
 		return resources, nil
 	}
-	utils.AddPlacement(nameSpaceObj, placeName)
-	// TODO: use a get/update retry loop to solve conflict error
-	if _, err = r.InformerManager.GetClient().Resource(utils.NamespaceGVR).Update(ctx, nameSpaceObj, metav1.UpdateOptions{}); err != nil {
-		return nil, errors.Wrapf(err, "cannot claim the namespace %s as selected by the placement", namespaceName)
-	}
 	resources = append(resources, obj)
 
 	trackedResource := r.InformerManager.GetNameSpaceScopedResources()
@@ -295,70 +275,19 @@ func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool 
 	return true
 }
 
-// removeResourcesClaims finds all the resources that we no longer place and removes this placement from the resource's placement annotation
-func (r *Reconciler) removeResourcesClaims(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
-	existingResources, newResources []fleetv1alpha1.ResourceIdentifier) (int, error) {
-	var allErr []error
-	resourceMap := make(map[fleetv1alpha1.ResourceIdentifier]bool, 0)
-	for _, res := range newResources {
-		resourceMap[res] = true
-	}
-	released := 0
-	for _, oldResource := range existingResources {
-		if !resourceMap[oldResource] {
-			klog.V(4).InfoS("find a no longer selected object", "resource", oldResource, "placement", klog.KObj(placement))
-			gk := schema.GroupKind{
-				Group: oldResource.Group,
-				Kind:  oldResource.Kind,
-			}
-			restMapping, err := r.RestMapper.RESTMapping(gk, oldResource.Version)
-			if err != nil {
-				allErr = append(allErr, errors.Wrapf(err, "failed to get the gvk of no longer selected obj %+v from placement %s", oldResource, placement.Name))
-				continue
-			}
-			// we only care about the cluster scoped resources
-			gvr := restMapping.Resource
-			if r.InformerManager.IsClusterScopedResources(gvr) {
-				klog.V(5).InfoS("find a no longer selected cluster scoped object", "resource", oldResource, "placement", klog.KObj(placement))
-				obj, err := r.InformerManager.Lister(gvr).Get(oldResource.Name)
-				if err != nil {
-					if !apierrors.IsNotFound(err) {
-						allErr = append(allErr, errors.Wrapf(err, "failed to get a no longer selected cluster scoped obj %+v from placement %s", oldResource, placement.Name))
-					}
-					continue
-				}
-				uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
-				utils.RemovePlacement(uObj, placement.Name)
-				// TODO: use a get/update retry loop to solve conflict error
-				if _, updateErr := r.InformerManager.GetClient().Resource(gvr).Update(ctx, uObj, metav1.UpdateOptions{}); updateErr != nil {
-					allErr = append(allErr, errors.Wrapf(updateErr, "failed to release a no longer selected cluster scoped obj %+v from placement %s", oldResource, placement.Name))
-					continue
-				}
-				released++
-				klog.V(3).InfoS("release a no longer selected cluster scoped obj", "resource", oldResource, "placement", klog.KObj(placement))
-			}
-		}
-	}
-	return released, utilerrors.NewAggregate(allErr)
-}
-
 // generateManifest creates a manifest from the unstructured obj,
 // it stripped all the unnecessary fields to prepare the objects for dispatch.
 func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest, error) {
+	// we keep the annotation/label/finalizer/owner references/delete grace period
 	object.SetResourceVersion("")
 	object.SetGeneration(0)
-	object.SetOwnerReferences(nil)
+	object.SetUID("")
+	object.SetSelfLink("")
 	object.SetDeletionTimestamp(nil)
 	object.SetManagedFields(nil)
-	object.SetUID("")
-	object.SetFinalizers(nil)
-	object.SetDeletionGracePeriodSeconds(nil)
 	unstructured.RemoveNestedField(object.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(object.Object, "status")
-	// remove the placement annotation we added
-	a := object.GetAnnotations()
-	delete(a, utils.AnnotationPlacementList)
-	object.SetAnnotations(a)
+
 	// TODO: see if there are other cases that we may have some extra fields
 	if object.GetKind() == "Service" && object.GetAPIVersion() == "v1" {
 		if clusterIP, exist, _ := unstructured.NestedString(object.Object, "spec", "clusterIP"); exist && clusterIP != corev1.ClusterIPNone {
