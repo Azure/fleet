@@ -14,7 +14,7 @@ import (
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/test/e2e/framework"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 var _ = Describe("workload orchestration testing", func() {
@@ -26,16 +26,16 @@ var _ = Describe("workload orchestration testing", func() {
 	var crp *v1alpha1.ClusterResourcePlacement
 
 	BeforeEach(func() {
-		memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+		memberNS = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
-		framework.CreateNamespace(*MemberCluster, memberNS)
-		sa = NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
-		framework.CreateServiceAccount(*MemberCluster, sa)
+		testutils.CreateNamespace(*MemberCluster, memberNS)
+		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
+		testutils.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
-		mc = NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
-		framework.CreateMemberCluster(*HubCluster, mc)
+		mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
+		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
 		imc = &v1alpha1.InternalMemberCluster{
@@ -44,12 +44,12 @@ var _ = Describe("workload orchestration testing", func() {
 				Namespace: memberNS.Name,
 			},
 		}
-		framework.WaitInternalMemberCluster(*HubCluster, imc)
+		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if internal member cluster condition is updated to Joined")
-		framework.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*framework.PollTimeout)
+		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*testutils.PollTimeout)
 		By("check if member cluster condition is updated to Joined")
-		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*testutils.PollTimeout)
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
@@ -68,7 +68,7 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 			},
 		}
-		framework.CreateClusterRole(*HubCluster, cr)
+		testutils.CreateClusterRole(*HubCluster, cr)
 
 		By("create the cluster resource placement in the hub cluster")
 		crp = &v1alpha1.ClusterResourcePlacement{
@@ -86,37 +86,37 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 			},
 		}
-		framework.CreateClusterResourcePlacement(*HubCluster, crp)
+		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
 
 		By("check if work gets created for cluster resource placement")
-		framework.WaitWork(*HubCluster, workName, memberNS.Name)
+		testutils.WaitWork(*HubCluster, workName, memberNS.Name)
 
 		By("check if cluster resource placement is updated to Scheduled & Applied")
-		framework.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementConditionTypeScheduled), v1.ConditionTrue, 3*framework.PollTimeout)
-		framework.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), v1.ConditionTrue, 3*framework.PollTimeout)
+		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementConditionTypeScheduled), v1.ConditionTrue, 3*testutils.PollTimeout)
+		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), v1.ConditionTrue, 3*testutils.PollTimeout)
 
 		By("check if resource is propagated to member cluster")
-		framework.WaitClusterRole(*MemberCluster, cr)
+		testutils.WaitClusterRole(*MemberCluster, cr)
 
 		By("delete cluster resource placement & cluster role on hub cluster")
-		framework.DeleteClusterResourcePlacement(*HubCluster, crp)
+		testutils.DeleteClusterResourcePlacement(*HubCluster, crp)
 		Eventually(func() bool {
 			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
 			return apierrors.IsNotFound(err)
-		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-		framework.DeleteClusterRole(*HubCluster, cr)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteClusterRole(*HubCluster, cr)
 	})
 
 	AfterEach(func() {
-		framework.DeleteMemberCluster(*HubCluster, mc)
+		testutils.DeleteMemberCluster(*HubCluster, mc)
 		Eventually(func() bool {
 			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 			return apierrors.IsNotFound(err)
-		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-		framework.DeleteNamespace(*MemberCluster, memberNS)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteNamespace(*MemberCluster, memberNS)
 		Eventually(func() bool {
 			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 			return apierrors.IsNotFound(err)
-		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
 	})
 })

@@ -17,7 +17,7 @@ import (
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/test/e2e/framework"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 var _ = Describe("Join/leave member cluster testing", func() {
@@ -27,55 +27,55 @@ var _ = Describe("Join/leave member cluster testing", func() {
 	var imc *v1alpha1.InternalMemberCluster
 
 	BeforeEach(func() {
-		memberNS = NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+		memberNS = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
-		framework.CreateNamespace(*MemberCluster, memberNS)
-		sa = NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
-		framework.CreateServiceAccount(*MemberCluster, sa)
+		testutils.CreateNamespace(*MemberCluster, memberNS)
+		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
+		testutils.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
-		mc = NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
-		framework.CreateMemberCluster(*HubCluster, mc)
+		mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
+		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
-		framework.WaitInternalMemberCluster(*HubCluster, imc)
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
+		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if member cluster is marked as readyToJoin")
-		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionTrue, 3*framework.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionTrue, 3*testutils.PollTimeout)
 	})
 
 	It("Join & Leave flow is successful ", func() {
 		By("check if internal member cluster condition is updated to Joined")
-		framework.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*framework.PollTimeout)
+		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*testutils.PollTimeout)
 
 		By("check if member cluster condition is updated to Joined")
-		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*framework.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*testutils.PollTimeout)
 
 		By("update member cluster in the hub cluster")
-		framework.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
+		testutils.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
 
 		By("check if internal member cluster condition is updated to Left")
-		framework.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionFalse, 3*framework.PollTimeout)
+		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionFalse, 3*testutils.PollTimeout)
 
 		By("check if member cluster is marked as notReadyToJoin")
-		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, 3*framework.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, 3*testutils.PollTimeout)
 
 		By("check if member cluster condition is updated to Left")
-		framework.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*framework.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*testutils.PollTimeout)
 	})
 
 	AfterEach(func() {
-		framework.DeleteNamespace(*MemberCluster, memberNS)
+		testutils.DeleteNamespace(*MemberCluster, memberNS)
 		Eventually(func() bool {
 			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 			return apierrors.IsNotFound(err)
-		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
-		framework.DeleteMemberCluster(*HubCluster, mc)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteMemberCluster(*HubCluster, mc)
 		Eventually(func() bool {
 			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
 			return apierrors.IsNotFound(err)
-		}, framework.PollTimeout, framework.PollInterval).Should(Equal(true))
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
 	})
 })
