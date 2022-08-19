@@ -62,11 +62,13 @@ var _ = Describe("workload orchestration testing", func() {
 
 	It("Apply CRP and check if work gets propagated", func() {
 		workName := fmt.Sprintf(utils.WorkNameFormat, "resource-label-selector")
+		labelKey := "fleet.azure.com/name"
+		labelValue := "test"
 		By("create the resources to be propagated")
 		cr = &rbacv1.ClusterRole{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "test-cluster-role",
-				Labels: map[string]string{"fleet.azure.com/name": "test"},
+				Labels: map[string]string{labelKey: labelValue},
 			},
 			Rules: []rbacv1.PolicyRule{
 				{
