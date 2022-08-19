@@ -46,6 +46,19 @@ var _ = Describe("Join/leave member cluster testing", func() {
 		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionTrue, 3*testutils.PollTimeout)
 	})
 
+	AfterEach(func() {
+		testutils.DeleteNamespace(*MemberCluster, memberNS)
+		Eventually(func() bool {
+			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
+			return apierrors.IsNotFound(err)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteMemberCluster(*HubCluster, mc)
+		Eventually(func() bool {
+			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
+			return apierrors.IsNotFound(err)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+	})
+
 	It("Join & Leave flow is successful ", func() {
 		By("check if internal member cluster condition is updated to Joined")
 		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*testutils.PollTimeout)
@@ -64,18 +77,5 @@ var _ = Describe("Join/leave member cluster testing", func() {
 
 		By("check if member cluster condition is updated to Left")
 		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionFalse, 3*testutils.PollTimeout)
-	})
-
-	AfterEach(func() {
-		testutils.DeleteNamespace(*MemberCluster, memberNS)
-		Eventually(func() bool {
-			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
-		testutils.DeleteMemberCluster(*HubCluster, mc)
-		Eventually(func() bool {
-			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
 	})
 })

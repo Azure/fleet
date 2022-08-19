@@ -38,18 +38,26 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = &v1alpha1.InternalMemberCluster{
-			ObjectMeta: v1.ObjectMeta{
-				Name:      MemberCluster.ClusterName,
-				Namespace: memberNS.Name,
-			},
-		}
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
 		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if internal member cluster condition is updated to Joined")
 		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*testutils.PollTimeout)
 		By("check if member cluster condition is updated to Joined")
 		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*testutils.PollTimeout)
+	})
+
+	AfterEach(func() {
+		testutils.DeleteMemberCluster(*HubCluster, mc)
+		Eventually(func() bool {
+			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
+			return apierrors.IsNotFound(err)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteNamespace(*MemberCluster, memberNS)
+		Eventually(func() bool {
+			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
+			return apierrors.IsNotFound(err)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
@@ -105,18 +113,5 @@ var _ = Describe("workload orchestration testing", func() {
 			return apierrors.IsNotFound(err)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
 		testutils.DeleteClusterRole(*HubCluster, cr)
-	})
-
-	AfterEach(func() {
-		testutils.DeleteMemberCluster(*HubCluster, mc)
-		Eventually(func() bool {
-			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
-		testutils.DeleteNamespace(*MemberCluster, memberNS)
-		Eventually(func() bool {
-			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
 	})
 })
