@@ -15,7 +15,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -41,7 +40,7 @@ func NewMemberCluster(name string, heartbeat int32, state v1alpha1.ClusterState)
 		Namespace: "fleet-system",
 	}
 	return &v1alpha1.MemberCluster{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 		Spec: v1alpha1.MemberClusterSpec{
@@ -55,7 +54,7 @@ func NewMemberCluster(name string, heartbeat int32, state v1alpha1.ClusterState)
 // NewInternalMemberCluster returns a new internal member cluster.
 func NewInternalMemberCluster(name, namespace string) *v1alpha1.InternalMemberCluster {
 	return &v1alpha1.InternalMemberCluster{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
@@ -65,7 +64,7 @@ func NewInternalMemberCluster(name, namespace string) *v1alpha1.InternalMemberCl
 // NewServiceAccount returns a new service account.
 func NewServiceAccount(name, namespace string) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
@@ -75,7 +74,7 @@ func NewServiceAccount(name, namespace string) *corev1.ServiceAccount {
 // NewNamespace returns a new namespace.
 func NewNamespace(name string) *corev1.Namespace {
 	return &corev1.Namespace{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 	}
