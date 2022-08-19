@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package resourcechange
 
 import (
@@ -82,7 +87,7 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 					Status: ClusterResourcePlacementStatus{
 						SelectedResources: []ResourceIdentifier{
 							deletedRes,
-							ResourceIdentifier{
+							{
 								Group:     "abc",
 								Name:      "foo",
 								Namespace: "bar",

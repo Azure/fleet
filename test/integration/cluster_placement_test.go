@@ -148,7 +148,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
+			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
 		})
 
 		It("Test select the resources by label", func() {
@@ -191,7 +191,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
+			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
 		})
 
 		It("Test select all the resources in a namespace", func() {
@@ -652,7 +652,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			waitForPlacementScheduled(crp.GetName())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
 
 			By("Verify that work is not created in any cluster")
 			var clusterWork workv1alpha1.Work
@@ -698,7 +698,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA})
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, 2, 1, metav1.ConditionTrue)
+			verifyPlacementScheduleStatus(crp, 2, 1, metav1.ConditionTrue)
 
 			By("Verify that work is not created in cluster B")
 			var clusterWork workv1alpha1.Work
@@ -749,7 +749,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created work objects that contain the resource selected
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, len(namespacedResource), 1, metav1.ConditionTrue)
+			verifyPlacementScheduleStatus(crp, len(namespacedResource), 1, metav1.ConditionTrue)
 
 			By("Verify that work is not created in cluster A")
 			var clusterWork workv1alpha1.Work
@@ -1001,7 +1001,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created work objects that contain the resource selected
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
 			By("Verified that placement has nothing scheduled")
 
 			var clusterWork workv1alpha1.Work
@@ -1044,7 +1044,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that do not schedule anything")
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			examinePlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
 			By("Verified that placement has nothing scheduled")
 
 			var clusterWork workv1alpha1.Work

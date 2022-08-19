@@ -76,7 +76,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		klog.V(4).InfoS("matched a cluster", "cluster", cluster, "placement", placement.Name)
 		clusterNames = append(clusterNames, cluster)
 	}
-	return
+	return clusterNames, nil
 }
 
 // listClusters retrieves the clusters according to its label selector, this will hit the informer cache.

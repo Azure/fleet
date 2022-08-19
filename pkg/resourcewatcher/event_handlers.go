@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -110,8 +109,17 @@ func (d *ChangeDetector) onWorkDeleted(obj interface{}) {
 func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
 	// Only enqueue if the change can affect placement decisions. i.e. label and spec and condition
 	var oldMC, newMC fleetv1alpha1.MemberCluster
-	runtime.DefaultUnstructuredConverter.FromUnstructured(oldObj.(*unstructured.Unstructured).Object, &oldMC)
-	runtime.DefaultUnstructuredConverter.FromUnstructured(newObj.(*unstructured.Unstructured).Object, &newMC)
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(oldObj.(*unstructured.Unstructured).Object, &oldMC)
+	if err != nil {
+		// should not happen
+		klog.ErrorS(err, "failed to handle a member cluster object update event")
+		return
+	}
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(newObj.(*unstructured.Unstructured).Object, &newMC)
+	if err != nil {
+		klog.ErrorS(err, "failed to handle a member cluster object update event")
+		return
+	}
 	if oldMC.GetGeneration() == newMC.GetGeneration() &&
 		reflect.DeepEqual(oldMC.GetLabels(), newMC.GetLabels()) &&
 		reflect.DeepEqual(oldMC.Status.Conditions, newMC.Status.Conditions) {

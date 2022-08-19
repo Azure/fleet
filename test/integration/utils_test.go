@@ -124,26 +124,26 @@ func deleteTestManifests() {
 	Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete PodDisruptionBudget")
-	Expect(k8sClient.Delete(ctx, &testPdb)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testPdb)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete the testConfigMap resources")
-	Expect(k8sClient.Delete(ctx, &testConfigMap)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testConfigMap)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete testSecret resource")
-	Expect(k8sClient.Delete(ctx, &testSecret)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testSecret)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete testService resource")
-	Expect(k8sClient.Delete(ctx, &testService)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testService)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete testCloneset resource")
-	Expect(k8sClient.Delete(ctx, &testCloneset)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testCloneset)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete testCloneset CRD")
-	Expect(k8sClient.Delete(ctx, &testClonesetCRD)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testClonesetCRD)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	// delete the namespace the last as there is no GC
 	By("Delete namespace")
-	Expect(k8sClient.Delete(ctx, &testNameSpace)).Should(Succeed())
+	Expect(k8sClient.Delete(ctx, &testNameSpace)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 }
 
 // verifyManifest verify the manifest we get from the work is the same as one of the test manifest
@@ -308,7 +308,7 @@ func markInternalMCLeft(mc fleetv1alpha1.MemberCluster) {
 	}, timeout, interval).Should(Succeed())
 	By("Marked internal member cluster as Left")
 	Eventually(func() bool {
-		k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
 		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
 		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionFalse
@@ -331,14 +331,14 @@ func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
 	Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 	By("Marked internal member cluster as joined")
 	Eventually(func() bool {
-		k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
 		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
 		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionTrue
 	}, timeout, interval).Should(BeTrue())
 }
 
-func examinePlacementScheduleStatus(crp *fleetv1alpha1.ClusterResourcePlacement, selectedResourceCount, targetClusterCount int, scheduleStatus metav1.ConditionStatus) {
+func verifyPlacementScheduleStatus(crp *fleetv1alpha1.ClusterResourcePlacement, selectedResourceCount, targetClusterCount int, scheduleStatus metav1.ConditionStatus) {
 	status := crp.Status
 	Expect(len(status.SelectedResources)).Should(Equal(selectedResourceCount))
 	Expect(len(status.TargetClusters)).Should(Equal(targetClusterCount))

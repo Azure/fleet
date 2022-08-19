@@ -9,17 +9,15 @@ import (
 	"context"
 	"fmt"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
