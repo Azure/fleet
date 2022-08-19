@@ -45,7 +45,7 @@ func WaitNamespaceRemoved(cluster Cluster, nc *corev1.Namespace) {
 		}
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: nc.Name, Namespace: ""}, nc)
 		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.BeNil())
+	}, timeout, interval).ShouldNot(gomega.BeNil())
 }
 
 // DeleteNamespace delete namespace.
