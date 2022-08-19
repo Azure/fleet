@@ -16,8 +16,8 @@ import (
 
 const (
 	conditionTypeApplied = "Applied"
-	timeout              = time.Second * 60
-	interval             = time.Second * 1
+	timeout              = time.Second * 90
+	interval             = time.Second * 5
 )
 
 func AddToManifestList(object runtime.Object, manifestList []workapi.Manifest) []workapi.Manifest {
