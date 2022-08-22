@@ -1,4 +1,4 @@
-name: fleet-ci
+name: unit and e2e test
 
 on:
   push:

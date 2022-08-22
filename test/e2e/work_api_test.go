@@ -6,11 +6,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/work-api/pkg/utils"
@@ -56,6 +59,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 			)
 
 			err = createWork(workObj, HubCluster)
+			Expect(err).ToNot(HaveOccurred())
+
 			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -96,8 +101,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 					return false
 				}
 				appliedCondition := meta.IsStatusConditionTrue(work.Status.Conditions, "Applied")
-				availableCondition := meta.IsStatusConditionTrue(work.Status.Conditions, "Available")
-				return appliedCondition && availableCondition
+				return appliedCondition
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 		})
 	})
@@ -130,16 +134,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 		})
 
-		AfterEach(func() {
-			err = deleteWorkResource(workOne, HubCluster)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = deleteWorkResource(workTwo, HubCluster)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should ignore the duplicate manifest", func() {
-
+		It("should apply both the duplicate manifest", func() {
 			By("creating the work resources")
 			err = createWork(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -159,7 +154,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 					return false
 				}
 
-				return len(appliedWorkOne.Status.AppliedResources)+len(appliedWorkTwo.Status.AppliedResources) == 1
+				return len(appliedWorkOne.Status.AppliedResources)+len(appliedWorkTwo.Status.AppliedResources) == 2
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 
 			By("Checking the work status of each works for verification")
@@ -174,18 +169,38 @@ var _ = Describe("work-api testing", Ordered, func() {
 				}
 				workOneCondition := meta.IsStatusConditionTrue(workOne.Status.ManifestConditions[0].Conditions, "Applied")
 				workTwoCondition := meta.IsStatusConditionTrue(workTwo.Status.ManifestConditions[0].Conditions, "Applied")
-				return (workOneCondition || workTwoCondition) && !(workOneCondition && workTwoCondition)
+				return workOneCondition && workTwoCondition
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 
-			By("verifying the resource was garbage collected")
-			Eventually(func() error {
+			By("verifying there is only one real resource on the spoke")
+			var deploy appsv1.Deployment
+			err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
+				Name:      manifestDetailsOne[0].ObjMeta.Name,
+				Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
+			Expect(err).Should(Succeed())
+			Expect(len(deploy.OwnerReferences)).Should(Equal(2))
 
-				return MemberCluster.KubeClientSet.AppsV1().Deployments(manifestDetailsOne[0].ObjMeta.Namespace).Delete(context.Background(), manifestDetailsOne[0].ObjMeta.Name, metav1.DeleteOptions{})
-			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
-			Eventually(func() error {
+			By("delete the work two resources")
+			Expect(deleteWorkResource(workTwo, HubCluster)).To(Succeed())
 
-				return MemberCluster.KubeClientSet.AppsV1().Deployments(manifestDetailsTwo[0].ObjMeta.Namespace).Delete(context.Background(), manifestDetailsTwo[0].ObjMeta.Name, metav1.DeleteOptions{})
-			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
+			By("Delete one work wont' delete the manifest")
+			Eventually(func() int {
+				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
+					Name:      manifestDetailsOne[0].ObjMeta.Name,
+					Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
+				Expect(err).Should(Succeed())
+				return len(deploy.OwnerReferences)
+			}, eventuallyTimeout, eventuallyInterval).Should(Equal(1))
+
+			By("delete the work one resources")
+			err = deleteWorkResource(workOne, HubCluster)
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() bool {
+				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
+					Name:      manifestDetailsOne[0].ObjMeta.Name,
+					Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
+				return apierrors.IsNotFound(err)
+			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 		})
 	})
 
@@ -211,6 +226,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 			)
 
 			err = createWork(workObj, HubCluster)
+			Expect(err).ToNot(HaveOccurred())
+
 			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -273,6 +290,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 			)
 
 			err = createWork(workObj, HubCluster)
+			Expect(err).ToNot(HaveOccurred())
+
 			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -290,23 +309,17 @@ var _ = Describe("work-api testing", Ordered, func() {
 				// Extract and modify the ConfigMap by adding a new key value pair.
 				err = json.Unmarshal(createdWork.Spec.Workload.Manifests[0].Raw, &configMap)
 				configMap.Data[newDataKey] = newDataValue
-
 				rawUpdatedManifest, _ := json.Marshal(configMap)
-
 				obj, _, _ := genericCodec.Decode(rawUpdatedManifest, nil, nil)
-
 				createdWork.Spec.Workload.Manifests[0].Object = obj
 				createdWork.Spec.Workload.Manifests[0].Raw = rawUpdatedManifest
-
-				createdWork, err = updateWork(createdWork, HubCluster)
-
+				_, err = updateWork(createdWork, HubCluster)
 				return err
-			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
+			}, eventuallyTimeout, eventuallyInterval).Should(Succeed())
 
 			By("verifying if the manifest was reapplied")
 			Eventually(func() bool {
 				configMap, _ := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestDetails[0].ObjMeta.Namespace).Get(context.Background(), manifestDetails[0].ObjMeta.Name, metav1.GetOptions{})
-
 				return configMap.Data[newDataKey] == newDataValue
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 		})
@@ -335,6 +348,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 			)
 
 			err = createWork(workObj, HubCluster)
+			Expect(err).ToNot(HaveOccurred())
+
 			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -413,6 +428,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 			)
 
 			err = createWork(workObj, HubCluster)
+			Expect(err).ToNot(HaveOccurred())
+
 			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})

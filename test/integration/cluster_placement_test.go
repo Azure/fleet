@@ -8,7 +8,6 @@ package integration
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -21,53 +20,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
+const ClusterRoleKind = "ClusterRole"
+
 var _ = Describe("Test Cluster Resource Placement Controller", func() {
 	var clusterA, clusterB fleetv1alpha1.MemberCluster
 	var clustarANamespace, clustarBNamespace corev1.Namespace
 	var crp *fleetv1alpha1.ClusterResourcePlacement
-	const ClusterRoleKind = "ClusterRole"
 	var endpointSlice discoveryv1.EndpointSlice
 
 	BeforeEach(func() {
-		endpointSlice = discoveryv1.EndpointSlice{
+		By("Create member cluster A ")
+		// create a new cluster everytime since namespace deletion doesn't work in testenv
+		clusterA = fleetv1alpha1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-nginx-export",
-				Namespace: testService.GetNamespace(),
+				Name:   "cluster-a-" + utilrand.String(8),
+				Labels: map[string]string{"clusterA": utilrand.String(10)},
 			},
-			AddressType: discoveryv1.AddressTypeIPv4,
-			Ports: []discoveryv1.EndpointPort{
-				{
-					Name: pointer.StringPtr("https"),
-					Port: pointer.Int32Ptr(443),
+			Spec: fleetv1alpha1.MemberClusterSpec{
+				State: fleetv1alpha1.ClusterStateJoin,
+				Identity: rbacv1.Subject{
+					Kind:      rbacv1.UserKind,
+					Name:      "hub-access",
+					Namespace: "app",
 				},
 			},
 		}
-		By("Create member clusters", func() {
-			// create a new cluster everytime since namespace deletion doesn't work in testenv
-			clusterA = fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-a-" + utils.RandStr(),
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
-					Identity: rbacv1.Subject{
-						Kind:      rbacv1.UserKind,
-						Name:      "hub-access",
-						Namespace: "app",
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, &clusterA)).Should(Succeed())
-		})
-
+		Expect(k8sClient.Create(ctx, &clusterA)).Should(Succeed())
 		By("Check if the member cluster namespace created")
 		nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
 		Eventually(func() error {
@@ -76,45 +62,61 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clustarANamespace)
 		}, timeout, interval).Should(Succeed())
 		By(fmt.Sprintf("Cluster namespace %s created", nsName))
+		// Create cluster B and wait for its namespace is created
+		clusterB = fleetv1alpha1.MemberCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "cluster-b-" + utilrand.String(8),
+				Labels: map[string]string{"clusterB": utilrand.String(10)},
+			},
+			Spec: fleetv1alpha1.MemberClusterSpec{
+				State: fleetv1alpha1.ClusterStateJoin,
+				Identity: rbacv1.Subject{
+					Kind:      rbacv1.UserKind,
+					Name:      "hub-access",
+					Namespace: "app",
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, &clusterB)).Should(Succeed())
+		By("Check if the member cluster namespace created")
+		nsName = fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name)
+		Eventually(func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{
+				Name: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
+			}, &clustarBNamespace)
+		}, timeout, interval).Should(Succeed())
+		By(fmt.Sprintf("Cluster namespace %s created", nsName))
 	})
 
 	AfterEach(func() {
 		By("Delete member clusters", func() {
 			Expect(k8sClient.Delete(ctx, &clusterA)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &clusterB)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
 		})
 	})
 
 	Context("Test select resources functionality", func() {
 		BeforeEach(func() {
-			clusterB = fleetv1alpha1.MemberCluster{
+			endpointSlice = discoveryv1.EndpointSlice{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-b-" + utils.RandStr(),
+					Name:      "test-nginx-export",
+					Namespace: testService.GetNamespace(),
 				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
-					Identity: rbacv1.Subject{
-						Kind:      rbacv1.UserKind,
-						Name:      "hub-access",
-						Namespace: "app",
+				AddressType: discoveryv1.AddressTypeIPv4,
+				Ports: []discoveryv1.EndpointPort{
+					{
+						Name: pointer.StringPtr("https"),
+						Port: pointer.Int32Ptr(443),
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, &clusterB)).Should(Succeed())
 
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
-				}, &clustarBNamespace)
-			}, timeout, interval).Should(Succeed())
+			By("Mark member cluster A as joined")
+			markInternalMCJoined(clusterA)
 
-			By("Cluster namespace created")
-		})
-
-		AfterEach(func() {
-			By("Delete member clusters", func() {
-				Expect(k8sClient.Delete(ctx, &clusterB)).Should(Succeed())
-				Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
-			})
+			By("Mark member cluster B as joined")
+			markInternalMCJoined(clusterB)
 		})
 
 		It("Test select the resources by name", func() {
@@ -145,14 +147,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created work objects that contain the resource selected
 			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
-			var cloneSetCRD apiextensionsv1.CustomResourceDefinition
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name: "clonesets.apps.kruise.io",
-			}, &cloneSetCRD)).Should(Succeed())
-			placement, exist := cloneSetCRD.Annotations[utils.AnnotationPlacementList]
-			Expect(controllerutil.ContainsFinalizer(&cloneSetCRD, utils.PlacementFinalizer)).Should(BeTrue())
-			Expect(exist).Should(BeTrue())
-			Expect(strings.Contains(placement, crp.Name))
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
 		})
 
 		It("Test select the resources by label", func() {
@@ -194,14 +190,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created work objects that contain the resource selected
 			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
-			var cloneSetCRD apiextensionsv1.CustomResourceDefinition
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name: "clonesets.apps.kruise.io",
-			}, &cloneSetCRD)).Should(Succeed())
-			placement, exist := cloneSetCRD.Annotations[utils.AnnotationPlacementList]
-			Expect(controllerutil.ContainsFinalizer(&cloneSetCRD, utils.PlacementFinalizer)).Should(BeTrue())
-			Expect(exist).Should(BeTrue())
-			Expect(strings.Contains(placement, crp.Name))
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
 		})
 
 		It("Test select all the resources in a namespace", func() {
@@ -403,8 +393,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Name:      newRoleName,
 				Namespace: testService.GetNamespace(),
 			}, &role)).Should(Succeed())
-			_, exist := role.Annotations[utils.AnnotationPlacementList]
-			Expect(exist).Should(BeFalse())
 			role.Rules = []rbacv1.PolicyRule{utils.FleetRule, utils.WorkRule}
 			Expect(k8sClient.Update(ctx, &role)).Should(Succeed())
 
@@ -445,6 +433,72 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed())
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 			By("Verified that the deleted role is removed from the work")
+		})
+
+		It("Test delete the entire namespace resource", func() {
+			nsLabel := map[string]string{"fleet.azure.com/name": "test-delete"}
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-select-namespace-change",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: nsLabel,
+							},
+						},
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/name": "test",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select all the resources in a namespace clusterResourcePlacement created")
+
+			By("Create a new namespace")
+			newSpace := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-delete-namespace" + utilrand.String(10),
+					Labels: nsLabel,
+				},
+			}
+			Expect(k8sClient.Create(ctx, &newSpace)).Should(Succeed())
+			By(fmt.Sprintf("Create a new namespace %s clusterResourcePlacement will select", newSpace.Name))
+
+			By("Create a new Pdb in the new namespace")
+			newPdb := testPdb.DeepCopy()
+			newPdb.Namespace = newSpace.Name
+			newPdb.SetResourceVersion("")
+			newPdb.SetGeneration(0)
+			Expect(k8sClient.Create(ctx, newPdb)).Should(Succeed())
+
+			By("Create a new CloneSet in the new namespace")
+			newCloneSet := testCloneset.DeepCopy()
+			newCloneSet.Namespace = newSpace.Name
+			newCloneSet.SetResourceVersion("")
+			newCloneSet.SetGeneration(0)
+			Expect(k8sClient.Create(ctx, newCloneSet)).Should(Succeed())
+
+			By("Verify that we pick up the clusterRole and all the resources we created in the new namespace")
+			verifyPartialWorkObjects(crp, []string{"PodDisruptionBudget", "CloneSet", ClusterRoleKind}, 4, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
+
+			By("Remove the namespace resource")
+			Expect(k8sClient.Delete(ctx, &newSpace)).Should(Succeed())
+
+			By("Verify that we pick up the namespace delete")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 		})
 
 		It("Test cluster scoped resource change picked up by placement", func() {
@@ -513,8 +567,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			By("Update the clusterRole resource")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: newClusterRoleName}, &clusterRole)).Should(Succeed())
-			_, exist := clusterRole.Annotations[utils.AnnotationPlacementList]
-			Expect(exist).Should(BeTrue())
 			clusterRole.Rules = []rbacv1.PolicyRule{utils.FleetRule, utils.WorkRule}
 			Expect(k8sClient.Update(ctx, &clusterRole)).Should(Succeed())
 
@@ -558,30 +610,37 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: newClusterRoleName}, &clusterRole)).Should(utils.NotFoundMatcher{})
 		})
+	})
 
-		It("Test delete the entire namespace resource", func() {
-			nsLabel := map[string]string{"fleet.azure.com/name": "test-delete"}
+	Context("Test basic select cluster functionality, only cluster A is joined", func() {
+		BeforeEach(func() {
+			By("Mark member cluster A as joined")
+			markInternalMCJoined(clusterA)
+		})
+
+		It("Test no matching cluster", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-select-namespace-change",
+					Name: "test-select-cluster",
 				},
 				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
 						{
-							Group:   corev1.GroupName,
-							Version: "v1",
-							Kind:    "Namespace",
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: nsLabel,
-							},
-						},
-						{
 							Group:   rbacv1.GroupName,
 							Version: "v1",
 							Kind:    ClusterRoleKind,
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"fleet.azure.com/name": "test",
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &fleetv1alpha1.PlacementPolicy{
+						Affinity: &fleetv1alpha1.Affinity{
+							ClusterAffinity: &fleetv1alpha1.ClusterAffinity{
+								ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
+									{
+										LabelSelector: metav1.LabelSelector{
+											MatchLabels: clusterB.Labels,
+										},
+									},
 								},
 							},
 						},
@@ -589,82 +648,28 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
-			By("Select all the resources in a namespace clusterResourcePlacement created")
+			By("Select named cluster clusterResourcePlacement created")
 
-			By("Create a new namespace")
-			newSpace := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "test-delete-namespace" + utils.RandStr(),
-					Labels: nsLabel,
-				},
-			}
-			Expect(k8sClient.Create(ctx, &newSpace)).Should(Succeed())
-			By(fmt.Sprintf("Create a new namespace %s clusterResourcePlacement will select", newSpace.Name))
+			waitForPlacementScheduled(crp.GetName())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
 
-			By("Create a new Pdb in the new namespace")
-			newPdb := testPdb.DeepCopy()
-			newPdb.Namespace = newSpace.Name
-			newPdb.SetResourceVersion("")
-			newPdb.SetGeneration(0)
-			Expect(k8sClient.Create(ctx, newPdb)).Should(Succeed())
-
-			By("Create a new CloneSet in the new namespace")
-			newCloneSet := testCloneset.DeepCopy()
-			newCloneSet.Namespace = newSpace.Name
-			newCloneSet.SetResourceVersion("")
-			newCloneSet.SetGeneration(0)
-			Expect(k8sClient.Create(ctx, newCloneSet)).Should(Succeed())
-
-			By("Verify that we pick up the clusterRole and all the resources we created in the new namespace")
-			verifyPartialWorkObjects(crp, []string{"PodDisruptionBudget", "CloneSet", ClusterRoleKind}, 4, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
-
-			By("Remove the namespace resource")
-			Expect(k8sClient.Delete(ctx, &newSpace)).Should(Succeed())
-
-			By("Verify that we pick up the namespace delete")
-			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
-		})
-	})
-
-	Context("Test select cluster functionality", func() {
-		BeforeEach(func() {
-			clusterB = fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-b-" + utils.RandStr(),
-					Labels: map[string]string{
-						"fleet.azure.com/name": "test-b",
-					},
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
-					Identity: rbacv1.Subject{
-						Kind:      rbacv1.UserKind,
-						Name:      "hub-access",
-						Namespace: "app",
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, &clusterB)).Should(Succeed())
-			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name)
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name: nsName,
-				}, &clustarBNamespace)
-			}, timeout, interval).Should(Succeed())
-			By(fmt.Sprintf("Cluster namespace %s created", nsName))
-		})
-
-		AfterEach(func() {
-			By("Delete member clusters", func() {
-				Expect(k8sClient.Delete(ctx, &clusterB)).Should(Succeed())
-				Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
-			})
+			By("Verify that work is not created in any cluster")
+			var clusterWork workv1alpha1.Work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 		})
 
 		It("Test select named cluster resources", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-list-resource",
+					Name: "test-list-cluster",
 				},
 				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
@@ -692,14 +697,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created work objects that contain the resource selected
 			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA})
 
-			var cloneSetCRD apiextensionsv1.CustomResourceDefinition
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name: "clonesets.apps.kruise.io",
-			}, &cloneSetCRD)).Should(Succeed())
-			placement, exist := cloneSetCRD.Annotations[utils.AnnotationPlacementList]
-			Expect(controllerutil.ContainsFinalizer(&cloneSetCRD, utils.PlacementFinalizer)).Should(BeTrue())
-			Expect(exist).Should(BeTrue())
-			Expect(strings.Contains(placement, crp.Name))
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 2, 1, metav1.ConditionTrue)
 
 			By("Verify that work is not created in cluster B")
 			var clusterWork workv1alpha1.Work
@@ -709,10 +708,11 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 		})
 
-		It("Test select cluster resources by label", func() {
+		It("Test select member cluster by label with change", func() {
+			markInternalMCJoined(clusterB)
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-list-resource",
+					Name: "test-select-cluster",
 				},
 				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
@@ -748,6 +748,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			// verify that we have created work objects that contain the resource selected
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, len(namespacedResource), 1, metav1.ConditionTrue)
 
 			By("Verify that work is not created in cluster A")
 			var clusterWork workv1alpha1.Work
@@ -775,11 +777,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
-
 			By("Verified that the work is removed from cluster A")
 		})
 
-		It("Test  member cluster create/delete trigger placement", func() {
+		It("Test  member cluster join/leave trigger placement", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-list-resource",
@@ -803,6 +804,11 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 								ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
 									{
 										LabelSelector: metav1.LabelSelector{
+											MatchLabels: clusterA.Labels,
+										},
+									},
+									{
+										LabelSelector: metav1.LabelSelector{
 											MatchLabels: clusterB.Labels,
 										},
 									},
@@ -817,40 +823,236 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Select label cluster clusterResourcePlacement created")
 
 			// verify that we have created work objects that contain the resource selected
-			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
-			By("Verified that the work is propagated to cluster B")
+			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA})
+			By("Verified that the work is propagated to cluster A")
 
-			By("Create a new member cluster C")
-			// create a new cluster everytime since namespace deletion doesn't work in testenv
-			clusterC := fleetv1alpha1.MemberCluster{
+			var clusterWork workv1alpha1.Work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+			By("Verified that the work is not scheduled to cluster B")
+
+			By("mark the member cluster B joined")
+			markInternalMCJoined(clusterB)
+
+			// verify that we have created work objects that contain the resource selected
+			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
+			By("Verified that the work is also propagated to cluster B")
+
+			By("mark the member cluster B left")
+			markInternalMCLeft(clusterB)
+			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA})
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+			By("Verified that the work is removed from cluster C")
+		})
+	})
+
+	Context("Test advanced placement functionality", func() {
+		BeforeEach(func() {
+			By("Mark member cluster A as joined")
+			markInternalMCJoined(clusterA)
+		})
+
+		XIt("Test  cluster scoped resource change unpick by a placement", func() {
+
+		})
+
+		It("Test a cluster scoped resource selected by multiple placements", func() {
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   "cluster-c-" + utils.RandStr(),
-					Labels: clusterB.Labels,
+					Name: "resource-select",
 				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
-					Identity: rbacv1.Subject{
-						Kind:      rbacv1.UserKind,
-						Name:      "hub-access-c",
-						Namespace: "app",
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/name": "test",
+								},
+							},
+						},
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, &clusterC)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select resource by label clusterResourcePlacement created")
 
 			// verify that we have created work objects that contain the resource selected
-			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB, &clusterC})
-			By("Verified that the work is also propagated to cluster C")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
 
-			By("Delete the member cluster C")
-			Expect(k8sClient.Delete(ctx, &clusterC)).Should(Succeed())
-			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
+			By("Create another placement that can select the same resource")
+			crp2 := &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-select-2",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchExpressions: []metav1.LabelSelectorRequirement{
+									{
+										Key:      "fleet.azure.com/name",
+										Operator: metav1.LabelSelectorOpExists,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp2)).Should(Succeed())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, crp2)).Should(Succeed())
+			})
+			By("the second clusterResourcePlacement created")
+			// verify that we have created work objects that contain the resource selected
+			verifyWorkObjects(crp2, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+
+			By("Update the testClusterRole  resource")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testClusterRole.Name}, &testClusterRole)).Should(Succeed())
+			testClusterRole.Rules = []rbacv1.PolicyRule{utils.FleetRule, utils.WorkRule}
+			Expect(k8sClient.Update(ctx, &testClusterRole)).Should(Succeed())
+
+			By("Verify that we pick up the clusterRole change")
+			waitForPlacementScheduleStopped(crp.Name)
+			var clusterWork workv1alpha1.Work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(1))
+			manifest := clusterWork.Spec.Workload.Manifests[0]
+			var selectedRole rbacv1.ClusterRole
+			GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+			Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(2))
+			Expect(reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) &&
+				reflect.DeepEqual(selectedRole.Rules[1], utils.WorkRule)).Should(BeTrue())
+			By("Verified that the clusterRole change is picked by crp")
+
+			waitForPlacementScheduleStopped(crp2.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp2.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(1))
+			manifest = clusterWork.Spec.Workload.Manifests[0]
+			GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+			Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(2))
+			Expect(reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) &&
+				reflect.DeepEqual(selectedRole.Rules[1], utils.WorkRule)).Should(BeTrue())
+			By("Verified that the clusterRole change is picked by crp2")
+		})
+
+		It("Test a placement select some clusters and then not any", func() {
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-list-resource",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/name": "test",
+								},
+							},
+						},
+					},
+					Policy: &fleetv1alpha1.PlacementPolicy{
+						Affinity: &fleetv1alpha1.Affinity{
+							ClusterAffinity: &fleetv1alpha1.ClusterAffinity{
+								ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
+									{
+										LabelSelector: metav1.LabelSelector{
+											MatchLabels: clusterA.Labels,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select label cluster clusterResourcePlacement created")
+
+			// verify that we have created work objects that contain the resource selected
+			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA})
+			By("Verified that the work is propagated to cluster A")
+
+			By("mark the member cluster A left")
+			markInternalMCLeft(clusterA)
+
+			// verify that we have created work objects that contain the resource selected
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+			By("Verified that placement has nothing scheduled")
+
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
-			By("Verified that the work is removed from cluster C")
+			By("Verified that the work is removed from cluster A")
+		})
+
+		It("Test a placement select some resources and then not any", func() {
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-test-change",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/name": "test",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select resource by label clusterResourcePlacement created")
+
+			// verify that we have created work objects that contain the resource selected
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+
+			By("Delete the clusterRole resources")
+			Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(Succeed())
+
+			By("Verify that do not schedule anything")
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+			By("Verified that placement has nothing scheduled")
+
+			var clusterWork workv1alpha1.Work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+			By("Verified that the deleted clusterRole is removed from the work")
 		})
 	})
 })

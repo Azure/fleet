@@ -7,6 +7,7 @@ package resourcewatcher
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -95,7 +96,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 
 	// create the member cluster informer that handles memberCluster add and update. We don't need to handle the
 	// delete event as the work resources in this cluster will all get deleted which will trigger placement reconcile.
-	memberClusterEventHandler := newHandlerOnEvents(d.onMemberClusterAdded, d.onMemberClusterUpdated, nil)
+	memberClusterEventHandler := newHandlerOnEvents(nil, d.onMemberClusterUpdated, nil)
 	d.InformerManager.AddStaticResource(
 		utils.APIResourceMeta{
 			GroupVersionResource: utils.MemberClusterGVR,
@@ -179,6 +180,7 @@ func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bo
 }
 
 // dynamicResourceFilter filters out resources that we don't want to watch
+// TODO: add UTs for this
 func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	key, err := controller.ClusterWideKeyFunc(obj)
 	if err != nil {
@@ -186,6 +188,13 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	}
 
 	cwKey, _ := key.(keys.ClusterWideKey)
+	// special case for cluster namespace
+	if strings.HasPrefix(cwKey.Namespace, utils.ClusterNamespacePrefix) {
+		klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
+			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
+		return false
+	}
+
 	// if SkippedNamespaces is set, skip any events related to the object in these namespaces.
 	if _, ok := d.SkippedNamespaces[cwKey.Namespace]; ok {
 		klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,

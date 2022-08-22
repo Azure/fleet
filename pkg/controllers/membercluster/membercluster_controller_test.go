@@ -638,9 +638,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"copy with Joined condition": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -729,9 +729,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"copy with Left condition": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(2),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -825,9 +825,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"copy with Unknown condition": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -916,8 +916,8 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"No Agent Status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -958,8 +958,8 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"Internal member cluster is nil": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent: true,
 				},
 			},
 			internalMemberCluster: nil,
@@ -969,9 +969,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"other agent type reported in the status and should be ignored": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -1082,9 +1082,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"less agent type reported in the status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -1151,9 +1151,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"condition is not reported in the status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
@@ -1228,9 +1228,9 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"agent type is not reported in the status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]string{
-					fleetv1alpha1.MemberAgent:              "",
-					fleetv1alpha1.ServiceExportImportAgent: "",
+				agents: map[fleetv1alpha1.AgentType]bool{
+					fleetv1alpha1.MemberAgent:              true,
+					fleetv1alpha1.ServiceExportImportAgent: true,
 				},
 			},
 			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{

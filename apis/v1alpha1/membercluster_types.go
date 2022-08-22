@@ -72,7 +72,7 @@ const (
 	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
 	ConditionTypeMemberClusterJoin string = "Joined"
 
-	// ConditionTypeMemberClusterHealthy is used to track the Health state of the MemberCluster.
+	// ConditionTypeMemberClusterHealth is used to track the Health state of the MemberCluster.
 	// its conditionStatus can be "True" == Healthy, "Unknown" == Health degraded, "False" == UnHealthy
 	ConditionTypeMemberClusterHealth string = "Healthy"
 )
