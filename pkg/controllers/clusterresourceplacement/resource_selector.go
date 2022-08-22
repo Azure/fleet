@@ -285,6 +285,10 @@ func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest
 	object.SetSelfLink("")
 	object.SetDeletionTimestamp(nil)
 	object.SetManagedFields(nil)
+	// Remove all the owner references as the UID in the owner reference can't be transferred to
+	// the member clusters
+	// TODO: Establish a way to keep the ownership relation through work-api
+	object.SetOwnerReferences(nil)
 	unstructured.RemoveNestedField(object.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(object.Object, "status")
 

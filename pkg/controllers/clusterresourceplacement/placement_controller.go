@@ -178,32 +178,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 }
 
 // removeAllWorks removes all the work objects from the previous placed clusters.
-func (r *Reconciler) removeAllWorks(ctx context.Context, placementOld *fleetv1alpha1.ClusterResourcePlacement) (ctrl.Result, error) {
-	placeRef := klog.KObj(placementOld)
-	placementNew := placementOld.DeepCopy()
-	placementNew.Status.TargetClusters = nil
-	placementNew.Status.SelectedResources = nil
-	placementNew.Status.FailedResourcePlacements = nil
-	updatePlacementScheduledCondition(placementNew, fmt.Errorf("the placement didn't select any resource or cluster"))
-	removed, removeErr := r.removeStaleWorks(ctx, placementNew.GetName(), placementOld.Status.TargetClusters, nil)
+func (r *Reconciler) removeAllWorks(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement) (ctrl.Result, error) {
+	placeRef := klog.KObj(placement)
+	removed, removeErr := r.removeStaleWorks(ctx, placement.GetName(), placement.Status.TargetClusters, nil)
 	if removeErr != nil {
-		klog.ErrorS(removeErr, "failed to remove work resources from previously selected clusters", "placement", placeRef)
+		klog.ErrorS(removeErr, "failed to remove all the work resources from previously selected clusters", "placement", placeRef)
 		return ctrl.Result{}, removeErr
 	}
 	klog.V(3).InfoS("Successfully removed work resources from previously selected clusters",
 		"placement", placeRef, "number of removed clusters", removed)
-	return ctrl.Result{}, r.Client.Status().Update(ctx, placementNew, client.FieldOwner(utils.PlacementFieldManagerName))
+	placement.Status.TargetClusters = nil
+	placement.Status.SelectedResources = nil
+	placement.Status.FailedResourcePlacements = nil
+	updatePlacementScheduledCondition(placement, fmt.Errorf("the placement didn't select any resource or cluster"))
+	return ctrl.Result{}, r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
 }
 
 // persistSelectedResourceUnion finds the union of the clusters and resource we selected between the old and new placement
 func (r *Reconciler) persistSelectedResourceUnion(ctx context.Context, placementOld, placementNew *fleetv1alpha1.ClusterResourcePlacement) (int, int, error) {
 	// find the union of target clusters
-	clusterUnion := make(map[string]bool)
+	clusterUnion := make(map[string]struct{})
 	for _, res := range placementOld.Status.TargetClusters {
-		clusterUnion[res] = true
+		clusterUnion[res] = struct{}{}
 	}
 	for _, res := range placementNew.Status.TargetClusters {
-		clusterUnion[res] = true
+		clusterUnion[res] = struct{}{}
 	}
 	clusterNum := len(clusterUnion)
 	placementOld.Status.TargetClusters = make([]string, clusterNum)
@@ -213,12 +212,12 @@ func (r *Reconciler) persistSelectedResourceUnion(ctx context.Context, placement
 		i++
 	}
 	// find the union of selected resources
-	resourceUnion := make(map[fleetv1alpha1.ResourceIdentifier]bool)
+	resourceUnion := make(map[fleetv1alpha1.ResourceIdentifier]struct{})
 	for _, res := range placementOld.Status.SelectedResources {
-		resourceUnion[res] = true
+		resourceUnion[res] = struct{}{}
 	}
 	for _, res := range placementNew.Status.SelectedResources {
-		resourceUnion[res] = true
+		resourceUnion[res] = struct{}{}
 	}
 	resourceNum := len(resourceUnion)
 	placementOld.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, resourceNum)
@@ -227,8 +226,8 @@ func (r *Reconciler) persistSelectedResourceUnion(ctx context.Context, placement
 		placementOld.Status.SelectedResources[i] = resource
 		i++
 	}
-	// Condition is a required field so we have to put something here and this also helps to keep the last schedule
-	// time up to date.
+	// Condition is a required field, so we have to put something here.
+	// This also helps to keep the last schedule time up to date.
 	placementOld.SetConditions(metav1.Condition{
 		Status:             metav1.ConditionUnknown,
 		Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),

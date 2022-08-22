@@ -129,7 +129,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string, existingClusters, newClusters []string) (int, error) {
 	var allErr []error
 	workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
-	clusterMap := make(map[string]bool, 0)
+	clusterMap := make(map[string]bool)
 	for _, cluster := range newClusters {
 		clusterMap[cluster] = true
 	}
@@ -143,11 +143,9 @@ func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string,
 					Name:      workName,
 				},
 			}
-			if deleteErr := r.Client.Delete(ctx, workCR); deleteErr != nil {
-				if !apierrors.IsNotFound(deleteErr) {
-					allErr = append(allErr, errors.Wrap(deleteErr, fmt.Sprintf("failed to delete the work obj %s from namespace %s", workName, memberClusterNsName)))
-					continue
-				}
+			if deleteErr := r.Client.Delete(ctx, workCR); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
+				allErr = append(allErr, errors.Wrap(deleteErr, fmt.Sprintf("failed to delete the work obj %s from namespace %s", workName, memberClusterNsName)))
+				continue
 			}
 			removed++
 			klog.V(2).InfoS("deleted a work resource from clusters no longer selected",

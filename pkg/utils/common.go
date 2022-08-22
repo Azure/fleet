@@ -39,7 +39,9 @@ const (
 
 	RoleBindingNameFormat = "fleet-rolebinding-%s"
 
-	PlacementFieldManagerName = "work-api-agent"
+	PlacementFieldManagerName = "cluster-placement-controller"
+
+	MCControllerFieldManagerName = "member-cluster-controller"
 
 	WorkNameFormat = "work-%s"
 )
