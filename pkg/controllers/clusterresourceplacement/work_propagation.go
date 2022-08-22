@@ -126,10 +126,9 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 }
 
 // removeStaleWorks removes all the work objects from the clusters that are no longer selected.
-func (r *Reconciler) removeStaleWorks(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement,
-	existingClusters, newClusters []string) (int, error) {
+func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string, existingClusters, newClusters []string) (int, error) {
 	var allErr []error
-	workName := fmt.Sprintf(utils.WorkNameFormat, placement.GetName())
+	workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
 	clusterMap := make(map[string]bool, 0)
 	for _, cluster := range newClusters {
 		clusterMap[cluster] = true
@@ -152,7 +151,7 @@ func (r *Reconciler) removeStaleWorks(ctx context.Context, placement *fleetv1alp
 			}
 			removed++
 			klog.V(2).InfoS("deleted a work resource from clusters no longer selected",
-				"member cluster namespace", memberClusterNsName, "work name", workName)
+				"member cluster namespace", memberClusterNsName, "work name", workName, "place", placementName)
 		}
 	}
 	return removed, apiErrors.NewAggregate(allErr)

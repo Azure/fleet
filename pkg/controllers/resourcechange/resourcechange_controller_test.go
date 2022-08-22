@@ -10,12 +10,11 @@ import (
 	"reflect"
 	"testing"
 
-	utilrand "k8s.io/apimachinery/pkg/util/rand"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "go.goms.io/fleet/apis/v1alpha1"
@@ -40,7 +39,7 @@ func (w *fakeController) Enqueue(obj interface{}) {
 	w.QueueObj = append(w.QueueObj, obj.(string))
 }
 
-func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
+func TestFindPlacementsSelectedDeletedRes(t *testing.T) {
 	deletedRes := ResourceIdentifier{
 		Group:     "abc",
 		Name:      "foo",
@@ -51,7 +50,7 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 		crpList        []*ClusterResourcePlacement
 		wantCrp        []string
 	}{
-		"find a place given the matching": {
+		"match a placement that selected the deleted resource": {
 			clusterWideKey: keys.ClusterWideKey{ResourceIdentifier: deletedRes},
 			crpList: []*ClusterResourcePlacement{
 				{
@@ -67,7 +66,7 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 			},
 			wantCrp: []string{"resource-selected"},
 		},
-		"find many places given the matching": {
+		"match all the placements that selected the deleted resource": {
 			clusterWideKey: keys.ClusterWideKey{ResourceIdentifier: deletedRes},
 			crpList: []*ClusterResourcePlacement{
 				{
@@ -98,7 +97,7 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 			},
 			wantCrp: []string{"resource-selected", "resource-selected-2"},
 		},
-		"find no place given the matching": {
+		"does not match placement that has selected some other resource": {
 			clusterWideKey: keys.ClusterWideKey{ResourceIdentifier: deletedRes},
 			crpList: []*ClusterResourcePlacement{
 				{
@@ -118,6 +117,20 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 			},
 			wantCrp: nil,
 		},
+		"does not match placement that has not selected any resource": {
+			clusterWideKey: keys.ClusterWideKey{ResourceIdentifier: deletedRes},
+			crpList: []*ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Status: ClusterResourcePlacementStatus{
+						SelectedResources: []ResourceIdentifier{},
+					},
+				},
+			},
+			wantCrp: nil,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -130,7 +143,7 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 				uMap, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(crp)
 				crpList = append(crpList, &unstructured.Unstructured{Object: uMap})
 			}
-			got, err := r.findExistingPlacements(tt.clusterWideKey, crpList)
+			got, err := r.findPlacementsSelectedDeletedRes(tt.clusterWideKey, crpList)
 			if !reflect.DeepEqual(placementController.QueueObj, tt.wantCrp) {
 				t.Errorf("test case `%s` got crp = %v, wantCrp %v", name, placementController.QueueObj, tt.wantCrp)
 				return
@@ -147,6 +160,7 @@ func TestTriggerAffectedPlacementsForDeletedClusterRes(t *testing.T) {
 }
 
 func TestCollectAllAffectedPlacements(t *testing.T) {
+	// the resource we use for all the tests
 	matchRes := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Namespace",
@@ -181,6 +195,41 @@ func TestCollectAllAffectedPlacements(t *testing.T) {
 								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: matchRes.Labels,
 								},
+							},
+						},
+					},
+				},
+			},
+			wantCrp: map[string]bool{"resource-selected": true},
+		},
+		"does not match a place with no selector": {
+			res: matchRes,
+			crpList: []*ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Spec: ClusterResourcePlacementSpec{
+						ResourceSelectors: []ClusterResourceSelector{},
+					},
+				},
+			},
+			wantCrp: make(map[string]bool),
+		},
+		"match a place with the name selector": {
+			res: matchRes,
+			crpList: []*ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Spec: ClusterResourcePlacementSpec{
+						ResourceSelectors: []ClusterResourceSelector{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    matchRes.Kind,
+								Name:    matchRes.Name,
 							},
 						},
 					},
@@ -255,6 +304,7 @@ func TestCollectAllAffectedPlacements(t *testing.T) {
 								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"region": matchRes.Labels["region"],
+										// the mis-matching label
 										"random": "doesnotmatter",
 									},
 								},
@@ -319,6 +369,7 @@ func TestCollectAllAffectedPlacements(t *testing.T) {
 								},
 							},
 							{
+								// the mis-matching label selector
 								Group:   corev1.GroupName,
 								Version: "v1",
 								Kind:    matchRes.Kind,
@@ -345,6 +396,7 @@ func TestCollectAllAffectedPlacements(t *testing.T) {
 						Name: "resource-selected",
 					},
 					Spec: ClusterResourcePlacementSpec{
+						// the mis-matching resource selector
 						ResourceSelectors: []ClusterResourceSelector{
 							{
 								Group:   corev1.GroupName,

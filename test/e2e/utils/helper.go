@@ -17,11 +17,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -181,7 +179,8 @@ func CreateClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.Clu
 }
 
 // WaitConditionClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster with a specific condition.
-func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
+func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement,
+	conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
 	klog.Infof("Waiting for ClusterResourcePlacement(%s) condition(%s) status(%s) to be synced", crp.Name, conditionName, status)
 	gomega.Eventually(func() bool {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
@@ -193,7 +192,6 @@ func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alp
 
 // DeleteClusterResourcePlacement is used delete ClusterResourcePlacement on the hub cluster.
 func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	controllerutil.RemoveFinalizer(crp, utils.PlacementFinalizer)
 	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), crp)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())

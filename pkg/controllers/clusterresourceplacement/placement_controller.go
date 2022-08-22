@@ -20,7 +20,6 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
@@ -71,21 +70,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	placeRef := klog.KObj(placementOld)
-
-	// Handle placement deleting
-	if placementOld.GetDeletionTimestamp() != nil {
-		return r.gcAllResources(ctx, placementOld)
-	}
-
-	// Makes sure that the finalizer is added before we do anything else
-	if !controllerutil.ContainsFinalizer(placementOld, utils.PlacementFinalizer) {
-		controllerutil.AddFinalizer(placementOld, utils.PlacementFinalizer)
-		if err := r.Client.Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName)); err != nil {
-			klog.ErrorS(err, "Failed to add the cluster resource placement finalizer", "placement", placeRef)
-			return ctrl.Result{}, err
-		}
-	}
 	placementNew := placementOld.DeepCopy()
+
+	// TODO: add finalizer logic if we need it in the future
 
 	// TODO: move this to webhook
 	if err := validator.ValidateClusterResourcePlacement(placementOld); err != nil {
@@ -152,7 +139,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	klog.V(3).InfoS("Successfully scheduled work resources", "placement", placementOld.Name, "number of clusters", len(selectedClusters))
 
 	// go through the existing cluster list and remove work from no longer scheduled clusters.
-	removed, scheduleErr := r.removeStaleWorks(ctx, placementNew, placementOld.Status.TargetClusters, placementNew.Status.TargetClusters)
+	removed, scheduleErr := r.removeStaleWorks(ctx, placementNew.GetName(), placementOld.Status.TargetClusters, placementNew.Status.TargetClusters)
 	if scheduleErr != nil {
 		//  if we fail here, the newly selected cluster's work are not removed if they are not picked by the next reconcile loop
 		//  as they are not recorded in the old placement status.
@@ -198,7 +185,7 @@ func (r *Reconciler) removeAllWorks(ctx context.Context, placementOld *fleetv1al
 	placementNew.Status.SelectedResources = nil
 	placementNew.Status.FailedResourcePlacements = nil
 	updatePlacementScheduledCondition(placementNew, fmt.Errorf("the placement didn't select any resource or cluster"))
-	removed, removeErr := r.removeStaleWorks(ctx, placementNew, placementOld.Status.TargetClusters, nil)
+	removed, removeErr := r.removeStaleWorks(ctx, placementNew.GetName(), placementOld.Status.TargetClusters, nil)
 	if removeErr != nil {
 		klog.ErrorS(removeErr, "failed to remove work resources from previously selected clusters", "placement", placeRef)
 		return ctrl.Result{}, removeErr
@@ -206,15 +193,6 @@ func (r *Reconciler) removeAllWorks(ctx context.Context, placementOld *fleetv1al
 	klog.V(3).InfoS("Successfully removed work resources from previously selected clusters",
 		"placement", placeRef, "number of removed clusters", removed)
 	return ctrl.Result{}, r.Client.Status().Update(ctx, placementNew, client.FieldOwner(utils.PlacementFieldManagerName))
-}
-
-// gcAllResources makes sure that we garbage-collects all the side effects of the placement resources before it's deleted
-func (r *Reconciler) gcAllResources(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement) (ctrl.Result, error) {
-	placeRef := klog.KObj(placement)
-	klog.V(2).InfoS("Placement is being deleted", "placement", placeRef)
-	// TODO: see if we need to garbage collect any other resources
-	controllerutil.RemoveFinalizer(placement, utils.PlacementFinalizer)
-	return ctrl.Result{}, r.Client.Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
 }
 
 // persistSelectedResourceUnion finds the union of the clusters and resource we selected between the old and new placement

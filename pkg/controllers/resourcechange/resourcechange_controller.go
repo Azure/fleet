@@ -105,11 +105,11 @@ func (r *Reconciler) triggerAffectedPlacementsForDeletedClusterRes(res keys.Clus
 		klog.ErrorS(err, "failed to list all the cluster placement", "obj", res)
 		return ctrl.Result{}, err
 	}
-	return r.findExistingPlacements(res, crpList)
+	return r.findPlacementsSelectedDeletedRes(res, crpList)
 }
 
-// findExistingPlacements finds the placements which has selected this resource before it's deleted
-func (r *Reconciler) findExistingPlacements(res keys.ClusterWideKey, crpList []runtime.Object) (ctrl.Result, error) {
+// findPlacementsSelectedDeletedRes finds the placements which has selected this resource before it's deleted
+func (r *Reconciler) findPlacementsSelectedDeletedRes(res keys.ClusterWideKey, crpList []runtime.Object) (ctrl.Result, error) {
 	matchedCrps := make([]string, 0)
 	for _, crp := range crpList {
 		var placement fleetv1alpha1.ClusterResourcePlacement

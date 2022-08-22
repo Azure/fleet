@@ -207,8 +207,7 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 		memberMgr.GetClient(),
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_status_controller"),
-		3,
-	).SetupWithManager(hubMgr); err != nil {
+		1, true).SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "WorkStatus")
 		return err
 	}
@@ -219,18 +218,8 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 		memberMgr.GetClient(),
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_controller"),
-		3,
-	).SetupWithManager(hubMgr); err != nil {
+		5, true).SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Work")
-		return err
-	}
-
-	if err = workcontrollers.NewFinalizeWorkReconciler(
-		hubMgr.GetClient(),
-		memberMgr.GetClient(),
-		hubMgr.GetEventRecorderFor("WorkFinalizer_controller"),
-	).SetupWithManager(hubMgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "WorkFinalize")
 		return err
 	}
 
