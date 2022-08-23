@@ -23,6 +23,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/work-api/pkg/utils"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	fleetutil "go.goms.io/fleet/pkg/utils"
 )
 
@@ -172,18 +173,20 @@ var _ = Describe("work-api testing", Ordered, func() {
 				if err != nil {
 					return false
 				}
-				workOneCondition := meta.IsStatusConditionTrue(workOne.Status.ManifestConditions[0].Conditions, "Applied")
-				workTwoCondition := meta.IsStatusConditionTrue(workTwo.Status.ManifestConditions[0].Conditions, "Applied")
+				workOneCondition := meta.IsStatusConditionTrue(workOne.Status.ManifestConditions[0].Conditions, string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
+				workTwoCondition := meta.IsStatusConditionTrue(workTwo.Status.ManifestConditions[0].Conditions, string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
 				return workOneCondition && workTwoCondition
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 
-			By("verifying there is only one real resource on the spoke")
+			By("verifying the one resource on the spoke are owned by both appliedWork")
 			var deploy appsv1.Deployment
-			err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
-				Name:      manifestDetailsOne[0].ObjMeta.Name,
-				Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
-			Expect(err).Should(Succeed())
-			Expect(len(deploy.OwnerReferences)).Should(Equal(2))
+			Eventually(func() int {
+				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
+					Name:      manifestDetailsOne[0].ObjMeta.Name,
+					Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
+				Expect(err).Should(Succeed())
+				return len(deploy.OwnerReferences)
+			}, eventuallyTimeout, eventuallyInterval).Should(Equal(2))
 
 			By("delete the work two resources")
 			Expect(deleteWorkResource(workTwo, HubCluster)).To(Succeed())

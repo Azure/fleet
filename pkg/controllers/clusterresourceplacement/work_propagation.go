@@ -166,7 +166,9 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 		work, err := r.getResourceBinding(memberClusterNsName, workName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				klog.Error(err, "the work does not exist", "work", klog.KRef(memberClusterNsName, workName))
+				klog.V(3).InfoS("the work change has not shown up in the cache yet",
+					"work", klog.KRef(memberClusterNsName, workName), "cluster", cluster)
+				hasPending = true
 				continue
 			}
 			return false, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s from namespace %s", workName, memberClusterNsName))
@@ -202,7 +204,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 			appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workController.ConditionTypeApplied)
 			// collect if there is an explicit fail
 			if appliedCond != nil && appliedCond.Status != metav1.ConditionTrue {
-				klog.V(4).InfoS("find a failed to apply manifest", "member cluster namespace", memberClusterNsName,
+				klog.V(3).InfoS("find a failed to apply manifest", "member cluster namespace", memberClusterNsName,
 					"manifest name", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
 					"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
 				placement.Status.FailedResourcePlacements = append(placement.Status.FailedResourcePlacements, fleetv1alpha1.FailedResourcePlacement{

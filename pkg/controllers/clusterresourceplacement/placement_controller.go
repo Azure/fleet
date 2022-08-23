@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -28,13 +29,14 @@ import (
 )
 
 const (
-	eventReasonResourceScheduled = "ResourceScheduled"
-	eventReasonResourceApplied   = "ResourceApplied"
+	ApplyFailedReason    = "ApplyFailed"
+	ApplyPendingReason   = "ApplyPending"
+	ApplySucceededReason = "ApplySucceeded"
 )
 
 var (
 	ErrStillPendingManifest = fmt.Errorf("there are still manifest pending to be processed by the member cluster")
-	ErrFailedManifest       = fmt.Errorf("there are still failed to apply manifests")
+	ErrFailedManifest       = fmt.Errorf("there are failed to apply manifests, please check the `failedResourcePlacements` status")
 )
 
 // Reconciler reconciles a cluster resource placement object
@@ -87,7 +89,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	selectedClusters, scheduleErr := r.selectClusters(placementNew)
 	if scheduleErr != nil {
 		klog.ErrorS(scheduleErr, "Failed to select the clusters", "placement", placeRef)
-		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
@@ -103,7 +105,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	manifests, scheduleErr := r.selectResources(ctx, placementNew)
 	if scheduleErr != nil {
 		klog.ErrorS(scheduleErr, "failed to generate the work resource for this placementOld", "placement", placeRef)
-		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
@@ -119,7 +121,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	totalCluster, totalResources, scheduleErr := r.persistSelectedResourceUnion(ctx, placementOld, placementNew)
 	if scheduleErr != nil {
 		klog.ErrorS(scheduleErr, "failed to record the  work resources ", "placement", placeRef)
-		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
@@ -132,7 +134,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	scheduleErr = r.scheduleWork(ctx, placementNew, manifests)
 	if scheduleErr != nil {
 		klog.ErrorS(scheduleErr, "failed to apply work resources ", "placement", placeRef)
-		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
@@ -145,31 +147,33 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		//  as they are not recorded in the old placement status.
 		// TODO: add them to the old placement selected clusters since the work has been created although the update can still fail
 		klog.ErrorS(scheduleErr, "failed to remove work resources from previously selected clusters", "placement", placeRef)
-		updatePlacementScheduledCondition(placementOld, scheduleErr)
+		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr
 	}
 	klog.V(3).InfoS("Successfully removed work resources from previously selected clusters", "placement", placementOld.Name, "removed clusters", removed)
 
 	// the schedule has succeeded, so we now can use the placementNew status that contains all the newly selected cluster and resources
-	updatePlacementScheduledCondition(placementNew, nil)
-	r.Recorder.Event(placementNew, corev1.EventTypeNormal, eventReasonResourceScheduled, "successfully scheduled all selected resources to their clusters")
+	r.updatePlacementScheduledCondition(placementNew, nil)
 
 	// go through all the valid works, get the failed and pending manifests
 	hasPending, applyErr := r.collectAllManifestsStatus(placementNew)
 	if applyErr != nil {
 		klog.ErrorS(applyErr, "failed to collect work resources status from all selected clusters", "placement", placeRef)
-		updatePlacementAppliedCondition(placementNew, applyErr)
+		r.updatePlacementAppliedCondition(placementNew, applyErr)
 		_ = r.Client.Status().Update(ctx, placementNew, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, applyErr
 	}
-	klog.V(3).InfoS("Successfully collected work resources status from all selected clusters", "placement", placementOld.Name, "number of clusters", len(selectedClusters))
+	klog.V(3).InfoS("Successfully collected work resources status from all selected clusters",
+		"placement", placementOld.Name, "number of clusters", len(selectedClusters), "hasPending", hasPending,
+		"numberFailedPlacement", len(placementNew.Status.FailedResourcePlacements))
 
 	if !hasPending && len(placementNew.Status.FailedResourcePlacements) == 0 {
-		updatePlacementAppliedCondition(placementNew, nil)
-		r.Recorder.Event(placementNew, corev1.EventTypeNormal, eventReasonResourceApplied, "successfully applied all selected resources")
+		r.updatePlacementAppliedCondition(placementNew, nil)
+	} else if len(placementNew.Status.FailedResourcePlacements) == 0 {
+		r.updatePlacementAppliedCondition(placementNew, ErrStillPendingManifest)
 	} else {
-		updatePlacementAppliedCondition(placementNew, ErrFailedManifest)
+		r.updatePlacementAppliedCondition(placementNew, ErrFailedManifest)
 	}
 
 	// we keep a slow reconcile loop here as a backup.
@@ -190,7 +194,7 @@ func (r *Reconciler) removeAllWorks(ctx context.Context, placement *fleetv1alpha
 	placement.Status.TargetClusters = nil
 	placement.Status.SelectedResources = nil
 	placement.Status.FailedResourcePlacements = nil
-	updatePlacementScheduledCondition(placement, fmt.Errorf("the placement didn't select any resource or cluster"))
+	r.updatePlacementScheduledCondition(placement, fmt.Errorf("the placement didn't select any resource or cluster"))
 	return ctrl.Result{}, r.Client.Status().Update(ctx, placement, client.FieldOwner(utils.PlacementFieldManagerName))
 }
 
@@ -252,7 +256,10 @@ func (r *Reconciler) getPlacement(name string) (*fleetv1alpha1.ClusterResourcePl
 	return &placement, nil
 }
 
-func updatePlacementScheduledCondition(placement *fleetv1alpha1.ClusterResourcePlacement, scheduleErr error) {
+// updatePlacementScheduledCondition updates the placement's schedule condition according to the schedule error
+func (r *Reconciler) updatePlacementScheduledCondition(placement *fleetv1alpha1.ClusterResourcePlacement, scheduleErr error) {
+	placementRef := klog.KObj(placement)
+	schedCond := placement.GetCondition(string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled))
 	if scheduleErr == nil {
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
@@ -261,6 +268,10 @@ func updatePlacementScheduledCondition(placement *fleetv1alpha1.ClusterResourceP
 			Message:            "Successfully scheduled resources for placement",
 			ObservedGeneration: placement.Generation,
 		})
+		if schedCond == nil || schedCond.Status != metav1.ConditionTrue {
+			klog.V(3).InfoS("successfully scheduled all selected resources to their clusters", "placement", placementRef)
+			r.Recorder.Event(placement, corev1.EventTypeNormal, "ResourceScheduled", "successfully scheduled all selected resources to their clusters")
+		}
 	} else {
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
@@ -272,20 +283,49 @@ func updatePlacementScheduledCondition(placement *fleetv1alpha1.ClusterResourceP
 	}
 }
 
-func updatePlacementAppliedCondition(placement *fleetv1alpha1.ClusterResourcePlacement, applyErr error) {
-	if applyErr == nil {
+// updatePlacementAppliedCondition updates the placement's applied condition according to the apply error
+func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.ClusterResourcePlacement, applyErr error) {
+	placementRef := klog.KObj(placement)
+	appliedCond := placement.GetCondition(string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
+	if appliedCond != nil {
+		// this pointer value will be modified by the setCondition, so we need to take a deep copy.
+		appliedCond = appliedCond.DeepCopy()
+	}
+	switch {
+	case applyErr == nil:
+		if appliedCond == nil || appliedCond.Status != metav1.ConditionTrue {
+			klog.V(2).InfoS("successfully applied all selected resources", "placement", placementRef)
+			r.Recorder.Event(placement, corev1.EventTypeNormal, "ResourceApplied", "successfully applied all selected resources")
+		}
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:             "applySucceeded",
+			Reason:             ApplySucceededReason,
 			Message:            "Successfully applied resources to member clusters",
 			ObservedGeneration: placement.Generation,
 		})
-	} else {
+	case errors.Is(applyErr, ErrStillPendingManifest):
+		if appliedCond == nil || appliedCond.Status != metav1.ConditionUnknown {
+			klog.V(2).InfoS("Some selected resources are still waiting to be applied", "placement", placementRef)
+			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyPending", "Some selected resources are still waiting to be applied to the member cluster")
+		}
+		placement.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionUnknown,
+			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+			Reason:             ApplyPendingReason,
+			Message:            applyErr.Error(),
+			ObservedGeneration: placement.Generation,
+		})
+	default:
+		// this includes ErrFailedManifest and any other applyError
+		if appliedCond == nil || appliedCond.Status != metav1.ConditionFalse {
+			klog.V(2).InfoS("failed to apply some selected resources", "placement", placementRef)
+			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyFailed", "failed to apply some selected resources")
+		}
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
-			Reason:             "applyFailed",
+			Reason:             ApplyFailedReason,
 			Message:            applyErr.Error(),
 			ObservedGeneration: placement.Generation,
 		})
