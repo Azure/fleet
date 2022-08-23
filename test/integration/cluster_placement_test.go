@@ -25,6 +25,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -119,7 +120,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			markInternalMCJoined(clusterB)
 		})
 
-		It("Test select the resources by name", func() {
+		It("Test select the resources by name happy path", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-list-resource",
@@ -149,6 +150,15 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
+			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
+
+			By("Mimic work apply succeeded")
+			markWorkAppliedStatusSuccess(crp, &clusterA)
+			markWorkAppliedStatusSuccess(crp, &clusterB)
+
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, clusterresourceplacement.ApplySucceededReason)
 		})
 
 		It("Test select the resources by label", func() {
@@ -192,6 +202,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
+			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
 		})
 
 		It("Test select all the resources in a namespace", func() {
@@ -242,6 +253,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed())
 			By(fmt.Sprintf("validate work resource for cluster %s. It should contain %d manifests", clusterA.Name, len(namespacedResource)+1))
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(len(namespacedResource) + 1))
+		})
+
+		XIt("Test some of the resources selectors does not match any resource", func() {
+
 		})
 
 		It("Test select only the propagated resources in a namespace", func() {
@@ -750,6 +765,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, len(namespacedResource), 1, metav1.ConditionTrue)
+			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
 
 			By("Verify that work is not created in cluster A")
 			var clusterWork workv1alpha1.Work
@@ -1053,6 +1069,20 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			By("Verified that the deleted clusterRole is removed from the work")
+		})
+	})
+
+	Context("Test with simulated work api functionality", func() {
+		BeforeEach(func() {
+			By("Mark member cluster A as joined")
+			markInternalMCJoined(clusterA)
+
+			By("Mark member cluster B as joined")
+			markInternalMCJoined(clusterB)
+		})
+
+		XIt("Test partial failed apply", func() {
+
 		})
 	})
 })

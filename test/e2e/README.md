@@ -2,12 +2,16 @@ Here is how to run e2e locally. Make sure that you have installed Docker and Kin
 
 1. Build the docker images
 ```shell
+export KUBECONFIG=~/.kube/config
 OUTPUT_TYPE=type=docker make docker-build-member-agent docker-build-hub-agent docker-build-refresh-token
 ```
 
 2. Create the kind clusters and install the helm.
 ```shell
-export KUBECONFIG=~/.kube/config
+make creat-kind-cluster
+```
+or 
+```shell
 make create-hub-kind-cluster
 make create-member-kind-cluster
 make install-helm

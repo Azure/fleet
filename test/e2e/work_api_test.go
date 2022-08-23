@@ -23,6 +23,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/work-api/pkg/utils"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	fleetutil "go.goms.io/fleet/pkg/utils"
 )
 
@@ -139,7 +140,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 		})
 
-		It("should apply both the duplicate manifest", func() {
+		It("should apply both the works with duplicated manifest", func() {
 			By("creating the work resources")
 			err = createWork(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -147,7 +148,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 			err = createWork(workTwo, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("Checking the Applied Work status of each to see if one of the manifest is abandoned.")
+			By("Checking the Applied Work status of each to see both are applied.")
 			Eventually(func() bool {
 				appliedWorkOne, err := retrieveAppliedWork(workOne.Name, MemberCluster)
 				if err != nil {
@@ -159,7 +160,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 					return false
 				}
 
-				return len(appliedWorkOne.Status.AppliedResources)+len(appliedWorkTwo.Status.AppliedResources) == 2
+				return len(appliedWorkOne.Status.AppliedResources) == 1 && len(appliedWorkTwo.Status.AppliedResources) == 1
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 
 			By("Checking the work status of each works for verification")
@@ -172,18 +173,20 @@ var _ = Describe("work-api testing", Ordered, func() {
 				if err != nil {
 					return false
 				}
-				workOneCondition := meta.IsStatusConditionTrue(workOne.Status.ManifestConditions[0].Conditions, "Applied")
-				workTwoCondition := meta.IsStatusConditionTrue(workTwo.Status.ManifestConditions[0].Conditions, "Applied")
+				workOneCondition := meta.IsStatusConditionTrue(workOne.Status.ManifestConditions[0].Conditions, string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
+				workTwoCondition := meta.IsStatusConditionTrue(workTwo.Status.ManifestConditions[0].Conditions, string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
 				return workOneCondition && workTwoCondition
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 
-			By("verifying there is only one real resource on the spoke")
+			By("verifying the one resource on the spoke are owned by both appliedWork")
 			var deploy appsv1.Deployment
-			err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
-				Name:      manifestDetailsOne[0].ObjMeta.Name,
-				Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
-			Expect(err).Should(Succeed())
-			Expect(len(deploy.OwnerReferences)).Should(Equal(2))
+			Eventually(func() int {
+				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
+					Name:      manifestDetailsOne[0].ObjMeta.Name,
+					Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
+				Expect(err).Should(Succeed())
+				return len(deploy.OwnerReferences)
+			}, eventuallyTimeout, eventuallyInterval).Should(Equal(2))
 
 			By("delete the work two resources")
 			Expect(deleteWorkResource(workTwo, HubCluster)).To(Succeed())

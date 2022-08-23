@@ -266,6 +266,7 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 			Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
 			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, cluster.Name),
 		}, &clusterWork)).Should(Succeed())
+		Expect(clusterWork.GetLabels()[utils.LabelWorkPlacementName]).Should(Equal(crp.Name))
 		By(fmt.Sprintf("validate work resource for cluster %s. It should contain %d manifests", cluster.Name, expectedLength))
 		Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(expectedLength))
 		for i, manifest := range clusterWork.Spec.Workload.Manifests {
@@ -333,9 +334,31 @@ func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
 	Eventually(func() bool {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
 		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		if joinCond == nil {
+			return false
+		}
 		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionTrue
 	}, timeout, interval).Should(BeTrue())
+}
+
+func markWorkAppliedStatusSuccess(crp *fleetv1alpha1.ClusterResourcePlacement, cluster *fleetv1alpha1.MemberCluster) {
+	var clusterWork workv1alpha1.Work
+	Expect(k8sClient.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+		Namespace: fmt.Sprintf(utils.NamespaceNameFormat, cluster.Name),
+	}, &clusterWork)).Should(Succeed())
+	clusterWork.Status.Conditions = []metav1.Condition{
+		{
+			Type:               "Applied",
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "appliedWorkComplete",
+			Message:            "Apply work complete",
+			ObservedGeneration: crp.Generation,
+		},
+	}
+	Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
 }
 
 func verifyPlacementScheduleStatus(crp *fleetv1alpha1.ClusterResourcePlacement, selectedResourceCount, targetClusterCount int, scheduleStatus metav1.ConditionStatus) {
@@ -346,4 +369,11 @@ func verifyPlacementScheduleStatus(crp *fleetv1alpha1.ClusterResourcePlacement, 
 	schedCond := crp.GetCondition(string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled))
 	Expect(schedCond).ShouldNot(BeNil())
 	Expect(schedCond.Status).Should(Equal(scheduleStatus))
+}
+
+func verifyPlacementApplyStatus(crp *fleetv1alpha1.ClusterResourcePlacement, applyStatus metav1.ConditionStatus, applyReason string) {
+	applyCond := crp.GetCondition(string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
+	Expect(applyCond).ShouldNot(BeNil())
+	Expect(applyCond.Status == applyStatus).Should(BeTrue())
+	Expect(applyCond.Reason == applyReason).Should(BeTrue())
 }
