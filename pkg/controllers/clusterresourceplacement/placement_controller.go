@@ -286,17 +286,13 @@ func (r *Reconciler) updatePlacementScheduledCondition(placement *fleetv1alpha1.
 // updatePlacementAppliedCondition updates the placement's applied condition according to the apply error
 func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.ClusterResourcePlacement, applyErr error) {
 	placementRef := klog.KObj(placement)
-	appliedCond := placement.GetCondition(string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
-	if appliedCond != nil {
+	preAppliedCond := placement.GetCondition(string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied))
+	if preAppliedCond != nil {
 		// this pointer value will be modified by the setCondition, so we need to take a deep copy.
-		appliedCond = appliedCond.DeepCopy()
+		preAppliedCond = preAppliedCond.DeepCopy()
 	}
 	switch {
 	case applyErr == nil:
-		if appliedCond == nil || appliedCond.Status != metav1.ConditionTrue {
-			klog.V(2).InfoS("successfully applied all selected resources", "placement", placementRef)
-			r.Recorder.Event(placement, corev1.EventTypeNormal, "ResourceApplied", "successfully applied all selected resources")
-		}
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
@@ -304,11 +300,11 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 			Message:            "Successfully applied resources to member clusters",
 			ObservedGeneration: placement.Generation,
 		})
-	case errors.Is(applyErr, ErrStillPendingManifest):
-		if appliedCond == nil || appliedCond.Status != metav1.ConditionUnknown {
-			klog.V(2).InfoS("Some selected resources are still waiting to be applied", "placement", placementRef)
-			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyPending", "Some selected resources are still waiting to be applied to the member cluster")
+		klog.V(3).InfoS("successfully applied all selected resources", "placement", placementRef)
+		if preAppliedCond == nil || preAppliedCond.Status != metav1.ConditionTrue {
+			r.Recorder.Event(placement, corev1.EventTypeNormal, "ResourceApplied", "successfully applied all selected resources")
 		}
+	case errors.Is(applyErr, ErrStillPendingManifest):
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
@@ -316,12 +312,12 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 			Message:            applyErr.Error(),
 			ObservedGeneration: placement.Generation,
 		})
+		klog.V(3).InfoS("Some selected resources are still waiting to be applied", "placement", placementRef)
+		if preAppliedCond == nil || preAppliedCond.Status == metav1.ConditionTrue {
+			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyPending", "Some applied resources are now waiting to be applied to the member cluster")
+		}
 	default:
 		// this includes ErrFailedManifest and any other applyError
-		if appliedCond == nil || appliedCond.Status != metav1.ConditionFalse {
-			klog.V(2).InfoS("failed to apply some selected resources", "placement", placementRef)
-			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyFailed", "failed to apply some selected resources")
-		}
 		placement.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
@@ -329,5 +325,9 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 			Message:            applyErr.Error(),
 			ObservedGeneration: placement.Generation,
 		})
+		klog.V(3).InfoS("failed to apply some selected resources", "placement", placementRef)
+		if preAppliedCond == nil || preAppliedCond.Status != metav1.ConditionFalse {
+			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyFailed", "failed to apply some selected resources")
+		}
 	}
 }

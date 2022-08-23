@@ -140,7 +140,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 		})
 
-		It("should apply both the duplicate manifest", func() {
+		It("should apply both the works with duplicated manifest", func() {
 			By("creating the work resources")
 			err = createWork(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -148,7 +148,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 			err = createWork(workTwo, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			By("Checking the Applied Work status of each to see if one of the manifest is abandoned.")
+			By("Checking the Applied Work status of each to see both are applied.")
 			Eventually(func() bool {
 				appliedWorkOne, err := retrieveAppliedWork(workOne.Name, MemberCluster)
 				if err != nil {
@@ -160,7 +160,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 					return false
 				}
 
-				return len(appliedWorkOne.Status.AppliedResources)+len(appliedWorkTwo.Status.AppliedResources) == 2
+				return len(appliedWorkOne.Status.AppliedResources) == 1 && len(appliedWorkTwo.Status.AppliedResources) == 1
 			}, eventuallyTimeout, eventuallyInterval).Should(BeTrue())
 
 			By("Checking the work status of each works for verification")

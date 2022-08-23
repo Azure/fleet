@@ -334,6 +334,9 @@ func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
 	Eventually(func() bool {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
 		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		if joinCond == nil {
+			return false
+		}
 		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionTrue
 	}, timeout, interval).Should(BeTrue())
