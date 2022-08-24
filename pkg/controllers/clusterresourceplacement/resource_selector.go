@@ -285,6 +285,16 @@ func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest
 	object.SetSelfLink("")
 	object.SetDeletionTimestamp(nil)
 	object.SetManagedFields(nil)
+	// remove kubectl last applied annotation if exist
+	annots := object.GetAnnotations()
+	if annots != nil {
+		delete(annots, corev1.LastAppliedConfigAnnotation)
+		if len(annots) == 0 {
+			object.SetAnnotations(nil)
+		} else {
+			object.SetAnnotations(annots)
+		}
+	}
 	// Remove all the owner references as the UID in the owner reference can't be transferred to
 	// the member clusters
 	// TODO: Establish a way to keep the ownership relation through work-api
