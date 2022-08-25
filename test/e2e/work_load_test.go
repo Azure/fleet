@@ -25,17 +25,18 @@ import (
 var _ = Describe("workload orchestration testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
-	var memberNS *corev1.Namespace
+	var memberNsName string
 	var imc *v1alpha1.InternalMemberCluster
 	var cr *rbacv1.ClusterRole
 	var crp *v1alpha1.ClusterResourcePlacement
 
 	BeforeEach(func() {
-		memberNS = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+		memberNsName = fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName)
+		//memberNs = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
-		testutils.CreateNamespace(*MemberCluster, memberNS)
-		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
+		//testutils.CreateNamespace(*MemberCluster, memberNs)
+		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNsName)
 		testutils.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
@@ -43,7 +44,7 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNsName)
 		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if internal member cluster condition is updated to Joined")
@@ -54,15 +55,7 @@ var _ = Describe("workload orchestration testing", func() {
 
 	AfterEach(func() {
 		testutils.DeleteMemberCluster(*HubCluster, mc)
-		Eventually(func() bool {
-			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
-		testutils.DeleteNamespace(*MemberCluster, memberNS)
-		Eventually(func() bool {
-			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteServiceAccount(*MemberCluster, sa)
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
@@ -104,7 +97,7 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
 
 		By("check if work gets created for cluster resource placement")
-		testutils.WaitWork(*HubCluster, workName, memberNS.Name)
+		testutils.WaitWork(*HubCluster, workName, memberNs.Name)
 
 		By("check if cluster resource placement is updated to Scheduled & Applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementConditionTypeScheduled), v1.ConditionTrue, 3*testutils.PollTimeout)

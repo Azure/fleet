@@ -5,11 +5,15 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"fmt"
+	"go.goms.io/fleet/pkg/utils"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -27,14 +31,19 @@ var (
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
-	genericCodecs     = serializer.NewCodecFactory(scheme)
-	genericCodec      = genericCodecs.UniversalDeserializer()
+	memberNs          = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+	workNs            = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+	workResourceNs    = testutils.NewNamespace("resource-namespace")
+
+	genericCodecs = serializer.NewCodecFactory(scheme)
+	genericCodec  = genericCodecs.UniversalDeserializer()
 )
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 }
 
 func TestE2E(t *testing.T) {
@@ -57,4 +66,15 @@ var _ = BeforeSuite(func() {
 	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 
+	testutils.CreateNamespace(*MemberCluster, memberNs)
+
+	testutils.CreateNamespace(*HubCluster, workNs)
+	testutils.CreateNamespace(*MemberCluster, workResourceNs)
+})
+
+var _ = AfterSuite(func() {
+	testutils.DeleteNamespace(*MemberCluster, memberNs)
+
+	testutils.DeleteNamespace(*HubCluster, workNs)
+	testutils.DeleteNamespace(*MemberCluster, workResourceNs)
 })

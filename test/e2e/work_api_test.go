@@ -7,8 +7,7 @@ package e2e
 
 import (
 	"context"
-	"fmt"
-	"time"
+	"go.goms.io/fleet/test/e2e/utils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,33 +23,19 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	fleetutil "go.goms.io/fleet/pkg/utils"
 )
 
 const (
-	eventuallyTimeout  = 10 * time.Second
-	eventuallyInterval = 500 * time.Millisecond
+	eventuallyTimeout  = 90 // seconds
+	eventuallyInterval = 1  // seconds
 )
 
-var defaultWorkNamespace = fmt.Sprintf(fleetutil.NamespaceNameFormat, MemberCluster.ClusterName)
-
-var _ = Describe("work-api testing", Ordered, func() {
-
-	wns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: defaultWorkNamespace,
-		},
-	}
-
-	BeforeAll(func() {
-		_, err := HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
-		Expect(err).Should(SatisfyAny(Succeed(), &fleetutil.AlreadyExistMatcher{}))
-	})
+var _ = Describe("work-api testing", func() {
 
 	Context("with a Work resource that has two manifests: Deployment & Service", func() {
 		var createdWork *workapi.Work
 		var err error
-		var mDetails []manifestDetails
+		var mDetails []utils.ManifestDetails
 
 		BeforeEach(func() {
 			mDetails = generateManifestDetails([]string{
@@ -58,28 +43,28 @@ var _ = Describe("work-api testing", Ordered, func() {
 				"manifests/test-service.yaml",
 			})
 
-			workObj := createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workObj := utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				mDetails,
 			)
 
-			err = createWork(workObj, HubCluster)
+			err = utils.CreateWorkOld(workObj, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
+			createdWork, err = utils.RetrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork, HubCluster)
+			err = utils.DeleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should have created: a respective AppliedWork, and the resources specified in the Work's manifests", func() {
 			By("verifying an AppliedWork was created")
 			Eventually(func() error {
-				_, err := retrieveAppliedWork(createdWork.Name, MemberCluster)
+				_, err := utils.RetrieveAppliedWork(createdWork.Name, MemberCluster)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -102,7 +87,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 			By("verifying that corresponding conditions were created")
 			Eventually(func() bool {
-				work, err := retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
+				work, err := utils.RetrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 				if err != nil {
 					return false
 				}
@@ -116,8 +101,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 		var workOne *workapi.Work
 		var workTwo *workapi.Work
 		var err error
-		var manifestDetailsOne []manifestDetails
-		var manifestDetailsTwo []manifestDetails
+		var manifestDetailsOne []utils.ManifestDetails
+		var manifestDetailsTwo []utils.ManifestDetails
 
 		BeforeEach(func() {
 			manifestDetailsOne = generateManifestDetails([]string{
@@ -127,35 +112,38 @@ var _ = Describe("work-api testing", Ordered, func() {
 				"manifests/test-deployment.yaml",
 			})
 
-			workOne = createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workOne = utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				manifestDetailsOne,
 			)
 
-			workTwo = createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workTwo = utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				manifestDetailsTwo)
 
 		})
 
 		It("should apply both the works with duplicated manifest", func() {
 			By("creating the work resources")
-			err = createWork(workOne, HubCluster)
+			err = utils.CreateWorkOld(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = createWork(workTwo, HubCluster)
+			err = utils.CreateWorkOld(workTwo, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
+
+			utils.WaitAppliedWorkPresent(workOne.Name, MemberCluster)
+			utils.WaitAppliedWorkPresent(workTwo.Name, MemberCluster)
 
 			By("Checking the Applied Work status of each to see both are applied.")
 			Eventually(func() bool {
-				appliedWorkOne, err := retrieveAppliedWork(workOne.Name, MemberCluster)
+				appliedWorkOne, err := utils.RetrieveAppliedWork(workOne.Name, MemberCluster)
 				if err != nil {
 					return false
 				}
 
-				appliedWorkTwo, err := retrieveAppliedWork(workTwo.Name, MemberCluster)
+				appliedWorkTwo, err := utils.RetrieveAppliedWork(workTwo.Name, MemberCluster)
 				if err != nil {
 					return false
 				}
@@ -165,11 +153,11 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 			By("Checking the work status of each works for verification")
 			Eventually(func() bool {
-				workOne, err := retrieveWork(workOne.Namespace, workOne.Name, HubCluster)
+				workOne, err := utils.RetrieveWork(workOne.Namespace, workOne.Name, HubCluster)
 				if err != nil {
 					return false
 				}
-				workTwo, err := retrieveWork(workTwo.Namespace, workTwo.Name, HubCluster)
+				workTwo, err := utils.RetrieveWork(workTwo.Namespace, workTwo.Name, HubCluster)
 				if err != nil {
 					return false
 				}
@@ -184,12 +172,20 @@ var _ = Describe("work-api testing", Ordered, func() {
 				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
 					Name:      manifestDetailsOne[0].ObjMeta.Name,
 					Namespace: manifestDetailsOne[0].ObjMeta.Namespace}, &deploy)
-				Expect(err).Should(Succeed())
+				if err != nil {
+					return 0
+				}
+				err = MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
+					Name:      manifestDetailsTwo[0].ObjMeta.Name,
+					Namespace: manifestDetailsTwo[0].ObjMeta.Namespace}, &deploy)
+				if err != nil {
+					return 0
+				}
 				return len(deploy.OwnerReferences)
 			}, eventuallyTimeout, eventuallyInterval).Should(Equal(2))
 
 			By("delete the work two resources")
-			Expect(deleteWorkResource(workTwo, HubCluster)).To(Succeed())
+			Expect(utils.DeleteWorkResource(workTwo, HubCluster)).To(Succeed())
 
 			By("Delete one work wont' delete the manifest")
 			Eventually(func() int {
@@ -201,7 +197,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 			}, eventuallyTimeout, eventuallyInterval).Should(Equal(1))
 
 			By("delete the work one resources")
-			err = deleteWorkResource(workOne, HubCluster)
+			err = utils.DeleteWorkResource(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 			Eventually(func() bool {
 				err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{
@@ -215,33 +211,33 @@ var _ = Describe("work-api testing", Ordered, func() {
 	Context("updating work with two newly added manifests: configmap & namespace", func() {
 		var createdWork *workapi.Work
 		var err error
-		var initialManifestDetails []manifestDetails
-		var addedManifestDetails []manifestDetails
+		var initialManifestDetails []utils.ManifestDetails
+		var addedManifestDetails []utils.ManifestDetails
 
 		BeforeEach(func() {
 			initialManifestDetails = generateManifestDetails([]string{
 				"manifests/test-secret.yaml",
 			})
 			addedManifestDetails = generateManifestDetails([]string{
-				"manifests/test-configmap.ns.yaml",
+				"manifests/test-configmap2.ns.yaml",
 				"manifests/test-namespace.yaml",
 			})
 
-			workObj := createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workObj := utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				initialManifestDetails,
 			)
 
-			err = createWork(workObj, HubCluster)
+			err = utils.CreateWorkOld(workObj, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
+			createdWork, err = utils.RetrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork, HubCluster)
+			err = utils.DeleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = MemberCluster.KubeClientSet.CoreV1().ConfigMaps(addedManifestDetails[0].ObjMeta.Namespace).Delete(context.Background(), addedManifestDetails[0].ObjMeta.Name, metav1.DeleteOptions{})
@@ -250,12 +246,19 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 		It("should have created the ConfigMap in the new namespace", func() {
 			By("retrieving the existing work and updating it by adding new manifests")
+			work := &workapi.Work{}
 			Eventually(func() error {
-				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
-				Expect(err).ToNot(HaveOccurred())
+				work, err = utils.RetrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
+				return err
+			}, eventuallyTimeout, eventuallyInterval).Should(Succeed())
 
-				createdWork.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
-				createdWork, err = updateWork(createdWork, HubCluster)
+			work.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
+			work, err = utils.UpdateWork(createdWork, HubCluster)
+			Expect(err).Should(Succeed())
+
+			By("checking if the new Namespace was created")
+			Eventually(func() error {
+				_, err := MemberCluster.KubeClientSet.CoreV1().Namespaces().Get(context.Background(), addedManifestDetails[1].ObjMeta.Name, metav1.GetOptions{})
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -267,12 +270,6 @@ var _ = Describe("work-api testing", Ordered, func() {
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
 
-			By("checking if the new Namespace was created ")
-			Eventually(func() error {
-				_, err := MemberCluster.KubeClientSet.CoreV1().Namespaces().Get(context.Background(), addedManifestDetails[1].ObjMeta.Name, metav1.GetOptions{})
-
-				return err
-			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
 		})
 	})
 
@@ -280,39 +277,39 @@ var _ = Describe("work-api testing", Ordered, func() {
 		var configMap corev1.ConfigMap
 		var createdWork *workapi.Work
 		var err error
-		var manifestDetails []manifestDetails
+		var manifestDetails []utils.ManifestDetails
 		var newDataKey string
 		var newDataValue string
 
 		BeforeEach(func() {
 			manifestDetails = generateManifestDetails([]string{
-				"manifests/test-configmap.yaml",
+				"manifests/test-configmap2.yaml",
 			})
-			newDataKey = getWorkName(5)
-			newDataValue = getWorkName(5)
+			newDataKey = utils.GetWorkName(5)
+			newDataValue = utils.GetWorkName(5)
 
-			workObj := createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workObj := utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				manifestDetails,
 			)
 
-			err = createWork(workObj, HubCluster)
+			err = utils.CreateWorkOld(workObj, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
+			createdWork, err = utils.RetrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork, HubCluster)
+			err = utils.DeleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should reapply the manifest's updated spec on the spoke cluster", func() {
 			By("retrieving the existing work and modifying the manifest")
 			Eventually(func() error {
-				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
+				createdWork, err = utils.RetrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 
 				// Extract and modify the ConfigMap by adding a new key value pair.
 				err = json.Unmarshal(createdWork.Spec.Workload.Manifests[0].Raw, &configMap)
@@ -321,7 +318,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 				obj, _, _ := genericCodec.Decode(rawUpdatedManifest, nil, nil)
 				createdWork.Spec.Workload.Manifests[0].Object = obj
 				createdWork.Spec.Workload.Manifests[0].Raw = rawUpdatedManifest
-				_, err = updateWork(createdWork, HubCluster)
+				_, err = utils.UpdateWork(createdWork, HubCluster)
 				return err
 			}, eventuallyTimeout, eventuallyInterval).Should(Succeed())
 
@@ -337,8 +334,8 @@ var _ = Describe("work-api testing", Ordered, func() {
 		var appliedWork *workapi.AppliedWork
 		var createdWork *workapi.Work
 		var err error
-		var originalManifestDetails []manifestDetails
-		var replacedManifestDetails []manifestDetails
+		var originalManifestDetails []utils.ManifestDetails
+		var replacedManifestDetails []utils.ManifestDetails
 		resourcesStillExist := true
 
 		BeforeEach(func() {
@@ -346,44 +343,44 @@ var _ = Describe("work-api testing", Ordered, func() {
 				"manifests/test-secret.yaml",
 			})
 			replacedManifestDetails = generateManifestDetails([]string{
-				"manifests/test-configmap.yaml",
+				"manifests/test-configmap2.yaml",
 			})
 
-			workObj := createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workObj := utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				originalManifestDetails,
 			)
 
-			err = createWork(workObj, HubCluster)
+			err = utils.CreateWorkOld(workObj, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
+			createdWork, err = utils.RetrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			err = deleteWorkResource(createdWork, HubCluster)
+			err = utils.DeleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should have deleted the original Work's resources, and created new resources with the replaced manifests", func() {
 			By("getting the respective AppliedWork")
 			Eventually(func() int {
-				appliedWork, _ = retrieveAppliedWork(createdWork.Name, MemberCluster)
+				appliedWork, _ = utils.RetrieveAppliedWork(createdWork.Name, MemberCluster)
 
 				return len(appliedWork.Status.AppliedResources)
 			}, eventuallyTimeout, eventuallyInterval).Should(Equal(len(originalManifestDetails)))
 
 			By("updating the Work resource with replaced manifests")
 			Eventually(func() error {
-				createdWork, err = retrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
+				createdWork, err = utils.RetrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
 				createdWork.Spec.Workload.Manifests = nil
 				for _, mD := range replacedManifestDetails {
 					createdWork.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, mD.Manifest)
 				}
 
-				createdWork, err = updateWork(createdWork, HubCluster)
+				createdWork, err = utils.UpdateWork(createdWork, HubCluster)
 
 				return err
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
@@ -422,23 +419,23 @@ var _ = Describe("work-api testing", Ordered, func() {
 	Context("Work deletion", func() {
 		var createdWork *workapi.Work
 		var err error
-		var manifestDetails []manifestDetails
+		var manifestDetails []utils.ManifestDetails
 
 		BeforeEach(func() {
 			manifestDetails = generateManifestDetails([]string{
 				"manifests/test-secret.yaml",
 			})
 
-			workObj := createWorkObj(
-				getWorkName(5),
-				defaultWorkNamespace,
+			workObj := utils.CreateWorkObj(
+				utils.GetWorkName(5),
+				workNs.Name,
 				manifestDetails,
 			)
 
-			err = createWork(workObj, HubCluster)
+			err = utils.CreateWorkOld(workObj, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			createdWork, err = retrieveWork(workObj.Namespace, workObj.Name, HubCluster)
+			createdWork, err = utils.RetrieveWork(workObj.Namespace, workObj.Name, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -451,7 +448,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
 
 			By("deleting the Work resource")
-			err = deleteWorkResource(createdWork, HubCluster)
+			err = utils.DeleteWorkResource(createdWork, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("verifying the resource was garbage collected")
@@ -462,21 +459,16 @@ var _ = Describe("work-api testing", Ordered, func() {
 			}, eventuallyTimeout, eventuallyInterval).ShouldNot(HaveOccurred())
 		})
 	})
-
-	AfterAll(func() {
-		err := HubCluster.KubeClient.Delete(context.Background(), wns)
-		Expect(err).ToNot(HaveOccurred())
-	})
 })
 
-func generateManifestDetails(manifestFiles []string) []manifestDetails {
-	details := make([]manifestDetails, 0, len(manifestFiles))
+func generateManifestDetails(manifestFiles []string) []utils.ManifestDetails {
+	details := make([]utils.ManifestDetails, 0, len(manifestFiles))
 
 	for _, file := range manifestFiles {
-		detail := manifestDetails{}
+		detail := utils.ManifestDetails{}
 
 		// Read files, create manifest
-		fileRaw, err := testManifestFiles.ReadFile(file)
+		fileRaw, err := utils.TestManifestFiles.ReadFile(file)
 		Expect(err).ToNot(HaveOccurred())
 
 		obj, gvk, err := genericCodec.Decode(fileRaw, nil, nil)
@@ -491,7 +483,7 @@ func generateManifestDetails(manifestFiles []string) []manifestDetails {
 				Raw:    jsonObj},
 		}
 
-		unstructuredObj, err := decodeUnstructured(detail.Manifest)
+		unstructuredObj, err := utils.DecodeUnstructured(detail.Manifest)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		mapping, err := MemberCluster.RestMapper.RESTMapping(unstructuredObj.GroupVersionKind().GroupKind(), unstructuredObj.GroupVersionKind().Version)

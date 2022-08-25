@@ -6,7 +6,9 @@ package utils
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"github.com/onsi/gomega/format"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -15,7 +17,11 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -23,11 +29,18 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
+const (
+	conditionTypeApplied = "Applied"
+)
+
 var (
 	// PollInterval defines the interval time for a poll operation.
 	PollInterval = 5 * time.Second
 	// PollTimeout defines the time after which the poll operation times out.
-	PollTimeout = 60 * time.Second
+	PollTimeout = 90 * time.Second
+
+	//go:embed manifests
+	TestManifestFiles embed.FS
 )
 
 // NewMemberCluster return a new member cluster.
@@ -82,7 +95,7 @@ func NewNamespace(name string) *corev1.Namespace {
 func CreateMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
 	ginkgo.By(fmt.Sprintf("Creating MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), mc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 	klog.Infof("Waiting for MemberCluster(%s) to be synced", mc.Name)
 	gomega.Eventually(func() error {
@@ -94,17 +107,17 @@ func CreateMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) 
 // UpdateMemberClusterState updates MemberCluster in the hub cluster.
 func UpdateMemberClusterState(cluster framework.Cluster, mc *v1alpha1.MemberCluster, state v1alpha1.ClusterState) {
 	err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	gomega.Expect(err).Should(gomega.Succeed())
 	mc.Spec.State = state
 	err = cluster.KubeClient.Update(context.TODO(), mc)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	gomega.Expect(err).Should(gomega.Succeed())
 }
 
 // DeleteMemberCluster deletes MemberCluster in the hub cluster.
 func DeleteMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
 	ginkgo.By(fmt.Sprintf("Deleting MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), mc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -134,7 +147,9 @@ func WaitConditionInternalMemberCluster(cluster framework.Cluster, imc *v1alpha1
 	klog.Infof("Waiting for InternalMemberCluster(%s) condition(%s) status(%s) to be synced in the %s cluster", imc.Name, conditionType, status, cluster.ClusterName)
 	gomega.Eventually(func() bool {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		if err != nil {
+			return false
+		}
 		cond := imc.GetConditionWithType(v1alpha1.MemberAgent, string(conditionType))
 		return cond != nil && cond.Status == status
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
@@ -144,7 +159,7 @@ func WaitConditionInternalMemberCluster(cluster framework.Cluster, imc *v1alpha1
 func CreateClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), cr)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -161,7 +176,7 @@ func WaitClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Deleting ClusterRole(%s)", cr.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), cr)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -169,7 +184,7 @@ func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 func CreateClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), crp)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 	klog.Infof("Waiting for ClusterResourcePlacement(%s) to be synced", crp.Name)
 	gomega.Eventually(func() error {
@@ -194,7 +209,7 @@ func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alp
 func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), crp)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -226,7 +241,7 @@ func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Deleting Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), ns)
 		if err != nil && !apierrors.IsNotFound(err) {
-			gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+			gomega.Expect(err).Should(gomega.Succeed())
 		}
 	})
 }
@@ -235,7 +250,7 @@ func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 func CreateServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) {
 	ginkgo.By(fmt.Sprintf("Creating ServiceAccount(%s)", sa.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), sa)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -243,6 +258,87 @@ func CreateServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) {
 	ginkgo.By(fmt.Sprintf("Delete ServiceAccount(%s)", sa.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), sa)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
+}
+
+// CreateWork creates Work object based on manifest given.
+func CreateWork(workName string, workNamespace string, ctx context.Context, hubCluster framework.Cluster, workList []workapi.Work, manifests []workapi.Manifest) {
+	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s", workName, workNamespace))
+	work := workapi.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: workNamespace,
+		},
+		Spec: workapi.WorkSpec{
+			Workload: workapi.WorkloadTemplate{
+				Manifests: manifests,
+			},
+		},
+	}
+
+	workList = append(workList, work)
+	err := hubCluster.KubeClient.Create(ctx, &work)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
+}
+
+func DeleteWork(hubCluster framework.Cluster, workList []workapi.Work, ctx context.Context) error {
+	if len(workList) > 0 {
+		for _, work := range workList {
+			err := hubCluster.KubeClient.Delete(ctx, &work)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func AppliedWorkContainsResource(resourceMeta workapi.AppliedResourceMeta, name string, version string, kind string) bool {
+	if resourceMeta.Name != name || resourceMeta.Version != version || resourceMeta.Kind != kind {
+		return false
+	}
+	return true
+}
+
+func GenerateCRDObjectFromFile(filepath string, genericCodec runtime.Decoder, cluster framework.Cluster) (*schema.GroupVersionKind, runtime.RawExtension) {
+	fileRaw, err := TestManifestFiles.ReadFile(filepath)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Reading manifest file %s failed", filepath)
+
+	obj, gvk, err := genericCodec.Decode(fileRaw, nil, nil)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Decoding manifest file %s failed", filepath)
+
+	jsonObj, err := json.Marshal(obj)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Marshalling failed for file %s", filepath)
+
+	newObj := &unstructured.Unstructured{}
+	err = newObj.UnmarshalJSON(jsonObj)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "UnMarshaling failed for file %s", filepath)
+
+	_, err = cluster.RestMapper.RESTMapping(newObj.GroupVersionKind().GroupKind(), newObj.GroupVersionKind().Version)
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred(), "CRD data was not mapped in the restMapper")
+
+	return gvk, runtime.RawExtension{Object: obj, Raw: jsonObj}
+}
+
+// AlreadyExistMatcher matches the error to be already exist
+type AlreadyExistMatcher struct {
+}
+
+// Match matches error.
+func (matcher AlreadyExistMatcher) Match(actual interface{}) (success bool, err error) {
+	if actual == nil {
+		return false, nil
+	}
+	actualError := actual.(error)
+	return apierrors.IsAlreadyExists(actualError), nil
+}
+
+// FailureMessage builds an error message.
+func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "to be already exist")
+}
+
+// NegatedFailureMessage builds an error message.
+func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "not to be already exist")
 }
