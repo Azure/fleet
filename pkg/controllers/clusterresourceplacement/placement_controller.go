@@ -107,6 +107,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		klog.ErrorS(scheduleErr, "failed to generate the work resource for this placementOld", "placement", placeRef)
 		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
+		// TODO:check if the schedule error is retriable
 		return ctrl.Result{}, scheduleErr
 	}
 	if len(manifests) == 0 {

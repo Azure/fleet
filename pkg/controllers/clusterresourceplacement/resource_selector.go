@@ -79,7 +79,6 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 			objs, err = r.fetchClusterScopedResources(ctx, selector, placement.GetName())
 		}
 		if err != nil {
-			// TODO: revisit if return partial result makes sense
 			return nil, errors.Wrapf(err, "selector = %v", selector)
 		}
 		resources = append(resources, objs...)
@@ -116,8 +115,11 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		return nil, errors.Wrap(err, "Failed to get GVR of the selector")
 	}
 	gvr := restMapping.Resource
+	if !r.InformerManager.IsClusterScopedResources(gvr) {
+		return nil, errors.New(fmt.Sprintf("%+v is not a cluster scoped resource", restMapping.Resource))
+	}
 	if !r.InformerManager.IsInformerSynced(gvr) {
-		return nil, fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource)
+		return nil, errors.New(fmt.Sprintf("informer cache for %+v is not synced yet", restMapping.Resource))
 	}
 
 	lister := r.InformerManager.Lister(gvr)
