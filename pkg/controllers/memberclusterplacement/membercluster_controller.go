@@ -20,12 +20,13 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	// the informer contains the cache for all the resources we need
-	InformerManager utils.InformerManager
+	InformerManager informer.Manager
 
 	// PlacementController maintains a rate limited queue which used to store
 	// the name of the clusterResourcePlacement and a reconcile function to consume the items in queue.

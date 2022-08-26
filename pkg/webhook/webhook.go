@@ -25,6 +25,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
 const (
@@ -62,7 +64,9 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 
 	// We assume a headless service named fleetwebhook has been created in the pod namespace (e.g., via helm chart)
 	podWebhookURL := fmt.Sprintf("https://fleetwebhook.%s.svc.cluster.local:%d/validate-v1-pod", WebhookServiceNs, port)
-	scope := admv1.NamespacedScope
+	crpWebhookURL := fmt.Sprintf("https://fleetwebhook.%s.svc.cluster.local:%d/validate-fleet-azure-com-v1alpha1-clusterresourceplacement", WebhookServiceNs, port)
+	namespacedScope := admv1.NamespacedScope
+	clusterScope := admv1.ClusterScope
 	whCfg := admv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: FleetWebhookCfgName,
@@ -90,7 +94,31 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 							APIGroups:   []string{""},
 							APIVersions: []string{"v1"},
 							Resources:   []string{"pods"},
-							Scope:       &scope,
+							Scope:       &namespacedScope,
+						},
+					},
+				},
+			},
+			{
+				Name: "fleet.clusterresourceplacement.validating",
+				ClientConfig: admv1.WebhookClientConfig{
+					URL:      &crpWebhookURL,
+					CABundle: caPEM,
+				},
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.OperationAll,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{"fleet.azure.com"},
+							APIVersions: []string{"v1alpha1"},
+							Resources:   []string{fleetv1alpha1.ClusterResourcePlacementResource},
+							Scope:       &clusterScope,
 						},
 					},
 				},

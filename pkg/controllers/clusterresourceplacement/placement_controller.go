@@ -24,6 +24,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
@@ -41,7 +42,7 @@ var (
 // Reconciler reconciles a cluster resource placement object
 type Reconciler struct {
 	// the informer contains the cache for all the resources we need
-	InformerManager utils.InformerManager
+	InformerManager informer.Manager
 
 	RestMapper meta.RESTMapper
 

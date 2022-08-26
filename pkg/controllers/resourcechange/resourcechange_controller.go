@@ -26,6 +26,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/keys"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
@@ -39,7 +40,7 @@ type Reconciler struct {
 	RestMapper meta.RESTMapper
 
 	// InformerManager holds all the informers that we can use to read from
-	InformerManager utils.InformerManager
+	InformerManager informer.Manager
 
 	// PlacementController exposes the placement queue for the reconciler to push to
 	PlacementController controller.Controller
