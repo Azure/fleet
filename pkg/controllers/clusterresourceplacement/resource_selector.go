@@ -79,7 +79,6 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 			objs, err = r.fetchClusterScopedResources(ctx, selector, placement.GetName())
 		}
 		if err != nil {
-			// TODO: revisit if return partial result makes sense
 			return nil, errors.Wrapf(err, "selector = %v", selector)
 		}
 		resources = append(resources, objs...)
@@ -116,8 +115,11 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		return nil, errors.Wrap(err, "Failed to get GVR of the selector")
 	}
 	gvr := restMapping.Resource
+	if !r.InformerManager.IsClusterScopedResources(gvr) {
+		return nil, errors.New(fmt.Sprintf("%+v is not a cluster scoped resource", restMapping.Resource))
+	}
 	if !r.InformerManager.IsInformerSynced(gvr) {
-		return nil, fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource)
+		return nil, errors.New(fmt.Sprintf("informer cache for %+v is not synced yet", restMapping.Resource))
 	}
 
 	lister := r.InformerManager.Lister(gvr)
@@ -125,7 +127,8 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 	if len(selector.Name) != 0 {
 		obj, err := lister.Get(selector.Name)
 		if err != nil {
-			return nil, client.IgnoreNotFound(errors.Wrap(err, "cannot get the objets"))
+			klog.ErrorS(err, "cannot get the resource", "gvr", gvr, "name", selector.Name)
+			return nil, client.IgnoreNotFound(err)
 		}
 		uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 		if uObj.GetDeletionTimestamp() != nil {
@@ -217,7 +220,8 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 	// select the namespace object itself
 	obj, err := r.InformerManager.Lister(utils.NamespaceGVR).Get(namespaceName)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get the namespace %s object", namespaceName)
+		klog.ErrorS(err, "cannot get the namespace", "namespace", namespaceName)
+		return nil, client.IgnoreNotFound(err)
 	}
 	nameSpaceObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 	if nameSpaceObj.GetDeletionTimestamp() != nil {
@@ -285,6 +289,16 @@ func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest
 	object.SetSelfLink("")
 	object.SetDeletionTimestamp(nil)
 	object.SetManagedFields(nil)
+	// remove kubectl last applied annotation if exist
+	annots := object.GetAnnotations()
+	if annots != nil {
+		delete(annots, corev1.LastAppliedConfigAnnotation)
+		if len(annots) == 0 {
+			object.SetAnnotations(nil)
+		} else {
+			object.SetAnnotations(annots)
+		}
+	}
 	// Remove all the owner references as the UID in the owner reference can't be transferred to
 	// the member clusters
 	// TODO: Establish a way to keep the ownership relation through work-api

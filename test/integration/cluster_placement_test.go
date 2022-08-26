@@ -161,6 +161,45 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, clusterresourceplacement.ApplySucceededReason)
 		})
 
+		It("Test select the resources by name not found", func() {
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-list-resource",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   apiextensionsv1.GroupName,
+							Version: "v1",
+							Kind:    "CustomResourceDefinition",
+							Name:    "doesnotexist",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select named resource clusterResourcePlacement created")
+
+			// verify that we have created work objects that contain the resource selected
+			waitForPlacementScheduled(crp.GetName())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+
+			//add a valid cluster
+			By("Select named cluster clusterResourcePlacement updated")
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, fleetv1alpha1.ClusterResourceSelector{
+				Group:   rbacv1.GroupName,
+				Version: "v1",
+				Kind:    ClusterRoleKind,
+				Name:    "test-cluster-role",
+			})
+			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
+			By("verify that we have created work objects in the newly selected cluster")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 1, 2, metav1.ConditionTrue)
+		})
+
 		It("Test select the resources by label", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -203,6 +242,14 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			verifyPlacementScheduleStatus(crp, 2, 2, metav1.ConditionTrue)
 			verifyPlacementApplyStatus(crp, metav1.ConditionUnknown, clusterresourceplacement.ApplyPendingReason)
+
+			By("Mimic work apply succeeded")
+			markWorkAppliedStatusSuccess(crp, &clusterA)
+			markWorkAppliedStatusSuccess(crp, &clusterB)
+
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementApplyStatus(crp, metav1.ConditionTrue, clusterresourceplacement.ApplySucceededReason)
 		})
 
 		It("Test select all the resources in a namespace", func() {
@@ -253,10 +300,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed())
 			By(fmt.Sprintf("validate work resource for cluster %s. It should contain %d manifests", clusterA.Name, len(namespacedResource)+1))
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(len(namespacedResource) + 1))
-		})
-
-		XIt("Test some of the resources selectors does not match any resource", func() {
-
 		})
 
 		It("Test select only the propagated resources in a namespace", func() {
@@ -721,6 +764,43 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+		})
+
+		It("Test select named cluster does not exist", func() {
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-list-cluster",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &fleetv1alpha1.PlacementPolicy{
+						ClusterNames: []string{"doesnotexist"},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select named cluster clusterResourcePlacement created")
+
+			waitForPlacementScheduled(crp.GetName())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+
+			//add a valid cluster
+			By("Select named cluster clusterResourcePlacement updated")
+			crp.Spec.Policy.ClusterNames = append(crp.Spec.Policy.ClusterNames, clusterA.Name)
+			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
+			waitForPlacementScheduled(crp.GetName())
+			By("verify that we have created work objects in the newly selected cluster")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 1, 1, metav1.ConditionTrue)
 		})
 
 		It("Test select member cluster by label with change", func() {

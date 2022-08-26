@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -43,7 +44,19 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		klog.V(4).InfoS("use the cluster names provided as the list of cluster we select",
 			"placement", placement.Name, "clusters", placement.Spec.Policy.ClusterNames)
 		// TODO: filter by cluster health
-		return placement.Spec.Policy.ClusterNames, nil
+		var selectedClusters []string
+		for _, clusterName := range placement.Spec.Policy.ClusterNames {
+			_, err = r.InformerManager.Lister(utils.MemberClusterGVR).Get(clusterName)
+			if err != nil {
+				klog.ErrorS(err, "cannot get the cluster", "clusterName", clusterName)
+				if !apierrors.IsNotFound(err) {
+					return nil, err
+				}
+			} else {
+				selectedClusters = append(selectedClusters, clusterName)
+			}
+		}
+		return selectedClusters, nil
 	}
 
 	// no Affinity or ClusterAffinity set

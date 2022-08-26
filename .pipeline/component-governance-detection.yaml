@@ -1,0 +1,11 @@
+# This pipeline hosted in ADO will use the auto-injected component detection build task to detect possible incidents
+# and report alerts related to OSS consumed by this repository.
+trigger: none
+
+pool:
+  vmImage: ubuntu-18.04
+
+steps:
+  - bash: |
+      echo "This task is used to trigger code base scan."
+    displayName: ADO Task
