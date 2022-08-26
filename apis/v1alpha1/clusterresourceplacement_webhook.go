@@ -20,7 +20,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
-var ResourceInformer informer.InformerManager
+var ResourceInformer informer.Manager
 var restMapper meta.RESTMapper
 
 func (c *ClusterResourcePlacement) SetupWebhookWithManager(mgr ctrl.Manager) error {

@@ -43,7 +43,7 @@ var (
 // Reconciler reconciles a cluster resource placement object
 type Reconciler struct {
 	// the informer contains the cache for all the resources we need
-	InformerManager informer.InformerManager
+	InformerManager informer.Manager
 
 	RestMapper meta.RESTMapper
 

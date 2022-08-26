@@ -40,7 +40,7 @@ type Reconciler struct {
 	RestMapper meta.RESTMapper
 
 	// InformerManager holds all the informers that we can use to read from
-	InformerManager informer.InformerManager
+	InformerManager informer.Manager
 
 	// PlacementController exposes the placement queue for the reconciler to push to
 	PlacementController controller.Controller

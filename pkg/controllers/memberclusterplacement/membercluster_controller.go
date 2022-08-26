@@ -26,7 +26,7 @@ import (
 // Reconciler reconciles a MemberCluster object
 type Reconciler struct {
 	// the informer contains the cache for all the resources we need
-	InformerManager informer.InformerManager
+	InformerManager informer.Manager
 
 	// PlacementController maintains a rate limited queue which used to store
 	// the name of the clusterResourcePlacement and a reconcile function to consume the items in queue.

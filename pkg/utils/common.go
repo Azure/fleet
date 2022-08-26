@@ -178,7 +178,7 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 }
 
 // ShouldPropagateObj decides if one should propagate the object
-func ShouldPropagateObj(informerManager informer.InformerManager, uObj *unstructured.Unstructured) (bool, error) {
+func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Unstructured) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
 	case corev1.SchemeGroupVersion.WithKind("ConfigMap"):

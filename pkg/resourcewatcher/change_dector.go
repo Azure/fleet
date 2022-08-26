@@ -53,7 +53,7 @@ type ChangeDetector struct {
 	MemberClusterPlacementController controller.Controller
 
 	// InformerManager manages all the dynamic informers created by the discovery client
-	InformerManager informer.InformerManager
+	InformerManager informer.Manager
 
 	// DisabledResourceConfig contains all the api resources that we won't select
 	DisabledResourceConfig *utils.DisabledResourceConfig

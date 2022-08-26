@@ -20,7 +20,7 @@ import (
 
 // InformerManager manages dynamic shared informer for all resources, include Kubernetes resource and
 // custom resources defined by CustomResourceDefinition.
-type InformerManager interface {
+type Manager interface {
 	// AddDynamicResources builds a dynamicInformer for each resource in the resources list with the event handler.
 	// A resource is dynamic if its definition can be created/deleted/updated during runtime.
 	// Normally, it is a custom resource that is installed by users. The handler should not be nil.
@@ -61,7 +61,7 @@ type InformerManager interface {
 
 // NewInformerManager constructs a new instance of informerManagerImpl.
 // defaultResync with value '0' means no re-sync.
-func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, parentCh <-chan struct{}) InformerManager {
+func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, parentCh <-chan struct{}) Manager {
 	// TODO: replace this with plain context
 	ctx, cancel := ContextForChannel(parentCh)
 	return &informerManagerImpl{
