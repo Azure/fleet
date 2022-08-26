@@ -6,7 +6,6 @@ Licensed under the MIT license.
 package utils
 
 import (
-	"context"
 	"crypto/rand"
 	"fmt"
 	"log"
@@ -27,6 +26,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 const (
@@ -155,25 +155,6 @@ func RandStr() string {
 	return string(ret)
 }
 
-// ContextForChannel derives a child context from a parent channel.
-//
-// The derived context's Done channel is closed when the returned cancel function
-// is called or when the parent channel is closed, whichever happens first.
-//
-// Note the caller must *always* call the CancelFunc, otherwise resources may be leaked.
-func ContextForChannel(parentCh <-chan struct{}) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		select {
-		case <-parentCh:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-	return ctx, cancel
-}
-
 // CheckCRDInstalled checks if the custom resource definition is installed
 func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.GroupVersionKind) error {
 	startTime := time.Now()
@@ -197,7 +178,7 @@ func CheckCRDInstalled(discoveryClient discovery.DiscoveryInterface, gvk schema.
 }
 
 // ShouldPropagateObj decides if one should propagate the object
-func ShouldPropagateObj(informerManager InformerManager, uObj *unstructured.Unstructured) (bool, error) {
+func ShouldPropagateObj(informerManager informer.InformerManager, uObj *unstructured.Unstructured) (bool, error) {
 	// TODO:  add more special handling for different resource kind
 	switch uObj.GroupVersionKind() {
 	case corev1.SchemeGroupVersion.WithKind("ConfigMap"):

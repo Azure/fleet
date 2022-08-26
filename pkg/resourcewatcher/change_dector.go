@@ -22,6 +22,7 @@ import (
 
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/keys"
 )
 
@@ -52,7 +53,7 @@ type ChangeDetector struct {
 	MemberClusterPlacementController controller.Controller
 
 	// InformerManager manages all the dynamic informers created by the discovery client
-	InformerManager utils.InformerManager
+	InformerManager informer.InformerManager
 
 	// DisabledResourceConfig contains all the api resources that we won't select
 	DisabledResourceConfig *utils.DisabledResourceConfig
@@ -80,7 +81,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdded,
 		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
 	d.InformerManager.AddStaticResource(
-		utils.APIResourceMeta{
+		informer.APIResourceMeta{
 			GroupVersionResource: utils.ClusterResourcePlacementGVR,
 			IsClusterScoped:      true,
 		}, clusterPlacementEventHandler)
@@ -89,7 +90,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	// the placement queue. We don't need to handle the add event as they are placed by the placement controller.
 	workEventHandler := newHandlerOnEvents(nil, d.onWorkUpdated, d.onWorkDeleted)
 	d.InformerManager.AddStaticResource(
-		utils.APIResourceMeta{
+		informer.APIResourceMeta{
 			GroupVersionResource: utils.WorkGVR,
 			IsClusterScoped:      false,
 		}, workEventHandler)
@@ -98,7 +99,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	// delete event as the work resources in this cluster will all get deleted which will trigger placement reconcile.
 	memberClusterEventHandler := newHandlerOnEvents(nil, d.onMemberClusterUpdated, nil)
 	d.InformerManager.AddStaticResource(
-		utils.APIResourceMeta{
+		informer.APIResourceMeta{
 			GroupVersionResource: utils.MemberClusterGVR,
 			IsClusterScoped:      true,
 		}, memberClusterEventHandler)
@@ -144,7 +145,7 @@ func (d *ChangeDetector) discoverAPIResourcesLoop(ctx context.Context, period ti
 // discoverResources goes through all the api resources in the cluster and create informers on selected types
 func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.ResourceEventHandler) {
 	newResources, err := d.getWatchableResources()
-	var dynamicResources []utils.APIResourceMeta
+	var dynamicResources []informer.APIResourceMeta
 	if err != nil {
 		klog.ErrorS(err, "Failed to get all the api resources from the cluster")
 	}

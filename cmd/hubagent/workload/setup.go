@@ -24,6 +24,7 @@ import (
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 const (
@@ -79,7 +80,8 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 	}
 
 	// the manager for all the dynamically created informers
-	dynamicInformerManager := utils.NewInformerManager(dynamicClient, opts.ResyncPeriod.Duration, ctx.Done())
+	dynamicInformerManager := informer.NewInformerManager(dynamicClient, opts.ResyncPeriod.Duration, ctx.Done())
+	fleetv1alpha1.ResourceInformer = dynamicInformerManager // webhook needs this to check resource scope
 
 	// Set up  a custom controller to reconcile cluster resource placement
 	klog.Info("Setting up clusterResourcePlacement controller")
