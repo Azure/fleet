@@ -8,6 +8,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,8 +29,8 @@ import (
 )
 
 const (
-	eventuallyTimeout  = 60 // seconds
-	eventuallyInterval = 1  // seconds
+	eventuallyTimeout  = 10 * time.Second
+	eventuallyInterval = 500 * time.Millisecond
 )
 
 var defaultWorkNamespace = fmt.Sprintf(fleetutil.NamespaceNameFormat, MemberCluster.ClusterName)
@@ -140,7 +141,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 		})
 
-		It("should apply both the works with duplicated manifest", func() {
+		XIt("should apply both the works with duplicated manifest", func() {
 			By("creating the work resources")
 			err = createWork(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
