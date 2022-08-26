@@ -127,7 +127,8 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 	if len(selector.Name) != 0 {
 		obj, err := lister.Get(selector.Name)
 		if err != nil {
-			return nil, client.IgnoreNotFound(errors.Wrap(err, "cannot get the objets"))
+			klog.ErrorS(err, "cannot get the resource", "gvr", gvr, "name", selector.Name)
+			return nil, client.IgnoreNotFound(err)
 		}
 		uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 		if uObj.GetDeletionTimestamp() != nil {
@@ -219,7 +220,8 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 	// select the namespace object itself
 	obj, err := r.InformerManager.Lister(utils.NamespaceGVR).Get(namespaceName)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get the namespace %s object", namespaceName)
+		klog.ErrorS(err, "cannot get the namespace", "namespace", namespaceName)
+		return nil, client.IgnoreNotFound(err)
 	}
 	nameSpaceObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 	if nameSpaceObj.GetDeletionTimestamp() != nil {

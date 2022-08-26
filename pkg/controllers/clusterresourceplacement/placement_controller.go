@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -66,9 +65,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 
 	placementOld, err := r.getPlacement(name)
 	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to get the cluster resource placementOld in hub agent", "placement", name)
-		}
+		klog.ErrorS(err, "Failed to get the cluster resource placement in hub", "placement", name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	placeRef := klog.KObj(placementOld)
@@ -91,6 +88,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		klog.ErrorS(scheduleErr, "Failed to select the clusters", "placement", placeRef)
 		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
+		// TODO: check on certain error (i.e. not cluster scoped) and do not retry
 		return ctrl.Result{}, scheduleErr
 	}
 	if len(selectedClusters) == 0 {
@@ -107,7 +105,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		klog.ErrorS(scheduleErr, "failed to generate the work resource for this placementOld", "placement", placeRef)
 		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
-		// TODO:check if the schedule error is retriable
 		return ctrl.Result{}, scheduleErr
 	}
 	if len(manifests) == 0 {
