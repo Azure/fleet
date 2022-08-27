@@ -125,14 +125,16 @@ func main() {
 		}
 	}
 
+	memberConfig := ctrl.GetConfigOrDie()
+
 	hubOpts := ctrl.Options{
 		Scheme:                  scheme,
 		MetricsBindAddress:      *hubMetricsAddr,
 		Port:                    8443,
 		HealthProbeBindAddress:  *hubProbeAddr,
 		LeaderElection:          *enableLeaderElection,
-		LeaderElectionNamespace: mcNamespace, // This requires we have access to resource "leases" in API group "coordination.k8s.io" under namespace $mcHubNamespace
-		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
+		LeaderElectionNamespace: *leaderElectionNamespace,
+		LeaderElectionID:        "3111024923.hub.fleet.azure.com",
 		Namespace:               mcNamespace,
 	}
 
@@ -143,24 +145,24 @@ func main() {
 		HealthProbeBindAddress:  *probeAddr,
 		LeaderElection:          hubOpts.LeaderElection,
 		LeaderElectionNamespace: *leaderElectionNamespace,
+		LeaderElectionConfig:    memberConfig,
 		LeaderElectionID:        "136224848560.member.fleet.azure.com",
 	}
 	//+kubebuilder:scaffold:builder
 
-	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, hubOpts, memberOpts); err != nil {
+	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
 		klog.ErrorS(err, "problem running controllers")
 		os.Exit(1)
 	}
 }
 
 // Start the member controllers with the supplied config
-func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Options) error {
+func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memberOpts ctrl.Options) error {
 	hubMgr, err := ctrl.NewManager(hubCfg, hubOpts)
 	if err != nil {
 		return errors.Wrap(err, "unable to start hub manager")
 	}
 
-	memberConfig := ctrl.GetConfigOrDie()
 	memberMgr, err := ctrl.NewManager(memberConfig, memberOpts)
 	if err != nil {
 		return errors.Wrap(err, "unable to start member manager")
@@ -194,22 +196,6 @@ func Start(ctx context.Context, hubCfg *rest.Config, hubOpts, memberOpts ctrl.Op
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke rest mapper")
 		os.Exit(1)
-	}
-
-	if err != nil {
-		klog.ErrorS(err, "unable to create spoke client")
-		os.Exit(1)
-	}
-
-	if err = workcontrollers.NewWorkStatusReconciler(
-		hubMgr.GetClient(),
-		spokeDynamicClient,
-		memberMgr.GetClient(),
-		restMapper,
-		hubMgr.GetEventRecorderFor("work_status_controller"),
-		1, true).SetupWithManager(hubMgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "WorkStatus")
-		return err
 	}
 
 	if err = workcontrollers.NewApplyWorkReconciler(
