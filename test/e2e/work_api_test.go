@@ -141,7 +141,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 		})
 
-		XIt("should apply both the works with duplicated manifest", func() {
+		It("should apply both the works with duplicated manifest", func() {
 			By("creating the work resources")
 			err = createWork(workOne, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
