@@ -90,5 +90,5 @@ require (
 
 replace (
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.2 // weird bug that the goland won't compile without this
-	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.4.0
+	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.4.1
 )
