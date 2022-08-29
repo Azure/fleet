@@ -135,6 +135,7 @@ func main() {
 		LeaderElection:          *enableLeaderElection,
 		LeaderElectionNamespace: *leaderElectionNamespace,
 		LeaderElectionID:        "3111024923.hub.fleet.azure.com",
+		LeaderElectionConfig:    memberConfig,
 		Namespace:               mcNamespace,
 	}
 
@@ -145,7 +146,6 @@ func main() {
 		HealthProbeBindAddress:  *probeAddr,
 		LeaderElection:          hubOpts.LeaderElection,
 		LeaderElectionNamespace: *leaderElectionNamespace,
-		LeaderElectionConfig:    memberConfig,
 		LeaderElectionID:        "136224848560.member.fleet.azure.com",
 	}
 	//+kubebuilder:scaffold:builder
