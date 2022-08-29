@@ -31,3 +31,8 @@ kubectl --context=kind-hub-testing -n fleet-system get pod
 ```shell
 kubectl --context=kind-member-testing -n fleet-system get pod 
 ```
+
+5. uninstall the resources
+```shell
+make uninstall-helm
+```

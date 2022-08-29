@@ -139,7 +139,8 @@ install-hub-agent-helm:
     --set image.pullPolicy=Never \
     --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
     --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
-    --set logVerbosity=5
+    --set logVerbosity=5 \
+    --set namespace=fleet-system
 
 .PHONY: e2e-hub-kubeconfig-secret
 e2e-hub-kubeconfig-secret:
@@ -162,7 +163,8 @@ install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
     --set refreshtoken.tag=$(REFRESH_TOKEN_IMAGE_VERSION) \
     --set image.pullPolicy=Never --set refreshtoken.pullPolicy=Never \
     --set config.memberClusterName="kind-$(MEMBER_KIND_CLUSTER_NAME)" \
-    --set logVerbosity=5
+    --set logVerbosity=5 \
+    --set namespace=fleet-system
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
