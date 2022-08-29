@@ -135,7 +135,6 @@ func main() {
 		LeaderElection:          *enableLeaderElection,
 		LeaderElectionNamespace: *leaderElectionNamespace,
 		LeaderElectionID:        "3111024923.hub.fleet.azure.com",
-		LeaderElectionConfig:    memberConfig,
 		Namespace:               mcNamespace,
 	}
 
