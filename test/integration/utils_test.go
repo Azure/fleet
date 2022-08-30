@@ -263,7 +263,7 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 	// check each work object in the cluster namespace
 	for _, cluster := range clusters {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+			Name:      crp.Name,
 			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, cluster.Name),
 		}, &clusterWork)).Should(Succeed())
 		Expect(clusterWork.GetLabels()[utils.LabelWorkPlacementName]).Should(Equal(crp.Name))
@@ -345,7 +345,7 @@ func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
 func markWorkAppliedStatusSuccess(crp *fleetv1alpha1.ClusterResourcePlacement, cluster *fleetv1alpha1.MemberCluster) {
 	var clusterWork workv1alpha1.Work
 	Expect(k8sClient.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+		Name:      crp.Name,
 		Namespace: fmt.Sprintf(utils.NamespaceNameFormat, cluster.Name),
 	}, &clusterWork)).Should(Succeed())
 	clusterWork.Status.Conditions = []metav1.Condition{

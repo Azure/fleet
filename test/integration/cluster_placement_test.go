@@ -295,7 +295,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			waitForPlacementScheduleStopped(crp.Name)
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			By(fmt.Sprintf("validate work resource for cluster %s. It should contain %d manifests", clusterA.Name, len(namespacedResource)+1))
@@ -422,7 +422,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			waitForPlacementScheduleStopped(crp.Name)
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 
@@ -457,7 +457,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that we pick up the role change")
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(len(namespacedResource) + 1))
@@ -486,7 +486,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that we pick up the role delete")
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
@@ -600,7 +600,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			waitForPlacementScheduleStopped(crp.Name)
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			By(fmt.Sprintf("validate work resource for cluster %s. It should contain %d manifests", clusterA.Name, 2))
@@ -631,7 +631,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that we pick up the clusterRole change")
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(2))
@@ -660,7 +660,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that we pick up the clusterRole delete")
 			waitForPlacementScheduleStopped(crp.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
@@ -715,11 +715,11 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that work is not created in any cluster")
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 		})
@@ -761,7 +761,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that work is not created in cluster B")
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 		})
@@ -850,7 +850,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verify that work is not created in cluster A")
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 
@@ -870,7 +870,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterB})
 			By("Verify that work is removed from cluster A")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			By("Verified that the work is removed from cluster A")
@@ -924,7 +924,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			By("Verified that the work is not scheduled to cluster B")
@@ -941,7 +941,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA})
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			By("Verified that the work is removed from cluster C")
@@ -1024,7 +1024,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			waitForPlacementScheduleStopped(crp.Name)
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(1))
@@ -1038,7 +1038,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			waitForPlacementScheduleStopped(crp2.Name)
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp2.Name),
+				Name:      crp2.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(Succeed())
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(1))
@@ -1102,7 +1102,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			By("Verified that the work is removed from cluster A")
@@ -1145,7 +1145,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      fmt.Sprintf(utils.WorkNameFormat, crp.Name),
+				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 			By("Verified that the deleted clusterRole is removed from the work")

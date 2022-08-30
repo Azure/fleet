@@ -40,7 +40,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 	manifests []workv1alpha1.Manifest) error {
 	var allErr []error
 	memberClusterNames := placement.Status.TargetClusters
-	workName := fmt.Sprintf(utils.WorkNameFormat, placement.Name)
+	workName := placement.Name
 	workerOwnerRef := metav1.OwnerReference{
 		APIVersion:         placement.GroupVersionKind().GroupVersion().String(),
 		Kind:               placement.GroupVersionKind().Kind,
@@ -128,7 +128,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 // removeStaleWorks removes all the work objects from the clusters that are no longer selected.
 func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string, existingClusters, newClusters []string) (int, error) {
 	var allErr []error
-	workName := fmt.Sprintf(utils.WorkNameFormat, placementName)
+	workName := placementName
 	clusterMap := make(map[string]bool)
 	for _, cluster := range newClusters {
 		clusterMap[cluster] = true
@@ -160,7 +160,7 @@ func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string,
 func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterResourcePlacement) (bool, error) {
 	hasPending := false
 	placement.Status.FailedResourcePlacements = make([]fleetv1alpha1.FailedResourcePlacement, 0)
-	workName := fmt.Sprintf(utils.WorkNameFormat, placement.GetName())
+	workName := placement.GetName()
 	for _, cluster := range placement.Status.TargetClusters {
 		memberClusterNsName := fmt.Sprintf(utils.NamespaceNameFormat, cluster)
 		work, err := r.getResourceBinding(memberClusterNsName, workName)
