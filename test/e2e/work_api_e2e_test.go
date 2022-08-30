@@ -35,8 +35,7 @@ var _ = Describe("Work API Controller test", func() {
 
 	AfterEach(func() {
 		if len(workList) > 0 {
-			err := testutils.DeleteWork(*HubCluster, workList, ctx)
-			Expect(err).Should(Succeed(), "Deletion of work failed.")
+			Expect(testutils.DeleteWork(*HubCluster, workList, ctx)).Should(Succeed(), "Deletion of work failed.")
 		}
 	})
 
@@ -59,7 +58,7 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 		By(fmt.Sprintf("creating work %s/%s of %s", workName, workNs.Name, manifestConfigMapName))
-		testutils.CreateWork(workName, workNs.Name, ctx, *HubCluster, workList, []workapi.Manifest{
+		testutils.CreateWork(*HubCluster, workName, workNs.Name, ctx, workList, []workapi.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: &manifestConfigMap},
 			},
@@ -67,13 +66,13 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("Waiting for AppliedWork %s to be created", workName))
 		Eventually(func() error {
-			return MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
+			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to create AppliedWork %s", workName)
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNs.Name))
 		Eventually(func() bool {
 			work := workapi.Work{}
-			err := HubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNs.Name}, &work)
+			err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNs.Name}, &work)
 			if err != nil {
 				return false
 			}
@@ -84,7 +83,7 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		Eventually(func() bool {
 			appliedWork := workapi.AppliedWork{}
-			err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName}, &appliedWork)
+			err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork)
 			if err != nil {
 				return false
 			}
@@ -99,7 +98,7 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
 		Eventually(func() bool {
 			cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).
-				Get(context.Background(), manifestConfigMap.Name, metav1.GetOptions{})
+				Get(ctx, manifestConfigMap.Name, metav1.GetOptions{})
 			if err != nil {
 				return false
 			}
@@ -143,7 +142,7 @@ var _ = Describe("Work API Controller test", func() {
 		}
 
 		By(fmt.Sprintf("creating work %s/%s of %s and %s", workName, workNs.Name, manifestSecretName, manifestServiceName))
-		testutils.CreateWork(workName, workNs.Name, ctx, *HubCluster, workList, []workapi.Manifest{
+		testutils.CreateWork(*HubCluster, workName, workNs.Name, ctx, workList, []workapi.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: &manifestSecret},
 			},
@@ -154,13 +153,13 @@ var _ = Describe("Work API Controller test", func() {
 
 		// Wait for the applied works to be created on the member cluster
 		Eventually(func() error {
-			return MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
+			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeNil())
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNs.Name))
 		Eventually(func() bool {
 			work := workapi.Work{}
-			err := HubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNs.Name}, &work)
+			err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNs.Name}, &work)
 			if err != nil {
 				return false
 			}
@@ -171,7 +170,7 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s and %s", manifestSecretName, manifestServiceName))
 		Eventually(func() bool {
 			appliedWork := workapi.AppliedWork{}
-			err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName}, &appliedWork)
+			err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork)
 			if err != nil {
 				return false
 			}
@@ -191,9 +190,9 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("Resource %s and %s should have been created in cluster %s", manifestSecretName, manifestServiceName, MemberCluster.ClusterName))
 		Eventually(func() bool {
-			_, secretErr := MemberCluster.KubeClientSet.CoreV1().Secrets(workResourceNs.Name).Get(context.Background(), manifestSecret.Name, metav1.GetOptions{})
+			_, secretErr := MemberCluster.KubeClientSet.CoreV1().Secrets(workResourceNs.Name).Get(ctx, manifestSecret.Name, metav1.GetOptions{})
 
-			_, podErr := MemberCluster.KubeClientSet.CoreV1().Services(workResourceNs.Name).Get(context.Background(), manifestService.Name, metav1.GetOptions{})
+			_, podErr := MemberCluster.KubeClientSet.CoreV1().Services(workResourceNs.Name).Get(ctx, manifestService.Name, metav1.GetOptions{})
 
 			return secretErr == nil && podErr == nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
@@ -201,12 +200,12 @@ var _ = Describe("Work API Controller test", func() {
 
 	It("Upon successful work creation of a CRD resource, manifest is applied, and resources are created", func() {
 		workName := utils.RandStr()
-		gvk, manifestCRD := testutils.GenerateCRDObjectFromFile("manifests/test-crd.yaml", genericCodec, *MemberCluster)
+		gvk, manifestCRD := testutils.GenerateCRDObjectFromFile(*MemberCluster, "manifests/test-crd.yaml", genericCodec)
 		_, err := MemberCluster.RestMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		Expect(err).Should(Succeed(), "The Test CRD was not included in the RestMapper for Cluster %s", MemberCluster.ClusterName)
 
 		By(fmt.Sprintf("creating work %s/%s of %s", workName, workNs.Name, gvk.Kind))
-		testutils.CreateWork(workName, workNs.Name, ctx, *HubCluster, workList, []workapi.Manifest{
+		testutils.CreateWork(*HubCluster, workName, workNs.Name, ctx, workList, []workapi.Manifest{
 			{
 				RawExtension: manifestCRD,
 			},
@@ -214,24 +213,24 @@ var _ = Describe("Work API Controller test", func() {
 
 		// Wait for the applied works to be created on the member cluster
 		Eventually(func() error {
-			return MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeNil())
+			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Waiting for AppliedWork %s failed", workName)
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNs.Name))
 		Eventually(func() bool {
 			work := workapi.Work{}
-			err := HubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNs.Name}, &work)
+			err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNs.Name}, &work)
 			if err != nil {
 				return false
 			}
 
 			return meta.IsStatusConditionTrue(work.Status.Conditions, conditionTypeApplied)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Applied Condition not True for work %s", workName)
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", gvk.Kind))
 		Eventually(func() bool {
 			appliedWork := workapi.AppliedWork{}
-			err := MemberCluster.KubeClient.Get(context.Background(), types.NamespacedName{Name: workName}, &appliedWork)
+			err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork)
 			if err != nil {
 				return false
 			}
@@ -242,13 +241,13 @@ var _ = Describe("Work API Controller test", func() {
 			}
 
 			return false
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "AppliedWork %s does not portray correct resources created", workName)
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", "testcrds.multicluster.x-k8s.io", MemberCluster.ClusterName))
 		Eventually(func() error {
-			_, err := MemberCluster.APIExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), "testcrds.multicluster.x-k8s.io", metav1.GetOptions{})
+			_, err := MemberCluster.APIExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "testcrds.multicluster.x-k8s.io", metav1.GetOptions{})
 
 			return err
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeNil())
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Resources %s not created in cluster %s", "testcrds.multicluster.x-k8s.io", MemberCluster.ClusterName)
 	})
 })

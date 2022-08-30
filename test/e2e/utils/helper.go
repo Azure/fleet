@@ -220,7 +220,7 @@ func WaitWork(cluster framework.Cluster, workName, workNamespace string) {
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
 		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s/%s not synced", workName, workNamespace)
 }
 
 // CreateNamespace create namespace and waits for namespace to exist.
@@ -233,7 +233,7 @@ func CreateNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name, Namespace: ""}, ns)
 		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+	}, PollTimeout, PollInterval).Should(gomega.Succeed())
 }
 
 // DeleteNamespace delete namespace.
@@ -263,7 +263,7 @@ func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 }
 
 // CreateWork creates Work object based on manifest given.
-func CreateWork(workName string, workNamespace string, ctx context.Context, hubCluster framework.Cluster, workList []workapi.Work, manifests []workapi.Manifest) {
+func CreateWork(hubCluster framework.Cluster, workName string, workNamespace string, ctx context.Context, workList []workapi.Work, manifests []workapi.Manifest) {
 	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s", workName, workNamespace))
 	work := workapi.Work{
 		ObjectMeta: metav1.ObjectMeta{
@@ -278,8 +278,7 @@ func CreateWork(workName string, workNamespace string, ctx context.Context, hubC
 	}
 
 	workList = append(workList, work)
-	err := hubCluster.KubeClient.Create(ctx, &work)
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
+	gomega.Expect(hubCluster.KubeClient.Create(ctx, &work)).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
 }
 
 func DeleteWork(hubCluster framework.Cluster, workList []workapi.Work, ctx context.Context) error {
@@ -300,22 +299,22 @@ func AppliedWorkContainsResource(resourceMeta workapi.AppliedResourceMeta, name 
 	return true
 }
 
-func GenerateCRDObjectFromFile(filepath string, genericCodec runtime.Decoder, cluster framework.Cluster) (*schema.GroupVersionKind, runtime.RawExtension) {
+func GenerateCRDObjectFromFile(cluster framework.Cluster, filepath string, genericCodec runtime.Decoder) (*schema.GroupVersionKind, runtime.RawExtension) {
 	fileRaw, err := TestManifestFiles.ReadFile(filepath)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Reading manifest file %s failed", filepath)
+	gomega.Expect(err).Should(gomega.Succeed(), "Reading manifest file %s failed", filepath)
 
 	obj, gvk, err := genericCodec.Decode(fileRaw, nil, nil)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Decoding manifest file %s failed", filepath)
+	gomega.Expect(err).Should(gomega.Succeed(), "Decoding manifest file %s failed", filepath)
 
 	jsonObj, err := json.Marshal(obj)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "Marshalling failed for file %s", filepath)
+	gomega.Expect(err).Should(gomega.Succeed(), "Marshalling failed for file %s", filepath)
 
 	newObj := &unstructured.Unstructured{}
 	err = newObj.UnmarshalJSON(jsonObj)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "UnMarshaling failed for file %s", filepath)
+	gomega.Expect(err).Should(gomega.Succeed(), "UnMarshaling failed for file %s", filepath)
 
 	_, err = cluster.RestMapper.RESTMapping(newObj.GroupVersionKind().GroupKind(), newObj.GroupVersionKind().Version)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred(), "CRD data was not mapped in the restMapper")
+	gomega.Expect(err).Should(gomega.Succeed(), "CRD data was not mapped in the restMapper")
 
 	return gvk, runtime.RawExtension{Object: obj, Raw: jsonObj}
 }
