@@ -133,8 +133,8 @@ func main() {
 		Port:                    8443,
 		HealthProbeBindAddress:  *hubProbeAddr,
 		LeaderElection:          *enableLeaderElection,
-		LeaderElectionNamespace: *leaderElectionNamespace,
-		LeaderElectionID:        "3111024923.hub.fleet.azure.com",
+		LeaderElectionNamespace: mcNamespace, // This requires we have access to resource "leases" in API group "coordination.k8s.io" under namespace $mcHubNamespace
+		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
 		Namespace:               mcNamespace,
 	}
 
