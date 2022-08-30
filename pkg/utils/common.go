@@ -42,8 +42,6 @@ const (
 	PlacementFieldManagerName = "cluster-placement-controller"
 
 	MCControllerFieldManagerName = "member-cluster-controller"
-
-	WorkNameFormat = "work-%s"
 )
 
 const (

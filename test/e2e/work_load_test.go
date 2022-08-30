@@ -66,7 +66,7 @@ var _ = Describe("workload orchestration testing", func() {
 	})
 
 	It("Apply CRP and check if work gets propagated", func() {
-		workName := fmt.Sprintf(utils.WorkNameFormat, "resource-label-selector")
+		workName := "resource-label-selector"
 		labelKey := "fleet.azure.com/name"
 		labelValue := "test"
 		By("create the resources to be propagated")
