@@ -5,10 +5,8 @@ Licensed under the MIT license.
 package e2e
 
 import (
-	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,12 +15,10 @@ import (
 var _ = Describe("Join/leave member cluster testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
-	var memberNsName string
 	var imc *v1alpha1.InternalMemberCluster
 
 	BeforeEach(func() {
-		memberNsName = fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName)
-		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNsName)
+		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
@@ -30,7 +26,7 @@ var _ = Describe("Join/leave member cluster testing", func() {
 		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNsName)
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if member cluster is marked as readyToJoin")

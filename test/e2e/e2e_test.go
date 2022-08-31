@@ -6,13 +6,12 @@ package e2e
 
 import (
 	"fmt"
-	"go.goms.io/fleet/pkg/utils"
-	testutils "go.goms.io/fleet/test/e2e/utils"
 	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -21,6 +20,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -31,9 +31,15 @@ var (
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
-	memberNs          = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-	workNs            = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-	workResourceNs    = testutils.NewNamespace("resource-namespace")
+
+	// This namespace in HubCluster will store Member cluster-related CRs, such as v1alpha1.MemberCluster
+	memberNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+
+	// This namespace in HubCluster will store v1alpha1.Work to simulate Work-related features in Hub Cluster.
+	workNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+
+	// This namespace in MemberCluster will store resources created from the Work-api.
+	workResourceNamespace = testutils.NewNamespace("resource-namespace")
 
 	genericCodecs = serializer.NewCodecFactory(scheme)
 	genericCodec  = genericCodecs.UniversalDeserializer()
@@ -53,10 +59,10 @@ func TestE2E(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	kubeconfig := os.Getenv("KUBECONFIG")
-	Expect(kubeconfig).ShouldNot(BeEmpty())
+	Expect(kubeconfig).ShouldNot(BeEmpty(), "Failure to retrieve kubeconfig")
 
 	hubURL = os.Getenv("HUB_SERVER_URL")
-	Expect(hubURL).ShouldNot(BeEmpty())
+	Expect(hubURL).ShouldNot(BeEmpty(), "Failure to retrieve Hub URL.")
 
 	// hub setup
 	HubCluster.HubURL = hubURL
@@ -66,15 +72,15 @@ var _ = BeforeSuite(func() {
 	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 
-	testutils.CreateNamespace(*MemberCluster, memberNs)
+	testutils.CreateNamespace(*MemberCluster, memberNamespace)
 
-	testutils.CreateNamespace(*HubCluster, workNs)
-	testutils.CreateNamespace(*MemberCluster, workResourceNs)
+	testutils.CreateNamespace(*HubCluster, workNamespace)
+	testutils.CreateNamespace(*MemberCluster, workResourceNamespace)
 })
 
 var _ = AfterSuite(func() {
-	testutils.DeleteNamespace(*MemberCluster, memberNs)
+	testutils.DeleteNamespace(*MemberCluster, memberNamespace)
 
-	testutils.DeleteNamespace(*HubCluster, workNs)
-	testutils.DeleteNamespace(*MemberCluster, workResourceNs)
+	testutils.DeleteNamespace(*HubCluster, workNamespace)
+	testutils.DeleteNamespace(*MemberCluster, workResourceNamespace)
 })

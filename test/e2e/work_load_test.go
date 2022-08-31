@@ -25,18 +25,16 @@ import (
 var _ = Describe("workload orchestration testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
-	var memberNsName string
 	var imc *v1alpha1.InternalMemberCluster
 	var cr *rbacv1.ClusterRole
 	var crp *v1alpha1.ClusterResourcePlacement
 
 	BeforeEach(func() {
-		memberNsName = fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName)
-		//memberNs = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+		//memberNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
-		//testutils.CreateNamespace(*MemberCluster, memberNs)
-		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNsName)
+		//testutils.CreateNamespace(*MemberCluster, memberNamespace)
+		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
@@ -44,7 +42,7 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNsName)
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if internal member cluster condition is updated to Joined")
@@ -97,7 +95,7 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
 
 		By("check if work gets created for cluster resource placement")
-		testutils.WaitWork(*HubCluster, workName, memberNs.Name)
+		testutils.WaitWork(*HubCluster, workName, memberNamespace.Name)
 
 		By("check if cluster resource placement is updated to Scheduled & Applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementConditionTypeScheduled), v1.ConditionTrue, 3*testutils.PollTimeout)

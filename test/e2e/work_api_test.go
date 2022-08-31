@@ -45,7 +45,7 @@ var _ = Describe("work-api testing", func() {
 
 			workObj := utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				mDetails,
 			)
 
@@ -114,13 +114,13 @@ var _ = Describe("work-api testing", func() {
 
 			workOne = utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				manifestDetailsOne,
 			)
 
 			workTwo = utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				manifestDetailsTwo)
 
 		})
@@ -225,7 +225,7 @@ var _ = Describe("work-api testing", func() {
 
 			workObj := utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				initialManifestDetails,
 			)
 
@@ -248,13 +248,14 @@ var _ = Describe("work-api testing", func() {
 			By("retrieving the existing work and updating it by adding new manifests")
 			work := &workapi.Work{}
 			Eventually(func() error {
-				work, err = utils.RetrieveWork(createdWork.Namespace, createdWork.Name, HubCluster)
+				if work, err = utils.RetrieveWork(createdWork.Namespace, createdWork.Name, HubCluster); err != nil {
+					return err
+				}
+
+				work.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
+				work, err = utils.UpdateWork(createdWork, HubCluster)
 				return err
 			}, eventuallyTimeout, eventuallyInterval).Should(Succeed())
-
-			work.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
-			work, err = utils.UpdateWork(createdWork, HubCluster)
-			Expect(err).Should(Succeed())
 
 			By("checking if the new Namespace was created")
 			Eventually(func() error {
@@ -290,7 +291,7 @@ var _ = Describe("work-api testing", func() {
 
 			workObj := utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				manifestDetails,
 			)
 
@@ -348,7 +349,7 @@ var _ = Describe("work-api testing", func() {
 
 			workObj := utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				originalManifestDetails,
 			)
 
@@ -428,7 +429,7 @@ var _ = Describe("work-api testing", func() {
 
 			workObj := utils.CreateWorkObj(
 				utils.GetWorkName(5),
-				workNs.Name,
+				workNamespace.Name,
 				manifestDetails,
 			)
 
