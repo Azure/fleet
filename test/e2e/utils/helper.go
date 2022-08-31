@@ -26,10 +26,6 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
-const (
-	conditionTypeApplied = "Applied"
-)
-
 var (
 	// PollInterval defines the interval time for a poll operation.
 	PollInterval = 5 * time.Second

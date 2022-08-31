@@ -8,6 +8,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"go.goms.io/fleet/pkg/utils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
@@ -30,10 +30,8 @@ var _ = Describe("workload orchestration testing", func() {
 	var crp *v1alpha1.ClusterResourcePlacement
 
 	BeforeEach(func() {
-		//memberNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
-		//testutils.CreateNamespace(*MemberCluster, memberNamespace)
 		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.CreateServiceAccount(*MemberCluster, sa)
 
