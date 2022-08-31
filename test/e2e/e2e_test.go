@@ -32,7 +32,7 @@ var (
 	hubURL            string
 	scheme            = runtime.NewScheme()
 
-	// This namespace in HubCluster will store Member cluster-related CRs, such as v1alpha1.MemberCluster
+	// This namespace will store Member cluster-related CRs, such as v1alpha1.MemberCluster
 	memberNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 
 	// This namespace in HubCluster will store v1alpha1.Work to simulate Work-related features in Hub Cluster.
