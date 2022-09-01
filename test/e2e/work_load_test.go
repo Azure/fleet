@@ -7,8 +7,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
@@ -28,8 +25,11 @@ var _ = Describe("workload orchestration testing", func() {
 	var imc *v1alpha1.InternalMemberCluster
 	var cr *rbacv1.ClusterRole
 	var crp *v1alpha1.ClusterResourcePlacement
+	var ctx context.Context
 
 	BeforeEach(func() {
+		ctx = context.Background()
+
 		By("prepare resources in member cluster")
 		// create testing NS in member cluster
 		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
@@ -93,7 +93,7 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
 
 		By("check if work gets created for cluster resource placement")
-		testutils.WaitWork(*HubCluster, workName, memberNamespace.Name)
+		testutils.WaitWork(ctx, *HubCluster, workName, memberNamespace.Name)
 
 		By("check if cluster resource placement is updated to Scheduled & Applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementConditionTypeScheduled), v1.ConditionTrue, 3*testutils.PollTimeout)

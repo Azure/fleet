@@ -3,17 +3,19 @@ package e2e
 import (
 	"context"
 	"fmt"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	testutils "go.goms.io/fleet/test/e2e/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+
+	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 // TODO: when join/leave logic is connected to work-api, join the Hub and Member for this test.
@@ -40,6 +42,9 @@ var _ = Describe("Work API Controller test", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
+
+		//Empties the works since they were garbage collected earlier.
+		works = []workapi.Work{}
 	})
 
 	AfterEach(func() {
@@ -48,6 +53,7 @@ var _ = Describe("Work API Controller test", func() {
 
 	It("Upon successful work creation of a single resource, work manifest is applied and resource is created", func() {
 		workName := testutils.GetWorkName(5)
+		By(fmt.Sprintf("Here is the work Name %s", workName))
 
 		// Configmap will be included in this work object.
 		manifestConfigMapName := "work-configmap"
@@ -65,9 +71,11 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		testutils.AddManifests([]runtime.Object{&manifestConfigMap}, manifests)
+		manifests = testutils.AddManifests([]runtime.Object{&manifestConfigMap}, manifests)
 		By(fmt.Sprintf("creating work %s/%s of %s", workName, workNamespace.Name, manifestConfigMapName))
-		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, works, manifests)
+		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
+
+		testutils.WaitWork(ctx, *HubCluster, workName, memberNamespace.Name)
 
 		By(fmt.Sprintf("Waiting for AppliedWork %s to be created", workName))
 		Eventually(func() error {
@@ -87,9 +95,10 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		Eventually(func() string {
 			appliedWork := workapi.AppliedWork{}
-			if err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &appliedWork); err != nil {
+			if err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &appliedWork); err != nil {
 				return err.Error()
 			}
+
 			if len(appliedWork.Status.AppliedResources) == 0 {
 				return fmt.Sprintf("Applied Work Meta not created for resource %s", manifestConfigMapName)
 			}
@@ -101,7 +110,7 @@ var _ = Describe("Work API Controller test", func() {
 					Kind:      manifestConfigMap.GroupVersionKind().Kind,
 					Namespace: manifestConfigMap.Namespace,
 					Name:      manifestConfigMap.Name,
-					Resource:  "configmap",
+					Resource:  "configmaps",
 				},
 			}
 			return cmp.Diff(want, appliedWork.Status.AppliedResources[0], cmpOptions...)

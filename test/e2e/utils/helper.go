@@ -8,17 +8,19 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/onsi/gomega/format"
 	"time"
 
+	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -206,11 +208,11 @@ func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.Clu
 }
 
 // WaitWork waits for Work to be present on the hub cluster.
-func WaitWork(cluster framework.Cluster, workName, workNamespace string) {
-	var work workapi.Work
+func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workNamespace string) {
 	klog.Infof("Waiting for Work(%s/%s) to be synced", workName, workNamespace)
 	gomega.Eventually(func() error {
-		return cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
+		var work workapi.Work
+		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s/%s not synced", workName, workNamespace)
 }
 
@@ -218,7 +220,7 @@ func WaitWork(cluster framework.Cluster, workName, workNamespace string) {
 func CreateNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Creating Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), ns)
-		gomega.Expect(err).Should(gomega.Succeed())
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to create namespace %s", ns.Name)
 	})
 	klog.Infof("Waiting for Namespace(%s) to be synced", ns.Name)
 	gomega.Eventually(func() error {
@@ -254,8 +256,9 @@ func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 }
 
 // CreateWork creates Work object based on manifest given.
-func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName string, workNamespace string, workList []workapi.Work, manifests []workapi.Manifest) {
+func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName string, workNamespace string, manifests []workapi.Manifest) {
 	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s", workName, workNamespace))
+
 	work := workapi.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
@@ -268,19 +271,16 @@ func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName stri
 		},
 	}
 
-	workList = append(workList, work)
 	gomega.Expect(hubCluster.KubeClient.Create(ctx, &work)).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
 }
 
 // DeleteWork deletes all works used in the current test.
-func DeleteWork(ctx context.Context, hubCluster framework.Cluster, workList []workapi.Work) error {
-	if len(workList) > 0 {
-		for _, work := range workList {
-			err := hubCluster.KubeClient.Delete(ctx, &work)
-			if apierrors.IsNotFound(err) {
-				continue
+func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []workapi.Work) error {
+	if len(works) > 0 {
+		for _, work := range works {
+			if err := hubCluster.KubeClient.Delete(ctx, &work); err != nil && !apierrors.IsNotFound(err) {
+				return err
 			}
-			return err
 		}
 	}
 
@@ -288,12 +288,18 @@ func DeleteWork(ctx context.Context, hubCluster framework.Cluster, workList []wo
 }
 
 // AddManifests adds manifests to be included within a Work Ob
-func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) {
+func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []workapi.Manifest {
 	for _, obj := range objects {
 		manifests = append(manifests, workapi.Manifest{
 			RawExtension: runtime.RawExtension{Object: obj},
 		})
 	}
+	return manifests
+}
+
+// GetWorkName creates a work name in a correct format for e2e tests.
+func GetWorkName(length int) string {
+	return "work" + rand.String(length)
 }
 
 // AlreadyExistMatcher matches the error to be already exist

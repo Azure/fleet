@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/rand"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/test/e2e/framework"
@@ -97,8 +96,4 @@ func WaitAppliedWorkPresent(workName string, memberCluster *framework.Cluster) {
 		_, err := RetrieveAppliedWork(workName, memberCluster)
 		return err
 	}, PollTimeout, PollInterval).Should(gomega.BeNil())
-}
-
-func GetWorkName(length int) string {
-	return "work" + rand.String(length)
 }
