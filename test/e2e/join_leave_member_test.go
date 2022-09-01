@@ -6,10 +6,11 @@ package e2e
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	"go.goms.io/fleet/apis/v1alpha1"
-	testutils "go.goms.io/fleet/test/e2e/utils"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"go.goms.io/fleet/apis/v1alpha1"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 var _ = Describe("Join/leave member cluster testing", func() {

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/rand"
+
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -277,8 +279,9 @@ func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName stri
 // DeleteWork deletes all works used in the current test.
 func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []workapi.Work) error {
 	if len(works) > 0 {
-		for _, work := range works {
-			if err := hubCluster.KubeClient.Delete(ctx, &work); err != nil && !apierrors.IsNotFound(err) {
+		// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
+		for i := range works {
+			if err := hubCluster.KubeClient.Delete(ctx, &works[i]); err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
 		}
