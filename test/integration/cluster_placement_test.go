@@ -745,7 +745,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						},
 					},
 					Policy: &fleetv1alpha1.PlacementPolicy{
-						ClusterNames: []string{clusterA.Name},
+						// Although both clusters are listed, only clusterA is selected as clusterB hasn't joined yet.
+						ClusterNames: []string{clusterA.Name, clusterB.Name},
 					},
 				},
 			}
@@ -876,7 +877,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Verified that the work is removed from cluster A")
 		})
 
-		It("Test  member cluster join/leave trigger placement", func() {
+		It("Test member cluster join/leave trigger placement", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-list-resource",
