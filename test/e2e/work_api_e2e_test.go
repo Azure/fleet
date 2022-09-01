@@ -118,12 +118,11 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
 		Eventually(func() string {
-			if cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).
-				Get(ctx, manifestConfigMap.Name, metav1.GetOptions{}); err != nil {
+			cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMap.Name, metav1.GetOptions{})
+			if err != nil {
 				return err.Error()
-			} else {
-				return cmp.Diff(cm.Data, manifestConfigMap.Data)
 			}
+			return cmp.Diff(cm.Data, manifestConfigMap.Data)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 			"ConfigMap %s was not created in the cluster %s", manifestConfigMapName, MemberCluster.ClusterName)
 	})
