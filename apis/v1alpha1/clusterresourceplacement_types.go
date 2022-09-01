@@ -42,7 +42,7 @@ type ClusterResourcePlacementSpec struct {
 	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
 
 	// Policy represents the placement policy to select clusters to place all the selected resources.
-	// Default is place to the entire fleet if this field is omitted.
+	// If unspecified, all the joined clusters are selected.
 	// +optional
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 }
@@ -77,9 +77,11 @@ type ClusterResourceSelector struct {
 }
 
 // PlacementPolicy represents the rule for select clusters.
+// You should only specify at most one of the two fields: ClusterNames and Affinity.
+// If none is specified, all the joined clusters are selected.
 type PlacementPolicy struct {
-	// ClusterNames is a request to schedule the selected resource to a list of member clusters.
-	// If exists, we only place the resources within the clusters in this list.
+	// ClusterNames contains a list of names of MemberCluster to place the selected resources to.
+	// If the list is not empty, Affinity is ignored.
 	// kubebuilder:validation:MaxItems=100
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`

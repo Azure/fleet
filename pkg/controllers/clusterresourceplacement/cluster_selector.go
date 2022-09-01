@@ -114,8 +114,6 @@ func (r *Reconciler) getClusters(clusterNames []string) ([]string, error) {
 			if !apierrors.IsNotFound(err) {
 				return nil, err
 			}
-			// IsNotFound.
-			klog.ErrorS(err, "cluster not found", "clusterName", clusterName)
 			continue
 		}
 		clusterObj, err := convertObjToMemberCluster(obj)
