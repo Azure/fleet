@@ -41,6 +41,7 @@ var (
 	// This namespace in MemberCluster will store resources created from the Work-api.
 	workResourceNamespace = testutils.NewNamespace("resource-namespace")
 
+	// Used to decode an unstructured object.
 	genericCodecs = serializer.NewCodecFactory(scheme)
 	genericCodec  = genericCodecs.UniversalDeserializer()
 )

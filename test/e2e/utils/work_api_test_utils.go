@@ -71,8 +71,6 @@ func RetrieveWork(workNamespace string, workName string, hubCluster *framework.C
 	workRetrieved := workapi.Work{}
 	err := hubCluster.KubeClient.Get(context.Background(), types.NamespacedName{Namespace: workNamespace, Name: workName}, &workRetrieved)
 	if err != nil {
-		println("err still exists")
-		println(err.Error())
 		return nil, err
 	}
 	return &workRetrieved, nil

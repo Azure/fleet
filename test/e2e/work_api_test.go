@@ -252,8 +252,8 @@ var _ = Describe("work-api testing", func() {
 					return err
 				}
 
-				work.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
-				work, err = utils.UpdateWork(createdWork, HubCluster)
+				work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, addedManifestDetails[0].Manifest, addedManifestDetails[1].Manifest)
+				work, err = utils.UpdateWork(work, HubCluster)
 				return err
 			}, eventuallyTimeout, eventuallyInterval).Should(Succeed())
 
@@ -380,7 +380,6 @@ var _ = Describe("work-api testing", func() {
 				for _, mD := range replacedManifestDetails {
 					createdWork.Spec.Workload.Manifests = append(createdWork.Spec.Workload.Manifests, mD.Manifest)
 				}
-
 				createdWork, err = utils.UpdateWork(createdWork, HubCluster)
 
 				return err
