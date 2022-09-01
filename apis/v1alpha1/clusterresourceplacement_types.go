@@ -42,7 +42,7 @@ type ClusterResourcePlacementSpec struct {
 	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
 
 	// Policy represents the placement policy to select clusters to place all the selected resources.
-	// Default is place to the entire fleet if this field is omitted.
+	// If unspecified, all the joined clusters are selected.
 	// +optional
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 }
@@ -76,10 +76,13 @@ type ClusterResourceSelector struct {
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 }
 
-// PlacementPolicy represents the rule for select clusters.
+// PlacementPolicy contains the rules to select member clusters to place the selected resources to.
+// Note that only clusters that are both joined and satisfying the rules will be selected.
+// You should only specify at most one of the two fields: ClusterNames and Affinity.
+// If none is specified, all the joined clusters are selected.
 type PlacementPolicy struct {
-	// ClusterNames is a request to schedule the selected resource to a list of member clusters.
-	// If exists, we only place the resources within the clusters in this list.
+	// ClusterNames contains a list of names of MemberCluster to place the selected resources to.
+	// If the list is not empty, Affinity is ignored.
 	// kubebuilder:validation:MaxItems=100
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
@@ -122,11 +125,12 @@ type ClusterResourcePlacementStatus struct {
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// SelectedResources is a list of the resources the resource selector selects.
+	// SelectedResources contains a list of resources selected by the resource selector.
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
-	// TargetClusters is a list of cluster names that this resource should run on.
+	// TargetClusters contains a list of member cluster names selected by PlacementPolicy.
+	// Note that the clusters must be both joined and meeting PlacementPolicy.
 	// +optional
 	TargetClusters []string `json:"targetClusters,omitempty"`
 

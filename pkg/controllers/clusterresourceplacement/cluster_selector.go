@@ -43,20 +43,11 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 	if len(placement.Spec.Policy.ClusterNames) != 0 {
 		klog.V(4).InfoS("use the cluster names provided as the list of cluster we select",
 			"placement", placement.Name, "clusters", placement.Spec.Policy.ClusterNames)
-		// TODO: filter by cluster health
-		var selectedClusters []string
-		for _, clusterName := range placement.Spec.Policy.ClusterNames {
-			_, err = r.InformerManager.Lister(utils.MemberClusterGVR).Get(clusterName)
-			if err != nil {
-				klog.ErrorS(err, "cannot get the cluster", "clusterName", clusterName)
-				if !apierrors.IsNotFound(err) {
-					return nil, err
-				}
-			} else {
-				selectedClusters = append(selectedClusters, clusterName)
-			}
+		clusterNames, err = r.getClusters(placement.Spec.Policy.ClusterNames)
+		if err != nil {
+			return nil, err
 		}
-		return selectedClusters, nil
+		return
 	}
 
 	// no Affinity or ClusterAffinity set
@@ -101,18 +92,54 @@ func (r *Reconciler) listClusters(labelSelector labels.Selector) ([]string, erro
 
 	clusterNames := make([]string, 0)
 	for _, obj := range objs {
-		uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
-		var clusterObj fleetv1alpha1.MemberCluster
-		err = runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &clusterObj)
+		clusterObj, err := convertObjToMemberCluster(obj)
 		if err != nil {
-			return nil, errors.Wrap(err, "cannot decode the member cluster object")
+			return nil, err
 		}
 		// only schedule the resource to an eligible cluster
-		// TODO: check the health condition of the cluster when its aggregated
-		joinCond := clusterObj.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
-		if joinCond != nil && joinCond.Status == metav1.ConditionTrue && joinCond.ObservedGeneration == clusterObj.Generation {
+		if isClusterEligible(clusterObj) {
 			clusterNames = append(clusterNames, clusterObj.GetName())
 		}
 	}
 	return clusterNames, nil
+}
+
+// getClusters retrieves the given clusters from the informer cache, and selects the ones found and eligible.
+func (r *Reconciler) getClusters(clusterNames []string) ([]string, error) {
+	selectedClusters := make([]string, 0)
+	for _, clusterName := range clusterNames {
+		obj, err := r.InformerManager.Lister(utils.MemberClusterGVR).Get(clusterName)
+		if err != nil {
+			klog.ErrorS(err, "cannot get the cluster", "clusterName", clusterName)
+			if !apierrors.IsNotFound(err) {
+				return nil, err
+			}
+			continue
+		}
+		clusterObj, err := convertObjToMemberCluster(obj)
+		if err != nil {
+			return nil, err
+		}
+		// only schedule the resource to an eligible cluster
+		if isClusterEligible(clusterObj) {
+			selectedClusters = append(selectedClusters, clusterObj.GetName())
+		}
+	}
+	return selectedClusters, nil
+}
+
+func convertObjToMemberCluster(obj runtime.Object) (*fleetv1alpha1.MemberCluster, error) {
+	uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
+	var clusterObj fleetv1alpha1.MemberCluster
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &clusterObj); err != nil {
+		return nil, errors.Wrap(err, "cannot decode the member cluster object")
+	}
+	return &clusterObj, nil
+}
+
+// isClusterEligible checks whether a member cluster is eligible to be selected in CRP.
+func isClusterEligible(mc *fleetv1alpha1.MemberCluster) bool {
+	// TODO: check the health condition of the cluster when its aggregated
+	joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+	return joinCond != nil && joinCond.Status == metav1.ConditionTrue && joinCond.ObservedGeneration == mc.Generation
 }
