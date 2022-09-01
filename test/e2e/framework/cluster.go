@@ -7,7 +7,7 @@ package framework
 import (
 	"os"
 
-	. "github.com/onsi/gomega" // nolint:golint
+	"github.com/onsi/gomega"
 	apiextension "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,23 +47,23 @@ func GetClusterClient(cluster *Cluster) {
 
 	restConfig, err := clusterConfig.ClientConfig()
 	if err != nil {
-		Expect(err).ShouldNot(HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up rest config")
 	}
 
 	cluster.KubeClient, err = client.New(restConfig, client.Options{Scheme: cluster.Scheme})
-	Expect(err).ShouldNot(HaveOccurred())
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Kube Client")
 
 	cluster.KubeClientSet, err = kubernetes.NewForConfig(restConfig)
-	Expect(err).Should(Succeed())
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up KubeClient Set")
 
 	cluster.APIExtensionClient, err = apiextension.NewForConfig(restConfig)
-	Expect(err).Should(Succeed())
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up API Extension Client.")
 
 	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
-	Expect(err).Should(Succeed())
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Dynamic Client")
 
 	cluster.RestMapper, err = apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
-	Expect(err).Should(Succeed())
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Rest Mapper")
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {
