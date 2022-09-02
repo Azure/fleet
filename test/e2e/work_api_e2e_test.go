@@ -93,13 +93,14 @@ var _ = Describe("Work API Controller test", func() {
 
 			want := []metav1.Condition{
 				{
-					Type:   conditionTypeApplied,
-					Status: metav1.ConditionTrue,
-					Reason: "appliedManifestComplete",
+					Type:    conditionTypeApplied,
+					Status:  metav1.ConditionTrue,
+					Reason:  "appliedWorkComplete",
+					Message: "Apply work complete",
 				},
 			}
 
-			return cmp.Diff(want, work.Status.Conditions)
+			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got)")
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
