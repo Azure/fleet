@@ -52,7 +52,7 @@ var _ = Describe("Work API Controller test", func() {
 	})
 
 	It("Upon successful work creation of a single resource, work manifest is applied and resource is created", func() {
-		workName := testutils.GetWorkName(5)
+		workName := testutils.RandomWorkName(5)
 		By(fmt.Sprintf("Here is the work Name %s", workName))
 
 		// Configmap will be included in this work object.

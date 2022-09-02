@@ -44,7 +44,7 @@ var _ = Describe("work-api testing", func() {
 			})
 
 			workObj := utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				mDetails,
 			)
@@ -113,13 +113,13 @@ var _ = Describe("work-api testing", func() {
 			})
 
 			workOne = utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				manifestDetailsOne,
 			)
 
 			workTwo = utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				manifestDetailsTwo)
 
@@ -224,7 +224,7 @@ var _ = Describe("work-api testing", func() {
 			})
 
 			workObj := utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				initialManifestDetails,
 			)
@@ -286,11 +286,11 @@ var _ = Describe("work-api testing", func() {
 			manifestDetails = generateManifestDetails([]string{
 				"manifests/test-configmap2.yaml",
 			})
-			newDataKey = utils.GetWorkName(5)
-			newDataValue = utils.GetWorkName(5)
+			newDataKey = utils.RandomWorkName(5)
+			newDataValue = utils.RandomWorkName(5)
 
 			workObj := utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				manifestDetails,
 			)
@@ -348,7 +348,7 @@ var _ = Describe("work-api testing", func() {
 			})
 
 			workObj := utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				originalManifestDetails,
 			)
@@ -427,7 +427,7 @@ var _ = Describe("work-api testing", func() {
 			})
 
 			workObj := utils.CreateWorkObj(
-				utils.GetWorkName(5),
+				utils.RandomWorkName(5),
 				workNamespace.Name,
 				manifestDetails,
 			)

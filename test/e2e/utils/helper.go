@@ -295,8 +295,8 @@ func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []work
 	return manifests
 }
 
-// GetWorkName creates a work name in a correct format for e2e tests.
-func GetWorkName(length int) string {
+// RandomWorkName creates a work name in a correct format for e2e tests.
+func RandomWorkName(length int) string {
 	return "work" + rand.String(length)
 }
 
