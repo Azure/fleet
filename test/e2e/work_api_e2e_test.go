@@ -48,7 +48,7 @@ var _ = Describe("Work API Controller test", func() {
 	})
 
 	AfterEach(func() {
-		Expect(testutils.DeleteWork(ctx, *HubCluster, works)).Should(Succeed(), "Deletion of work failed.")
+		testutils.DeleteWork(ctx, *HubCluster, works)
 	})
 
 	It("Upon successful work creation of a single resource, work manifest is applied and resource is created", func() {
@@ -79,13 +79,15 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("Waiting for AppliedWork %s to be created", workName))
 		Eventually(func() error {
-			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
+			return MemberCluster.KubeClient.Get(ctx,
+				types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to create AppliedWork %s", workName)
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNamespace.Name))
 		Eventually(func() bool {
 			work := workapi.Work{}
-			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &work); err != nil {
+			if err := HubCluster.KubeClient.Get(ctx,
+				types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &work); err != nil {
 				return false
 			}
 
@@ -95,7 +97,8 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		Eventually(func() string {
 			appliedWork := workapi.AppliedWork{}
-			if err := MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &appliedWork); err != nil {
+			if err := MemberCluster.KubeClient.Get(ctx,
+				types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &appliedWork); err != nil {
 				return err.Error()
 			}
 
