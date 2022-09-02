@@ -30,9 +30,6 @@ var _ = Describe("Work API Controller test", func() {
 		// Includes all works applied to the hub cluster. Used for garbage collection.
 		works []workapi.Work
 
-		// Includes all manifests to be within a Work object.
-		manifests []workapi.Manifest
-
 		// Comparison Options
 		cmpOptions = []cmp.Option{
 			cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"),
@@ -71,17 +68,11 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		manifests = testutils.AddManifests([]runtime.Object{&manifestConfigMap}, manifests)
+		manifests := testutils.AddManifests([]runtime.Object{&manifestConfigMap}, []workapi.Manifest{})
 		By(fmt.Sprintf("creating work %s/%s of %s", workName, workNamespace.Name, manifestConfigMapName))
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
 		testutils.WaitWork(ctx, *HubCluster, workName, memberNamespace.Name)
-
-		By(fmt.Sprintf("Waiting for AppliedWork %s to be created", workName))
-		Eventually(func() error {
-			return MemberCluster.KubeClient.Get(ctx,
-				types.NamespacedName{Name: workName}, &workapi.AppliedWork{})
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to create AppliedWork %s", workName)
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNamespace.Name))
 		Eventually(func() string {
@@ -101,32 +92,27 @@ var _ = Describe("Work API Controller test", func() {
 			}
 
 			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got)")
+		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
-		Eventually(func() string {
-			appliedWork := workapi.AppliedWork{}
-			if err := MemberCluster.KubeClient.Get(ctx,
-				types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &appliedWork); err != nil {
-				return err.Error()
-			}
+		appliedWork := workapi.AppliedWork{}
+		Expect(MemberCluster.KubeClient.Get(ctx,
+			types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &appliedWork)).Should(Succeed())
 
-			if len(appliedWork.Status.AppliedResources) == 0 {
-				return fmt.Sprintf("Applied Work Meta not created for resource %s", manifestConfigMapName)
-			}
-			want := workapi.AppliedResourceMeta{
-				ResourceIdentifier: workapi.ResourceIdentifier{
-					Ordinal:   0,
-					Group:     manifestConfigMap.GroupVersionKind().Group,
-					Version:   manifestConfigMap.GroupVersionKind().Version,
-					Kind:      manifestConfigMap.GroupVersionKind().Kind,
-					Namespace: manifestConfigMap.Namespace,
-					Name:      manifestConfigMap.Name,
-					Resource:  "configmaps",
-				},
-			}
-			return cmp.Diff(want, appliedWork.Status.AppliedResources[0], cmpOptions...)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate AppliedResourceMeta mismatch (-want, +got)")
+		want := workapi.AppliedResourceMeta{
+			ResourceIdentifier: workapi.ResourceIdentifier{
+				Ordinal:   0,
+				Group:     manifestConfigMap.GroupVersionKind().Group,
+				Version:   manifestConfigMap.GroupVersionKind().Version,
+				Kind:      manifestConfigMap.GroupVersionKind().Kind,
+				Namespace: manifestConfigMap.Namespace,
+				Name:      manifestConfigMap.Name,
+				Resource:  "configmaps",
+			},
+		}
+
+		Expect(cmp.Diff(want, appliedWork.Status.AppliedResources[0], cmpOptions...)).Should(BeEmpty(),
+			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
 		Eventually(func() string {
@@ -134,8 +120,8 @@ var _ = Describe("Work API Controller test", func() {
 			if err != nil {
 				return err.Error()
 			}
-			return cmp.Diff(cm.Data, manifestConfigMap.Data)
+			return cmp.Diff(manifestConfigMap.Data, cm.Data)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
-			"ConfigMap %s was not created in the cluster %s", manifestConfigMapName, MemberCluster.ClusterName)
+			"ConfigMap %s was not created in the cluster %s, or configMap data mismatch(-want, +got):", manifestConfigMapName, MemberCluster.ClusterName)
 	})
 })

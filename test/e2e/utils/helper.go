@@ -257,7 +257,7 @@ func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 }
 
 // CreateWork creates Work object based on manifest given.
-func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName string, workNamespace string, manifests []workapi.Manifest) {
+func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, workNamespace string, manifests []workapi.Manifest) {
 	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s", workName, workNamespace))
 
 	work := workapi.Work{
@@ -280,12 +280,12 @@ func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []worka
 	if len(works) > 0 {
 		// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
 		for i := range works {
-			gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work failed.")
+			gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed.", works[i].Name)
 		}
 	}
 }
 
-// AddManifests adds manifests to be included within a Work Ob
+// AddManifests adds manifests to be included within a Work.
 func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []workapi.Manifest {
 	for _, obj := range objects {
 		manifests = append(manifests, workapi.Manifest{

@@ -57,7 +57,7 @@ func GetClusterClient(cluster *Cluster) {
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up KubeClient Set")
 
 	cluster.APIExtensionClient, err = clientset.NewForConfig(restConfig)
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up API Extension Client.")
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up API Extension Client")
 
 	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Dynamic Client")

@@ -11,7 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -50,7 +50,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(v1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 }
 
 func TestE2E(t *testing.T) {
@@ -63,7 +63,7 @@ var _ = BeforeSuite(func() {
 	Expect(kubeconfig).ShouldNot(BeEmpty(), "Failure to retrieve kubeconfig")
 
 	hubURL = os.Getenv("HUB_SERVER_URL")
-	Expect(hubURL).ShouldNot(BeEmpty(), "Failure to retrieve Hub URL.")
+	Expect(hubURL).ShouldNot(BeEmpty(), "Failure to retrieve Hub URL")
 
 	// hub setup
 	HubCluster.HubURL = hubURL
