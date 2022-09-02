@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +36,7 @@ var _ = Describe("Work API Controller test", func() {
 		// Comparison Options
 		cmpOptions = []cmp.Option{
 			cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"),
+			cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
 		}
 	)
 
@@ -84,15 +84,23 @@ var _ = Describe("Work API Controller test", func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to create AppliedWork %s", workName)
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNamespace.Name))
-		Eventually(func() bool {
+		Eventually(func() string {
 			work := workapi.Work{}
 			if err := HubCluster.KubeClient.Get(ctx,
 				types.NamespacedName{Name: workName, Namespace: workNamespace.Name}, &work); err != nil {
-				return false
+				return err.Error()
 			}
 
-			return meta.IsStatusConditionTrue(work.Status.Conditions, conditionTypeApplied)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			want := []metav1.Condition{
+				{
+					Type:   conditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: "appliedManifestComplete",
+				},
+			}
+
+			return cmp.Diff(want, work.Status.Conditions)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got)")
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		Eventually(func() string {
