@@ -74,9 +74,9 @@ const (
 	ConditionTypeMemberClusterReadyToJoin MemberClusterConditionType = "ReadyToJoin"
 
 	// ConditionTypeMemberClusterJoined indicates the join condition of the given member cluster. Its condition status can be one of the following:
-	// "True" means all the agents on the member cluster has joined.
-	// "False" means all the agents on the member cluster has left.
-	// "Unknown" means not all the agents has joined or left.
+	// "True" means all the agents on the member cluster have joined.
+	// "False" means all the agents on the member cluster have left.
+	// "Unknown" means not all the agents have joined or left.
 	ConditionTypeMemberClusterJoined MemberClusterConditionType = "Joined"
 
 	// ConditionTypeMemberClusterHealthy indicates the health condition of the given member cluster. Its condition status can be one of the following:
