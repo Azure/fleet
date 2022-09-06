@@ -6,7 +6,7 @@ package utils
 
 import (
 	"context"
-	"embed"
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -18,8 +18,10 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -35,8 +37,9 @@ var (
 	// PollTimeout defines the time after which the poll operation times out.
 	PollTimeout = 90 * time.Second
 
-	//go:embed manifests
-	TestManifestFiles embed.FS
+	manifestHashAnnotation = "fleet.azure.com/spec-hash"
+
+	lastAppliedConfigAnnotation = "fleet.azure.com/last-applied-configuration"
 )
 
 // NewMemberCluster return a new member cluster.
@@ -210,11 +213,14 @@ func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.Clu
 
 // WaitWork waits for Work to be present on the hub cluster.
 func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workNamespace string) {
+	name := types.NamespacedName{Name: workName, Namespace: workNamespace}
+
 	klog.Infof("Waiting for Work(%s/%s) to be synced", workName, workNamespace)
 	gomega.Eventually(func() error {
 		var work workapi.Work
-		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s/%s not synced", workName, workNamespace)
+
+		return cluster.KubeClient.Get(ctx, name, &work)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s not synced", name)
 }
 
 // CreateNamespace create namespace and waits for namespace to exist.
@@ -226,6 +232,7 @@ func CreateNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	klog.Infof("Waiting for Namespace(%s) to be synced", ns.Name)
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name, Namespace: ""}, ns)
+
 		return err
 	}, PollTimeout, PollInterval).Should(gomega.Succeed())
 }
@@ -280,7 +287,7 @@ func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []worka
 	if len(works) > 0 {
 		// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
 		for i := range works {
-			gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed.", works[i].Name)
+			gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed", works[i].Name)
 		}
 	}
 }
@@ -288,8 +295,10 @@ func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []worka
 // AddManifests adds manifests to be included within a Work.
 func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []workapi.Manifest {
 	for _, obj := range objects {
+		rawObj, err := json.Marshal(obj)
+		gomega.Expect(err).Should(gomega.Succeed())
 		manifests = append(manifests, workapi.Manifest{
-			RawExtension: runtime.RawExtension{Object: obj},
+			RawExtension: runtime.RawExtension{Object: obj, Raw: rawObj},
 		})
 	}
 	return manifests
@@ -321,4 +330,51 @@ func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message s
 // NegatedFailureMessage builds an error message.
 func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return format.Message(actual, "not to be already exist")
+}
+
+// GenerateSpecHash will generate Hash value used for annotation in the work-api for verification for each manifests given.
+func GenerateSpecHash(manifests []workapi.Manifest) []string {
+	var specHashes []string
+	for index, manifest := range manifests {
+		unstructuredObj := &unstructured.Unstructured{}
+		err := unstructuredObj.UnmarshalJSON(manifest.Raw)
+		gomega.Expect(err).Should(gomega.Succeed(),
+			"Invalid manifest with ordinal of %d", index)
+
+		annotation := unstructuredObj.GetAnnotations()
+		if annotation != nil {
+			delete(annotation, manifestHashAnnotation)
+			delete(annotation, lastAppliedConfigAnnotation)
+			if len(annotation) == 0 {
+				unstructuredObj.SetAnnotations(nil)
+			} else {
+				unstructuredObj.SetAnnotations(annotation)
+			}
+		}
+
+		unstructuredObj.SetResourceVersion("")
+		unstructuredObj.SetGeneration(0)
+		unstructuredObj.SetUID("")
+		unstructuredObj.SetSelfLink("")
+		unstructuredObj.SetDeletionTimestamp(nil)
+		unstructuredObj.SetManagedFields(nil)
+		unstructured.RemoveNestedField(unstructuredObj.Object, "metadata", "creationTimestamp")
+		unstructured.RemoveNestedField(unstructuredObj.Object, "status")
+		// compute the sha256 hash of the remaining data
+
+		jsonBytes, err := json.Marshal(unstructuredObj)
+		gomega.Expect(err).Should(gomega.Succeed(),
+			"Marshaling failed for manifest with ordinal of %d", index)
+		specHashes = append(specHashes, fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
+	}
+	return specHashes
+}
+
+// GetConfigMap retrieves a configmap based on the name and namespace given.
+func GetConfigMap(ctx context.Context, cluster framework.Cluster, name, namespace string) (corev1.ConfigMap, error) {
+	cm, err := cluster.KubeClientSet.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return corev1.ConfigMap{}, err
+	}
+	return *cm, err
 }

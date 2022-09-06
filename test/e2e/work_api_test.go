@@ -133,9 +133,6 @@ var _ = Describe("work-api testing", func() {
 			err = utils.CreateWorkOld(workTwo, HubCluster)
 			Expect(err).ToNot(HaveOccurred())
 
-			utils.WaitAppliedWorkPresent(workOne.Name, MemberCluster)
-			utils.WaitAppliedWorkPresent(workTwo.Name, MemberCluster)
-
 			By("Checking the Applied Work status of each to see both are applied.")
 			Eventually(func() bool {
 				appliedWorkOne, err := utils.RetrieveAppliedWork(workOne.Name, MemberCluster)
@@ -468,7 +465,7 @@ func generateManifestDetails(manifestFiles []string) []utils.ManifestDetails {
 		detail := utils.ManifestDetails{}
 
 		// Read files, create manifest
-		fileRaw, err := utils.TestManifestFiles.ReadFile(file)
+		fileRaw, err := TestManifestFiles.ReadFile(file)
 		Expect(err).ToNot(HaveOccurred())
 
 		obj, gvk, err := genericCodec.Decode(fileRaw, nil, nil)

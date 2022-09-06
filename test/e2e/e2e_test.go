@@ -5,6 +5,7 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"testing"
@@ -44,6 +45,9 @@ var (
 	// Used to decode an unstructured object.
 	genericCodecs = serializer.NewCodecFactory(scheme)
 	genericCodec  = genericCodecs.UniversalDeserializer()
+
+	//go:embed manifests
+	TestManifestFiles embed.FS
 )
 
 func init() {

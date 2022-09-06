@@ -7,10 +7,7 @@ package utils
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -87,12 +84,4 @@ func UpdateWork(work *workapi.Work, hubCluster *framework.Cluster) (*workapi.Wor
 		return nil, err
 	}
 	return updatedWork, err
-}
-
-func WaitAppliedWorkPresent(workName string, memberCluster *framework.Cluster) {
-	ginkgo.By(fmt.Sprintf("Waiting for AppliedWork to be created with Name %s on memberCluster %s", workName, memberCluster.ClusterName))
-	gomega.Eventually(func() error {
-		_, err := RetrieveAppliedWork(workName, memberCluster)
-		return err
-	}, PollTimeout, PollInterval).Should(gomega.BeNil())
 }
