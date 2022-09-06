@@ -71,12 +71,12 @@ type AgentStatus struct {
 type AgentConditionType string
 
 const (
-	// AgentJoined indicates whether the given member agent has joined the fleet.
+	// AgentJoined indicates the join condition of the given member agent. Its condition status can be one of the following:
 	// "True" means the member agent has joined.
 	// "False" means the member agent has left.
 	// "Unknown" means the member agent is joining or leaving or in an unknown status.
 	AgentJoined AgentConditionType = "Joined"
-	// AgentHealthy indicates whether the given member agent is healthy.
+	// AgentHealthy indicates the health condition of the given member agent. Its condition status can be one of the following:
 	// "True" means the member agent is healthy.
 	// "False" means the member agent is unhealthy.
 	// "Unknown" means the member agent has an unknown health status.

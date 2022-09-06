@@ -15,7 +15,7 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
-// InternalMemberCluster is used by the hub agent to control the state of the member agents, and used by the member agents to report their status.
+// InternalMemberCluster is used by hub agent to notify the member agents about the member cluster state changes, and is used by the member agents to report their status.
 type InternalMemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -43,7 +43,7 @@ type InternalMemberClusterSpec struct {
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
-	// The current observed resource usage of the member cluster.
+	// The current observed resource usage of the member cluster. It is populated by the member agent.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 

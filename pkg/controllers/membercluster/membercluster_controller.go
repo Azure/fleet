@@ -338,7 +338,7 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.Internal
 		return
 	}
 
-	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealth.
+	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealthy.
 	// Copy Agent status.
 	mc.Status.AgentStatus = imc.Status.AgentStatus
 	r.aggregateJoinedCondition(mc)
@@ -425,7 +425,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterJoined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoin),
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterJoined,
 		ObservedGeneration: mc.GetGeneration(),
@@ -446,7 +446,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoin),
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterLeft,
 		ObservedGeneration: mc.GetGeneration(),
@@ -473,7 +473,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoin),
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionUnknown,
 		Reason:             reasonMemberClusterUnknown,
 		ObservedGeneration: mc.GetGeneration(),

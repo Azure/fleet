@@ -54,7 +54,7 @@ type MemberClusterStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// The current observed resource usage of the member cluster.
+	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
@@ -67,23 +67,24 @@ type MemberClusterStatus struct {
 type MemberClusterConditionType string
 
 const (
-	// ConditionTypeMemberClusterReadyToJoin indicates whether the hub cluster is ready for the given member cluster to join.
+	// ConditionTypeMemberClusterReadyToJoin indicates the readiness condition of the given member cluster for joining the hub cluster. Its condition status can be one of the following:
 	// "True" means the hub cluster is ready for the member cluster to join.
 	// "False" means the hub cluster is not ready for the member cluster to join.
 	// "Unknown" means it is unknown whether the hub cluster is ready for the member cluster to join.
 	ConditionTypeMemberClusterReadyToJoin MemberClusterConditionType = "ReadyToJoin"
 
-	// ConditionTypeMemberClusterJoin indicates whether the given member cluster has joined the fleet.
-	// "True" means the member cluster has joined.
-	// "False" means the member cluster has left.
-	// "Unknown" means the member cluster is joining or leaving or in an unknown status.
-	ConditionTypeMemberClusterJoin MemberClusterConditionType = "Joined"
+	// ConditionTypeMemberClusterJoined indicates the join condition of the given member cluster. Its condition status can be one of the following:
+	// "True" means all the agents on the member cluster has joined.
+	// "False" means all the agents on the member cluster has left.
+	// "Unknown" means not all the agents has joined or left.
+	ConditionTypeMemberClusterJoined MemberClusterConditionType = "Joined"
 
-	// ConditionTypeMemberClusterHealth indicates whether the given member cluster is healthy.
+	// ConditionTypeMemberClusterHealthy indicates the health condition of the given member cluster. Its condition status can be one of the following:
 	// "True" means the member cluster is healthy.
 	// "False" means the member cluster is unhealthy.
 	// "Unknown" means the member cluster has an unknown health status.
-	ConditionTypeMemberClusterHealth MemberClusterConditionType = "Healthy"
+	// NOTE: This condition type is currently unused.
+	ConditionTypeMemberClusterHealthy MemberClusterConditionType = "Healthy"
 )
 
 //+kubebuilder:object:root=true
