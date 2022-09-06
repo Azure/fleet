@@ -126,14 +126,15 @@ func main() {
 	}
 
 	memberConfig := ctrl.GetConfigOrDie()
-
+	// we place the leader election lease on the member cluster to avoid adding load to the hub
 	hubOpts := ctrl.Options{
 		Scheme:                  scheme,
 		MetricsBindAddress:      *hubMetricsAddr,
 		Port:                    8443,
 		HealthProbeBindAddress:  *hubProbeAddr,
 		LeaderElection:          *enableLeaderElection,
-		LeaderElectionNamespace: mcNamespace, // This requires we have access to resource "leases" in API group "coordination.k8s.io" under namespace $mcHubNamespace
+		LeaderElectionNamespace: *leaderElectionNamespace,
+		LeaderElectionConfig:    memberConfig,
 		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
 		Namespace:               mcNamespace,
 	}
