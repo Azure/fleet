@@ -94,7 +94,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC := fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
@@ -138,7 +138,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			joinCondition := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+			joinCondition := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
 			Expect(joinCondition).NotTo(BeNil())
 			Expect(joinCondition.Status).To(Equal(metav1.ConditionTrue))
 			Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
@@ -184,13 +184,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC := fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterNotReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterLeft,
 						ObservedGeneration: mc.GetGeneration(),
@@ -302,13 +302,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC := fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -345,13 +345,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC = fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -388,13 +388,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC = fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -431,13 +431,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC = fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterJoined,
 						ObservedGeneration: mc.GetGeneration(),
@@ -493,13 +493,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC := fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -535,13 +535,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC = fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -584,13 +584,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC = fleetv1alpha1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterNotReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterLeft,
 						ObservedGeneration: mc.GetGeneration(),

@@ -618,7 +618,7 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
-		{Type: fleetv1alpha1.ConditionTypeMemberClusterJoin, Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined},
+		{Type: string(fleetv1alpha1.ConditionTypeMemberClusterJoined), Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined},
 	}
 
 	for i := range expectedConditions {
@@ -685,7 +685,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionTrue,
 							Reason: reasonMemberClusterJoined,
 						},
@@ -776,12 +776,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionFalse,
 							Reason: reasonMemberClusterLeft,
 						},
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 							Status: metav1.ConditionFalse,
 							Reason: reasonMemberClusterNotReadyToJoin,
 						},
@@ -872,7 +872,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
@@ -947,7 +947,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
@@ -1027,7 +1027,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionTrue,
 							Reason: reasonMemberClusterJoined,
 						},
@@ -1118,7 +1118,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
@@ -1191,7 +1191,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
@@ -1268,7 +1268,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 				Status: fleetv1alpha1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   fleetv1alpha1.ConditionTypeMemberClusterJoin,
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
@@ -1307,7 +1307,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
-			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), tt.memberCluster.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin), cmpopts.IgnoreTypes(time.Time{})))
+			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined)), tt.memberCluster.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined)), cmpopts.IgnoreTypes(time.Time{})))
 			assert.Equal(t, tt.wantedMemberCluster.Status.ResourceUsage, tt.memberCluster.Status.ResourceUsage)
 			assert.Equal(t, tt.wantedMemberCluster.Status.AgentStatus, tt.memberCluster.Status.AgentStatus)
 		})

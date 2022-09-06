@@ -48,8 +48,8 @@ spec:
             properties:
               policy:
                 description: Policy represents the placement policy to select clusters
-                  to place all the selected resources. Default is place to the entire
-                  fleet if this field is omitted.
+                  to place all the selected resources. If unspecified, all the joined
+                  clusters are selected.
                 properties:
                   affinity:
                     description: Affinity represents the selected resources' scheduling
@@ -125,9 +125,9 @@ spec:
                         type: object
                     type: object
                   clusterNames:
-                    description: ClusterNames is a request to schedule the selected
-                      resource to a list of member clusters. If exists, we only place
-                      the resources within the clusters in this list. kubebuilder:validation:MaxItems=100
+                    description: ClusterNames contains a list of names of MemberCluster
+                      to place the selected resources to. If the list is not empty,
+                      Affinity is ignored. kubebuilder:validation:MaxItems=100
                     items:
                       type: string
                     type: array
@@ -384,8 +384,8 @@ spec:
                   type: object
                 type: array
               selectedResources:
-                description: SelectedResources is a list of the resources the resource
-                  selector selects.
+                description: SelectedResources contains a list of resources selected
+                  by the resource selector.
                 items:
                   description: ResourceIdentifier points to one resource we selected
                   properties:
@@ -411,8 +411,9 @@ spec:
                   type: object
                 type: array
               targetClusters:
-                description: TargetClusters is a list of cluster names that this resource
-                  should run on.
+                description: TargetClusters contains a list of member cluster names
+                  selected by PlacementPolicy. Note that the clusters must be both
+                  joined and meeting PlacementPolicy.
                 items:
                   type: string
                 type: array

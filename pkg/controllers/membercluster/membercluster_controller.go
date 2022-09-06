@@ -338,7 +338,7 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1alpha1.Internal
 		return
 	}
 
-	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealth.
+	// TODO: We didn't handle condition type: fleetv1alpha1.ConditionTypeMemberClusterHealthy.
 	// Copy Agent status.
 	mc.Status.AgentStatus = imc.Status.AgentStatus
 	r.aggregateJoinedCondition(mc)
@@ -405,7 +405,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterReadyToJoin,
 		ObservedGeneration: mc.GetGeneration(),
@@ -425,7 +425,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.Conditi
 func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterJoined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterJoined,
 		ObservedGeneration: mc.GetGeneration(),
@@ -446,13 +446,13 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedO
 func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterLeft,
 		ObservedGeneration: mc.GetGeneration(),
 	}
 	notReadyCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin,
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterNotReadyToJoin,
 		ObservedGeneration: mc.GetGeneration(),
@@ -473,7 +473,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(5).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               fleetv1alpha1.ConditionTypeMemberClusterJoin,
+		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionUnknown,
 		Reason:             reasonMemberClusterUnknown,
 		ObservedGeneration: mc.GetGeneration(),

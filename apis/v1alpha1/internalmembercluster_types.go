@@ -6,18 +6,16 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// InternalMemberCluster is used by the hub agent to control the member cluster state.
-// Member agent watches this CR and updates its status.
-
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced,categories={fleet},shortName=internalcluster
+// +kubebuilder:resource:scope=Namespaced,categories={fleet},shortName=imc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
+
+// InternalMemberCluster is used by hub agent to notify the member agents about the member cluster state changes, and is used by the member agents to report their status.
 type InternalMemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -26,44 +24,32 @@ type InternalMemberCluster struct {
 	Status InternalMemberClusterStatus `json:"status,omitempty"`
 }
 
-// InternalMemberClusterSpec defines the desired state of InternalMemberCluster for the hub agent.
+// InternalMemberClusterSpec defines the desired state of InternalMemberCluster. Set by the hub agent.
 type InternalMemberClusterSpec struct {
-	// State indicates the state of the member cluster.
-
 	// +kubebuilder:validation:Required,Enum=Join;Leave
+
+	// The desired state of the member cluster. Possible values: Join, Leave.
+	// +required
 	State ClusterState `json:"state"`
 
-	// HeartbeatPeriodSeconds indicates how often (in seconds) for the member cluster to send a heartbeat. Default to 60 seconds. Minimum value is 1.
-
-	// +optional
 	// +kubebuilder:default=60
-	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
+	// +kubebuilder:validation:Minimum:1
+	// +kubebuilder:validation:Maximum:600
+
+	// How often (in seconds) for the member cluster to send a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second. Max: 10 minutes.
+	// +optional
+	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
 }
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
-	// Resource usage collected from member cluster.
+	// The current observed resource usage of the member cluster. It is populated by the member agent.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
-	// AgentStatus field contains the status for each agent running in the member cluster.
+	// AgentStatus is an array of current observed status, each corresponding to one member agent running in the member cluster.
 	// +optional
 	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`
-}
-
-// ResourceUsage represents the resource usage collected from the member cluster and its observation time.
-type ResourceUsage struct {
-	// Capacity represents the total resource capacity from all nodeStatues on the member cluster.
-	// +optional
-	Capacity v1.ResourceList `json:"capacity,omitempty"`
-
-	// Allocatable represents the total allocatable resources on the member cluster.
-	// +optional
-	Allocatable v1.ResourceList `json:"allocatable,omitempty"`
-
-	// The time we observe the member cluster resource usage, including capacity and allocatable.
-	// +optional
-	ObservationTime metav1.Time `json:"observationTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true

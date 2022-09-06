@@ -49,7 +49,7 @@ var _ = Describe("workload orchestration testing", func() {
 		By("check if internal member cluster condition is updated to Joined")
 		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, 3*testutils.PollTimeout)
 		By("check if member cluster condition is updated to Joined")
-		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoin, v1.ConditionTrue, 3*testutils.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, v1.ConditionTrue, 3*testutils.PollTimeout)
 	})
 
 	AfterEach(func() {

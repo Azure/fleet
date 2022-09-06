@@ -310,7 +310,7 @@ func markInternalMCLeft(mc fleetv1alpha1.MemberCluster) {
 	By("Marked internal member cluster as Left")
 	Eventually(func() bool {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
-		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		joinCond := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
 		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionFalse
 	}, timeout, interval).Should(BeTrue())
@@ -333,7 +333,7 @@ func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
 	By("Marked internal member cluster as joined")
 	Eventually(func() bool {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
-		joinCond := mc.GetCondition(fleetv1alpha1.ConditionTypeMemberClusterJoin)
+		joinCond := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
 		if joinCond == nil {
 			return false
 		}

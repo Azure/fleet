@@ -9,4 +9,4 @@ spec:
     kind: ServiceAccount
     namespace: fleet-system
     apiGroup: ""
-  leaseDurationSeconds: 30
+  heartbeatPeriodSeconds: 30
