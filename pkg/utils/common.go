@@ -56,6 +56,10 @@ const (
 	// PlacementFinalizer is used to make sure that we handle gc of placement resources
 	PlacementFinalizer = "work.fleet.azure.com/placement-protection"
 )
+const (
+	// NetworkingGroupName is the group name of the fleet networking
+	NetworkingGroupName = "networking.fleet.azure.com"
+)
 
 var (
 	FleetRule = rbacv1.PolicyRule{
@@ -75,7 +79,7 @@ var (
 	}
 	FleetNetworkRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
-		APIGroups: []string{"networking.fleet.azure.com"},
+		APIGroups: []string{NetworkingGroupName},
 		Resources: []string{"*"},
 	}
 	// LeaseRule Leases permissions are required for leader election of hub controller manager in member cluster.

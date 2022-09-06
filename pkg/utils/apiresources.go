@@ -31,6 +31,12 @@ var (
 		Kind:    "Node",
 	}
 
+	serviceImportGVK = schema.GroupVersionKind{
+		Group:   NetworkingGroupName,
+		Version: "v1alpha1",
+		Kind:    "ServiceImport",
+	}
+
 	// we use `;` to separate the different api groups
 	apiGroupSepToken = ";"
 )
@@ -61,6 +67,7 @@ func NewDisabledResourceConfig() *DisabledResourceConfig {
 	r.DisableGroup(coordv1.GroupName)
 	r.DisableGroupVersionKind(corev1PodGVK)
 	r.DisableGroupVersionKind(corev1NodeGVK)
+	r.DisableGroupVersionKind(serviceImportGVK)
 	return r
 }
 
