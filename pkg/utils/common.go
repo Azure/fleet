@@ -45,7 +45,7 @@ const (
 )
 
 const (
-	// LabelFleetObj is a label key indicate the resource is created by the fleet
+	// LabelFleetObj is a label key indicate the resource is created by the fleet.
 	LabelFleetObj      = "kubernetes.azure.com/managed-by"
 	LabelFleetObjValue = "fleet"
 
@@ -53,11 +53,11 @@ const (
 	// This label aims to enable different work objects to be managed by different placement.
 	LabelWorkPlacementName = "work.fleet.azure.com/placement-name"
 
-	// PlacementFinalizer is used to make sure that we handle gc of placement resources
+	// PlacementFinalizer is used to make sure that we handle gc of placement resources.
 	PlacementFinalizer = "work.fleet.azure.com/placement-protection"
 )
 const (
-	// NetworkingGroupName is the group name of the fleet networking
+	// NetworkingGroupName is the group name of the fleet networking.
 	NetworkingGroupName = "networking.fleet.azure.com"
 )
 
@@ -82,14 +82,9 @@ var (
 		APIGroups: []string{NetworkingGroupName},
 		Resources: []string{"*"},
 	}
-	// LeaseRule Leases permissions are required for leader election of hub controller manager in member cluster.
-	LeaseRule = rbacv1.PolicyRule{
-		Verbs:     []string{"create", "get", "list", "update"},
-		APIGroups: []string{"coordination.k8s.io"},
-		Resources: []string{"leases"},
-	}
 )
 
+// Those are the GVR/GVK of the fleet related resources.
 var (
 	ClusterResourcePlacementGVR = schema.GroupVersionResource{
 		Group:    fleetv1alpha1.GroupVersion.Group,
