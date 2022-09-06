@@ -109,12 +109,12 @@ func DeleteMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) 
 }
 
 // WaitConditionMemberCluster waits for MemberCluster to present on th hub cluster with a specific condition.
-func WaitConditionMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster, conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
-	klog.Infof("Waiting for MemberCluster(%s) condition(%s) status(%s) to be synced", mc.Name, conditionName, status)
+func WaitConditionMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster, conditionType v1alpha1.MemberClusterConditionType, status metav1.ConditionStatus, customTimeout time.Duration) {
+	klog.Infof("Waiting for MemberCluster(%s) condition(%s) status(%s) to be synced", mc.Name, conditionType, status)
 	gomega.Eventually(func() bool {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		cond := mc.GetCondition(conditionName)
+		cond := mc.GetCondition(string(conditionType))
 		return cond != nil && cond.Status == status
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
 }

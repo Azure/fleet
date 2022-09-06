@@ -290,7 +290,7 @@ func TestGetConditionWithType(t *testing.T) {
 							Type: v1alpha1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   v1alpha1.ConditionTypeMemberClusterJoin,
+									Type:   string(v1alpha1.ConditionTypeMemberClusterJoin),
 									Status: metav1.ConditionTrue,
 									Reason: eventReasonInternalMemberClusterJoined,
 								},
@@ -301,7 +301,7 @@ func TestGetConditionWithType(t *testing.T) {
 			},
 			conditionType: string(v1alpha1.AgentJoined),
 			wantedCondition: &metav1.Condition{
-				Type:   v1alpha1.ConditionTypeMemberClusterJoin,
+				Type:   string(v1alpha1.ConditionTypeMemberClusterJoin),
 				Status: metav1.ConditionTrue,
 				Reason: eventReasonInternalMemberClusterJoined,
 			},
@@ -314,7 +314,7 @@ func TestGetConditionWithType(t *testing.T) {
 							Type: v1alpha1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   v1alpha1.ConditionTypeMemberClusterJoin,
+									Type:   string(v1alpha1.ConditionTypeMemberClusterJoin),
 									Status: metav1.ConditionTrue,
 									Reason: eventReasonInternalMemberClusterJoined,
 								},

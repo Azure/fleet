@@ -11,14 +11,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
-
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=membercluster
+// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=mc
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ConditionTypeMemberClusterJoin")].status`,name="Joined",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
-// +kubebuilder:printcolumn:JSONPath=`.metadata.label[fleet.azure.com/clusterHealth]`,name="HealthStatus",type=string
+
+// MemberCluster is a resource created in the hub cluster to represent a member cluster within a fleet.
 type MemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -29,52 +28,62 @@ type MemberCluster struct {
 
 // MemberClusterSpec defines the desired state of MemberCluster.
 type MemberClusterSpec struct {
-	// State indicates the desired state of the member cluster.
-
 	// +kubebuilder:validation:Required,Enum=Join;Leave
+
+	// The desired state of the member cluster. Possible values: Join, Leave.
+	// +required
 	State ClusterState `json:"state"`
 
-	// Identity used by the member cluster to contact the hub cluster.
-	// The hub cluster will create the minimal required permission for this identity.
-
+	// The identity used by the member cluster to access the hub cluster.
+	// The hub agents deployed on the hub cluster will automatically grant the minimal required permissions to this identity for the member agents deployed on the member cluster to access the hub cluster.
 	// +required
 	Identity rbacv1.Subject `json:"identity"`
 
-	// HeartbeatPeriodSeconds indicates how often (in seconds) for the member cluster to send a heartbeat. Default to 60 seconds. Minimum value is 1.
-
 	// +kubebuilder:default=60
+	// +kubebuilder:validation:Minimum:1
+	// +kubebuilder:validation:Maximum:600
+
+	// How often (in seconds) for the member cluster to send a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second. Max: 10 minutes.
 	// +optional
-	HeartbeatPeriodSeconds int32 `json:"leaseDurationSeconds,omitempty"`
+	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
 }
 
-// MemberClusterStatus defines the observed state of MemberCluster.
+// MemberClusterStatus defines the observed status of MemberCluster.
 type MemberClusterStatus struct {
-	// Conditions is an array of current observed conditions for this member cluster.
-	// +required
+	// Conditions is an array of current observed conditions for the member cluster.
+	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Resource usage collected from member cluster.
+	// The current observed resource usage of the member cluster.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`
 
-	// AgentStatus field contains the status for each agent running in the member cluster.
+	// AgentStatus is an array of current observed status, each corresponding to one member agent running in the member cluster.
 	// +optional
 	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`
 }
 
+// MemberClusterConditionType defines a specific condition of a member cluster.
+type MemberClusterConditionType string
+
 const (
-	// ConditionTypeMemberClusterReadyToJoin is used to track the readiness of the hub cluster
-	// controller to accept the new member cluster.
-	// its conditionStatus can only be "True" == ReadyToJoin
-	ConditionTypeMemberClusterReadyToJoin string = "ReadyToJoin"
+	// ConditionTypeMemberClusterReadyToJoin indicates whether the hub cluster is ready for the given member cluster to join.
+	// "True" means the hub cluster is ready for the member cluster to join.
+	// "False" means the hub cluster is not ready for the member cluster to join.
+	// "Unknown" means it is unknown whether the hub cluster is ready for the member cluster to join.
+	ConditionTypeMemberClusterReadyToJoin MemberClusterConditionType = "ReadyToJoin"
 
-	// ConditionTypeMemberClusterJoin is used to track the join state of the memberCluster.
-	// its conditionStatus can be "True" == Joined, "Unknown" == Joining/Leaving, "False" == Left
-	ConditionTypeMemberClusterJoin string = "Joined"
+	// ConditionTypeMemberClusterJoin indicates whether the given member cluster has joined the fleet.
+	// "True" means the member cluster has joined.
+	// "False" means the member cluster has left.
+	// "Unknown" means the member cluster is joining or leaving or in an unknown status.
+	ConditionTypeMemberClusterJoin MemberClusterConditionType = "Joined"
 
-	// ConditionTypeMemberClusterHealth is used to track the Health state of the MemberCluster.
-	// its conditionStatus can be "True" == Healthy, "Unknown" == Health degraded, "False" == UnHealthy
-	ConditionTypeMemberClusterHealth string = "Healthy"
+	// ConditionTypeMemberClusterHealth indicates whether the given member cluster is healthy.
+	// "True" means the member cluster is healthy.
+	// "False" means the member cluster is unhealthy.
+	// "Unknown" means the member cluster has an unknown health status.
+	ConditionTypeMemberClusterHealth MemberClusterConditionType = "Healthy"
 )
 
 //+kubebuilder:object:root=true
