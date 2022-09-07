@@ -141,6 +141,7 @@ spec:
                               required:
                               - labelSelector
                               type: object
+                            maxItems: 10
                             type: array
                         type: object
                     type: object
@@ -150,6 +151,7 @@ spec:
                       Affinity is ignored.
                     items:
                       type: string
+                    maxItems: 100
                     type: array
                 type: object
               resourceSelectors:
@@ -230,6 +232,8 @@ spec:
                   - kind
                   - version
                   type: object
+                maxItems: 100
+                minItems: 1
                 type: array
             required:
             - resourceSelectors
@@ -404,6 +408,7 @@ spec:
                   - kind
                   - name
                   type: object
+                maxItems: 1000
                 type: array
               selectedResources:
                 description: SelectedResources contains a list of resources selected

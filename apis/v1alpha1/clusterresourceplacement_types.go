@@ -43,8 +43,8 @@ type ClusterResourcePlacement struct {
 
 // ClusterResourcePlacementSpec defines the desired state of ClusterResourcePlacement.
 type ClusterResourcePlacementSpec struct {
-	// kubebuilder:validation:MinItems=1
-	// kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=100
 
 	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
@@ -94,7 +94,7 @@ type ClusterResourceSelector struct {
 // You can only specify at most one of the two fields: ClusterNames and Affinity.
 // If none is specified, all the joined clusters are selected.
 type PlacementPolicy struct {
-	// kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:MaxItems=100
 
 	// ClusterNames contains a list of names of MemberCluster to place the selected resources to.
 	// If the list is not empty, Affinity is ignored.
@@ -115,7 +115,7 @@ type Affinity struct {
 
 // ClusterAffinity contains cluster affinity scheduling rules for the selected resources.
 type ClusterAffinity struct {
-	// kubebuilder:validation:MaxItems=10
+	// +kubebuilder:validation:MaxItems=10
 
 	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
 	// +optional
@@ -149,7 +149,7 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	TargetClusters []string `json:"targetClusters,omitempty"`
 
-	// kubebuilder:validation:MaxItems=1000
+	// +kubebuilder:validation:MaxItems=1000
 
 	// FailedResourcePlacements is a list of all the resources failed to be placed to the given clusters.
 	// Note that we only include 1000 failed resource placements even if there are more than 1000.
