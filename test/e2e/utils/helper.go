@@ -296,7 +296,7 @@ func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []worka
 func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []workapi.Manifest {
 	for _, obj := range objects {
 		rawObj, err := json.Marshal(obj)
-		gomega.Expect(err).Should(gomega.Succeed())
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", obj)
 		manifests = append(manifests, workapi.Manifest{
 			RawExtension: runtime.RawExtension{Object: obj, Raw: rawObj},
 		})

@@ -17,6 +17,8 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
+// Deprecated: The functions in this file will be removed or moved to helper.go.
+
 type ManifestDetails struct {
 	Manifest workapi.Manifest
 	GVK      *schema.GroupVersionKind
