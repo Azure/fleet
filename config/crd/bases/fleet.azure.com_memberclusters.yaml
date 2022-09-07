@@ -53,6 +53,8 @@ spec:
                   a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second.
                   Max: 10 minutes.'
                 format: int32
+                maximum: 600
+                minimum: 1
                 type: integer
               identity:
                 description: The identity used by the member cluster to access the
