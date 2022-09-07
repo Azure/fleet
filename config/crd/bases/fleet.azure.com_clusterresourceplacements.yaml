@@ -41,14 +41,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: 'ClusterResourcePlacement is used to select cluster scoped resources
-          and place them onto selected member clusters in a fleet. If a namespace
-          is selected, ALL the resources under the namespace are placed to the target
-          clusters. Note that you can''t select the following resources: - reserved
-          namespaces including: default, kube-* (reserved for Kubernetes system namespaces),
-          fleet-* (reserved for fleet system namespaces). - reserved fleet resource
-          types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement,
-          MultiClusterService, ServiceImport, etc.'
+        description: 'ClusterResourcePlacement is used to select cluster scoped resources,
+          including built-in resources and custom resources, and placement them onto
+          selected member clusters in a fleet. If a namespace is selected, ALL the
+          resources under the namespace are placed to the target clusters. Note that
+          you can''t select the following resources: - reserved namespaces including:
+          default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved
+          for fleet system namespaces). - reserved fleet resource types including:
+          MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService,
+          ServiceImport, etc.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -72,8 +73,7 @@ spec:
                 properties:
                   affinity:
                     description: Affinity contains cluster affinity scheduling rules.
-                      Defines which member clusters to place the selected resources
-                      to.
+                      Defines which member clusters to place the selected resources.
                     properties:
                       clusterAffinity:
                         description: ClusterAffinity contains cluster affinity scheduling
@@ -147,8 +147,8 @@ spec:
                     type: object
                   clusterNames:
                     description: ClusterNames contains a list of names of MemberCluster
-                      to place the selected resources to. If the list is not empty,
-                      Affinity is ignored.
+                      to place the selected resources. If the list is not empty, Affinity
+                      is ignored.
                     items:
                       type: string
                     maxItems: 100
@@ -438,13 +438,15 @@ spec:
                   type: object
                 type: array
               targetClusters:
-                description: TargetClusters contains a list of names of member cluster
+                description: TargetClusters contains a list of names of member clusters
                   selected by PlacementPolicy. Note that the clusters must be both
                   joined and meeting PlacementPolicy.
                 items:
                   type: string
                 type: array
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

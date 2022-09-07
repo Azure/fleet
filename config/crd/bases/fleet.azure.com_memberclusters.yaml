@@ -45,7 +45,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: MemberClusterSpec defines the desired state of MemberCluster.
+            description: The desired state of MemberCluster.
             properties:
               heartbeatPeriodSeconds:
                 default: 60
@@ -92,7 +92,7 @@ spec:
             - state
             type: object
           status:
-            description: MemberClusterStatus defines the observed status of MemberCluster.
+            description: The observed status of MemberCluster.
             properties:
               agentStatus:
                 description: AgentStatus is an array of current observed status, each

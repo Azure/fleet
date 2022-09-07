@@ -22,7 +22,12 @@ type MemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MemberClusterSpec   `json:"spec"`
+	// The desired state of MemberCluster.
+	// +required
+	Spec MemberClusterSpec `json:"spec"`
+
+	// The observed status of MemberCluster.
+	// +optional
 	Status MemberClusterStatus `json:"status,omitempty"`
 }
 

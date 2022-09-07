@@ -23,7 +23,7 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterResourcePlacement is used to select cluster scoped resources and place them onto selected member clusters in a fleet.
+// ClusterResourcePlacement is used to select cluster scoped resources, including built-in resources and custom resources, and placement them onto selected member clusters in a fleet.
 // If a namespace is selected, ALL the resources under the namespace are placed to the target clusters.
 // Note that you can't select the following resources:
 // - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces).
@@ -33,7 +33,7 @@ type ClusterResourcePlacement struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// The desired state of ClusterResourcePlacement.
-	// +optional
+	// +required
 	Spec ClusterResourcePlacementSpec `json:"spec"`
 
 	// The observed status of ClusterResourcePlacement.
@@ -88,7 +88,7 @@ type ClusterResourceSelector struct {
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 }
 
-// PlacementPolicy contains the rules to select target member clusters to place the selected resources to.
+// PlacementPolicy contains the rules to select target member clusters to place the selected resources.
 // Note that only clusters that are both joined and satisfying the rules will be selected.
 //
 // You can only specify at most one of the two fields: ClusterNames and Affinity.
@@ -96,12 +96,12 @@ type ClusterResourceSelector struct {
 type PlacementPolicy struct {
 	// +kubebuilder:validation:MaxItems=100
 
-	// ClusterNames contains a list of names of MemberCluster to place the selected resources to.
+	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
 	// If the list is not empty, Affinity is ignored.
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
 
-	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources to.
+	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources.
 	// +optional
 	Affinity *Affinity `json:"affinity,omitempty"`
 }
@@ -144,7 +144,7 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
-	// TargetClusters contains a list of names of member cluster selected by PlacementPolicy.
+	// TargetClusters contains a list of names of member clusters selected by PlacementPolicy.
 	// Note that the clusters must be both joined and meeting PlacementPolicy.
 	// +optional
 	TargetClusters []string `json:"targetClusters,omitempty"`
@@ -199,10 +199,10 @@ type FailedResourcePlacement struct {
 type ResourcePlacementConditionType string
 
 const (
-	// ResourcePlacementConditionTypeScheduled indicates whether we have selected >0 resources to be placed to >0 clusters and created work CRs under the corresponding per-cluster namespaces (i.e., fleet-member-<member-name>).
+	// ResourcePlacementConditionTypeScheduled indicates whether we have selected at least one resource to be placed to at least one member cluster and created work CRs under the corresponding per-cluster namespaces (i.e., fleet-member-<member-name>).
 	// Its condition status can be one of the following:
-	// - "True" means we have selected >0 resources and target >0 clusters and created the work CRs.
-	// - "False" means we have selected 0 resources, 0 clusters, or failed to create the work CRs.
+	// - "True" means we have selected at least one resource, targeted at least one member cluster and created the work CRs.
+	// - "False" means we have selected zero resources, zero target clusters, or failed to create the work CRs.
 	// - "Unknown" otherwise.
 	ResourcePlacementConditionTypeScheduled ResourcePlacementConditionType = "Scheduled"
 
