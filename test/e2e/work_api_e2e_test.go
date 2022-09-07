@@ -99,7 +99,7 @@ var _ = Describe("Work API Controller test", func() {
 			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
-		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied.", namespaceType.String()))
+		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType.String()))
 		expectedManifestCondition := []workapi.ManifestCondition{
 			{
 				Conditions: []metav1.Condition{
