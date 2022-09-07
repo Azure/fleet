@@ -11,6 +11,7 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -245,4 +246,27 @@ func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 		err := cluster.KubeClient.Delete(context.TODO(), sa)
 		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 	})
+}
+
+// AlreadyExistMatcher matches the error to be already exist
+type AlreadyExistMatcher struct {
+}
+
+// Match matches error.
+func (matcher AlreadyExistMatcher) Match(actual interface{}) (success bool, err error) {
+	if actual == nil {
+		return false, nil
+	}
+	actualError := actual.(error)
+	return apierrors.IsAlreadyExists(actualError), nil
+}
+
+// FailureMessage builds an error message.
+func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "to be already exist")
+}
+
+// NegatedFailureMessage builds an error message.
+func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "not to be already exist")
 }

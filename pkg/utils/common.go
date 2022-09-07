@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -30,17 +31,21 @@ import (
 )
 
 const (
-	FleetSystemNamespace = "fleet-system"
+	kubePrefix            = "kube-"
+	fleetPrefix           = "fleet-"
+	FleetSystemNamespace  = fleetPrefix + "system"
+	NamespaceNameFormat   = fleetPrefix + "member-%s"
+	RoleNameFormat        = fleetPrefix + "role-%s"
+	RoleBindingNameFormat = fleetPrefix + "rolebinding-%s"
+)
 
-	ClusterNamespacePrefix = "fleet-member-"
-	NamespaceNameFormat    = ClusterNamespacePrefix + "%s"
+const (
+	// NetworkingGroupName is the group name of the fleet networking.
+	NetworkingGroupName = "networking.fleet.azure.com"
+)
 
-	RoleNameFormat = "fleet-role-%s"
-
-	RoleBindingNameFormat = "fleet-rolebinding-%s"
-
-	PlacementFieldManagerName = "cluster-placement-controller"
-
+const (
+	PlacementFieldManagerName    = "cluster-placement-controller"
 	MCControllerFieldManagerName = "member-cluster-controller"
 )
 
@@ -55,10 +60,6 @@ const (
 
 	// PlacementFinalizer is used to make sure that we handle gc of placement resources.
 	PlacementFinalizer = "work.fleet.azure.com/placement-protection"
-)
-const (
-	// NetworkingGroupName is the group name of the fleet networking.
-	NetworkingGroupName = "networking.fleet.azure.com"
 )
 
 var (
@@ -221,4 +222,17 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 		}
 	}
 	return true, nil
+}
+
+// ShouldPropagateNamespace decides if we should propagate the resources in the namespace
+func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]bool) bool {
+	// special case for namespace have the reserved prefix
+	if strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix) {
+		return false
+	}
+
+	if skippedNamespaces[namespace] {
+		return false
+	}
+	return true
 }

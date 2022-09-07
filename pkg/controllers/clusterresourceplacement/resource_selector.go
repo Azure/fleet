@@ -32,7 +32,7 @@ import (
 func (r *Reconciler) selectResources(ctx context.Context, placement *fleetv1alpha1.ClusterResourcePlacement) ([]workv1alpha1.Manifest, error) {
 	selectedObjects, err := r.gatherSelectedResource(ctx, placement)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to gather all the selected resource")
+		return nil, err
 	}
 	placement.Status.SelectedResources = make([]fleetv1alpha1.ResourceIdentifier, 0)
 	manifests := make([]workv1alpha1.Manifest, len(selectedObjects))
@@ -177,11 +177,15 @@ func (r *Reconciler) fetchNamespaceResources(ctx context.Context, selector fleet
 
 	if len(selector.Name) != 0 {
 		// just a single namespace
-		return r.fetchAllResourcesInOneNamespace(ctx, selector.Name, placeName)
+		objs, err := r.fetchAllResourcesInOneNamespace(ctx, selector.Name, placeName)
+		if err != nil {
+			klog.ErrorS(err, "failed to fetch all the selected resource in a namespace", "namespace", selector.Name)
+			return nil, err
+		}
+		return objs, err
 	}
-	// go through each namespace
-	lister := r.InformerManager.Lister(utils.NamespaceGVR)
 
+	// go through each namespace
 	var labelSelector labels.Selector
 	var err error
 	if selector.LabelSelector == nil {
@@ -192,9 +196,9 @@ func (r *Reconciler) fetchNamespaceResources(ctx context.Context, selector fleet
 			return nil, errors.Wrap(err, "cannot convert the label selector to a selector")
 		}
 	}
-	namespaces, err := lister.List(labelSelector)
+	namespaces, err := r.InformerManager.Lister(utils.NamespaceGVR).List(labelSelector)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot list all the namespaces")
+		return nil, errors.Wrap(err, "cannot list all the namespaces given the label selector")
 	}
 
 	for _, namespace := range namespaces {
@@ -204,19 +208,23 @@ func (r *Reconciler) fetchNamespaceResources(ctx context.Context, selector fleet
 		}
 		objs, err := r.fetchAllResourcesInOneNamespace(ctx, ns.GetName(), placeName)
 		if err != nil {
+			klog.ErrorS(err, "failed to fetch all the selected resource in a namespace", "namespace", ns.GetName())
 			return nil, err
 		}
 		resources = append(resources, objs...)
 	}
-
 	return resources, nil
 }
 
 // fetchAllResourcesInOneNamespace retrieve all the objects inside a single namespace which includes the namespace itself.
 func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namespaceName string, placeName string) ([]runtime.Object, error) {
-	klog.V(4).InfoS("start to fetch all the resources inside a namespace", "namespace", namespaceName)
 	var resources []runtime.Object
 
+	if !utils.ShouldPropagateNamespace(namespaceName, r.SkippedNamespaces) {
+		return nil, errors.New(fmt.Sprintf("namespace %s is not allowed to propagate", namespaceName))
+	}
+
+	klog.V(4).InfoS("start to fetch all the resources inside a namespace", "namespace", namespaceName)
 	// select the namespace object itself
 	obj, err := r.InformerManager.Lister(utils.NamespaceGVR).Get(namespaceName)
 	if err != nil {

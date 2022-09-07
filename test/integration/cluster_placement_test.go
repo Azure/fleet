@@ -55,7 +55,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, &clusterA)).Should(Succeed())
-		By("Check if the member cluster namespace created")
+		By("Check if the member cluster namespace is created")
 		nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{
@@ -63,7 +63,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clustarANamespace)
 		}, timeout, interval).Should(Succeed())
 		By(fmt.Sprintf("Cluster namespace %s created", nsName))
-		// Create cluster B and wait for its namespace is created
+
+		By("Create member cluster B")
+		// Create cluster B and wait for its namespace created
 		clusterB = fleetv1alpha1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "cluster-b-" + utilrand.String(8),
@@ -79,7 +81,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, &clusterB)).Should(Succeed())
-		By("Check if the member cluster namespace created")
+		By("Check if the member cluster namespace is created")
 		nsName = fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{
@@ -279,9 +281,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// we should not get anything else like the endpoints and endpointSlice
 			verifyWorkObjects(crp, namespacedResource, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
-			By("Make sure that the reconciler is stopped")
-			waitForPlacementScheduleStopped(crp.Name)
-
 			By("Create one more resources in the namespace")
 			// this is a user created endpointSlice
 			extraResource := endpointSlice.DeepCopy()
@@ -293,6 +292,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			By("verify that new resources in a namespace are selected")
 			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, len(namespacedResource)+1, 2, metav1.ConditionTrue)
+
+			By("verify that new resources in a namespace are placed in the work")
 			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
@@ -300,6 +303,54 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed())
 			By(fmt.Sprintf("validate work resource for cluster %s. It should contain %d manifests", clusterA.Name, len(namespacedResource)+1))
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(len(namespacedResource) + 1))
+		})
+
+		It("Test select blocked namespace", func() {
+			By("Create a select blocked namespace clusterResourcePlacement")
+			blockedNameSpace := "fleet-" + utilrand.String(10)
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-select-namespace",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    blockedNameSpace,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+
+			By("Verify that the CPR failed with scheduling error")
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			schedCond := crp.GetCondition(string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled))
+			Expect(schedCond).ShouldNot(BeNil())
+			Expect(schedCond.Status).Should(Equal(metav1.ConditionFalse))
+			Expect(schedCond.Message).Should(ContainSubstring(fmt.Sprintf("namespace %s is not allowed to propagate", blockedNameSpace)))
+
+			By("Update the CRP to place default namespace")
+			crp.Spec.ResourceSelectors = []fleetv1alpha1.ClusterResourceSelector{
+				{
+					Group:   corev1.GroupName,
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "default",
+				},
+			}
+			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
+
+			By("Verify that the CPR failed with scheduling error")
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			schedCond = crp.GetCondition(string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled))
+			Expect(schedCond).ShouldNot(BeNil())
+			Expect(schedCond.Status).Should(Equal(metav1.ConditionFalse))
+			Expect(schedCond.Message).Should(ContainSubstring("namespace default is not allowed to propagate"))
 		})
 
 		It("Test select only the propagated resources in a namespace", func() {
@@ -724,7 +775,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
 		})
 
-		It("Test select named cluster resources", func() {
+		It("Test select named cluster resources with status change", func() {
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-list-cluster",
@@ -765,6 +816,18 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+
+			By("Verify that work is created in cluster B after it joins")
+			markInternalMCJoined(clusterB)
+			markInternalMCLeft(clusterA)
+			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterB})
+
+			By("Verify that work is removed from cluster A after it leaves")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+
 		})
 
 		It("Test select named cluster does not exist", func() {

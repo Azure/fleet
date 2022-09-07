@@ -7,7 +7,6 @@ package workload
 
 import (
 	"context"
-
 	"strings"
 
 	"k8s.io/client-go/discovery"
@@ -28,9 +27,9 @@ import (
 )
 
 const (
-	clusterResourcePlacementName = "cluster-resource-placement-controller"
-	resourceChangeName           = "resource-change-controller"
-	memberClusterPlacementName   = "memberCluster-placement-controller"
+	crpControllerName            = "cluster-resource-placement-controller"
+	resourceChangeControllerName = "resource-change-controller"
+	mcPlacementControllerName    = "memberCluster-placement-controller"
 )
 
 // SetupControllers set up the customized controllers we developed
@@ -65,11 +64,8 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		return err
 	}
 
+	// setup namespaces we skip propagation
 	skippedNamespaces := make(map[string]bool)
-	skippedNamespaces["fleet-system"] = true
-	skippedNamespaces["kube-system"] = true
-	skippedNamespaces["kube-public"] = true
-	skippedNamespaces["kube-node-lease"] = true
 	skippedNamespaces["default"] = true
 	optionalSkipNS := strings.Split(opts.SkippedPropagatingNamespaces, ";")
 	for _, ns := range optionalSkipNS {
@@ -87,15 +83,15 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 	klog.Info("Setting up clusterResourcePlacement controller")
 	crpc := &clusterresourceplacement.Reconciler{
 		Client:                 mgr.GetClient(),
-		Recorder:               mgr.GetEventRecorderFor(clusterResourcePlacementName),
+		Recorder:               mgr.GetEventRecorderFor(crpControllerName),
 		RestMapper:             mgr.GetRESTMapper(),
 		InformerManager:        dynamicInformerManager,
 		DisabledResourceConfig: disabledResourceConfig,
-		WorkPendingGracePeriod: opts.WorkPendingGracePeriod,
+		SkippedNamespaces:      skippedNamespaces,
 	}
 
 	ratelimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
-	clusterResourcePlacementController := controller.NewController(clusterResourcePlacementName, controller.NamespaceKeyFunc, crpc.Reconcile, ratelimiter)
+	clusterResourcePlacementController := controller.NewController(crpControllerName, controller.NamespaceKeyFunc, crpc.Reconcile, ratelimiter)
 	if err != nil {
 		klog.ErrorS(err, "unable to set up clusterResourcePlacement controller")
 		return err
@@ -105,13 +101,13 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 	klog.Info("Setting up resource change controller")
 	rcr := &resourcechange.Reconciler{
 		DynamicClient:       dynamicClient,
-		Recorder:            mgr.GetEventRecorderFor(resourceChangeName),
+		Recorder:            mgr.GetEventRecorderFor(resourceChangeControllerName),
 		RestMapper:          mgr.GetRESTMapper(),
 		InformerManager:     dynamicInformerManager,
 		PlacementController: clusterResourcePlacementController,
 	}
 
-	resourceChangeController := controller.NewController(resourceChangeName, controller.ClusterWideKeyFunc, rcr.Reconcile, ratelimiter)
+	resourceChangeController := controller.NewController(resourceChangeControllerName, controller.ClusterWideKeyFunc, rcr.Reconcile, ratelimiter)
 	if err != nil {
 		klog.ErrorS(err, "unable to set up resource change  controller")
 		return err
@@ -124,7 +120,7 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		PlacementController: clusterResourcePlacementController,
 	}
 
-	memberClusterPlacementController := controller.NewController(memberClusterPlacementName, controller.NamespaceKeyFunc, mcp.Reconcile, ratelimiter)
+	memberClusterPlacementController := controller.NewController(mcPlacementControllerName, controller.NamespaceKeyFunc, mcp.Reconcile, ratelimiter)
 	if err != nil {
 		klog.ErrorS(err, "unable to set up resource change  controller")
 		return err
