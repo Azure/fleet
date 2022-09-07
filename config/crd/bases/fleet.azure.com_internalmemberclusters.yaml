@@ -26,9 +26,9 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: InternalMemberCluster is used by the hub agent to control the
-          state of the member agents, and used by the member agents to report their
-          status.
+        description: InternalMemberCluster is used by hub agent to notify the member
+          agents about the member cluster state changes, and is used by the member
+          agents to report their status.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -146,6 +146,9 @@ spec:
                         - type
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - type
+                      x-kubernetes-list-type: map
                     lastReceivedHeartbeat:
                       description: Last time we received a heartbeat from the member
                         agent.
@@ -160,6 +163,7 @@ spec:
                 type: array
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
+                  It is populated by the member agent.
                 properties:
                   allocatable:
                     additionalProperties:

@@ -176,6 +176,9 @@ spec:
                         - type
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - type
+                      x-kubernetes-list-type: map
                     lastReceivedHeartbeat:
                       description: Last time we received a heartbeat from the member
                         agent.
@@ -258,8 +261,12 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
+                  It is copied from the corresponding InternalMemberCluster object.
                 properties:
                   allocatable:
                     additionalProperties:
