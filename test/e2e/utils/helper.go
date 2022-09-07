@@ -36,10 +36,6 @@ var (
 	PollInterval = 5 * time.Second
 	// PollTimeout defines the time after which the poll operation times out.
 	PollTimeout = 90 * time.Second
-
-	manifestHashAnnotation = "fleet.azure.com/spec-hash"
-
-	lastAppliedConfigAnnotation = "fleet.azure.com/last-applied-configuration"
 )
 
 // NewMemberCluster return a new member cluster.
@@ -265,8 +261,6 @@ func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 
 // CreateWork creates Work object based on manifest given.
 func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, workNamespace string, manifests []workapi.Manifest) {
-	ginkgo.By(fmt.Sprintf("Creating Work with Name %s, %s", workName, workNamespace))
-
 	work := workapi.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,

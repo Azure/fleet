@@ -71,16 +71,16 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
+		// Creating types.NamespacedName to use in retrieving objects.
+		namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
+
 		manifests := testutils.AddManifests([]runtime.Object{&manifestConfigMap}, []workapi.Manifest{})
-		By(fmt.Sprintf("creating work %s/%s of %s", workName, workNamespace.Name, manifestConfigMapName))
+		By(fmt.Sprintf("creating work %s of %s", namespaceType.String(), manifestConfigMapName))
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
 		testutils.WaitWork(ctx, *HubCluster, workName, memberNamespace.Name)
 
-		// Creating types.NamespacedName to use in retrieving objects.
-		namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
-
-		By(fmt.Sprintf("Applied Condition should be set to True for Work %s/%s", workName, workNamespace.Name))
+		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType.String()))
 		work := workapi.Work{}
 		Eventually(func() string {
 			if err := HubCluster.KubeClient.Get(ctx,
@@ -99,6 +99,7 @@ var _ = Describe("Work API Controller test", func() {
 			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
+		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied.", namespaceType.String()))
 		expectedManifestCondition := []workapi.ManifestCondition{
 			{
 				Conditions: []metav1.Condition{
@@ -124,7 +125,7 @@ var _ = Describe("Work API Controller test", func() {
 		//Excluding Reason for check, since there could be two possible reasons.
 		options := append(cmpOptions, cmpopts.IgnoreFields(metav1.Condition{}, "Reason"))
 		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, options...)).Should(BeEmpty(),
-			"Manifest Condition not matching for work %s (-want, +got):", workName)
+			"Manifest Condition not matching for work %s (-want, +got):", namespaceType.String())
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		appliedWork := workapi.AppliedWork{}
@@ -161,7 +162,7 @@ var _ = Describe("Work API Controller test", func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 			"ConfigMap %s was not created in the cluster %s, or configMap data mismatch(-want, +got):", manifestConfigMapName, MemberCluster.ClusterName)
 
-		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, workName))
+		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, namespaceType.String()))
 		configMap, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
 		Expect(err).Should(Succeed(), "Retrieving resource %s failed", manifestConfigMap.Name)
 		wantOwner := []metav1.OwnerReference{
