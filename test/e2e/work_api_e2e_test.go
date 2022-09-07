@@ -129,7 +129,8 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		appliedWork := workapi.AppliedWork{}
 		Expect(MemberCluster.KubeClient.Get(ctx,
-			namespaceType, &appliedWork)).Should(Succeed())
+			namespaceType, &appliedWork)).Should(Succeed(),
+			"Retrieving AppliedWork %s failed", workName)
 
 		want := workapi.AppliedtWorkStatus{
 			AppliedResources: []workapi.AppliedResourceMeta{
