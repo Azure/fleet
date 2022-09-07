@@ -7,7 +7,6 @@ package resourcewatcher
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -189,15 +188,7 @@ func (d *ChangeDetector) dynamicResourceFilter(obj interface{}) bool {
 	}
 
 	cwKey, _ := key.(keys.ClusterWideKey)
-	// special case for cluster namespace
-	if strings.HasPrefix(cwKey.Namespace, utils.ClusterNamespacePrefix) {
-		klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
-			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
-		return false
-	}
-
-	// if SkippedNamespaces is set, skip any events related to the object in these namespaces.
-	if _, ok := d.SkippedNamespaces[cwKey.Namespace]; ok {
+	if !utils.ShouldPropagateNamespace(cwKey.Namespace, d.SkippedNamespaces) {
 		klog.V(5).InfoS("Skip watching resource in namespace", "namespace", cwKey.Namespace,
 			"group", cwKey.Group, "version", cwKey.Version, "kind", cwKey.Kind, "object", cwKey.Name)
 		return false

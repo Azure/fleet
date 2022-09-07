@@ -293,7 +293,7 @@ func markInternalMCLeft(mc fleetv1alpha1.MemberCluster) {
 	Expect(k8sClient.Update(ctx, &mc)).Should(Succeed())
 	var imc fleetv1alpha1.InternalMemberCluster
 	nsName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
-	By("Wait for internal member cluster to be created")
+	By("Mark internal member cluster as Left")
 	Eventually(func() error {
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name, Namespace: nsName}, &imc)
 		if err != nil {
@@ -311,9 +311,9 @@ func markInternalMCLeft(mc fleetv1alpha1.MemberCluster) {
 	Eventually(func() bool {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mc.Name}, &mc)).Should(Succeed())
 		joinCond := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
-		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionFalse
 	}, timeout, interval).Should(BeTrue())
+	By("Member cluster is marked as Left")
 }
 
 func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
@@ -337,9 +337,9 @@ func markInternalMCJoined(mc fleetv1alpha1.MemberCluster) {
 		if joinCond == nil {
 			return false
 		}
-		By("the MC " + mc.Name + " join condition = " + string(joinCond.Status))
 		return joinCond.Status == metav1.ConditionTrue
 	}, timeout, interval).Should(BeTrue())
+	By("Member cluster is marked as Join")
 }
 
 func markWorkAppliedStatusSuccess(crp *fleetv1alpha1.ClusterResourcePlacement, cluster *fleetv1alpha1.MemberCluster) {

@@ -25,7 +25,6 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 const (
@@ -41,19 +40,22 @@ var (
 
 // Reconciler reconciles a cluster resource placement object
 type Reconciler struct {
-	// the informer contains the cache for all the resources we need
+	// the informer contains the cache for all the resources we need.
 	InformerManager informer.Manager
 
+	// RestMapper is used to convert between gvk and gvr on known resources.
 	RestMapper meta.RESTMapper
 
-	// Client is used to update objects which goes to the api server directly
+	// Client is used to update objects which goes to the api server directly.
 	Client client.Client
 
-	// DisabledResourceConfig contains all the api resources that we won't select
+	// DisabledResourceConfig contains all the api resources that we won't select.
 	DisabledResourceConfig *utils.DisabledResourceConfig
 
-	WorkPendingGracePeriod metav1.Duration
-	Recorder               record.EventRecorder
+	// SkippedNamespaces contains the namespaces that we should not propagate.
+	SkippedNamespaces map[string]bool
+
+	Recorder record.EventRecorder
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
@@ -73,14 +75,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	placementNew := placementOld.DeepCopy()
 
 	// TODO: add finalizer logic if we need it in the future
-
-	// TODO: move this to webhook
-	if err := validator.ValidateClusterResourcePlacement(placementOld); err != nil {
-		invalidSpec := "the spec is invalid"
-		klog.ErrorS(err, invalidSpec, "placement", placeRef)
-		r.Recorder.Event(placementOld, corev1.EventTypeWarning, invalidSpec, err.Error())
-		return ctrl.Result{}, nil
-	}
 
 	klog.V(2).InfoS("Start to reconcile a ClusterResourcePlacement", "placement", placeRef)
 	// select the new clusters and record that in the placementNew status
@@ -103,7 +97,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 	// select the new resources and record the result in the placementNew status
 	manifests, scheduleErr := r.selectResources(ctx, placementNew)
 	if scheduleErr != nil {
-		klog.ErrorS(scheduleErr, "failed to generate the work resource for this placementOld", "placement", placeRef)
+		klog.ErrorS(scheduleErr, "failed to select the resources for this placement", "placement", placeRef)
 		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
 		_ = r.Client.Status().Update(ctx, placementOld, client.FieldOwner(utils.PlacementFieldManagerName))
 		return ctrl.Result{}, scheduleErr

@@ -71,7 +71,7 @@ func NewOptions() *Options {
 			LeaderElect:       true,
 			ResourceLock:      resourcelock.LeasesResourceLock,
 			ResourceNamespace: utils.FleetSystemNamespace,
-			ResourceName:      "13622se4848560.hub.fleet.azure.com",
+			ResourceName:      "136224848560.hub.fleet.azure.com",
 		},
 		ConcurrentClusterPlacementSyncs: 1,
 		ConcurrentResourceChangeSyncs:   1,
