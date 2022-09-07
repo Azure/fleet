@@ -20,7 +20,12 @@ type InternalMemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   InternalMemberClusterSpec   `json:"spec"`
+	// The desired state of InternalMemberCluster.
+	// +required
+	Spec InternalMemberClusterSpec `json:"spec"`
+
+	// The observed status of InternalMemberCluster.
+	// +optional
 	Status InternalMemberClusterStatus `json:"status,omitempty"`
 }
 

@@ -15,132 +15,149 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-workload}
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Scheduled")].status`,name="Scheduled",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Scheduled")].observedGeneration`,name="ScheduledGen",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].status`,name="Applied",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].observedGeneration`,name="AppliedGen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterResourcePlacement is used to place cluster scoped resources or ALL the resources in a namespace
-// onto one or more member clusters in a fleet. Users cannot select resources in a system reserved namespace.
-// System reserved namespaces are: kube-system, fleet-system, fleet-work-*.
+// ClusterResourcePlacement is used to select cluster scoped resources, including built-in resources and custom resources, and placement them onto selected member clusters in a fleet.
+// If a namespace is selected, ALL the resources under the namespace are placed to the target clusters.
+// Note that you can't select the following resources:
+// - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces).
+// - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService, ServiceImport, etc.
 type ClusterResourcePlacement struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec represents the desired behavior of ClusterResourcePlacement.
+	// The desired state of ClusterResourcePlacement.
 	// +required
 	Spec ClusterResourcePlacementSpec `json:"spec"`
 
-	// Most recently observed status of the ClusterResourcePlacement.
+	// The observed status of ClusterResourcePlacement.
 	// +optional
 	Status ClusterResourcePlacementStatus `json:"status,omitempty"`
 }
 
-// ClusterResourcePlacementSpec represents the desired behavior of a ClusterResourcePlacement object.
+// ClusterResourcePlacementSpec defines the desired state of ClusterResourcePlacement.
 type ClusterResourcePlacementSpec struct {
-	// ResourceSelectors is used to select cluster scoped resources. The selectors are `ORed`.
-	// kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=100
+
+	// ResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
+	// You can have 1-100 selectors.
 	// +required
 	ResourceSelectors []ClusterResourceSelector `json:"resourceSelectors"`
 
-	// Policy represents the placement policy to select clusters to place all the selected resources.
-	// If unspecified, all the joined clusters are selected.
+	// Policy defines how to select member clusters to place the selected resources.
+	// If unspecified, all the joined member clusters are selected.
 	// +optional
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 }
 
-// ClusterResourceSelector is used to specify cluster scoped resources to be selected.
-// Note: When the cluster resource is of type `namespace`, ALL the resources in this namespace are selected.
-// All the fields present in this structure are `ANDed`.
+// ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
+// If a namespace is selected, ALL the resources under the namespace are selected automatically.
+// All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
 type ClusterResourceSelector struct {
-	// Group is the group name of the target resource.
+	// Group name of the cluster-scoped resource.
+	// Use an empty string to select resources under the core API group (e.g., namespaces).
 	// +required
 	Group string `json:"group"`
 
-	// Version is the version of the target resource.
+	// Version of the cluster-scoped resource.
 	// +required
 	Version string `json:"version"`
 
-	// Kind is the kind of the target resources.
-	// Note: When the `kind` field is `namespace` then all the resources inside that namespace is selected.
+	// Kind of the cluster-scoped resource.
+	// Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
 	// +required
 	Kind string `json:"kind"`
 
-	// Name is the name of the target resource.
-	// Default is empty, which means selecting all resources.
-	// This field is mutually exclusive with the `labelSelector` field.
+	// You can only specify at most one of the following two fields: Name and LabelSelector.
+	// If none is specified, all the cluster-scoped resources with the given group, version and kind are selected.
+
+	// Name of the cluster-scoped resource.
 	// +optional
 	Name string `json:"name,omitempty"`
 
-	// labelSelector spells out a label query over a set of resources.
-	// This field is mutually exclusive with the `name` field.
+	// A label query over all the cluster-scoped resources. Resources matching the query are selected.
+	// Note that namespace-scoped resources can't be selected even if they match the query.
 	// +optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 }
 
-// PlacementPolicy contains the rules to select member clusters to place the selected resources to.
+// PlacementPolicy contains the rules to select target member clusters to place the selected resources.
 // Note that only clusters that are both joined and satisfying the rules will be selected.
-// You should only specify at most one of the two fields: ClusterNames and Affinity.
+//
+// You can only specify at most one of the two fields: ClusterNames and Affinity.
 // If none is specified, all the joined clusters are selected.
 type PlacementPolicy struct {
-	// ClusterNames contains a list of names of MemberCluster to place the selected resources to.
+	// +kubebuilder:validation:MaxItems=100
+
+	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
 	// If the list is not empty, Affinity is ignored.
-	// kubebuilder:validation:MaxItems=100
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
 
-	// Affinity represents the selected resources' scheduling constraints.
-	// If not set, the entire fleet can be scheduling candidate.
+	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources.
 	// +optional
 	Affinity *Affinity `json:"affinity,omitempty"`
 }
 
-// Affinity represents the filter to select clusters.
-// The selectors in this struct are `ANDed`.
+// Affinity is a group of cluster affinity scheduling rules. More to be added.
 type Affinity struct {
-	// ClusterAffinity describes cluster affinity scheduling rules for the resources.
+	// ClusterAffinity contains cluster affinity scheduling rules for the selected resources.
 	// +optional
 	ClusterAffinity *ClusterAffinity `json:"clusterAffinity,omitempty"`
 }
 
-// ClusterAffinity represents the filter to select clusters.
+// ClusterAffinity contains cluster affinity scheduling rules for the selected resources.
 type ClusterAffinity struct {
+	// +kubebuilder:validation:MaxItems=10
+
 	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
-	// kubebuilder:validation:MaxItems=10
 	// +optional
 	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms,omitempty"`
 }
 
-// ClusterSelectorTerm represents the requirements to selected clusters.
+// ClusterSelectorTerm contains the requirements to select clusters.
 type ClusterSelectorTerm struct {
-	// LabelSelector is a label query over the clusters.
+	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected.
 	// +required
 	LabelSelector metav1.LabelSelector `json:"labelSelector"`
 }
 
 // ClusterResourcePlacementStatus defines the observed state of resource.
 type ClusterResourcePlacementStatus struct {
-	// Conditions field contains the overall condition statuses for this resource.
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
+
+	// Conditions is an array of current observed conditions for ClusterResourcePlacement.
+	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// SelectedResources contains a list of resources selected by the resource selector.
+	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
-	// TargetClusters contains a list of member cluster names selected by PlacementPolicy.
+	// TargetClusters contains a list of names of member clusters selected by PlacementPolicy.
 	// Note that the clusters must be both joined and meeting PlacementPolicy.
 	// +optional
 	TargetClusters []string `json:"targetClusters,omitempty"`
 
-	// FailedResourcePlacements is a list of all failed to place resources status.
-	// kubebuilder:validation:MaxItems=1000
+	// +kubebuilder:validation:MaxItems=1000
+
+	// FailedResourcePlacements is a list of all the resources failed to be placed to the given clusters.
+	// Note that we only include 1000 failed resource placements even if there are more than 1000.
 	// +optional
 	FailedResourcePlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 }
 
-// ResourceIdentifier points to one resource we selected
+// ResourceIdentifier identifies one Kubernetes resource.
 type ResourceIdentifier struct {
 	// Group is the group name of the selected resource.
 	// +required
@@ -158,35 +175,42 @@ type ResourceIdentifier struct {
 	// +required
 	Name string `json:"name"`
 
-	// Namespace is the namespace of the resource, the resource is cluster scoped if the value is empty.
+	// Namespace is the namespace of the resource. Empty if the resource is cluster scoped.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// FailedResourcePlacement shows the failure details of a failed resource placement.
+// FailedResourcePlacement contains the failure details of a failed resource placement.
 type FailedResourcePlacement struct {
+	// The resource failed to be placed.
+	// +required
 	ResourceIdentifier `json:",inline"`
 
-	// ClusterName is the name of the cluster that this resource is placed on.
+	// Name of the member cluster that the resource is placed to.
 	// +required
 	ClusterName string `json:"clusterName"`
 
-	// Condition contains the failed condition status for this failed to place resource.
+	// The failed condition status.
 	// +required
 	Condition metav1.Condition `json:"condition"`
 }
 
-// ResourcePlacementConditionType identifies a specific condition on a workload.
+// ResourcePlacementConditionType defines a specific condition of a resource placement.
 type ResourcePlacementConditionType string
 
 const (
-	// ResourcePlacementConditionTypeScheduled indicates if we have successfully identified the set of clusters on which
-	// the selected resources should run and created work CRs in the per-cluster namespace.
-	// its conditionStatus can be "True" == Scheduled, "False" == Failed to Schedule
+	// ResourcePlacementConditionTypeScheduled indicates whether we have selected at least one resource to be placed to at least one member cluster and created work CRs under the corresponding per-cluster namespaces (i.e., fleet-member-<member-name>).
+	// Its condition status can be one of the following:
+	// - "True" means we have selected at least one resource, targeted at least one member cluster and created the work CRs.
+	// - "False" means we have selected zero resources, zero target clusters, or failed to create the work CRs.
+	// - "Unknown" otherwise.
 	ResourcePlacementConditionTypeScheduled ResourcePlacementConditionType = "Scheduled"
 
-	// ResourcePlacementStatusConditionTypeApplied indicates if the referenced workload is applied on the selected member cluster.
-	// its conditionStatus can be "True" == All referenced workloads are applied, "False" == Not all are applied
+	// ResourcePlacementStatusConditionTypeApplied indicates whether the selected member clusters have received the work CRs and applied the selected resources locally.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully applied to all the target clusters.
+	// - "False" means some of them have failed.
+	// - "Unknown" otherwise.
 	ResourcePlacementStatusConditionTypeApplied ResourcePlacementConditionType = "Applied"
 )
 

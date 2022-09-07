@@ -22,7 +22,12 @@ type MemberCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MemberClusterSpec   `json:"spec"`
+	// The desired state of MemberCluster.
+	// +required
+	Spec MemberClusterSpec `json:"spec"`
+
+	// The observed status of MemberCluster.
+	// +optional
 	Status MemberClusterStatus `json:"status,omitempty"`
 }
 
@@ -50,6 +55,11 @@ type MemberClusterSpec struct {
 
 // MemberClusterStatus defines the observed status of MemberCluster.
 type MemberClusterStatus struct {
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+
 	// Conditions is an array of current observed conditions for the member cluster.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
@@ -67,22 +77,25 @@ type MemberClusterStatus struct {
 type MemberClusterConditionType string
 
 const (
-	// ConditionTypeMemberClusterReadyToJoin indicates the readiness condition of the given member cluster for joining the hub cluster. Its condition status can be one of the following:
-	// "True" means the hub cluster is ready for the member cluster to join.
-	// "False" means the hub cluster is not ready for the member cluster to join.
-	// "Unknown" means it is unknown whether the hub cluster is ready for the member cluster to join.
+	// ConditionTypeMemberClusterReadyToJoin indicates the readiness condition of the given member cluster for joining the hub cluster.
+	// Its condition status can be one of the following:
+	// - "True" means the hub cluster is ready for the member cluster to join.
+	// - "False" means the hub cluster is not ready for the member cluster to join.
+	// - "Unknown" means it is unknown whether the hub cluster is ready for the member cluster to join.
 	ConditionTypeMemberClusterReadyToJoin MemberClusterConditionType = "ReadyToJoin"
 
-	// ConditionTypeMemberClusterJoined indicates the join condition of the given member cluster. Its condition status can be one of the following:
-	// "True" means all the agents on the member cluster have joined.
-	// "False" means all the agents on the member cluster have left.
-	// "Unknown" means not all the agents have joined or left.
+	// ConditionTypeMemberClusterJoined indicates the join condition of the given member cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the agents on the member cluster have joined.
+	// - "False" means all the agents on the member cluster have left.
+	// - "Unknown" means not all the agents have joined or left.
 	ConditionTypeMemberClusterJoined MemberClusterConditionType = "Joined"
 
-	// ConditionTypeMemberClusterHealthy indicates the health condition of the given member cluster. Its condition status can be one of the following:
-	// "True" means the member cluster is healthy.
-	// "False" means the member cluster is unhealthy.
-	// "Unknown" means the member cluster has an unknown health status.
+	// ConditionTypeMemberClusterHealthy indicates the health condition of the given member cluster.
+	// Its condition status can be one of the following:
+	// - "True" means the member cluster is healthy.
+	// - "False" means the member cluster is unhealthy.
+	// - "Unknown" means the member cluster has an unknown health status.
 	// NOTE: This condition type is currently unused.
 	ConditionTypeMemberClusterHealthy MemberClusterConditionType = "Healthy"
 )

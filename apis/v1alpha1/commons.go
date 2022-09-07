@@ -58,6 +58,11 @@ type AgentStatus struct {
 	// +required
 	Type AgentType `json:"type"`
 
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=type
+
 	// Conditions is an array of current observed conditions for the member agent.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
@@ -71,14 +76,16 @@ type AgentStatus struct {
 type AgentConditionType string
 
 const (
-	// AgentJoined indicates the join condition of the given member agent. Its condition status can be one of the following:
-	// "True" means the member agent has joined.
-	// "False" means the member agent has left.
-	// "Unknown" means the member agent is joining or leaving or in an unknown status.
+	// AgentJoined indicates the join condition of the given member agent.
+	// Its condition status can be one of the following:
+	// - "True" means the member agent has joined.
+	// - "False" means the member agent has left.
+	// - "Unknown" means the member agent is joining or leaving or in an unknown status.
 	AgentJoined AgentConditionType = "Joined"
-	// AgentHealthy indicates the health condition of the given member agent. Its condition status can be one of the following:
-	// "True" means the member agent is healthy.
-	// "False" means the member agent is unhealthy.
-	// "Unknown" means the member agent has an unknown health status.
+	// AgentHealthy indicates the health condition of the given member agent.
+	// Its condition status can be one of the following:
+	// - "True" means the member agent is healthy.
+	// - "False" means the member agent is unhealthy.
+	// - "Unknown" means the member agent has an unknown health status.
 	AgentHealthy AgentConditionType = "Healthy"
 )
