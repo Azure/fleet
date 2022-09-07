@@ -121,7 +121,7 @@ var _ = Describe("Work API Controller test", func() {
 				},
 			},
 		}
-		//Expecting the reason of the condition seperately, since it could be either Complete or Updated.
+		//Expecting the reason of the condition separately, since it could be either Complete or Updated.
 		Expect(work.Status.ManifestConditions[0].Conditions[0].Reason).Should(
 			SatisfyAny(Equal("appliedManifestComplete"), Equal("appliedManifestUpdated")))
 		// Will leave out the reason for this check, since the manifest condition's reason was checked above.
@@ -195,7 +195,7 @@ var _ = Describe("Work API Controller test", func() {
 		newManifests := testutils.AddManifests([]runtime.Object{validateConfigMap}, []workapi.Manifest{})
 		specHashes := testutils.GenerateSpecHash(newManifests)
 
-		Expect(cmp.Diff(specHashes[0], configMap.ObjectMeta.Annotations[specHashAnnotation])).Should(BeEmpty(),
+		Expect(cmp.Diff(specHashes[1], configMap.ObjectMeta.Annotations[specHashAnnotation])).Should(BeEmpty(),
 			"Validating SpecHash Annotation failed for resource %s in work %s(-want, +got):", configMap.Name, workName)
 	})
 })

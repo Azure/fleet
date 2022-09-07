@@ -334,7 +334,7 @@ func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (me
 
 // GenerateSpecHash will generate Hash value used for annotation in the work-api for verification for each manifests given.
 func GenerateSpecHash(manifests []workapi.Manifest) []string {
-	var specHashes []string
+	specHashes := make([]string, len(manifests))
 	for index, manifest := range manifests {
 		unstructuredObj := &unstructured.Unstructured{}
 		err := unstructuredObj.UnmarshalJSON(manifest.Raw)
