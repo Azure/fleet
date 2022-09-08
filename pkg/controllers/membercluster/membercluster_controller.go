@@ -25,7 +25,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -60,10 +62,24 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(3).InfoS("Reconcile", "memberCluster", req.NamespacedName)
-	var mc fleetv1alpha1.MemberCluster
-	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
+	var oldMC fleetv1alpha1.MemberCluster
+	if err := r.Client.Get(ctx, req.NamespacedName, &oldMC); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Handle deleting member cluster, garbage collect all the resources in the cluster namespace
+	if !oldMC.DeletionTimestamp.IsZero() {
+		klog.V(2).InfoS("the member cluster is in the process of being deleted", "memberCluster", klog.KObj(&oldMC))
+		return r.garbageCollectWork(ctx, &oldMC)
+	}
+
+	mc := oldMC.DeepCopy()
+	mcObjRef := klog.KObj(mc)
+	// Add the finalizer to the member cluster
+	if err := r.ensureFinalizer(ctx, mc); err != nil {
+		klog.ErrorS(err, "failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
+		return ctrl.Result{}, err
 	}
 
 	// Get current internal member cluster.
@@ -82,30 +98,74 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	switch mc.Spec.State {
 	case fleetv1alpha1.ClusterStateJoin:
-		if err := r.join(ctx, &mc, currentImc); err != nil {
-			klog.ErrorS(err, "failed to join", "memberCluster", klog.KObj(&mc))
+		if err := r.join(ctx, mc, currentImc); err != nil {
+			klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
 			return ctrl.Result{}, err
 		}
 
 	case fleetv1alpha1.ClusterStateLeave:
-		if err := r.leave(ctx, &mc, currentImc); err != nil {
-			klog.ErrorS(err, "failed to leave", "memberCluster", klog.KObj(&mc))
+		if err := r.leave(ctx, mc, currentImc); err != nil {
+			klog.ErrorS(err, "failed to leave", "memberCluster", mcObjRef)
 			return ctrl.Result{}, err
 		}
 
 	default:
-		klog.Errorf("encountered a fatal error. unknown state %v in MemberCluster: %s", mc.Spec.State, klog.KObj(&mc))
+		klog.Errorf("encountered a fatal error. unknown state %v in MemberCluster: %s", mc.Spec.State, mcObjRef)
 		return ctrl.Result{}, nil
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
-	r.syncInternalMemberClusterStatus(currentImc, &mc)
-	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
-		klog.ErrorS(err, "failed to update status for", klog.KObj(&mc))
+	r.syncInternalMemberClusterStatus(currentImc, mc)
+	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
+		klog.ErrorS(err, "failed to update status for", klog.KObj(mc))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
+func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (ctrl.Result, error) {
+	var works workv1alpha1.WorkList
+	var clusterNS corev1.Namespace
+	// check if the namespace still exist
+	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &clusterNS); apierrors.IsNotFound(err) {
+		klog.V(2).InfoS("the member cluster namespace is successfully deleted", "memberCluster", klog.KObj(mc))
+		return ctrl.Result{}, nil
+	}
+	// list all the work object we created in the member cluster namespace
+	listOpts := []client.ListOption{
+		client.MatchingLabels{utils.LabelFleetObj: utils.LabelFleetObjValue},
+		client.InNamespace(namespaceName),
+	}
+	if err := r.Client.List(ctx, &works, listOpts...); err != nil {
+		klog.ErrorS(err, "failed to list all the work object", "memberCluster", klog.KObj(mc))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	for _, work := range works.Items {
+		staleWork := work.DeepCopy()
+		staleWork.SetFinalizers(nil)
+		if updateErr := r.Update(ctx, staleWork, &client.UpdateOptions{}); updateErr != nil {
+			klog.ErrorS(updateErr, "failed to remove the finalizer from the work",
+				"memberCluster", klog.KObj(mc), "work", klog.KObj(staleWork))
+			return ctrl.Result{}, updateErr
+		}
+	}
+	klog.V(2).InfoS("successfully removed all the work finalizers in the cluster namespace",
+		"memberCluster", klog.KObj(mc), "number of work", len(works.Items))
+	controllerutil.RemoveFinalizer(mc, utils.MemberClusterFinalizer)
+	return ctrl.Result{}, r.Update(ctx, mc, &client.UpdateOptions{})
+}
+
+// ensureFinalizer makes sure that the member cluster CR has a finalizer on it
+func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
+	if controllerutil.ContainsFinalizer(mc, utils.MemberClusterFinalizer) {
+		return nil
+	}
+	klog.InfoS("add the member cluster finalizer", "memberCluster", klog.KObj(mc))
+	controllerutil.AddFinalizer(mc, utils.MemberClusterFinalizer)
+	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
 
 // join takes the actions to make hub cluster ready for member cluster to join, including:

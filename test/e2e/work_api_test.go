@@ -25,7 +25,6 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	fleetutil "go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/test/e2e/utils"
 )
 
 const (
@@ -45,7 +44,7 @@ var _ = Describe("work-api testing", Ordered, func() {
 
 	BeforeAll(func() {
 		_, err := HubCluster.KubeClientSet.CoreV1().Namespaces().Create(context.Background(), wns, metav1.CreateOptions{})
-		Expect(err).Should(SatisfyAny(Succeed(), &utils.AlreadyExistMatcher{}))
+		Expect(err).Should(SatisfyAny(Succeed(), &fleetutil.AlreadyExistMatcher{}))
 	})
 
 	Context("with a Work resource that has two manifests: Deployment & Service", func() {

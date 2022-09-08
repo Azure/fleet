@@ -12,11 +12,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	adminv1 "k8s.io/api/admissionregistration/v1"
 	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -93,9 +95,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 	AfterEach(func() {
 		By("Delete member clusters", func() {
-			Expect(k8sClient.Delete(ctx, &clusterA)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, &clusterB)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &clusterA)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			Expect(k8sClient.Delete(ctx, &clusterB)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			Expect(k8sClient.Delete(ctx, crp)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		})
 	})
 
@@ -1173,6 +1175,97 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 		})
 
 		It("Test a placement select some resources and then not any", func() {
+			By("Create a webhook resource")
+			webhookName := "test-mutating-webhook"
+			sideEffect := adminv1.SideEffectClassNone
+			mutatingWebhook := adminv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      webhookName,
+					Namespace: testService.GetNamespace(),
+				},
+				Webhooks: []adminv1.MutatingWebhook{
+					{
+						Name: "test.azure.com",
+						Rules: []adminv1.RuleWithOperations{
+							{
+								Operations: []adminv1.OperationType{
+									adminv1.OperationAll,
+								},
+								Rule: adminv1.Rule{
+									APIGroups:   []string{"*"},
+									APIVersions: []string{"*"},
+									Resources:   []string{"pod"},
+								},
+							},
+						},
+						ClientConfig: adminv1.WebhookClientConfig{
+							URL: pointer.String("https://test.azure.com/test-crp"),
+						},
+						AdmissionReviewVersions: []string{"v1"},
+						SideEffects:             &sideEffect,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, &mutatingWebhook)).Should(Succeed())
+
+			By("Select webhook clusterResourcePlacement created")
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-test-change",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   adminv1.GroupName,
+							Version: "v1",
+							Kind:    "MutatingWebhookConfiguration",
+							Name:    webhookName,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+
+			By("verify that we have created work objects that contain the resource selected")
+			var clusterWork workv1alpha1.Work
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(Equal(1))
+			var uObj unstructured.Unstructured
+			GetObjectFromRawExtension(clusterWork.Spec.Workload.Manifests[0].Raw, &uObj)
+			Expect(uObj.GroupVersionKind().Kind).Should(Equal("MutatingWebhookConfiguration"))
+
+			By("Delete the webhook resources")
+			Expect(k8sClient.Delete(ctx, &mutatingWebhook)).Should(Succeed())
+
+			By("Verify that do not schedule anything")
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
+			By("Verified that placement has nothing scheduled")
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(utils.NotFoundMatcher{})
+			By("Verified that the deleted webhook is removed from the work")
+		})
+	})
+
+	Context("Test with simulated work api functionality", func() {
+		BeforeEach(func() {
+			By("Mark member cluster A as joined")
+			markInternalMCJoined(clusterA)
+
+			By("Mark member cluster B as joined")
+			markInternalMCJoined(clusterB)
+		})
+
+		It("Test force delete member cluster after work agent lost connection/deleted", func() {
+			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "resource-test-change",
@@ -1193,36 +1286,33 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
-			By("Select resource by label clusterResourcePlacement created")
 
-			// verify that we have created work objects that contain the resource selected
-			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			By("verify that we have created work objects that contain the resource selected")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
 
-			By("Delete the clusterRole resources")
-			Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(Succeed())
+			By("add finalizer to the work and mark it as applied")
+			markWorkAppliedStatusSuccess(crp, &clusterA)
 
-			By("Verify that do not schedule anything")
-			waitForPlacementScheduleStopped(crp.Name)
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
-			By("Verified that placement has nothing scheduled")
+			By("delete the member cluster")
+			Expect(k8sClient.Delete(ctx, &clusterA)).Should(Succeed())
 
-			var clusterWork workv1alpha1.Work
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      crp.Name,
-				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
-			}, &clusterWork)).Should(utils.NotFoundMatcher{})
-			By("Verified that the deleted clusterRole is removed from the work")
-		})
-	})
+			// the namespace won't be deleted as the GC controller does not run there
+			By("verify that the work is deleted")
+			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
+			Eventually(func() bool {
+				var clusterWork workv1alpha1.Work
+				return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      crp.Name,
+					Namespace: nsName,
+				}, &clusterWork))
+			}, timeout, interval).Should(BeTrue())
 
-	Context("Test with simulated work api functionality", func() {
-		BeforeEach(func() {
-			By("Mark member cluster A as joined")
-			markInternalMCJoined(clusterA)
-
-			By("Mark member cluster B as joined")
-			markInternalMCJoined(clusterB)
+			By("verify that the member cluster is deleted")
+			Eventually(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{
+					Name: clusterA.Name,
+				}, &clusterA))
+			}, timeout, interval).Should(BeTrue())
 		})
 
 		XIt("Test partial failed apply", func() {

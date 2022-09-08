@@ -85,3 +85,26 @@ func (matcher NotFoundMatcher) FailureMessage(actual interface{}) (message strin
 func (matcher NotFoundMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return format.Message(actual, "to be found")
 }
+
+// AlreadyExistMatcher matches the error to be already exist
+type AlreadyExistMatcher struct {
+}
+
+// Match matches error.
+func (matcher AlreadyExistMatcher) Match(actual interface{}) (success bool, err error) {
+	if actual == nil {
+		return false, nil
+	}
+	actualError := actual.(error)
+	return apierrors.IsAlreadyExists(actualError), nil
+}
+
+// FailureMessage builds an error message.
+func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "to be already exist")
+}
+
+// NegatedFailureMessage builds an error message.
+func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return format.Message(actual, "not to be already exist")
+}

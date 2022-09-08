@@ -168,12 +168,13 @@ func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
 		return
 	}
 	if oldObjMeta.GetResourceVersion() != newObjMeta.GetResourceVersion() {
-		klog.V(5).InfoS("A resource is updated", "obj", klog.KObj(oldObjMeta),
-			"gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
+		klog.V(5).InfoS("A resource is updated", "obj", oldObjMeta.GetName(),
+			"namespace", oldObjMeta.GetNamespace(), "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 		d.ResourceChangeController.Enqueue(newObj)
 		return
 	}
-	klog.V(5).InfoS("Received a resource updated event with no change", "obj", klog.KObj(oldObjMeta))
+	klog.V(5).InfoS("Received a resource updated event with no change", "obj", oldObjMeta.GetName(),
+		"namespace", oldObjMeta.GetNamespace(), "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 }
 
 // onResourceDeleted handles object delete event and push the deleted object to the resource queue.
