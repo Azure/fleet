@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	adminv1 "k8s.io/api/admissionregistration/v1"
 	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -1174,6 +1175,40 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 		})
 
 		It("Test a placement select some resources and then not any", func() {
+			By("Create a webhook resource")
+			webhookName := "test-mutating-webhook"
+			sideEffect := adminv1.SideEffectClassNone
+			mutatingWebhook := adminv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      webhookName,
+					Namespace: testService.GetNamespace(),
+				},
+				Webhooks: []adminv1.MutatingWebhook{
+					{
+						Name: "test.azure.com",
+						Rules: []adminv1.RuleWithOperations{
+							{
+								Operations: []adminv1.OperationType{
+									adminv1.OperationAll,
+								},
+								Rule: adminv1.Rule{
+									APIGroups:   []string{"*"},
+									APIVersions: []string{"*"},
+									Resources:   []string{"pod"},
+								},
+							},
+						},
+						ClientConfig: adminv1.WebhookClientConfig{
+							URL: pointer.String("https://test.azure.com/test-crp"),
+						},
+						AdmissionReviewVersions: []string{"v1"},
+						SideEffects:             &sideEffect,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, &mutatingWebhook)).Should(Succeed())
+
+			By("Select webhook clusterResourcePlacement created")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "resource-test-change",
@@ -1181,26 +1216,30 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
 						{
-							Group:   rbacv1.GroupName,
+							Group:   adminv1.GroupName,
 							Version: "v1",
-							Kind:    ClusterRoleKind,
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"fleet.azure.com/name": "test",
-								},
-							},
+							Kind:    "MutatingWebhookConfiguration",
+							Name:    webhookName,
 						},
 					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
-			By("Select resource by label clusterResourcePlacement created")
 
-			// verify that we have created work objects that contain the resource selected
-			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			By("verify that we have created work objects that contain the resource selected")
+			var clusterWork workv1alpha1.Work
+			waitForPlacementScheduleStopped(crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(Equal(1))
+			var uObj unstructured.Unstructured
+			GetObjectFromRawExtension(clusterWork.Spec.Workload.Manifests[0].Raw, &uObj)
+			Expect(uObj.GroupVersionKind().Kind).Should(Equal("MutatingWebhookConfiguration"))
 
-			By("Delete the clusterRole resources")
-			Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(Succeed())
+			By("Delete the webhook resources")
+			Expect(k8sClient.Delete(ctx, &mutatingWebhook)).Should(Succeed())
 
 			By("Verify that do not schedule anything")
 			waitForPlacementScheduleStopped(crp.Name)
@@ -1208,12 +1247,11 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			verifyPlacementScheduleStatus(crp, 0, 0, metav1.ConditionFalse)
 			By("Verified that placement has nothing scheduled")
 
-			var clusterWork workv1alpha1.Work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
 			}, &clusterWork)).Should(utils.NotFoundMatcher{})
-			By("Verified that the deleted clusterRole is removed from the work")
+			By("Verified that the deleted webhook is removed from the work")
 		})
 	})
 
@@ -1226,7 +1264,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			markInternalMCJoined(clusterB)
 		})
 
-		FIt("Test force delete member cluster after work agent lost connection/deleted", func() {
+		It("Test force delete member cluster after work agent lost connection/deleted", func() {
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{

@@ -62,20 +62,22 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(3).InfoS("Reconcile", "memberCluster", req.NamespacedName)
-	var mc fleetv1alpha1.MemberCluster
-	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
+	var oldMC fleetv1alpha1.MemberCluster
+	if err := r.Client.Get(ctx, req.NamespacedName, &oldMC); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	mcObjRef := klog.KObj(&mc)
 
 	// Handle deleting member cluster, garbage collect all the resources in the cluster namespace
-	if !mc.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("the member cluster is in the process of being deleted", "memberCluster", mcObjRef)
-		return r.garbageCollectWork(ctx, &mc)
+	if !oldMC.DeletionTimestamp.IsZero() {
+		klog.V(2).InfoS("the member cluster is in the process of being deleted", "memberCluster", klog.KObj(&oldMC))
+		return r.garbageCollectWork(ctx, &oldMC)
 	}
+
+	mc := oldMC.DeepCopy()
+	mcObjRef := klog.KObj(mc)
 	// Add the finalizer to the member cluster
-	if err := r.ensureFinalizer(ctx, &mc); err != nil {
+	if err := r.ensureFinalizer(ctx, mc); err != nil {
 		klog.ErrorS(err, "failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
 		return ctrl.Result{}, err
 	}
@@ -96,26 +98,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	switch mc.Spec.State {
 	case fleetv1alpha1.ClusterStateJoin:
-		if err := r.join(ctx, &mc, currentImc); err != nil {
+		if err := r.join(ctx, mc, currentImc); err != nil {
 			klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
 			return ctrl.Result{}, err
 		}
 
 	case fleetv1alpha1.ClusterStateLeave:
-		if err := r.leave(ctx, &mc, currentImc); err != nil {
+		if err := r.leave(ctx, mc, currentImc); err != nil {
 			klog.ErrorS(err, "failed to leave", "memberCluster", mcObjRef)
 			return ctrl.Result{}, err
 		}
 
 	default:
-		klog.Errorf("encountered a fatal error. unknown state %v in MemberCluster: %s", mc.Spec.State, klog.KObj(&mc))
+		klog.Errorf("encountered a fatal error. unknown state %v in MemberCluster: %s", mc.Spec.State, mcObjRef)
 		return ctrl.Result{}, nil
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
-	r.syncInternalMemberClusterStatus(currentImc, &mc)
-	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
-		klog.ErrorS(err, "failed to update status for", klog.KObj(&mc))
+	r.syncInternalMemberClusterStatus(currentImc, mc)
+	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
+		klog.ErrorS(err, "failed to update status for", klog.KObj(mc))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
