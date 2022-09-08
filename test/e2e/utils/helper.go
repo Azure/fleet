@@ -306,6 +306,7 @@ func RandomWorkName(length int) string {
 // GenerateSpecHash formats the object and creates a hash value for comparison.
 func GenerateSpecHash(object runtime.Object) string {
 	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to convert the object %s for formatting", object)
 	unstructured.RemoveNestedField(unstructuredObj, "metadata", "creationTimestamp")
 	jsonBytes, err := json.Marshal(unstructuredObj)
 
