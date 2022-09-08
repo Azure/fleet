@@ -8,7 +8,6 @@ package utils
 import (
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -130,12 +129,17 @@ var (
 	}
 )
 
+// RandSecureInt returns a uniform random value in [1, max] or panic.
+// Only use this in tests.
 func RandSecureInt(limit int64) int64 {
+	if limit <= 0 {
+		panic("limit <= 0")
+	}
 	nBig, err := rand.Int(rand.Reader, big.NewInt(limit))
 	if err != nil {
-		log.Println(err)
+		panic(err)
 	}
-	return nBig.Int64()
+	return nBig.Int64() + 1
 }
 
 func RandStr() string {
