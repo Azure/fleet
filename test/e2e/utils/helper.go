@@ -18,7 +18,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -303,6 +302,13 @@ func RandomWorkName(length int) string {
 	return "work" + rand.String(length)
 }
 
+// GenerateSpecHash generates a Sha256 value from the object.
+func GenerateSpecHash(object runtime.Object) string {
+	rawObj, err := json.Marshal(object)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", rawObj)
+	return fmt.Sprintf("%x", sha256.Sum256(rawObj))
+}
+
 // AlreadyExistMatcher matches the error to be already exist
 type AlreadyExistMatcher struct {
 }
@@ -324,51 +330,4 @@ func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message s
 // NegatedFailureMessage builds an error message.
 func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return format.Message(actual, "not to be already exist")
-}
-
-// GenerateSpecHash will generate Hash value used for annotation in the work-api for verification for each manifests given.
-func GenerateSpecHash(manifests []workapi.Manifest) []string {
-	specHashes := make([]string, len(manifests))
-	for index, manifest := range manifests {
-		unstructuredObj := &unstructured.Unstructured{}
-		err := unstructuredObj.UnmarshalJSON(manifest.Raw)
-		gomega.Expect(err).Should(gomega.Succeed(),
-			"Invalid manifest with ordinal of %d", index)
-
-		annotation := unstructuredObj.GetAnnotations()
-		if annotation != nil {
-			delete(annotation, manifestHashAnnotation)
-			delete(annotation, lastAppliedConfigAnnotation)
-			if len(annotation) == 0 {
-				unstructuredObj.SetAnnotations(nil)
-			} else {
-				unstructuredObj.SetAnnotations(annotation)
-			}
-		}
-
-		unstructuredObj.SetResourceVersion("")
-		unstructuredObj.SetGeneration(0)
-		unstructuredObj.SetUID("")
-		unstructuredObj.SetSelfLink("")
-		unstructuredObj.SetDeletionTimestamp(nil)
-		unstructuredObj.SetManagedFields(nil)
-		unstructured.RemoveNestedField(unstructuredObj.Object, "metadata", "creationTimestamp")
-		unstructured.RemoveNestedField(unstructuredObj.Object, "status")
-		// compute the sha256 hash of the remaining data
-
-		jsonBytes, err := json.Marshal(unstructuredObj)
-		gomega.Expect(err).Should(gomega.Succeed(),
-			"Marshaling failed for manifest with ordinal of %d", index)
-		specHashes = append(specHashes, fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
-	}
-	return specHashes
-}
-
-// GetConfigMap retrieves a configmap based on the name and namespace given.
-func GetConfigMap(ctx context.Context, cluster framework.Cluster, name, namespace string) (corev1.ConfigMap, error) {
-	cm, err := cluster.KubeClientSet.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return corev1.ConfigMap{}, err
-	}
-	return *cm, err
 }

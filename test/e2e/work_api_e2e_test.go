@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	testutils "go.goms.io/fleet/test/e2e/utils"
@@ -75,16 +76,15 @@ var _ = Describe("Work API Controller test", func() {
 		namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
 
 		manifests := testutils.AddManifests([]runtime.Object{&manifestConfigMap}, []workapi.Manifest{})
-		By(fmt.Sprintf("creating work %s of %s", namespaceType.String(), manifestConfigMapName))
+		By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
 		testutils.WaitWork(ctx, *HubCluster, workName, memberNamespace.Name)
 
-		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType.String()))
+		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType))
 		work := workapi.Work{}
 		Eventually(func() string {
-			if err := HubCluster.KubeClient.Get(ctx,
-				namespaceType, &work); err != nil {
+			if err := HubCluster.KubeClient.Get(ctx, namespaceType, &work); err != nil {
 				return err.Error()
 			}
 
@@ -99,7 +99,7 @@ var _ = Describe("Work API Controller test", func() {
 			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
-		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType.String()))
+		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType))
 		expectedManifestCondition := []workapi.ManifestCondition{
 			{
 				Conditions: []metav1.Condition{
@@ -125,12 +125,11 @@ var _ = Describe("Work API Controller test", func() {
 		//Excluding Reason for check, since there could be two possible reasons.
 		options := append(cmpOptions, cmpopts.IgnoreFields(metav1.Condition{}, "Reason"))
 		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, options...)).Should(BeEmpty(),
-			"Manifest Condition not matching for work %s (-want, +got):", namespaceType.String())
+			"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		appliedWork := workapi.AppliedWork{}
-		Expect(MemberCluster.KubeClient.Get(ctx,
-			namespaceType, &appliedWork)).Should(Succeed(),
+		Expect(MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)).Should(Succeed(),
 			"Retrieving AppliedWork %s failed", workName)
 
 		want := workapi.AppliedtWorkStatus{
@@ -162,7 +161,7 @@ var _ = Describe("Work API Controller test", func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 			"ConfigMap %s was not created in the cluster %s, or configMap data mismatch(-want, +got):", manifestConfigMapName, MemberCluster.ClusterName)
 
-		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, namespaceType.String()))
+		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, namespaceType))
 		configMap, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
 		Expect(err).Should(Succeed(), "Retrieving resource %s failed", manifestConfigMap.Name)
 		wantOwner := []metav1.OwnerReference{
@@ -177,7 +176,22 @@ var _ = Describe("Work API Controller test", func() {
 		Expect(cmp.Diff(wantOwner, configMap.OwnerReferences, cmpOptions...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestConfigMapName))
-		Expect(configMap.GetAnnotations()[specHashAnnotation]).ToNot(BeNil(),
-			"There is no spec annotation on the resource %s", configMap.Name)
+
+		// Owner Reference is created when manifests are being applied.
+		ownerRef := []metav1.OwnerReference{
+			{
+				APIVersion:         workapi.GroupVersion.String(),
+				Kind:               workapi.AppliedWorkKind,
+				Name:               appliedWork.GetName(),
+				UID:                appliedWork.GetUID(),
+				BlockOwnerDeletion: pointer.Bool(false),
+			},
+		}
+		validateConfigMap := manifestConfigMap.DeepCopy()
+		validateConfigMap.SetOwnerReferences(ownerRef)
+		wantHash := testutils.GenerateSpecHash(validateConfigMap)
+
+		Expect(cmp.Diff(wantHash, configMap.ObjectMeta.Annotations[specHashAnnotation])).Should(BeEmpty(),
+			"Validating SpecHash Annotation failed for resource %s in work %s(-want, +got):", configMap.Name, workName)
 	})
 })
