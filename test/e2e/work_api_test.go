@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"context"
-	"go.goms.io/fleet/test/e2e/utils"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,6 +22,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/test/e2e/utils"
 )
 
 const (
