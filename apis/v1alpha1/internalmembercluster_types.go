@@ -38,8 +38,8 @@ type InternalMemberClusterSpec struct {
 	State ClusterState `json:"state"`
 
 	// +kubebuilder:default=60
-	// +kubebuilder:validation:Minimum:1
-	// +kubebuilder:validation:Maximum:600
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=600
 
 	// How often (in seconds) for the member cluster to send a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second. Max: 10 minutes.
 	// +optional

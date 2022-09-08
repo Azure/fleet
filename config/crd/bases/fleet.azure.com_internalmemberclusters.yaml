@@ -51,6 +51,8 @@ spec:
                   a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second.
                   Max: 10 minutes.'
                 format: int32
+                maximum: 600
+                minimum: 1
                 type: integer
               state:
                 description: 'The desired state of the member cluster. Possible values:

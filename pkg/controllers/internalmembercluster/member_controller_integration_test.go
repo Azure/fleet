@@ -33,7 +33,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		HBPeriod = int(utils.RandSecureInt(1000))
+		HBPeriod = int(utils.RandSecureInt(600))
 		memberClusterName = "rand-" + strings.ToLower(utils.RandStr()) + "-mc"
 		memberClusterNamespace = "fleet-" + memberClusterName
 		memberClusterNamespacedName = types.NamespacedName{
