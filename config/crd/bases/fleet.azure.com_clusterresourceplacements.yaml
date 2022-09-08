@@ -20,36 +20,16 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .metadata.generation
-      name: Gen
-      type: string
-    - jsonPath: .status.conditions[?(@.type=="Scheduled")].status
-      name: Scheduled
-      type: string
-    - jsonPath: .status.conditions[?(@.type=="Scheduled")].observedGeneration
-      name: ScheduledGen
-      type: string
-    - jsonPath: .status.conditions[?(@.type=="Applied")].status
-      name: Applied
-      type: string
-    - jsonPath: .status.conditions[?(@.type=="Applied")].observedGeneration
-      name: AppliedGen
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: 'ClusterResourcePlacement is used to select cluster scoped resources,
-          including built-in resources and custom resources, and placement them onto
-          selected member clusters in a fleet. If a namespace is selected, ALL the
-          resources under the namespace are placed to the target clusters. Note that
-          you can''t select the following resources: - reserved namespaces including:
-          default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved
-          for fleet system namespaces). - reserved fleet resource types including:
-          MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService,
-          ServiceImport, etc.'
+        description: 'ClusterResourcePlacement is used to place cluster scoped resources
+          or ALL the resources in a namespace onto one or more member clusters in
+          a fleet. Users cannot select resources in a system reserved namespace. System
+          reserved namespaces are: kube-system, fleet-system, fleet-work-*.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -64,32 +44,32 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of ClusterResourcePlacement.
+            description: Spec represents the desired behavior of ClusterResourcePlacement.
             properties:
               policy:
-                description: Policy defines how to select member clusters to place
-                  the selected resources. If unspecified, all the joined member clusters
-                  are selected.
+                description: Policy represents the placement policy to select clusters
+                  to place all the selected resources. Default is place to the entire
+                  fleet if this field is omitted.
                 properties:
                   affinity:
-                    description: Affinity contains cluster affinity scheduling rules.
-                      Defines which member clusters to place the selected resources.
+                    description: Affinity represents the selected resources' scheduling
+                      constraints. If not set, the entire fleet can be scheduling
+                      candidate.
                     properties:
                       clusterAffinity:
-                        description: ClusterAffinity contains cluster affinity scheduling
-                          rules for the selected resources.
+                        description: ClusterAffinity describes cluster affinity scheduling
+                          rules for the resources.
                         properties:
                           clusterSelectorTerms:
                             description: ClusterSelectorTerms is a list of cluster
-                              selector terms. The terms are `ORed`.
+                              selector terms. The terms are `ORed`. kubebuilder:validation:MaxItems=10
                             items:
-                              description: ClusterSelectorTerm contains the requirements
-                                to select clusters.
+                              description: ClusterSelectorTerm represents the requirements
+                                to selected clusters.
                               properties:
                                 labelSelector:
                                   description: LabelSelector is a label query over
-                                    all the joined member clusters. Clusters matching
-                                    the query are selected.
+                                    the clusters.
                                   properties:
                                     matchExpressions:
                                       description: matchExpressions is a list of label
@@ -141,44 +121,38 @@ spec:
                               required:
                               - labelSelector
                               type: object
-                            maxItems: 10
                             type: array
                         type: object
                     type: object
                   clusterNames:
-                    description: ClusterNames contains a list of names of MemberCluster
-                      to place the selected resources. If the list is not empty, Affinity
-                      is ignored.
+                    description: ClusterNames is a request to schedule the selected
+                      resource to a list of member clusters. If exists, we only place
+                      the resources within the clusters in this list. kubebuilder:validation:MaxItems=100
                     items:
                       type: string
-                    maxItems: 100
                     type: array
                 type: object
               resourceSelectors:
-                description: ResourceSelectors is an array of selectors used to select
-                  cluster scoped resources. The selectors are `ORed`. You can have
-                  1-100 selectors.
+                description: ResourceSelectors is used to select cluster scoped resources.
+                  The selectors are `ORed`. kubebuilder:validation:MaxItems=100
                 items:
-                  description: ClusterResourceSelector is used to select cluster scoped
-                    resources as the target resources to be placed. If a namespace
-                    is selected, ALL the resources under the namespace are selected
-                    automatically. All the fields are `ANDed`. In other words, a resource
-                    must match all the fields to be selected.
+                  description: 'ClusterResourceSelector is used to specify cluster
+                    scoped resources to be selected. Note: When the cluster resource
+                    is of type `namespace`, ALL the resources in this namespace are
+                    selected. All the fields present in this structure are `ANDed`.'
                   properties:
                     group:
-                      description: Group name of the cluster-scoped resource. Use
-                        an empty string to select resources under the core API group
-                        (e.g., namespaces).
+                      description: Group is the group name of the target resource.
                       type: string
                     kind:
-                      description: 'Kind of the cluster-scoped resource. Note: When
-                        `Kind` is `namespace`, ALL the resources under the selected
-                        namespaces are selected.'
+                      description: 'Kind is the kind of the target resources. Note:
+                        When the `kind` field is `namespace` then all the resources
+                        inside that namespace is selected.'
                       type: string
                     labelSelector:
-                      description: A label query over all the cluster-scoped resources.
-                        Resources matching the query are selected. Note that namespace-scoped
-                        resources can't be selected even if they match the query.
+                      description: labelSelector spells out a label query over a set
+                        of resources. This field is mutually exclusive with the `name`
+                        field.
                       properties:
                         matchExpressions:
                           description: matchExpressions is a list of label selector
@@ -222,28 +196,28 @@ spec:
                           type: object
                       type: object
                     name:
-                      description: Name of the cluster-scoped resource.
+                      description: Name is the name of the target resource. Default
+                        is empty, which means selecting all resources. This field
+                        is mutually exclusive with the `labelSelector` field.
                       type: string
                     version:
-                      description: Version of the cluster-scoped resource.
+                      description: Version is the version of the target resource.
                       type: string
                   required:
                   - group
                   - kind
                   - version
                   type: object
-                maxItems: 100
-                minItems: 1
                 type: array
             required:
             - resourceSelectors
             type: object
           status:
-            description: The observed status of ClusterResourcePlacement.
+            description: Most recently observed status of the ClusterResourcePlacement.
             properties:
               conditions:
-                description: Conditions is an array of current observed conditions
-                  for ClusterResourcePlacement.
+                description: Conditions field contains the overall condition statuses
+                  for this resource.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct
@@ -315,19 +289,19 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               failedPlacements:
-                description: FailedResourcePlacements is a list of all the resources
-                  failed to be placed to the given clusters. Note that we only include
-                  1000 failed resource placements even if there are more than 1000.
+                description: FailedResourcePlacements is a list of all failed to place
+                  resources status. kubebuilder:validation:MaxItems=1000
                 items:
-                  description: FailedResourcePlacement contains the failure details
-                    of a failed resource placement.
+                  description: FailedResourcePlacement shows the failure details of
+                    a failed resource placement.
                   properties:
                     clusterName:
-                      description: Name of the member cluster that the resource is
-                        placed to.
+                      description: ClusterName is the name of the cluster that this
+                        resource is placed on.
                       type: string
                     condition:
-                      description: The failed condition status.
+                      description: Condition contains the failed condition status
+                        for this failed to place resource.
                       properties:
                         lastTransitionTime:
                           description: lastTransitionTime is the last time the condition
@@ -396,8 +370,8 @@ spec:
                       description: Name of the target resource.
                       type: string
                     namespace:
-                      description: Namespace is the namespace of the resource. Empty
-                        if the resource is cluster scoped.
+                      description: Namespace is the namespace of the resource, the
+                        resource is cluster scoped if the value is empty.
                       type: string
                     version:
                       description: Version is the version of the selected resource.
@@ -408,13 +382,12 @@ spec:
                   - kind
                   - name
                   type: object
-                maxItems: 1000
                 type: array
               selectedResources:
-                description: SelectedResources contains a list of resources selected
-                  by ResourceSelectors.
+                description: SelectedResources is a list of the resources the resource
+                  selector selects.
                 items:
-                  description: ResourceIdentifier identifies one Kubernetes resource.
+                  description: ResourceIdentifier points to one resource we selected
                   properties:
                     group:
                       description: Group is the group name of the selected resource.
@@ -426,8 +399,8 @@ spec:
                       description: Name of the target resource.
                       type: string
                     namespace:
-                      description: Namespace is the namespace of the resource. Empty
-                        if the resource is cluster scoped.
+                      description: Namespace is the namespace of the resource, the
+                        resource is cluster scoped if the value is empty.
                       type: string
                     version:
                       description: Version is the version of the selected resource.
@@ -438,12 +411,13 @@ spec:
                   type: object
                 type: array
               targetClusters:
-                description: TargetClusters contains a list of names of member clusters
-                  selected by PlacementPolicy. Note that the clusters must be both
-                  joined and meeting PlacementPolicy.
+                description: TargetClusters is a list of cluster names that this resource
+                  should run on.
                 items:
                   type: string
                 type: array
+            required:
+            - conditions
             type: object
         required:
         - spec

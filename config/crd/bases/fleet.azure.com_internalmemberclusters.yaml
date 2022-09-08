@@ -15,7 +15,7 @@ spec:
     listKind: InternalMemberClusterList
     plural: internalmemberclusters
     shortNames:
-    - imc
+    - internalcluster
     singular: internalmembercluster
   scope: Namespaced
   versions:
@@ -26,9 +26,6 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: InternalMemberCluster is used by hub agent to notify the member
-          agents about the member cluster state changes, and is used by the member
-          agents to report their status.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -43,37 +40,32 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of InternalMemberCluster.
+            description: InternalMemberClusterSpec defines the desired state of InternalMemberCluster
+              for the hub agent.
             properties:
-              heartbeatPeriodSeconds:
+              leaseDurationSeconds:
                 default: 60
-                description: 'How often (in seconds) for the member cluster to send
-                  a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second.
-                  Max: 10 minutes.'
                 format: int32
-                maximum: 600
-                minimum: 1
                 type: integer
               state:
-                description: 'The desired state of the member cluster. Possible values:
-                  Join, Leave.'
                 type: string
             required:
             - state
             type: object
           status:
-            description: The observed status of InternalMemberCluster.
+            description: InternalMemberClusterStatus defines the observed state of
+              InternalMemberCluster.
             properties:
               agentStatus:
-                description: AgentStatus is an array of current observed status, each
-                  corresponding to one member agent running in the member cluster.
+                description: AgentStatus field contains the status for each agent
+                  running in the member cluster.
                 items:
-                  description: AgentStatus defines the observed status of the member
-                    agent of the given type.
+                  description: AgentStatus contains status information received for
+                    the particular agent type.
                   properties:
                     conditions:
-                      description: Conditions is an array of current observed conditions
-                        for the member agent.
+                      description: Conditions field contains the different condition
+                        statuses for this member cluster, eg join and health status.
                       items:
                         description: "Condition contains details for one aspect of
                           the current state of this API Resource. --- This struct
@@ -146,24 +138,19 @@ spec:
                         - type
                         type: object
                       type: array
-                      x-kubernetes-list-map-keys:
-                      - type
-                      x-kubernetes-list-type: map
                     lastReceivedHeartbeat:
-                      description: Last time we received a heartbeat from the member
-                        agent.
+                      description: Last time we got the heartbeat.
                       format: date-time
                       type: string
                     type:
-                      description: Type of the member agent.
+                      description: Type of agent type.
                       type: string
                   required:
                   - type
                   type: object
                 type: array
               resourceUsage:
-                description: The current observed resource usage of the member cluster.
-                  It is populated by the member agent.
+                description: Resource usage collected from member cluster.
                 properties:
                   allocatable:
                     additionalProperties:
@@ -172,8 +159,8 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Allocatable represents the total resources of all
-                      the nodes on a member cluster that are available for scheduling.
+                    description: Allocatable represents the total allocatable resources
+                      on the member cluster.
                     type: object
                   capacity:
                     additionalProperties:
@@ -182,11 +169,12 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Capacity represents the total resource capacity of
-                      all the nodes on a member cluster.
+                    description: Capacity represents the total resource capacity from
+                      all nodeStatues on the member cluster.
                     type: object
                   observationTime:
-                    description: When the resource usage is observed.
+                    description: The time we observe the member cluster resource usage,
+                      including capacity and allocatable.
                     format: date-time
                     type: string
                 type: object
