@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
@@ -19,6 +18,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -303,7 +303,7 @@ func RandomWorkName(length int) string {
 	return "work" + rand.String(length)
 }
 
-// GenerateSpecHash generates a Sha256 value from the object.
+// GenerateSpecHash formats the object and creates a hash value for comparison.
 func GenerateSpecHash(object runtime.Object) string {
 	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
 	unstructured.RemoveNestedField(unstructuredObj, "metadata", "creationTimestamp")
