@@ -17,6 +17,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -93,9 +94,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 	AfterEach(func() {
 		By("Delete member clusters", func() {
-			Expect(k8sClient.Delete(ctx, &clusterA)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, &clusterB)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, crp)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, &clusterA)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			Expect(k8sClient.Delete(ctx, &clusterB)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			Expect(k8sClient.Delete(ctx, crp)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		})
 	})
 
@@ -1223,6 +1224,57 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			By("Mark member cluster B as joined")
 			markInternalMCJoined(clusterB)
+		})
+
+		FIt("Test force delete member cluster after work agent lost connection/deleted", func() {
+			By("create clusterResourcePlacement CR")
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-test-change",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/name": "test",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+
+			By("verify that we have created work objects that contain the resource selected")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
+
+			By("add finalizer to the work and mark it as applied")
+			markWorkAppliedStatusSuccess(crp, &clusterA)
+
+			By("delete the member cluster")
+			Expect(k8sClient.Delete(ctx, &clusterA)).Should(Succeed())
+
+			// the namespace won't be deleted as the GC controller does not run there
+			By("verify that the work is deleted")
+			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
+			Eventually(func() bool {
+				var clusterWork workv1alpha1.Work
+				return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      crp.Name,
+					Namespace: nsName,
+				}, &clusterWork))
+			}, timeout, interval).Should(BeTrue())
+
+			By("verify that the member cluster is deleted")
+			Eventually(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{
+					Name: clusterA.Name,
+				}, &clusterA))
+			}, timeout, interval).Should(BeTrue())
 		})
 
 		XIt("Test partial failed apply", func() {

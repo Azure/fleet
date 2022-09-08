@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -358,6 +359,7 @@ func markWorkAppliedStatusSuccess(crp *fleetv1alpha1.ClusterResourcePlacement, c
 			ObservedGeneration: crp.Generation,
 		},
 	}
+	controllerutil.AddFinalizer(&clusterWork, "fleet.azure.com/work-cleanup")
 	Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
 }
 

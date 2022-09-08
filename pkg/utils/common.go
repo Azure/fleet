@@ -57,8 +57,8 @@ const (
 	// This label aims to enable different work objects to be managed by different placement.
 	LabelWorkPlacementName = "work.fleet.azure.com/placement-name"
 
-	// PlacementFinalizer is used to make sure that we handle gc of placement resources.
-	PlacementFinalizer = "work.fleet.azure.com/placement-protection"
+	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster
+	MemberClusterFinalizer = "work.fleet.azure.com/membercluster-finalizer"
 )
 
 var (
