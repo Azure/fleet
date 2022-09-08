@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
@@ -304,9 +305,12 @@ func RandomWorkName(length int) string {
 
 // GenerateSpecHash generates a Sha256 value from the object.
 func GenerateSpecHash(object runtime.Object) string {
-	rawObj, err := json.Marshal(object)
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", rawObj)
-	return fmt.Sprintf("%x", sha256.Sum256(rawObj))
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
+	unstructured.RemoveNestedField(unstructuredObj, "metadata", "creationTimestamp")
+	jsonBytes, err := json.Marshal(unstructuredObj)
+
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", jsonBytes)
+	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 }
 
 // AlreadyExistMatcher matches the error to be already exist

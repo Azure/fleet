@@ -64,8 +64,9 @@ var _ = Describe("Work API Controller test", func() {
 				Kind:       "ConfigMap",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      manifestConfigMapName,
-				Namespace: workResourceNamespace.Name,
+				Name:              manifestConfigMapName,
+				Namespace:         workResourceNamespace.Name,
+				CreationTimestamp: metav1.Time{},
 			},
 			Data: map[string]string{
 				"test-key": "test-data",
@@ -189,8 +190,8 @@ var _ = Describe("Work API Controller test", func() {
 		}
 		validateConfigMap := manifestConfigMap.DeepCopy()
 		validateConfigMap.SetOwnerReferences(ownerRef)
-		wantHash := testutils.GenerateSpecHash(validateConfigMap)
 
+		wantHash := testutils.GenerateSpecHash(validateConfigMap)
 		Expect(cmp.Diff(wantHash, configMap.ObjectMeta.Annotations[specHashAnnotation])).Should(BeEmpty(),
 			"Validating SpecHash Annotation failed for resource %s in work %s(-want, +got):", configMap.Name, workName)
 	})
