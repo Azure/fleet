@@ -89,6 +89,9 @@ require (
 )
 
 replace (
+	// https://nvd.nist.gov/vuln/detail/CVE-2022-1996
+	github.com/emicklei/go-restful => github.com/emicklei/go-restful v2.16.0+incompatible
+
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.2 // weird bug that the goland won't compile without this
 	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.4.2
 )
