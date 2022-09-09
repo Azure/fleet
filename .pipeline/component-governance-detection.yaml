@@ -1,6 +1,13 @@
 # This pipeline hosted in ADO will use the auto-injected component detection build task to detect possible incidents
 # and report alerts related to OSS consumed by this repository.
-trigger: none
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - go.sum
+    - go.mod
 
 pool:
   vmImage: ubuntu-18.04
