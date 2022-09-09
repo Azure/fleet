@@ -1,0 +1,124 @@
+name: Trivy vulnerability scanner
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+      - release-*
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  HUB_AGENT_IMAGE_NAME: hub-agent
+  MEMBER_AGENT_IMAGE_NAME: member-agent
+  REFRESH_TOKEN_IMAGE_NAME: refresh-token
+
+  GO_VERSION: '1.18'
+
+jobs:
+  export-registry:
+    runs-on: ubuntu-20.04
+    outputs:
+      registry: ${{ steps.export.outputs.registry }}
+    steps:
+      - id: export
+        run: |
+          # registry must be in lowercase
+          # store the images under dev
+          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}/dev" | tr [:upper:] [:lower:])"
+  scan-images:
+    needs: export-registry
+    env:
+      REGISTRY: ${{ needs.export-registry.outputs.registry }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: generate image version
+        run: echo IMAGE_VERSION=$(shell git rev-parse --short=7 HEAD) >> $GITHUB_ENV
+
+      - name: Build ${{ env.HUB_AGENT_IMAGE_NAME}}
+        run: |
+          make docker-build-hub-agent
+        env:
+          REGISTRY: ${{ env.REGISTRY}}
+          HUB_AGENT_IMAGE_NAME: ${{ env.HUB_NET_CONTROLLER_MANAGER_IMAGE_NAME}}
+          HUB_AGENT_IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
+
+      - name: Build ${{ env.MEMBER_AGENT_IMAGE_NAME}}
+        run: |
+          make docker-build-member-agent
+        env:
+          REGISTRY: ${{ env.REGISTRY}}
+          MEMBER_AGENT_IMAGE_NAME: ${{ env.MEMBER_NET_CONTROLLER_MANAGER_IMAGE_NAME}}
+          MEMBER_AGENT_IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
+
+      - name: Build ${{ env.REFRESH_TOKEN_IMAGE_NAME}}
+        run: |
+          make docker-build-refresh-token
+        env:
+          REGISTRY: ${{ env.REGISTRY}}
+          REFRESH_TOKEN_IMAGE_NAME: ${{ env.REFRESH_TOKEN_IMAGE_NAME}}
+          REFRESH_TOKEN_IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
+
+      - name: Scan ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+
+      - name: Scan ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.MEMBER_AGENT_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.REFRESH_TOKEN_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
