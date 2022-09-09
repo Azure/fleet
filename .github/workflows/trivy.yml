@@ -31,6 +31,7 @@ jobs:
         run: |
           # registry must be in lowercase
           # store the images under dev
+          # TODO: need to cleanup dev images periodically 
           echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}/dev" | tr [:upper:] [:lower:])"
   scan-images:
     needs: export-registry
@@ -54,31 +55,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: generate image version
-        run: echo IMAGE_VERSION=$(shell git rev-parse --short=7 HEAD) >> $GITHUB_ENV
+        run: echo IMAGE_VERSION=$(git rev-parse --short=7 HEAD) >> $GITHUB_ENV
 
-      - name: Build ${{ env.HUB_AGENT_IMAGE_NAME}}
+      - name: Build and push controller manager images to registry with tag ${{ env.IMAGE_VERSION }}
         run: |
-          make docker-build-hub-agent
+          make push
         env:
           REGISTRY: ${{ env.REGISTRY}}
-          HUB_AGENT_IMAGE_NAME: ${{ env.HUB_NET_CONTROLLER_MANAGER_IMAGE_NAME}}
-          HUB_AGENT_IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
-
-      - name: Build ${{ env.MEMBER_AGENT_IMAGE_NAME}}
-        run: |
-          make docker-build-member-agent
-        env:
-          REGISTRY: ${{ env.REGISTRY}}
-          MEMBER_AGENT_IMAGE_NAME: ${{ env.MEMBER_NET_CONTROLLER_MANAGER_IMAGE_NAME}}
-          MEMBER_AGENT_IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
-
-      - name: Build ${{ env.REFRESH_TOKEN_IMAGE_NAME}}
-        run: |
-          make docker-build-refresh-token
-        env:
-          REGISTRY: ${{ env.REGISTRY}}
-          REFRESH_TOKEN_IMAGE_NAME: ${{ env.REFRESH_TOKEN_IMAGE_NAME}}
-          REFRESH_TOKEN_IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
+          TAG: ${{ env.IMAGE_VERSION }}
 
       - name: Scan ${{ env.REGISTRY }}/${{ env.HUB_AGENT_IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
         uses: aquasecurity/trivy-action@master
