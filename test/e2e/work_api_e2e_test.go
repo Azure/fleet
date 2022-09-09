@@ -64,9 +64,8 @@ var _ = Describe("Work API Controller test", func() {
 				Kind:       "ConfigMap",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:              manifestConfigMapName,
-				Namespace:         workResourceNamespace.Name,
-				CreationTimestamp: metav1.Time{},
+				Name:      manifestConfigMapName,
+				Namespace: workResourceNamespace.Name,
 			},
 			Data: map[string]string{
 				"test-key": "test-data",

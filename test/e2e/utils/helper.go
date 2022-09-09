@@ -13,7 +13,6 @@ import (
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-	"github.com/onsi/gomega/format"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -312,27 +311,4 @@ func GenerateSpecHash(object runtime.Object) string {
 
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", jsonBytes)
 	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-}
-
-// AlreadyExistMatcher matches the error to be already exist
-type AlreadyExistMatcher struct {
-}
-
-// Match matches error.
-func (matcher AlreadyExistMatcher) Match(actual interface{}) (success bool, err error) {
-	if actual == nil {
-		return false, nil
-	}
-	actualError := actual.(error)
-	return apierrors.IsAlreadyExists(actualError), nil
-}
-
-// FailureMessage builds an error message.
-func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message string) {
-	return format.Message(actual, "to be already exist")
-}
-
-// NegatedFailureMessage builds an error message.
-func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	return format.Message(actual, "not to be already exist")
 }
