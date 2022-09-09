@@ -57,7 +57,7 @@ jobs:
       - name: generate image version
         run: echo IMAGE_VERSION=$(git rev-parse --short=7 HEAD) >> $GITHUB_ENV
 
-      - name: Build and push controller manager images to registry with tag ${{ env.IMAGE_VERSION }}
+      - name: Build and push images to registry with tag ${{ env.IMAGE_VERSION }}
         run: |
           make push
         env:
