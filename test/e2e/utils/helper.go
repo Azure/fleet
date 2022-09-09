@@ -305,7 +305,7 @@ func RandomWorkName(length int) string {
 // GenerateSpecHash formats the object and creates a hash value for comparison.
 // The Object being passed in should not have the following variables.
 // Example: ResourceVersion
-// Full List of the variables can be found in the [computeManifestHash](https://github.com/Azure/k8s-work-api/blob/ba21e65fff6bee7282cdfe7e4f189d987ef5502b/pkg/controllers/apply_controller.go#L441)
+// Full List of the variables can be found in the [computeManifestHash](https://github.com/Azure/k8s-work-api/blob/ba21e65fff6bee7282cdfe7e4f189d987ef5502b/pkg/controllers/apply_controller.go#L441).
 func GenerateSpecHash(object runtime.Object) string {
 	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to convert the object %s for formatting", object)
