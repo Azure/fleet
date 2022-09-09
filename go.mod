@@ -93,7 +93,7 @@ replace (
 	github.com/emicklei/go-restful => github.com/emicklei/go-restful v2.16.0+incompatible
 
 	// https://avd.aquasec.com/nvd/2022/cve-2022-27191/
-    golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
+	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
 
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.2 // weird bug that the goland won't compile without this
 	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.4.2
