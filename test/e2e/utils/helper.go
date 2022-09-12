@@ -106,11 +106,15 @@ func UpdateMemberClusterState(cluster framework.Cluster, mc *v1alpha1.MemberClus
 }
 
 // DeleteMemberCluster deletes MemberCluster in the hub cluster.
-func DeleteMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
+func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
 	ginkgo.By(fmt.Sprintf("Deleting MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), mc)
 		gomega.Expect(err).Should(gomega.Succeed())
 	})
+
+	gomega.Eventually(func() bool {
+		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
+	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for member cluster %s to be deleted in %s cluster", mc.Name, cluster.ClusterName)
 }
 
 // WaitConditionMemberCluster waits for MemberCluster to present on th hub cluster with a specific condition.

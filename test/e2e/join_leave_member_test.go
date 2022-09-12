@@ -5,20 +5,23 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"context"
 	. "github.com/onsi/ginkgo/v2"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"go.goms.io/fleet/apis/v1alpha1"
 	testutils "go.goms.io/fleet/test/e2e/utils"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Join/leave member cluster testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
 	var imc *v1alpha1.InternalMemberCluster
+	var ctx context.Context
 
 	BeforeEach(func() {
+		ctx = context.Background()
+
 		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.CreateServiceAccount(*MemberCluster, sa)
 
@@ -35,8 +38,9 @@ var _ = Describe("Join/leave member cluster testing", func() {
 	})
 
 	AfterEach(func() {
+		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
 		testutils.DeleteServiceAccount(*MemberCluster, sa)
-		testutils.DeleteMemberCluster(*HubCluster, mc)
+
 	})
 
 	It("Join & Leave flow is successful ", func() {

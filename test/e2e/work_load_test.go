@@ -51,7 +51,7 @@ var _ = Describe("workload orchestration testing", func() {
 	})
 
 	AfterEach(func() {
-		testutils.DeleteMemberCluster(*HubCluster, mc)
+		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
 		testutils.DeleteServiceAccount(*MemberCluster, sa)
 	})
 
