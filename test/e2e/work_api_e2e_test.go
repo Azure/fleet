@@ -12,9 +12,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
@@ -37,11 +37,19 @@ var _ = Describe("Work API Controller test", func() {
 			cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"),
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
+			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
 		}
+
+		resourceNamespace *corev1.Namespace
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
+
+		// This namespace in MemberCluster will store specified test resources created from the Work-api.
+		resourceNamespaceName := "resource-namespace" + utils.RandStr()
+		resourceNamespace = testutils.NewNamespace(resourceNamespaceName)
+		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
 
 		//Empties the works since they were garbage collected earlier.
 		works = []workapi.Work{}
@@ -49,6 +57,7 @@ var _ = Describe("Work API Controller test", func() {
 
 	AfterEach(func() {
 		testutils.DeleteWork(ctx, *HubCluster, works)
+		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
 	})
 
 	It("Upon successful work creation of a single resource, work manifest is applied and resource is created", func() {
@@ -65,7 +74,7 @@ var _ = Describe("Work API Controller test", func() {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      manifestConfigMapName,
-				Namespace: workResourceNamespace.Name,
+				Namespace: resourceNamespace.Name,
 			},
 			Data: map[string]string{
 				"test-key": "test-data",
@@ -79,10 +88,9 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
-		testutils.WaitWork(ctx, *HubCluster, workName, memberNamespace.Name)
-
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType))
 		work := workapi.Work{}
+
 		Eventually(func() string {
 			if err := HubCluster.KubeClient.Get(ctx, namespaceType, &work); err != nil {
 				return err.Error()
@@ -106,12 +114,10 @@ var _ = Describe("Work API Controller test", func() {
 					{
 						Type:   conditionTypeApplied,
 						Status: metav1.ConditionTrue,
-						// It is possible for the reason to be appliedManifestUpdated
-						//Reason: "appliedManifestComplete",
+						Reason: "appliedManifestUpdated",
 					},
 				},
 				Identifier: workapi.ResourceIdentifier{
-					Ordinal:   0,
 					Group:     manifestConfigMap.GroupVersionKind().Group,
 					Version:   manifestConfigMap.GroupVersionKind().Version,
 					Kind:      manifestConfigMap.GroupVersionKind().Kind,
@@ -122,9 +128,7 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		//Excluding Reason for check, since there could be two possible reasons.
-		options := append(cmpOptions, cmpopts.IgnoreFields(metav1.Condition{}, "Reason"))
-		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, options...)).Should(BeEmpty(),
+		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 			"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
@@ -136,7 +140,6 @@ var _ = Describe("Work API Controller test", func() {
 			AppliedResources: []workapi.AppliedResourceMeta{
 				{
 					ResourceIdentifier: workapi.ResourceIdentifier{
-						Ordinal:   0,
 						Group:     manifestConfigMap.GroupVersionKind().Group,
 						Version:   manifestConfigMap.GroupVersionKind().Version,
 						Kind:      manifestConfigMap.GroupVersionKind().Kind,
@@ -152,13 +155,9 @@ var _ = Describe("Work API Controller test", func() {
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
-		Eventually(func() string {
-			cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
-			if err != nil {
-				return err.Error()
-			}
-			return cmp.Diff(manifestConfigMap.Data, cm.Data)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
+		cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
+		Expect(err).Should(Succeed())
+		Expect(cmp.Diff(manifestConfigMap.Data, cm.Data)).Should(BeEmpty(),
 			"ConfigMap %s was not created in the cluster %s, or configMap data mismatch(-want, +got):", manifestConfigMapName, MemberCluster.ClusterName)
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, namespaceType))
@@ -176,22 +175,7 @@ var _ = Describe("Work API Controller test", func() {
 		Expect(cmp.Diff(wantOwner, configMap.OwnerReferences, cmpOptions...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestConfigMapName))
-
-		// Owner Reference is created when manifests are being applied.
-		ownerRef := []metav1.OwnerReference{
-			{
-				APIVersion:         workapi.GroupVersion.String(),
-				Kind:               workapi.AppliedWorkKind,
-				Name:               appliedWork.GetName(),
-				UID:                appliedWork.GetUID(),
-				BlockOwnerDeletion: pointer.Bool(false),
-			},
-		}
-		validateConfigMap := manifestConfigMap.DeepCopy()
-		validateConfigMap.SetOwnerReferences(ownerRef)
-
-		wantHash := testutils.GenerateSpecHash(validateConfigMap)
-		Expect(cmp.Diff(wantHash, configMap.ObjectMeta.Annotations[specHashAnnotation])).Should(BeEmpty(),
-			"Validating SpecHash Annotation failed for resource %s in work %s(-want, +got):", configMap.Name, workName)
+		Expect(configMap.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
+			"SpecHash Annotation does not exist for resource %s", configMap.Name)
 	})
 })

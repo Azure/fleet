@@ -6,7 +6,6 @@ package utils
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -32,9 +30,9 @@ import (
 
 var (
 	// PollInterval defines the interval time for a poll operation.
-	PollInterval = 5 * time.Second
+	PollInterval = 250 * time.Millisecond
 	// PollTimeout defines the time after which the poll operation times out.
-	PollTimeout = 90 * time.Second
+	PollTimeout = 60 * time.Second
 )
 
 // NewMemberCluster return a new member cluster.
@@ -259,7 +257,7 @@ func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 }
 
 // CreateWork creates Work object based on manifest given.
-func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, workNamespace string, manifests []workapi.Manifest) {
+func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, workNamespace string, manifests []workapi.Manifest) workapi.Work {
 	work := workapi.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
@@ -272,16 +270,16 @@ func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, wor
 		},
 	}
 
-	gomega.Expect(hubCluster.KubeClient.Create(ctx, &work)).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
+	err := hubCluster.KubeClient.Create(ctx, &work)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
+	return work
 }
 
 // DeleteWork deletes all works used in the current test.
 func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []workapi.Work) {
-	if len(works) > 0 {
-		// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
-		for i := range works {
-			gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed", works[i].Name)
-		}
+	// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
+	for i := range works {
+		gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed", works[i].Name)
 	}
 }
 
@@ -300,18 +298,4 @@ func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []work
 // RandomWorkName creates a work name in a correct format for e2e tests.
 func RandomWorkName(length int) string {
 	return "work" + rand.String(length)
-}
-
-// GenerateSpecHash formats the object and creates a hash value for comparison.
-// The Object being passed in should not have the following variables.
-// Example: ResourceVersion
-// Full List of the variables can be found in the [computeManifestHash](https://github.com/Azure/k8s-work-api/blob/ba21e65fff6bee7282cdfe7e4f189d987ef5502b/pkg/controllers/apply_controller.go#L441).
-func GenerateSpecHash(object runtime.Object) string {
-	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(object)
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to convert the object %s for formatting", object)
-	unstructured.RemoveNestedField(unstructuredObj, "metadata", "creationTimestamp")
-	jsonBytes, err := json.Marshal(unstructuredObj)
-
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", jsonBytes)
-	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 }

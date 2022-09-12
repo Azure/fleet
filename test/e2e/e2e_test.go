@@ -39,9 +39,6 @@ var (
 	// This namespace in HubCluster will store v1alpha1.Work to simulate Work-related features in Hub Cluster.
 	workNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
 
-	// This namespace in MemberCluster will store resources created from the Work-api.
-	workResourceNamespace = testutils.NewNamespace("resource-namespace")
-
 	// Used to decode an unstructured object.
 	genericCodecs = serializer.NewCodecFactory(scheme)
 	genericCodec  = genericCodecs.UniversalDeserializer()
@@ -80,12 +77,10 @@ var _ = BeforeSuite(func() {
 	testutils.CreateNamespace(*MemberCluster, memberNamespace)
 
 	testutils.CreateNamespace(*HubCluster, workNamespace)
-	testutils.CreateNamespace(*MemberCluster, workResourceNamespace)
 })
 
 var _ = AfterSuite(func() {
 	testutils.DeleteNamespace(*MemberCluster, memberNamespace)
 
 	testutils.DeleteNamespace(*HubCluster, workNamespace)
-	testutils.DeleteNamespace(*MemberCluster, workResourceNamespace)
 })
