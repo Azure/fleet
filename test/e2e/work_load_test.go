@@ -143,11 +143,11 @@ var _ = Describe("workload orchestration testing", func() {
 		By("check if work gets created for cluster resource placement")
 		testutils.WaitWork(*HubCluster, crp.Name, memberNS.Name)
 
-		By("check if cluster role is propagated to member cluster")
-		testutils.WaitCreateClusterRole(ctx, *MemberCluster, clusterRole)
-
 		By("check if cluster resource placement status is updated")
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if cluster role is propagated to member cluster")
+		testutils.GetClusterRole(ctx, *MemberCluster, clusterRole)
 
 		By("edit cluster role in Hub cluster")
 		newLabelKey := "fleet.azure.com/region"
@@ -175,9 +175,6 @@ var _ = Describe("workload orchestration testing", func() {
 
 		By("check if cluster role got updated in member cluster")
 		testutils.WaitUpdateClusterRoleLabels(ctx, *MemberCluster, clusterRole, newClusterRole)
-
-		By("check if cluster resource placement status is synced")
-		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
 
 		By("delete cluster resource placement on hub cluster")
 		testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
@@ -247,14 +244,14 @@ var _ = Describe("workload orchestration testing", func() {
 		By("check if work gets created for cluster resource placement")
 		testutils.WaitWork(*HubCluster, crp.Name, memberNS.Name)
 
-		By("check if resources in namespace are propagated to member cluster")
-		testutils.WaitCreateNamespace(ctx, *MemberCluster, resourceNamespace)
-		testutils.WaitCreateRole(ctx, *MemberCluster, role)
-		testutils.WaitCreateRoleBinding(ctx, *MemberCluster, roleBinding)
-
 		By("check if cluster resource placement status is updated")
 		selectedResources := []v1alpha1.ResourceIdentifier{selectedResource2, selectedResource3, selectedResource4}
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if resources in namespace are propagated to member cluster")
+		testutils.GetNamespace(ctx, *MemberCluster, resourceNamespace)
+		testutils.GetRole(ctx, *MemberCluster, role)
+		testutils.GetRoleBinding(ctx, *MemberCluster, roleBinding)
 
 		By("edit role in Hub cluster")
 		updatedRole := &rbacv1.Role{
@@ -331,14 +328,14 @@ var _ = Describe("workload orchestration testing", func() {
 		By("check if work gets created for cluster resource placement")
 		testutils.WaitWork(*HubCluster, crp.Name, memberNS.Name)
 
-		By("check if resources in namespace are propagated to member cluster")
-		testutils.WaitCreateNamespace(ctx, *MemberCluster, resourceNamespace)
-		testutils.WaitCreateRole(ctx, *MemberCluster, role)
-
 		By("check if cluster resource placement status is updated")
 		var selectedResources []v1alpha1.ResourceIdentifier
 		selectedResources = []v1alpha1.ResourceIdentifier{selectedResource2, selectedResource4}
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if resources in namespace are propagated to member cluster")
+		testutils.GetNamespace(ctx, *MemberCluster, resourceNamespace)
+		testutils.GetRole(ctx, *MemberCluster, role)
 
 		By("Add new role which should be selected by cluster resource placement")
 		newRole := &rbacv1.Role{
@@ -356,12 +353,12 @@ var _ = Describe("workload orchestration testing", func() {
 		}
 		testutils.CreateRole(ctx, *HubCluster, newRole)
 
-		By("check if new role in namespace is propagated to member cluster")
-		testutils.WaitCreateRole(ctx, *MemberCluster, newRole)
-
 		By("check if cluster resource placement status is selecting new role")
 		selectedResources = []v1alpha1.ResourceIdentifier{selectedResource2, selectedResource4, selectedResource5}
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if new role in namespace is propagated to member cluster")
+		testutils.GetRole(ctx, *MemberCluster, newRole)
 
 		By("delete new role in hub cluster")
 		testutils.DeleteRole(ctx, *HubCluster, newRole)
@@ -443,14 +440,14 @@ var _ = Describe("workload orchestration testing", func() {
 		By("check if work gets created for cluster resource placement")
 		testutils.WaitWork(*HubCluster, crp.Name, memberNS.Name)
 
-		By("check if cluster role, role & role binding are propagated to member cluster")
-		testutils.WaitCreateNamespace(ctx, *MemberCluster, resourceNamespace)
-		testutils.WaitCreateClusterRole(ctx, *MemberCluster, clusterRole)
-		testutils.WaitCreateRole(ctx, *MemberCluster, role)
-
 		By("check if cluster resource placement status is updated")
 		selectedResources := []v1alpha1.ResourceIdentifier{selectedResource1, selectedResource2, selectedResource4}
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if cluster role, role & role binding are propagated to member cluster")
+		testutils.GetNamespace(ctx, *MemberCluster, resourceNamespace)
+		testutils.GetClusterRole(ctx, *MemberCluster, clusterRole)
+		testutils.GetRole(ctx, *MemberCluster, role)
 
 		By("delete cluster resource placement on hub cluster")
 		testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
@@ -501,13 +498,13 @@ var _ = Describe("workload orchestration testing", func() {
 		By("check if work gets created for cluster resource placement")
 		testutils.WaitWork(*HubCluster, crp.Name, memberNS.Name)
 
-		By("check if cluster role is propagated to member cluster")
-		testutils.WaitCreateClusterRole(ctx, *MemberCluster, clusterRole)
-
 		By("check if cluster resource placement status is updated")
 		var selectedResources []v1alpha1.ResourceIdentifier
 		selectedResources = []v1alpha1.ResourceIdentifier{selectedResource1}
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, crp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if cluster role is propagated to member cluster")
+		testutils.GetClusterRole(ctx, *MemberCluster, clusterRole)
 
 		By("create new cluster role")
 		newLabelKey := "fleet.azure.com/region"
@@ -557,12 +554,12 @@ var _ = Describe("workload orchestration testing", func() {
 		newCrp.SetResourceVersion(crp.GetResourceVersion())
 		testutils.UpdateClusterResourcePlacement(ctx, *HubCluster, newCrp)
 
-		By("check if new cluster role is propagated to member cluster")
-		testutils.WaitCreateClusterRole(ctx, *MemberCluster, newClusterRole)
-
 		By("check if cluster resource placement status is updated")
 		selectedResources = []v1alpha1.ResourceIdentifier{selectedResource1, selectedResource6}
 		testutils.WaitCreateClusterResourcePlacement(ctx, *HubCluster, newCrp, conditionType, conditionStatus, selectedResources, targetClusters, 3*testutils.PollTimeout)
+
+		By("check if new cluster role is propagated to member cluster")
+		testutils.GetClusterRole(ctx, *MemberCluster, newClusterRole)
 
 		By("delete cluster resource placement on hub cluster")
 		testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, newCrp)

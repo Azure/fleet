@@ -150,18 +150,16 @@ func CreateClusterRole(ctx context.Context, cluster framework.Cluster, cr *rbacv
 	gomega.Expect(cluster.KubeClient.Create(ctx, cr)).Should(gomega.Succeed(), "Failed to create cluster role %s in %s cluster", cr.Name, cluster.ClusterName)
 }
 
+// GetClusterRole retrieves cluster role.
+func GetClusterRole(ctx context.Context, cluster framework.Cluster, cr *rbacv1.ClusterRole) {
+	klog.Infof("Get Role(%s) in %s cluster", cr.Name, cluster.ClusterName)
+	gomega.Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr))
+}
+
 // UpdateClusterRole updates cluster role in hub cluster.
 func UpdateClusterRole(ctx context.Context, cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	klog.Infof("Updating ClusterRole (%s) in %s cluster", cr.Name, cluster.ClusterName)
 	gomega.Expect(cluster.KubeClient.Update(ctx, cr)).Should(gomega.Succeed(), "Failed to update cluster role %s in %s cluster", cr.Name, cluster.ClusterName)
-}
-
-// WaitCreateClusterRole waits for cluster roles to be created.
-func WaitCreateClusterRole(ctx context.Context, cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	klog.Infof("Waiting for ClusterRole(%s) to be created in %s cluster", cr.Name, cluster.ClusterName)
-	gomega.Eventually(func() error {
-		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for cluster role %s to be updated in %s cluster", cr.Name, cluster.ClusterName)
 }
 
 // WaitUpdateClusterRoleLabels waits for cluster role to be updated to new labels.
@@ -210,6 +208,12 @@ func WaitCreateRole(ctx context.Context, cluster framework.Cluster, r *rbacv1.Ro
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for role %s in %s cluster", r.Name, cluster.ClusterName)
 }
 
+// GetRole retrieves role.
+func GetRole(ctx context.Context, cluster framework.Cluster, r *rbacv1.Role) {
+	klog.Infof("Get Role(%s) in %s cluster", r.Name, cluster.ClusterName)
+	gomega.Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: r.Name, Namespace: r.Namespace}, r))
+}
+
 // WaitDeleteRole waits for role to be deleted.
 func WaitDeleteRole(ctx context.Context, cluster framework.Cluster, r *rbacv1.Role) {
 	klog.Infof("Waiting for Role(%s) to be updated in %s cluster", r.Name, cluster.ClusterName)
@@ -250,12 +254,10 @@ func CreateRoleBinding(ctx context.Context, cluster framework.Cluster, rb *rbacv
 	gomega.Expect(cluster.KubeClient.Create(ctx, rb)).Should(gomega.Succeed(), "Failed to create role binding %s in %s cluster", rb.Name, cluster.ClusterName)
 }
 
-// WaitRoleBinding waits for role binding to be created.
-func WaitCreateRoleBinding(ctx context.Context, cluster framework.Cluster, rb *rbacv1.RoleBinding) {
-	klog.Infof("Waiting for RoleBinding(%s) to be created in %s cluster", rb.Name, cluster.ClusterName)
-	gomega.Eventually(func() error {
-		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, rb)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for role binding %s to be created in %s cluster", rb.Name, cluster.ClusterName)
+// GetRoleBinding retrieves role binding.
+func GetRoleBinding(ctx context.Context, cluster framework.Cluster, rb *rbacv1.RoleBinding) {
+	klog.Infof("Get RoleBinding(%s) in %s cluster", rb.Name, cluster.ClusterName)
+	gomega.Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, rb))
 }
 
 // CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.
@@ -335,12 +337,10 @@ func CreateNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for namespace %s to be created in %s cluster", ns.Name, cluster.ClusterName)
 }
 
-// WaitCreateNamespace waits for namespace to be created.
-func WaitCreateNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
-	klog.Infof("Waiting for Namespace(%s) to be created in %s cluster", ns.Name, cluster.ClusterName)
-	gomega.Eventually(func() error {
-		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed())
+// GetNamespace retrieves namespace.
+func GetNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
+	klog.Infof("Get Namespace(%s) in %s cluster", ns.Name, cluster.ClusterName)
+	gomega.Expect(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns))
 }
 
 // DeleteNamespace delete namespace.
