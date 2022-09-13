@@ -6,32 +6,24 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Join/leave member cluster testing", func() {
 	var mc *v1alpha1.MemberCluster
 	var sa *corev1.ServiceAccount
-	var memberNS *corev1.Namespace
 	var imc *v1alpha1.InternalMemberCluster
+	var ctx context.Context
 
 	BeforeEach(func() {
-		memberNS = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-		By("prepare resources in member cluster")
-		// create testing NS in member cluster
-		testutils.CreateNamespace(*MemberCluster, memberNS)
-		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNS.Name)
+		ctx = context.Background()
+
+		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.CreateServiceAccount(*MemberCluster, sa)
 
 		By("deploy member cluster in the hub cluster")
@@ -39,7 +31,7 @@ var _ = Describe("Join/leave member cluster testing", func() {
 		testutils.CreateMemberCluster(*HubCluster, mc)
 
 		By("check if internal member cluster created in the hub cluster")
-		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNS.Name)
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNamespace.Name)
 		testutils.WaitInternalMemberCluster(*HubCluster, imc)
 
 		By("check if member cluster is marked as readyToJoin")
@@ -47,16 +39,9 @@ var _ = Describe("Join/leave member cluster testing", func() {
 	})
 
 	AfterEach(func() {
-		testutils.DeleteNamespace(*MemberCluster, memberNS)
-		Eventually(func() bool {
-			err := MemberCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
-		testutils.DeleteMemberCluster(*HubCluster, mc)
-		Eventually(func() bool {
-			err := HubCluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: memberNS.Name, Namespace: ""}, memberNS)
-			return apierrors.IsNotFound(err)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Equal(true))
+		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
+		testutils.DeleteServiceAccount(*MemberCluster, sa)
+
 	})
 
 	It("Join & Leave flow is successful ", func() {
