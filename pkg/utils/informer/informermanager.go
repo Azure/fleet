@@ -50,7 +50,7 @@ type Manager interface {
 	GetNameSpaceScopedResources() []schema.GroupVersionResource
 
 	// IsClusterScopedResources returns if a resource is cluster scoped.
-	IsClusterScopedResources(resource schema.GroupVersionResource) bool
+	IsClusterScopedResources(resource schema.GroupVersionKind) bool
 
 	// WaitForCacheSync waits for the informer cache to populate.
 	WaitForCacheSync()
@@ -69,12 +69,15 @@ func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, p
 		ctx:             ctx,
 		cancel:          cancel,
 		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		apiResources:    make(map[schema.GroupVersionResource]*APIResourceMeta),
+		apiResources:    make(map[schema.GroupVersionKind]*APIResourceMeta),
 	}
 }
 
 // APIResourceMeta contains the gvk and associated metadata about an api resource
 type APIResourceMeta struct {
+	// GroupVersionKind is the gvk of the resource.
+	GroupVersionKind schema.GroupVersionKind
+
 	// GroupVersionResource is the gvr of the resource.
 	GroupVersionResource schema.GroupVersionResource
 
@@ -102,18 +105,18 @@ type informerManagerImpl struct {
 	informerFactory dynamicinformer.DynamicSharedInformerFactory
 
 	// the apiResources map collects all the api resources we watch
-	apiResources  map[schema.GroupVersionResource]*APIResourceMeta
+	apiResources  map[schema.GroupVersionKind]*APIResourceMeta
 	resourcesLock sync.RWMutex
 }
 
 func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta, handler cache.ResourceEventHandler, listComplete bool) {
-	newGVRs := make(map[schema.GroupVersionResource]bool, len(dynResources))
+	newGVKs := make(map[schema.GroupVersionKind]bool, len(dynResources))
 
 	addInformerFunc := func(newRes APIResourceMeta) {
-		dynRes, exist := s.apiResources[newRes.GroupVersionResource]
+		dynRes, exist := s.apiResources[newRes.GroupVersionKind]
 		if !exist {
 			newRes.isPresent = true
-			s.apiResources[newRes.GroupVersionResource] = &newRes
+			s.apiResources[newRes.GroupVersionKind] = &newRes
 			s.informerFactory.ForResource(newRes.GroupVersionResource).Informer().AddEventHandler(handler)
 			klog.InfoS("Added an informer for a new resource", "res", newRes)
 		} else if !dynRes.isPresent {
@@ -130,7 +133,7 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 
 	// Add the new dynResources that do not exist yet while build a map to speed up lookup
 	for _, newRes := range dynResources {
-		newGVRs[newRes.GroupVersionResource] = true
+		newGVKs[newRes.GroupVersionKind] = true
 		addInformerFunc(newRes)
 	}
 
@@ -140,8 +143,8 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 	}
 
 	// mark the disappeared dynResources from the handler map
-	for gvr, dynRes := range s.apiResources {
-		if !newGVRs[gvr] && !dynRes.isStaticResource && dynRes.isPresent {
+	for gvk, dynRes := range s.apiResources {
+		if !newGVKs[gvk] && !dynRes.isStaticResource && dynRes.isPresent {
 			// TODO: Disable the informer associated with the resource
 			dynRes.isPresent = false
 			klog.InfoS("Disabled an informer for a disappeared resource", "res", dynRes)
@@ -153,13 +156,13 @@ func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handle
 	s.resourcesLock.Lock()
 	defer s.resourcesLock.Unlock()
 
-	staticRes, exist := s.apiResources[resource.GroupVersionResource]
+	staticRes, exist := s.apiResources[resource.GroupVersionKind]
 	if exist {
 		klog.ErrorS(fmt.Errorf("a static resource is added already"), "existing res", staticRes)
 	}
 
 	resource.isStaticResource = true
-	s.apiResources[resource.GroupVersionResource] = &resource
+	s.apiResources[resource.GroupVersionKind] = &resource
 	s.informerFactory.ForResource(resource.GroupVersionResource).Informer().AddEventHandler(handler)
 }
 
@@ -189,19 +192,19 @@ func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersio
 	defer s.resourcesLock.RUnlock()
 
 	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
-	for gvr, resource := range s.apiResources {
+	for _, resource := range s.apiResources {
 		if resource.isPresent && !resource.isStaticResource && !resource.IsClusterScoped {
-			res = append(res, gvr)
+			res = append(res, resource.GroupVersionResource)
 		}
 	}
 	return res
 }
 
-func (s *informerManagerImpl) IsClusterScopedResources(resource schema.GroupVersionResource) bool {
+func (s *informerManagerImpl) IsClusterScopedResources(gvk schema.GroupVersionKind) bool {
 	s.resourcesLock.RLock()
 	defer s.resourcesLock.RUnlock()
 
-	resMeta, exist := s.apiResources[resource]
+	resMeta, exist := s.apiResources[gvk]
 	if !exist {
 		return false
 	}

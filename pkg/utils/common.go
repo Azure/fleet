@@ -92,6 +92,12 @@ var (
 		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
 	}
 
+	ClusterResourcePlacementGVK = schema.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "ClusterResourcePlacement",
+	}
+
 	NamespaceGVK = schema.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
@@ -108,6 +114,12 @@ var (
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.MemberClusterResource,
+	}
+
+	MemberClusterGVK = schema.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    fleetv1alpha1.MemberClusterKind,
 	}
 
 	WorkGVK = schema.GroupVersionKind{
