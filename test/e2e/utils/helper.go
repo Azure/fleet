@@ -6,7 +6,10 @@ package utils
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
@@ -179,4 +182,25 @@ func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []work
 // RandomWorkName creates a work name in a correct format for e2e tests.
 func RandomWorkName(length int) string {
 	return "work" + rand.String(length)
+}
+
+// GenerateCRDObjectFromFile provides the object and gvk from the manifest file given.
+func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath string, genericCodec runtime.Decoder) (runtime.Object, *schema.GroupVersionKind, schema.GroupVersionResource) {
+	fileRaw, err := fs.ReadFile(filepath)
+	gomega.Expect(err).Should(gomega.Succeed(), "Reading manifest file %s failed", filepath)
+
+	obj, gvk, err := genericCodec.Decode(fileRaw, nil, nil)
+	gomega.Expect(err).Should(gomega.Succeed(), "Decoding manifest file %s failed", filepath)
+
+	jsonObj, err := json.Marshal(obj)
+	gomega.Expect(err).Should(gomega.Succeed(), "Marshalling failed for file %s", filepath)
+
+	newObj := &unstructured.Unstructured{}
+	gomega.Expect(newObj.UnmarshalJSON(jsonObj)).Should(gomega.Succeed(),
+		"Unmarshalling failed for object %s", newObj)
+
+	mapping, err := cluster.RestMapper.RESTMapping(newObj.GroupVersionKind().GroupKind(), newObj.GroupVersionKind().Version)
+	gomega.Expect(err).Should(gomega.Succeed(), "CRD data was not mapped in the restMapper")
+
+	return obj, gvk, mapping.Resource
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/onsi/gomega"
-	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
@@ -24,14 +23,13 @@ var (
 
 // Cluster object defines the required clients based on the kubeconfig of the test cluster.
 type Cluster struct {
-	Scheme             *runtime.Scheme
-	KubeClient         client.Client
-	KubeClientSet      kubernetes.Interface
-	APIExtensionClient *clientset.Clientset
-	DynamicClient      dynamic.Interface
-	ClusterName        string
-	HubURL             string
-	RestMapper         meta.RESTMapper
+	Scheme        *runtime.Scheme
+	KubeClient    client.Client
+	KubeClientSet kubernetes.Interface
+	DynamicClient dynamic.Interface
+	ClusterName   string
+	HubURL        string
+	RestMapper    meta.RESTMapper
 }
 
 func NewCluster(name string, scheme *runtime.Scheme) *Cluster {
@@ -55,9 +53,6 @@ func GetClusterClient(cluster *Cluster) {
 
 	cluster.KubeClientSet, err = kubernetes.NewForConfig(restConfig)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up KubeClient Set")
-
-	cluster.APIExtensionClient, err = clientset.NewForConfig(restConfig)
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up API Extension Client")
 
 	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Dynamic Client")
