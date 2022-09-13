@@ -19,7 +19,7 @@ env:
   MEMBER_AGENT_IMAGE_NAME: member-agent
   REFRESH_TOKEN_IMAGE_NAME: refresh-token
 
-  GO_VERSION: '1.18'
+  GO_VERSION: '1.18.6'
 
 jobs:
   export-registry:
