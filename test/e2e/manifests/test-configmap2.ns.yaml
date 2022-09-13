@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: test-configmap
+  name: test-configmap2
   namespace: test-namespace
 data:
   fielda: one

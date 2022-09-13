@@ -9,23 +9,28 @@ import (
 	"fmt"
 	"time"
 
+	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
 var (
 	// PollInterval defines the interval time for a poll operation.
-	PollInterval = 5 * time.Second
+	PollInterval = 250 * time.Millisecond
 	// PollTimeout defines the time after which the poll operation times out.
 	PollTimeout = 60 * time.Second
 )
@@ -82,7 +87,7 @@ func NewNamespace(name string) *corev1.Namespace {
 func CreateMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
 	ginkgo.By(fmt.Sprintf("Creating MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), mc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 	klog.Infof("Waiting for MemberCluster(%s) to be synced", mc.Name)
 	gomega.Eventually(func() error {
@@ -94,18 +99,22 @@ func CreateMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) 
 // UpdateMemberClusterState updates MemberCluster in the hub cluster.
 func UpdateMemberClusterState(cluster framework.Cluster, mc *v1alpha1.MemberCluster, state v1alpha1.ClusterState) {
 	err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: mc.Name, Namespace: ""}, mc)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	gomega.Expect(err).Should(gomega.Succeed())
 	mc.Spec.State = state
 	err = cluster.KubeClient.Update(context.TODO(), mc)
-	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	gomega.Expect(err).Should(gomega.Succeed())
 }
 
 // DeleteMemberCluster deletes MemberCluster in the hub cluster.
-func DeleteMemberCluster(cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
+func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
 	ginkgo.By(fmt.Sprintf("Deleting MemberCluster(%s)", mc.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), mc)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
+
+	gomega.Eventually(func() bool {
+		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
+	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for member cluster %s to be deleted in %s cluster", mc.Name, cluster.ClusterName)
 }
 
 // WaitConditionMemberCluster waits for MemberCluster to present on th hub cluster with a specific condition.
@@ -133,8 +142,9 @@ func WaitInternalMemberCluster(cluster framework.Cluster, imc *v1alpha1.Internal
 func WaitConditionInternalMemberCluster(cluster framework.Cluster, imc *v1alpha1.InternalMemberCluster, conditionType v1alpha1.AgentConditionType, status metav1.ConditionStatus, customTimeout time.Duration) {
 	klog.Infof("Waiting for InternalMemberCluster(%s) condition(%s) status(%s) to be synced in the %s cluster", imc.Name, conditionType, status, cluster.ClusterName)
 	gomega.Eventually(func() bool {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		if err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
+			return false
+		}
 		cond := imc.GetConditionWithType(v1alpha1.MemberAgent, string(conditionType))
 		return cond != nil && cond.Status == status
 	}, customTimeout, PollInterval).Should(gomega.Equal(true))
@@ -144,7 +154,7 @@ func WaitConditionInternalMemberCluster(cluster framework.Cluster, imc *v1alpha1
 func CreateClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), cr)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -161,7 +171,7 @@ func WaitClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Deleting ClusterRole(%s)", cr.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), cr)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -169,7 +179,7 @@ func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 func CreateClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Creating ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), crp)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 	klog.Infof("Waiting for ClusterResourcePlacement(%s) to be synced", crp.Name)
 	gomega.Eventually(func() error {
@@ -194,31 +204,34 @@ func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alp
 func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), crp)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
 // WaitWork waits for Work to be present on the hub cluster.
-func WaitWork(cluster framework.Cluster, workName, workNamespace string) {
-	var work workapi.Work
+func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workNamespace string) {
+	name := types.NamespacedName{Name: workName, Namespace: workNamespace}
+
 	klog.Infof("Waiting for Work(%s/%s) to be synced", workName, workNamespace)
 	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: workName, Namespace: workNamespace}, &work)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+		var work workapi.Work
+
+		return cluster.KubeClient.Get(ctx, name, &work)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s not synced", name)
 }
 
 // CreateNamespace create namespace and waits for namespace to exist.
 func CreateNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Creating Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), ns)
-		gomega.Expect(err).Should(gomega.Succeed())
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to create namespace %s", ns.Name)
 	})
 	klog.Infof("Waiting for Namespace(%s) to be synced", ns.Name)
 	gomega.Eventually(func() error {
 		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name, Namespace: ""}, ns)
+
 		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+	}, PollTimeout, PollInterval).Should(gomega.Succeed())
 }
 
 // DeleteNamespace delete namespace.
@@ -226,7 +239,7 @@ func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Deleting Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), ns)
 		if err != nil && !apierrors.IsNotFound(err) {
-			gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+			gomega.Expect(err).Should(gomega.Succeed())
 		}
 	})
 }
@@ -235,7 +248,7 @@ func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 func CreateServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) {
 	ginkgo.By(fmt.Sprintf("Creating ServiceAccount(%s)", sa.Name), func() {
 		err := cluster.KubeClient.Create(context.TODO(), sa)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
 }
 
@@ -243,6 +256,50 @@ func CreateServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) {
 	ginkgo.By(fmt.Sprintf("Delete ServiceAccount(%s)", sa.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), sa)
-		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		gomega.Expect(err).Should(gomega.Succeed())
 	})
+}
+
+// CreateWork creates Work object based on manifest given.
+func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, workNamespace string, manifests []workapi.Manifest) workapi.Work {
+	work := workapi.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: workNamespace,
+		},
+		Spec: workapi.WorkSpec{
+			Workload: workapi.WorkloadTemplate{
+				Manifests: manifests,
+			},
+		},
+	}
+
+	err := hubCluster.KubeClient.Create(ctx, &work)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to create work %s in namespace %v", workName, workNamespace)
+	return work
+}
+
+// DeleteWork deletes all works used in the current test.
+func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []workapi.Work) {
+	// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
+	for i := range works {
+		gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed", works[i].Name)
+	}
+}
+
+// AddManifests adds manifests to be included within a Work.
+func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []workapi.Manifest {
+	for _, obj := range objects {
+		rawObj, err := json.Marshal(obj)
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", obj)
+		manifests = append(manifests, workapi.Manifest{
+			RawExtension: runtime.RawExtension{Object: obj, Raw: rawObj},
+		})
+	}
+	return manifests
+}
+
+// RandomWorkName creates a work name in a correct format for e2e tests.
+func RandomWorkName(length int) string {
+	return "work" + rand.String(length)
 }
