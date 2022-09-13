@@ -81,6 +81,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
 	d.InformerManager.AddStaticResource(
 		informer.APIResourceMeta{
+			GroupVersionKind:     utils.ClusterResourcePlacementGVK,
 			GroupVersionResource: utils.ClusterResourcePlacementGVR,
 			IsClusterScoped:      true,
 		}, clusterPlacementEventHandler)
@@ -90,6 +91,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	workEventHandler := newHandlerOnEvents(nil, d.onWorkUpdated, d.onWorkDeleted)
 	d.InformerManager.AddStaticResource(
 		informer.APIResourceMeta{
+			GroupVersionKind:     utils.WorkGVK,
 			GroupVersionResource: utils.WorkGVR,
 			IsClusterScoped:      false,
 		}, workEventHandler)
@@ -99,6 +101,7 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	memberClusterEventHandler := newHandlerOnEvents(nil, d.onMemberClusterUpdated, nil)
 	d.InformerManager.AddStaticResource(
 		informer.APIResourceMeta{
+			GroupVersionKind:     utils.MemberClusterGVK,
 			GroupVersionResource: utils.MemberClusterGVR,
 			IsClusterScoped:      true,
 		}, memberClusterEventHandler)

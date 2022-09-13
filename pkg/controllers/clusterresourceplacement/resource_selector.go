@@ -115,7 +115,12 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		return nil, errors.Wrap(err, "Failed to get GVR of the selector")
 	}
 	gvr := restMapping.Resource
-	if !r.InformerManager.IsClusterScopedResources(gvr) {
+	gvk := schema.GroupVersionKind{
+		Group:   selector.Group,
+		Version: selector.Version,
+		Kind:    selector.Kind,
+	}
+	if !r.InformerManager.IsClusterScopedResources(gvk) {
 		return nil, errors.New(fmt.Sprintf("%+v is not a cluster scoped resource", restMapping.Resource))
 	}
 	if !r.InformerManager.IsInformerSynced(gvr) {
