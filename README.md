@@ -137,7 +137,7 @@ Events:
 </details><br/>
 
 ```shell
-$ kubectl describe internalmembercluster kind-member-testing -n fleet-kind-member-testing
+$ kubectl describe internalmembercluster kind-member-testing -n fleet-member-kind-member-testing
 ```
 
 <details>
