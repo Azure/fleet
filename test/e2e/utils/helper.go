@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -179,7 +180,7 @@ func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []work
 	return manifests
 }
 
-//AddByteArrayToManifest adds a given ByteArray to the manifest for Work Object.
+// AddByteArrayToManifest adds a given ByteArray to the manifest for Work Object.
 func AddByteArrayToManifest(bytes []byte, manifests []workapi.Manifest) []workapi.Manifest {
 	return append(manifests, workapi.Manifest{RawExtension: runtime.RawExtension{Raw: bytes}})
 }
@@ -208,4 +209,16 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	gomega.Expect(err).Should(gomega.Succeed(), "CRD data was not mapped in the restMapper")
 
 	return obj, gvk, mapping.Resource
+}
+
+// IsKeyNotName is a comparison function that returns true if the key value of a map is not "name".
+func IsKeyNotName(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() != "name"
+}
+
+// IsKeyMetadata is a comparison function that returns true if the key value of a map is "metadata".
+func IsKeyMetadata(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() == "metadata"
 }
