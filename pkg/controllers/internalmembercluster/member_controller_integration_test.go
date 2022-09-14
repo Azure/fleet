@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	workcontrollers "sigs.k8s.io/work-api/pkg/controllers"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
@@ -57,7 +58,9 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 		}
 
 		By("create the internalMemberCluster reconciler")
-		r = NewReconciler(k8sClient, k8sClient)
+		workController := workcontrollers.NewApplyWorkReconciler(
+			k8sClient, nil, k8sClient, nil, nil, 5, memberClusterNamespace)
+		r = NewReconciler(k8sClient, k8sClient, workController)
 		err := r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())
 	})
