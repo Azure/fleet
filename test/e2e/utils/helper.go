@@ -179,6 +179,11 @@ func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []work
 	return manifests
 }
 
+//AddByteArrayToManifest adds a given ByteArray to the manifest for Work Object.
+func AddByteArrayToManifest(bytes []byte, manifests []workapi.Manifest) []workapi.Manifest {
+	return append(manifests, workapi.Manifest{RawExtension: runtime.RawExtension{Raw: bytes}})
+}
+
 // RandomWorkName creates a work name in a correct format for e2e tests.
 func RandomWorkName(length int) string {
 	return "work" + rand.String(length)
