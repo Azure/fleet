@@ -325,6 +325,22 @@ func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest
 			unstructured.RemoveNestedField(object.Object, "spec", "clusterIP")
 			unstructured.RemoveNestedField(object.Object, "spec", "clusterIPs")
 		}
+		// We should remove all node ports that are assigned by hubcluster if any.
+		unstructured.RemoveNestedField(object.Object, "spec", "healthCheckNodePort")
+
+		vals, found, err := unstructured.NestedFieldNoCopy(object.Object, "spec", "ports")
+		if found && err == nil {
+			if ports, ok := vals.([]interface{}); ok {
+				for i := range ports {
+					if each, ok := ports[i].(map[string]interface{}); ok {
+						delete(each, "nodePort")
+					}
+				}
+			}
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get the ports field in Serivce object, name =%s", object.GetName())
+		}
 	}
 
 	rawContent, err := object.MarshalJSON()
