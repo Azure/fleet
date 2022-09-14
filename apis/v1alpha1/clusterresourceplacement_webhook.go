@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -21,10 +20,8 @@ import (
 )
 
 var ResourceInformer informer.Manager
-var restMapper meta.RESTMapper
 
 func (c *ClusterResourcePlacement) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	restMapper = mgr.GetRESTMapper()
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(c).
 		Complete()
@@ -75,19 +72,14 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *ClusterResourceP
 		allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
 	} else {
 		for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
-			gk := schema.GroupKind{
-				Group: selector.Group,
-				Kind:  selector.Kind,
+			gvk := schema.GroupVersionKind{
+				Group:   selector.Group,
+				Version: selector.Version,
+				Kind:    selector.Kind,
 			}
 
-			restMapping, err := restMapper.RESTMapping(gk, selector.Version)
-			if err != nil {
-				allErr = append(allErr, errors.Wrap(err, fmt.Sprintf("failed to get GVR of GVK (%s/%s/%s), please retry if the GVK is valid", selector.Group, selector.Version, selector.Kind)))
-				continue
-			}
-
-			if !ResourceInformer.IsClusterScopedResources(restMapping.Resource) {
-				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", restMapping.Resource))
+			if !ResourceInformer.IsClusterScopedResources(gvk) {
+				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
 			}
 		}
 	}

@@ -140,7 +140,7 @@ func (r *Reconciler) getUnstructuredObject(objectKey keys.ClusterWideKey) (runti
 		return nil, false, errors.Wrap(err, "Failed to get GVR of object")
 	}
 	gvr := restMapping.Resource
-	isClusterScoped := r.InformerManager.IsClusterScopedResources(gvr)
+	isClusterScoped := r.InformerManager.IsClusterScopedResources(objectKey.GroupVersionKind())
 	if !r.InformerManager.IsInformerSynced(gvr) {
 		return nil, isClusterScoped, fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource)
 	}

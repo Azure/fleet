@@ -48,7 +48,9 @@ func (d *ChangeDetector) getWatchableResources() ([]informer.APIResourceMeta, er
 		}
 		for i := range rl.APIResources {
 			gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: rl.APIResources[i].Name}
+			gvk := schema.GroupVersionKind{Group: gv.Group, Version: gv.Version, Kind: rl.APIResources[i].Kind}
 			watchableGroupVersionResources = append(watchableGroupVersionResources, informer.APIResourceMeta{
+				GroupVersionKind:     gvk,
 				GroupVersionResource: gvr,
 				IsClusterScoped:      !rl.APIResources[i].Namespaced,
 			})
