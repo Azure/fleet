@@ -40,6 +40,9 @@ var _ = Describe("Work API Controller test", func() {
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
+			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "Generation", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
+			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "Status"),
+			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinitionSpec{}, "Versions", "Conversion"),
 		}
 
 		resourceNamespace *corev1.Namespace
