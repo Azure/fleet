@@ -63,7 +63,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 			klog.ErrorS(err, "failed to convert a cluster resource placement", "memberCluster", memberClusterName, "crp", uObj.GetName())
 			return ctrl.Result{}, err
 		}
-		if matchPlacement(&placement, mObj.(*unstructured.Unstructured).DeepCopy()) {
+		if mObj == nil {
+			// This is a corner case that the member cluster is deleted before we handle its status change
+			klog.V(3).InfoS("enqueue a placement to reconcile for a deleted member cluster", "memberCluster", memberClusterName, "placement", klog.KObj(&placement))
+			r.PlacementController.Enqueue(crpList[i])
+		} else if matchPlacement(&placement, mObj.(*unstructured.Unstructured).DeepCopy()) {
 			klog.V(3).InfoS("enqueue a placement to reconcile", "memberCluster", memberClusterName, "placement", klog.KObj(&placement))
 			r.PlacementController.Enqueue(crpList[i])
 		}
