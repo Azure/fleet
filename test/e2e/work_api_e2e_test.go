@@ -8,13 +8,13 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.goms.io/fleet/apis/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
@@ -67,6 +67,7 @@ var _ = Describe("Work API Controller test", func() {
 
 		By("check if internal member cluster condition is updated to Joined")
 		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, metav1.ConditionTrue, testutils.PollTimeout)
+
 		By("check if member cluster condition is updated to Joined")
 		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, metav1.ConditionTrue, testutils.PollTimeout)
 
@@ -75,9 +76,9 @@ var _ = Describe("Work API Controller test", func() {
 	})
 
 	AfterEach(func() {
-		By("delete the member cluster")
-		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
 		testutils.DeleteWork(ctx, *HubCluster, works)
+		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
+
 		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
 	})
 
