@@ -204,7 +204,7 @@ func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alp
 func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
 	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), crp)
-		gomega.Expect(err).Should(gomega.Succeed())
+		gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
 	})
 }
 
@@ -239,7 +239,7 @@ func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
 	ginkgo.By(fmt.Sprintf("Deleting Namespace(%s)", ns.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), ns)
 		if err != nil && !apierrors.IsNotFound(err) {
-			gomega.Expect(err).Should(gomega.Succeed())
+			gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
 		}
 	})
 }
@@ -256,7 +256,7 @@ func CreateServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) 
 func DeleteServiceAccount(cluster framework.Cluster, sa *corev1.ServiceAccount) {
 	ginkgo.By(fmt.Sprintf("Delete ServiceAccount(%s)", sa.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), sa)
-		gomega.Expect(err).Should(gomega.Succeed())
+		gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
 	})
 }
 

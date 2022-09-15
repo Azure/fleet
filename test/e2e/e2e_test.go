@@ -14,7 +14,6 @@ import (
 	. "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -38,10 +37,6 @@ var (
 
 	// This namespace in HubCluster will store v1alpha1.Work to simulate Work-related features in Hub Cluster.
 	workNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
-
-	// Used to decode an unstructured object.
-	genericCodecs = serializer.NewCodecFactory(scheme)
-	genericCodec  = genericCodecs.UniversalDeserializer()
 
 	//go:embed manifests
 	TestManifestFiles embed.FS

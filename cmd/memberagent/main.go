@@ -5,6 +5,7 @@ Licensed under the MIT license.
 
 package main
 
+//goland:noinspection ALL
 import (
 	"context"
 	"encoding/base64"
@@ -198,18 +199,19 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		os.Exit(1)
 	}
 
-	if err = workcontrollers.NewApplyWorkReconciler(
+	// create the work controller, so we can pass it to the internal member cluster reconciler
+	workController := workcontrollers.NewApplyWorkReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
 		memberMgr.GetClient(),
-		restMapper,
-		hubMgr.GetEventRecorderFor("work_controller"),
-		5, true).SetupWithManager(hubMgr); err != nil {
+		restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+
+	if err = workController.SetupWithManager(hubMgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "Work")
 		return err
 	}
 
-	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient()).SetupWithManager(hubMgr); err != nil {
+	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
 		return errors.Wrap(err, "unable to create controller hub_member")
 	}
 
