@@ -190,6 +190,14 @@ var _ = Describe("workload orchestration testing", func() {
 			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 
+		By("delete the crp from the hub")
+		testutils.DeleteClusterResourcePlacement(*HubCluster, crp)
+
+		By("verify that the resource is still on the member cluster")
+		Consistently(func() error {
+			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
 		By("delete cluster role on hub cluster")
 		testutils.DeleteClusterRole(*HubCluster, cr)
 	})
