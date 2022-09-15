@@ -3,11 +3,11 @@ package e2e
 import (
 	"context"
 	"fmt"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.goms.io/fleet/apis/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,6 +28,10 @@ var _ = Describe("Work API Controller test", func() {
 
 	var (
 		ctx context.Context
+
+		// These variables are used to join the member cluster.
+		mc  *v1alpha1.MemberCluster
+		imc *v1alpha1.InternalMemberCluster
 
 		// Includes all works applied to the hub cluster. Used for garbage collection.
 		works []workapi.Work
@@ -51,11 +55,27 @@ var _ = Describe("Work API Controller test", func() {
 		resourceNamespace = testutils.NewNamespace(resourceNamespaceName)
 		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
 
+		// Member Cluster must join the fleet for Work API to work.
+		By("deploy member cluster in the hub cluster")
+		mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
+		testutils.CreateMemberCluster(*HubCluster, mc)
+
+		By("check if internal member cluster created in the hub cluster")
+		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNamespace.Name)
+		testutils.WaitInternalMemberCluster(*HubCluster, imc)
+
+		By("check if internal member cluster condition is updated to Joined")
+		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, metav1.ConditionTrue, testutils.PollTimeout)
+		By("check if member cluster condition is updated to Joined")
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, metav1.ConditionTrue, testutils.PollTimeout)
+
 		//Empties the works since they were garbage collected earlier.
 		works = []workapi.Work{}
 	})
 
 	AfterEach(func() {
+		By("delete the member cluster")
+		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
 		testutils.DeleteWork(ctx, *HubCluster, works)
 		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
 	})
