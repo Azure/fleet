@@ -31,8 +31,7 @@ var _ = Describe("Work API Controller test", func() {
 		ctx context.Context
 
 		// These variables are used to join the member cluster.
-		mc  *v1alpha1.MemberCluster
-		imc *v1alpha1.InternalMemberCluster
+		mc *v1alpha1.MemberCluster
 
 		// Includes all works applied to the hub cluster. Used for garbage collection.
 		works []workapi.Work
@@ -60,13 +59,6 @@ var _ = Describe("Work API Controller test", func() {
 		By("deploy member cluster in the hub cluster")
 		mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
 		testutils.CreateMemberCluster(*HubCluster, mc)
-
-		By("check if internal member cluster created in the hub cluster")
-		imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNamespace.Name)
-		testutils.WaitInternalMemberCluster(*HubCluster, imc)
-
-		By("check if internal member cluster condition is updated to Joined")
-		testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, metav1.ConditionTrue, testutils.PollTimeout)
 
 		By("check if member cluster condition is updated to Joined")
 		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, metav1.ConditionTrue, testutils.PollTimeout)
