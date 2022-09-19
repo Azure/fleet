@@ -42,6 +42,9 @@ var _ = Describe("Work API Controller test", func() {
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
+			//Ignore TypeMeta in Secret, because of the Kubernetes's decision not to fill in redundant kind / apiVersion fields.
+			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
+			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
 		}
 
 		resourceNamespace *corev1.Namespace
@@ -122,7 +125,7 @@ var _ = Describe("Work API Controller test", func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType))
-		expectedManifestCondition := []workapi.ManifestCondition{
+		wantManifestCondition := []workapi.ManifestCondition{
 			{
 				Conditions: []metav1.Condition{
 					{
@@ -142,7 +145,7 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(wantManifestCondition, work.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 			"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
@@ -229,19 +232,20 @@ var _ = Describe("Work API Controller test", func() {
 		testutils.CreateWork(ctx, *HubCluster, workNameTwo, workNamespace.Name, manifests)
 
 		By(fmt.Sprintf("Applied Condition should be set to True for Work %s and %s", namespaceTypeOne, namespaceTypeTwo))
+
+		want := []metav1.Condition{
+			{
+				Type:   conditionTypeApplied,
+				Status: metav1.ConditionTrue,
+				Reason: "appliedWorkComplete",
+			},
+		}
+
 		workOne := workapi.Work{}
 
 		Eventually(func() string {
 			if err := HubCluster.KubeClient.Get(ctx, namespaceTypeOne, &workOne); err != nil {
 				return err.Error()
-			}
-
-			want := []metav1.Condition{
-				{
-					Type:   conditionTypeApplied,
-					Status: metav1.ConditionTrue,
-					Reason: "appliedWorkComplete",
-				},
 			}
 
 			return cmp.Diff(want, workOne.Status.Conditions, cmpOptions...)
@@ -254,19 +258,11 @@ var _ = Describe("Work API Controller test", func() {
 				return err.Error()
 			}
 
-			want := []metav1.Condition{
-				{
-					Type:   conditionTypeApplied,
-					Status: metav1.ConditionTrue,
-					Reason: "appliedWorkComplete",
-				},
-			}
-
 			return cmp.Diff(want, workTwo.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s and %s should be applied", namespaceTypeOne, namespaceTypeTwo))
-		expectedManifestConditionOne := []workapi.ManifestCondition{
+		wantManifestCondition := []workapi.ManifestCondition{
 			{
 				Conditions: []metav1.Condition{
 					{
@@ -286,38 +282,15 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(expectedManifestConditionOne, workOne.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(wantManifestCondition, workOne.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 			"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeOne)
 
-		expectedManifestConditionTwo := []workapi.ManifestCondition{
-			{
-				Conditions: []metav1.Condition{
-					{
-						Type:   conditionTypeApplied,
-						Status: metav1.ConditionTrue,
-						Reason: "appliedManifestUpdated",
-					},
-				},
-				Identifier: workapi.ResourceIdentifier{
-					Group:     secret.GroupVersionKind().Group,
-					Version:   secret.GroupVersionKind().Version,
-					Kind:      secret.GroupVersionKind().Kind,
-					Namespace: secret.Namespace,
-					Name:      secret.Name,
-					Resource:  "secrets",
-				},
-			},
-		}
-
-		Expect(cmp.Diff(expectedManifestConditionTwo, workTwo.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(wantManifestCondition, workTwo.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 			"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeTwo)
 
 		By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
-		appliedWorkOne := workapi.AppliedWork{}
-		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
-			"Retrieving AppliedWork %s failed", workNameOne)
 
-		wantAppliedStatusOne := workapi.AppliedtWorkStatus{
+		wantAppliedStatus := workapi.AppliedtWorkStatus{
 			AppliedResources: []workapi.AppliedResourceMeta{
 				{
 					ResourceIdentifier: workapi.ResourceIdentifier{
@@ -332,36 +305,25 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(wantAppliedStatusOne, appliedWorkOne.Status, cmpOptions...)).Should(BeEmpty(),
+		appliedWorkOne := workapi.AppliedWork{}
+		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
+			"Retrieving AppliedWork %s failed", workNameOne)
+
+		Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, cmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		appliedWorkTwo := workapi.AppliedWork{}
 		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeTwo, &appliedWorkTwo)).Should(Succeed(),
 			"Retrieving AppliedWork %s failed", workNameTwo)
 
-		wantAppliedStatusTwo := workapi.AppliedtWorkStatus{
-			AppliedResources: []workapi.AppliedResourceMeta{
-				{
-					ResourceIdentifier: workapi.ResourceIdentifier{
-						Group:     secret.GroupVersionKind().Group,
-						Version:   secret.GroupVersionKind().Version,
-						Kind:      secret.GroupVersionKind().Kind,
-						Namespace: secret.Namespace,
-						Name:      secret.Name,
-						Resource:  "secrets",
-					},
-				},
-			},
-		}
-
-		Expect(cmp.Diff(wantAppliedStatusTwo, appliedWorkTwo.Status, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(wantAppliedStatus, appliedWorkTwo.Status, cmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestSecretName, MemberCluster.ClusterName))
 		retrievedSecret := corev1.Secret{}
 		err := MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedSecret)
 		Expect(err).Should(Succeed(), "Secret %s was not created in the cluster %s", manifestSecretName, MemberCluster.ClusterName)
-		Expect(cmp.Diff(secret.Data, retrievedSecret.Data, cmpOptions...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
+		Expect(cmp.Diff(secret, retrievedSecret, cmpOptions...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the both works: %s and %s", manifestSecretName, namespaceTypeOne, namespaceTypeTwo))
 		wantOwner := []metav1.OwnerReference{
@@ -380,8 +342,8 @@ var _ = Describe("Work API Controller test", func() {
 		}
 		// sort using compare function (sort the array to guarantee the sequence)
 		// then the result will be determined
-		options := append(cmpOptions, cmpopts.SortSlices(func(ref1, ref2 metav1.OwnerReference) bool { return ref1.Name < ref2.Name }))
-		Expect(cmp.Diff(wantOwner, retrievedSecret.OwnerReferences, options...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
+		sortSlicesOption := append(cmpOptions, cmpopts.SortSlices(func(ref1, ref2 metav1.OwnerReference) bool { return ref1.Name < ref2.Name }))
+		Expect(cmp.Diff(wantOwner, retrievedSecret.OwnerReferences, sortSlicesOption...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestSecretName))
 		Expect(retrievedSecret.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
