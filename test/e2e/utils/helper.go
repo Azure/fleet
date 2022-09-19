@@ -211,14 +211,18 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	return obj, gvk, mapping.Resource
 }
 
-// IsKeyNotName is a comparison function that returns true if the key value of a map is not "name".
-func IsKeyNotName(p cmp.Path) bool {
-	step, ok := p[len(p)-1].(cmp.MapIndex)
-	return ok && step.Key().String() != "name"
-}
-
-// IsKeyMetadata is a comparison function that returns true if the key value of a map is "metadata".
-func IsKeyMetadata(p cmp.Path) bool {
-	step, ok := p[len(p)-1].(cmp.MapIndex)
-	return ok && step.Key().String() == "metadata"
+// CompareCRObject compares the two unstructured objects and returns empty string if they are equal.
+func CompareCRObject(obj1, obj2 unstructured.Unstructured, cmpOptions []cmp.Option) string {
+	// First compares the root level map of the unstructured object.
+	return cmp.Diff(obj1, obj2, append(cmpOptions, cmp.FilterPath(
+		func(p cmp.Path) bool {
+			step, ok := p[len(p)-1].(cmp.MapIndex)
+			return ok && step.Key().String() == "metadata"
+		}, cmp.Ignore()))...) +
+		// Then compares the metadata of the unstructured Object.
+		cmp.Diff(obj1.Object["metadata"], obj2.Object["metadata"], append(cmpOptions, cmp.FilterPath(
+			func(p cmp.Path) bool {
+				step, ok := p[len(p)-1].(cmp.MapIndex)
+				return ok && step.Key().String() != "name"
+			}, cmp.Ignore()))...)
 }
