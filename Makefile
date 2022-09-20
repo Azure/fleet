@@ -170,13 +170,13 @@ install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
 
 build-e2e:
 	go test -c ./test/e2e ;\
-	go test -c ./test/e2e-join-leave-placement
+	go test -c ./test/e2eJoinLeavePlacement
 
 core-e2e:
 	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e.test -test.v -ginkgo.v
 
 e2e-join-leave-placement:
-	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e-join-leave-placement.test -test.v -ginkgo.v
+	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2eJoinLeavePlacement.test -test.v -ginkgo.v
 
 run-e2e: build-e2e core-e2e e2e-join-leave-placement
 
