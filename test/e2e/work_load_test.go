@@ -182,8 +182,9 @@ var _ = Describe("workload orchestration testing", func() {
 		By("mark the member cluster in the hub cluster as leave")
 		testutils.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
 
-		By("verify that member cluster is marked as notReadyToJoin")
+		By("verify that member cluster is marked as leave")
 		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, testutils.PollTimeout)
+		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, v1.ConditionFalse, testutils.PollTimeout)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
