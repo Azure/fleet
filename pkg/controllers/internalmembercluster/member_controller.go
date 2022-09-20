@@ -77,7 +77,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		updateHealthErr := r.updateHealth(ctx, &imc)
 		r.markInternalMemberClusterJoined(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
-			if !apierrors.IsConflict(err) {
+			if apierrors.IsConflict(err) {
+				klog.V(2).InfoS("failed to update status due to conflicts", "name", imc.Name)
+			} else {
 				klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			}
 			return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -94,7 +96,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		r.markInternalMemberClusterLeft(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
-			if !apierrors.IsConflict(err) {
+			if apierrors.IsConflict(err) {
+				klog.V(2).InfoS("failed to update status due to conflicts", "name", imc.Name)
+			} else {
 				klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
 			}
 			return ctrl.Result{}, client.IgnoreNotFound(err)
