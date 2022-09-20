@@ -144,7 +144,7 @@ var _ = Describe("workload orchestration testing", func() {
 		mc.Spec.State = v1alpha1.ClusterStateLeave
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
-		By("verify that member cluster is marked as notReadyToJoin")
+		By("verify that member cluster is marked as left")
 		agentStatus = []v1alpha1.AgentStatus{
 			{
 				Type: v1alpha1.MemberAgent,
