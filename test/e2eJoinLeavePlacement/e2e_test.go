@@ -34,7 +34,7 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "fleet e2e suite")
+	RunSpecs(t, "fleet join leave placement e2e suite")
 }
 
 var _ = BeforeSuite(func() {
