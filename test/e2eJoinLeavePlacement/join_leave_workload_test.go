@@ -1,4 +1,4 @@
-package e2e_join_leave_placement
+package e2eJoinLeavePlacement
 
 import (
 	"context"
@@ -31,7 +31,7 @@ var _ = Describe("workload orchestration testing", func() {
 		By("create the resources to be propagated")
 		cr := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "test2",
+				Name:   "jlp-test-cluster-role",
 				Labels: map[string]string{labelKey: labelValue},
 			},
 			Rules: []rbacv1.PolicyRule{
@@ -125,7 +125,7 @@ var _ = Describe("workload orchestration testing", func() {
 				return err
 			}
 			ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-				cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"), cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{})}
+				cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{})}
 			statusDiff := cmp.Diff(mcStatus, mc.Status, ignoreOptions...)
 			if statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
@@ -137,7 +137,7 @@ var _ = Describe("workload orchestration testing", func() {
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
 
 		By("verify the resource is propagated to member cluster")
-		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)).Should(Succeed())
+		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)).Should(Succeed())
 
 		By("mark the member cluster in the hub cluster as leave")
 		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
@@ -182,7 +182,7 @@ var _ = Describe("workload orchestration testing", func() {
 				return err
 			}
 			ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-				cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"), cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{})}
+				cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{})}
 			statusDiff := cmp.Diff(mcStatus, mc.Status, ignoreOptions...)
 			if statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
@@ -192,7 +192,7 @@ var _ = Describe("workload orchestration testing", func() {
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
-			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
+			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 
 		By("delete the crp from the hub")

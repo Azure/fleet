@@ -1,7 +1,6 @@
-package e2e_join_leave_placement
+package e2eJoinLeavePlacement
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -19,7 +18,6 @@ import (
 
 var (
 	scheme            = runtime.NewScheme()
-	ctx               context.Context
 	hubURL            string
 	hubClusterName    = "kind-hub-testing"
 	memberClusterName = "kind-member-testing"
