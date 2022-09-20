@@ -9,65 +9,25 @@ import (
 	"context"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	"go.goms.io/fleet/apis/v1alpha1"
 	testutils "go.goms.io/fleet/test/e2e/utils"
+	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("workload orchestration testing", func() {
-	var mc *v1alpha1.MemberCluster
-	var imc *v1alpha1.InternalMemberCluster
-	var sa *corev1.ServiceAccount
 	var crp *v1alpha1.ClusterResourcePlacement
 	var ctx context.Context
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		By("prepare resources in member cluster")
-		// create testing NS in member cluster
-		sa = testutils.NewServiceAccount(MemberCluster.ClusterName, memberNamespace.Name)
-		testutils.CreateServiceAccount(*MemberCluster, sa)
 	})
 
 	AfterEach(func() {
-		By("delete the member cluster")
-		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
-		testutils.DeleteServiceAccount(*MemberCluster, sa)
 		testutils.DeleteClusterResourcePlacement(*HubCluster, crp)
 	})
 
 	Context("Test Workload Orchestration", func() {
-		BeforeEach(func() {
-			By("deploy member cluster in the hub cluster")
-			mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
-			testutils.CreateMemberCluster(*HubCluster, mc)
-
-			By("check if internal member cluster created in the hub cluster")
-			imc = testutils.NewInternalMemberCluster(MemberCluster.ClusterName, memberNamespace.Name)
-			testutils.WaitInternalMemberCluster(*HubCluster, imc)
-
-			By("check if internal member cluster condition is updated to Joined")
-			testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionTrue, testutils.PollTimeout)
-			By("check if member cluster condition is updated to Joined")
-			testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, v1.ConditionTrue, testutils.PollTimeout)
-		})
-
-		AfterEach(func() {
-			By("update member cluster in the hub cluster")
-			testutils.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
-
-			By("check if internal member cluster condition is updated to Left")
-			testutils.WaitConditionInternalMemberCluster(*HubCluster, imc, v1alpha1.AgentJoined, v1.ConditionFalse, testutils.PollTimeout)
-
-			By("check if member cluster is marked as notReadyToJoin")
-			testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, testutils.PollTimeout)
-		})
-
 		It("Apply CRP and check if work gets propagated", func() {
 			workName := "resource-label-selector"
 			labelKey := "fleet.azure.com/name"
@@ -119,87 +79,5 @@ var _ = Describe("workload orchestration testing", func() {
 			By("delete cluster role on hub cluster")
 			testutils.DeleteClusterRole(*HubCluster, cr)
 		})
-	})
-
-	It("Test join and leave with CRP", func() {
-		cprName := "join-leave-test2"
-		labelKey := "fleet.azure.com/name"
-		labelValue := "test"
-		By("create the resources to be propagated")
-		cr := &rbacv1.ClusterRole{
-			ObjectMeta: v1.ObjectMeta{
-				Name:   "test2",
-				Labels: map[string]string{labelKey: labelValue},
-			},
-			Rules: []rbacv1.PolicyRule{
-				{
-					Verbs:     []string{"get", "list", "watch"},
-					APIGroups: []string{""},
-					Resources: []string{"secrets"},
-				},
-			},
-		}
-		testutils.CreateClusterRole(*HubCluster, cr)
-
-		By("create the cluster resource placement in the hub cluster")
-		crp = &v1alpha1.ClusterResourcePlacement{
-			ObjectMeta: v1.ObjectMeta{
-				Name: cprName,
-			},
-			Spec: v1alpha1.ClusterResourcePlacementSpec{
-				ResourceSelectors: []v1alpha1.ClusterResourceSelector{
-					{
-						Group:   "rbac.authorization.k8s.io",
-						Version: "v1",
-						Kind:    "ClusterRole",
-						LabelSelector: &v1.LabelSelector{
-							MatchLabels: cr.Labels,
-						},
-					},
-				},
-			},
-		}
-		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
-
-		By("verify the resource is not propagated to member cluster")
-		Consistently(func() error {
-			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed())
-
-		By("add member cluster in the hub cluster")
-		mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
-		testutils.CreateMemberCluster(*HubCluster, mc)
-
-		By("check if member cluster condition is updated to Joined")
-		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, v1.ConditionTrue, testutils.PollTimeout)
-
-		By("verify that the cluster resource placement is applied")
-		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), v1.ConditionTrue, testutils.PollTimeout)
-
-		By("verify the resource is propagated to member cluster")
-		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)).Should(Succeed())
-
-		By("mark the member cluster in the hub cluster as leave")
-		testutils.UpdateMemberClusterState(*HubCluster, mc, v1alpha1.ClusterStateLeave)
-
-		By("verify that member cluster is marked as leave")
-		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterReadyToJoin, v1.ConditionFalse, testutils.PollTimeout)
-		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, v1.ConditionFalse, testutils.PollTimeout)
-
-		By("verify that the resource is still on the member cluster")
-		Consistently(func() error {
-			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-		By("delete the crp from the hub")
-		testutils.DeleteClusterResourcePlacement(*HubCluster, crp)
-
-		By("verify that the resource is still on the member cluster")
-		Consistently(func() error {
-			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-		By("delete cluster role on hub cluster")
-		testutils.DeleteClusterRole(*HubCluster, cr)
 	})
 })
