@@ -2,7 +2,6 @@ package e2e_join_leave_placement
 
 import (
 	"context"
-	"go.goms.io/fleet/test/e2e/framework"
 	"os"
 	"testing"
 
@@ -15,6 +14,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 var (

@@ -9,10 +9,11 @@ import (
 	"context"
 
 	. "github.com/onsi/ginkgo/v2"
-	"go.goms.io/fleet/apis/v1alpha1"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"go.goms.io/fleet/apis/v1alpha1"
 )
 
 var _ = Describe("workload orchestration testing", func() {
