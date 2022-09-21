@@ -21,6 +21,9 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		mc  *v1alpha1.MemberCluster
 		crp *v1alpha1.ClusterResourcePlacement
 		ctx context.Context
+
+		mcStatusCmpOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"), cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+			cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}), cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type })}
 	)
 
 	It("Test join and leave with CRP", func() {
@@ -88,7 +91,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		Expect(HubCluster.KubeClient.Create(ctx, mc)).Should(Succeed(), "Failed to create member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("check if member cluster condition is updated to Joined")
-		agentStatus := []v1alpha1.AgentStatus{
+		mcAgentStatus := []v1alpha1.AgentStatus{
 			{
 				Type: v1alpha1.MemberAgent,
 				Conditions: []metav1.Condition{
@@ -105,8 +108,8 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 				},
 			},
 		}
-		mcStatus := v1alpha1.MemberClusterStatus{
-			AgentStatus: agentStatus,
+		wantMcStatus := v1alpha1.MemberClusterStatus{
+			AgentStatus: mcAgentStatus,
 			Conditions: []metav1.Condition{
 				{
 					Reason: "MemberClusterReadyToJoin",
@@ -124,14 +127,11 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
 				return err
 			}
-			ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-				cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{})}
-			statusDiff := cmp.Diff(mcStatus, mc.Status, ignoreOptions...)
-			if statusDiff != "" {
+			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, mcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMcStatus)
 
 		By("verify that the cluster resource placement is applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
@@ -145,7 +145,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("verify that member cluster is marked as left")
-		agentStatus = []v1alpha1.AgentStatus{
+		mcAgentStatus = []v1alpha1.AgentStatus{
 			{
 				Type: v1alpha1.MemberAgent,
 				Conditions: []metav1.Condition{
@@ -162,8 +162,8 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 				},
 			},
 		}
-		mcStatus = v1alpha1.MemberClusterStatus{
-			AgentStatus: agentStatus,
+		wantMcStatus = v1alpha1.MemberClusterStatus{
+			AgentStatus: mcAgentStatus,
 			Conditions: []metav1.Condition{
 				{
 					Reason: "MemberClusterNotReadyToJoin",
@@ -181,14 +181,11 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
 				return err
 			}
-			ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-				cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{})}
-			statusDiff := cmp.Diff(mcStatus, mc.Status, ignoreOptions...)
-			if statusDiff != "" {
+			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, mcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMcStatus)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
