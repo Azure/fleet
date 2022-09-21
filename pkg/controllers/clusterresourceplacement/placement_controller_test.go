@@ -1,3 +1,4 @@
+				if err != nil {
 /*
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
