@@ -23,8 +23,8 @@ import (
 
 func TestGenerateManifest(t *testing.T) {
 	tests := map[string]struct {
-		unstructuredObj  func() *unstructured.Unstructured
-		expectedManifest func() *workv1alpha1.Manifest
+		unstructuredObj  interface{}
+		expectedManifest interface{}
 		expectedError    error
 	}{
 		"should generate sanitized manifest for: k8s.io/apiextensions-apiserver/apis/apiextensions/v1/CustomResourceDefinition": {
@@ -61,7 +61,6 @@ func TestGenerateManifest(t *testing.T) {
 							},
 						},
 						Finalizers: []string{"object-finalizer"},
-						// todo - ask ryan about: ZZZ_DeprecatedClusterName: utilrand.String(10),
 						ManagedFields: []metav1.ManagedFieldsEntry{
 							{
 								Manager:    utilrand.String(10),
@@ -97,7 +96,6 @@ func TestGenerateManifest(t *testing.T) {
 							"svc-annotation-key": "svc-object-annotation-key-value",
 						},
 						Finalizers: []string{"object-finalizer"},
-						// todo - ask Ryan on: ZZZ_DeprecatedClusterName: utilrand.String(10),
 					},
 				}
 
@@ -105,8 +103,9 @@ func TestGenerateManifest(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ToUnstructured failed: %v", err)
 				}
-				unstructured.RemoveNestedField(mCRD, "metadata", "creationTimestamp")
-				unstructured.RemoveNestedField(mCRD, "status")
+				delete(mCRD["metadata"].(map[string]interface{}), "creationTimestamp")
+				delete(mCRD, "status")
+
 				uCRD := unstructured.Unstructured{Object: mCRD}
 				rawCRD, err := uCRD.MarshalJSON()
 				if err != nil {
@@ -225,8 +224,9 @@ func TestGenerateManifest(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ToUnstructured failed: %v", err)
 				}
-				unstructured.RemoveNestedField(mSvc, "metadata", "creationTimestamp")
-				unstructured.RemoveNestedField(mSvc, "status")
+				delete(mSvc["metadata"].(map[string]interface{}), "creationTimestamp")
+				delete(mSvc, "status")
+
 				uSvc := unstructured.Unstructured{Object: mSvc}
 				rawSvc, err := uSvc.MarshalJSON()
 				if err != nil {
@@ -245,8 +245,9 @@ func TestGenerateManifest(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got, err := generateManifest(tt.unstructuredObj())
-			expected := tt.expectedManifest()
+
+			got, err := generateManifest(tt.unstructuredObj.(func() *unstructured.Unstructured)())
+			expected := tt.expectedManifest.(func() *workv1alpha1.Manifest)()
 
 			if tt.expectedError != nil {
 				assert.Containsf(t, err.Error(), tt.expectedError.Error(), "error not matching for Testcase %s", testName)
