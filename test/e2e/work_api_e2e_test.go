@@ -42,9 +42,6 @@ var _ = Describe("Work API Controller test", func() {
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
-			//Ignore TypeMeta in Secret, because of the Kubernetes's decision not to fill in redundant kind / apiVersion fields.
-			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
-			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
 		}
 
 		resourceNamespace *corev1.Namespace
@@ -290,6 +287,10 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
 
+		appliedWorkOne := workapi.AppliedWork{}
+		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
+			"Retrieving AppliedWork %s failed", workNameOne)
+
 		wantAppliedStatus := workapi.AppliedtWorkStatus{
 			AppliedResources: []workapi.AppliedResourceMeta{
 				{
@@ -305,10 +306,6 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		appliedWorkOne := workapi.AppliedWork{}
-		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
-			"Retrieving AppliedWork %s failed", workNameOne)
-
 		Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, cmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
@@ -322,8 +319,15 @@ var _ = Describe("Work API Controller test", func() {
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestSecretName, MemberCluster.ClusterName))
 		retrievedSecret := corev1.Secret{}
 		err := MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedSecret)
+
+		//Ignore TypeMeta in Secret, because of the Kubernetes's decision not to fill in redundant kind / apiVersion fields.
+		secretCmpOptions := []cmp.Option{
+			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
+			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
+		}
+
 		Expect(err).Should(Succeed(), "Secret %s was not created in the cluster %s", manifestSecretName, MemberCluster.ClusterName)
-		Expect(cmp.Diff(secret, retrievedSecret, cmpOptions...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
+		Expect(cmp.Diff(secret, retrievedSecret, append(cmpOptions, secretCmpOptions...)...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the both works: %s and %s", manifestSecretName, namespaceTypeOne, namespaceTypeTwo))
 		wantOwner := []metav1.OwnerReference{
