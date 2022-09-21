@@ -67,7 +67,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		By("verify the resource is not propagated to member cluster")
 		Consistently(func() error {
 			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed())
+		}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Failed to verify cluster role %s is not propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("add member cluster in the hub cluster")
 		identity := rbacv1.Subject{
@@ -137,7 +137,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
 
 		By("verify the resource is propagated to member cluster")
-		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)).Should(Succeed())
+		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)).Should(Succeed(), "Failed to verify cluster role %s is propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("mark the member cluster in the hub cluster as leave")
 		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
@@ -193,7 +193,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
 			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to verify cluster role %s is still on %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("delete the crp from the hub")
 		testutils.DeleteClusterResourcePlacement(*HubCluster, crp)
@@ -201,7 +201,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
 			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to verify cluster role %s is still on %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("delete cluster role on hub cluster")
 		testutils.DeleteClusterRole(*HubCluster, cr)
