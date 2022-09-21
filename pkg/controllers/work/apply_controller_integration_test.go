@@ -573,7 +573,9 @@ var _ = Describe("Work Controller", func() {
 			}
 
 			By("mark the work controller as leave")
-			Expect(workController.Leave(ctx)).Should(Succeed())
+			Eventually(func() error {
+				return workController.Leave(ctx)
+			}, timeout, interval).Should(Succeed())
 
 			By("make sure the manifests have no finalizer and its status match the member cluster")
 			newData := map[string]string{
