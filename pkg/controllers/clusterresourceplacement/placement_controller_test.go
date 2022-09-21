@@ -1,4 +1,3 @@
-				if err != nil {
 /*
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
@@ -254,7 +253,7 @@ func TestGenerateManifest(t *testing.T) {
 				assert.Containsf(t, err.Error(), tt.expectedError.Error(), "error not matching for Testcase %s", testName)
 			} else {
 				assert.Truef(t, err == nil, "err is not nil for Testcase %s", testName)
-				assert.Equal(t, got, expected, "expected manifest did not match the expected")
+				assert.Equalf(t, got, expected, "expected manifest did not match the generated manifest, got %+v, want %+v", got, expected)
 			}
 		})
 	}
