@@ -16,7 +16,7 @@ import (
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
-var _ = Describe("workload orchestration testing", func() {
+var _ = Describe("workload orchestration testing with join/leave", func() {
 	var (
 		mc  *v1alpha1.MemberCluster
 		crp *v1alpha1.ClusterResourcePlacement
