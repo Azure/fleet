@@ -320,13 +320,14 @@ var _ = Describe("Work API Controller test", func() {
 		retrievedSecret := corev1.Secret{}
 		err := MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedSecret)
 
+		Expect(err).Should(Succeed(), "Secret %s was not created in the cluster %s", manifestSecretName, MemberCluster.ClusterName)
+
 		//Ignore TypeMeta in Secret, because of the Kubernetes's decision not to fill in redundant kind / apiVersion fields.
 		secretCmpOptions := []cmp.Option{
 			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
 			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
 		}
 
-		Expect(err).Should(Succeed(), "Secret %s was not created in the cluster %s", manifestSecretName, MemberCluster.ClusterName)
 		Expect(cmp.Diff(secret, retrievedSecret, append(cmpOptions, secretCmpOptions...)...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the both works: %s and %s", manifestSecretName, namespaceTypeOne, namespaceTypeTwo))
