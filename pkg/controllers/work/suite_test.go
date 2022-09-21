@@ -41,7 +41,7 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 var (
 	cfg *rest.Config
-	// TODO: Seperate k8sClient into hub and spoke
+	// TODO: Separate k8sClient into hub and spoke
 	k8sClient      client.Client
 	testEnv        *envtest.Environment
 	workController *ApplyWorkReconciler

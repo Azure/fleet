@@ -24,9 +24,9 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-	workController "sigs.k8s.io/work-api/pkg/controllers"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -174,7 +174,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 			return false, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s from namespace %s", workName, memberClusterNsName))
 		}
 		// check the overall condition
-		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workController.ConditionTypeApplied)
+		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workapi.ConditionTypeApplied)
 		if appliedCond == nil {
 			hasPending = true
 			klog.V(4).InfoS("the work is never picked up by the member cluster",
@@ -201,7 +201,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 				Name:      manifestCondition.Identifier.Name,
 				Namespace: manifestCondition.Identifier.Namespace,
 			}
-			appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workController.ConditionTypeApplied)
+			appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workapi.ConditionTypeApplied)
 			// collect if there is an explicit fail
 			if appliedCond != nil && appliedCond.Status != metav1.ConditionTrue {
 				klog.V(3).InfoS("find a failed to apply manifest", "member cluster namespace", memberClusterNsName,

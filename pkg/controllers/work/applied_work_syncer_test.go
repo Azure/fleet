@@ -324,9 +324,8 @@ func generateWorkObj(identifier *v1alpha1.ResourceIdentifier) v1alpha1.Work {
 				},
 			},
 		}
-	} else {
-		return v1alpha1.Work{}
 	}
+	return v1alpha1.Work{}
 }
 
 func generateAppliedWorkObj(identifier *v1alpha1.ResourceIdentifier) v1alpha1.AppliedWork {
@@ -344,9 +343,8 @@ func generateAppliedWorkObj(identifier *v1alpha1.ResourceIdentifier) v1alpha1.Ap
 				},
 			},
 		}
-	} else {
-		return v1alpha1.AppliedWork{}
 	}
+	return v1alpha1.AppliedWork{}
 }
 
 func generateResourceIdentifier() v1alpha1.ResourceIdentifier {

@@ -101,11 +101,11 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		klog.ErrorS(err, "failed to retrieve the work", "work", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
-	kLogObjRef := klog.KObj(work)
+	logObjRef := klog.KObj(work)
 
 	// Handle deleting work, garbage collect the resources
 	if !work.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("resource is in the process of being deleted", work.Kind, kLogObjRef)
+		klog.V(2).InfoS("resource is in the process of being deleted", work.Kind, logObjRef)
 		return r.garbageCollectAppliedWork(ctx, work)
 	}
 
@@ -130,29 +130,29 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// update the work status
 	if err = r.client.Status().Update(ctx, work, &client.UpdateOptions{}); err != nil {
-		klog.ErrorS(err, "failed to update work status", "work", kLogObjRef)
+		klog.ErrorS(err, "failed to update work status", "work", logObjRef)
 		return ctrl.Result{}, err
 	}
 	if len(errs) == 0 {
-		klog.InfoS("successfully applied the work to the cluster", "work", kLogObjRef)
+		klog.InfoS("successfully applied the work to the cluster", "work", logObjRef)
 		r.recorder.Event(work, v1.EventTypeNormal, "ApplyWorkSucceed", "apply the work successfully")
 	}
 
 	// now we sync the status from work to appliedWork no matter if apply succeeds or not
 	newRes, staleRes, genErr := r.generateDiff(ctx, work, appliedWork)
 	if genErr != nil {
-		klog.ErrorS(err, "failed to generate the diff between work status and appliedWork status", work.Kind, kLogObjRef)
+		klog.ErrorS(err, "failed to generate the diff between work status and appliedWork status", work.Kind, logObjRef)
 		return ctrl.Result{}, err
 	}
 	// delete all the manifests that should not be in the cluster.
 	if err = r.deleteStaleManifest(ctx, staleRes, owner); err != nil {
-		klog.ErrorS(err, "resource garbage-collection incomplete; some Work owned resources could not be deleted", work.Kind, kLogObjRef)
+		klog.ErrorS(err, "resource garbage-collection incomplete; some Work owned resources could not be deleted", work.Kind, logObjRef)
 		// we can't proceed to update the applied
 		return ctrl.Result{}, err
 	} else if len(staleRes) > 0 {
-		klog.V(2).InfoS("successfully garbage-collected all stale manifests", work.Kind, kLogObjRef, "number of GCed res", len(staleRes))
+		klog.V(2).InfoS("successfully garbage-collected all stale manifests", work.Kind, logObjRef, "number of GCed res", len(staleRes))
 		for _, res := range staleRes {
-			klog.V(5).InfoS("successfully garbage-collected a stale manifest", work.Kind, kLogObjRef, "res", res)
+			klog.V(5).InfoS("successfully garbage-collected a stale manifest", work.Kind, logObjRef, "res", res)
 		}
 	}
 
@@ -165,7 +165,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	err = utilerrors.NewAggregate(errs)
 	if err != nil {
 		klog.ErrorS(err, "manifest apply incomplete; the message is queued again for reconciliation",
-			"work", kLogObjRef)
+			"work", logObjRef)
 	}
 
 	// we periodically reconcile the work to make sure the member cluster state is in sync with the work
@@ -242,9 +242,9 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *workv
 
 // applyManifests processes a given set of Manifests by: setting ownership, validating the manifest, and passing it on for application to the cluster.
 func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []workv1alpha1.Manifest, owner metav1.OwnerReference) []applyResult {
-	var results []applyResult
 	var appliedObj *unstructured.Unstructured
 
+	results := make([]applyResult, len(manifests))
 	for index, manifest := range manifests {
 		var result applyResult
 		gvr, rawObj, err := r.decodeManifest(manifest)
@@ -266,22 +266,22 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []wo
 			addOwnerRef(owner, rawObj)
 			appliedObj, result.updated, result.err = r.applyUnstructured(ctx, gvr, rawObj)
 			result.identifier = buildResourceIdentifier(index, rawObj, gvr)
-			kLogObjRef := klog.ObjectRef{
+			logObjRef := klog.ObjectRef{
 				Name:      result.identifier.Name,
 				Namespace: result.identifier.Namespace,
 			}
 			if result.err == nil {
 				result.generation = appliedObj.GetGeneration()
 				if result.updated {
-					klog.V(2).InfoS("manifest upsert succeeded", "gvr", gvr, "manifest", kLogObjRef, "new ObservedGeneration", result.generation)
+					klog.V(2).InfoS("manifest upsert succeeded", "gvr", gvr, "manifest", logObjRef, "new ObservedGeneration", result.generation)
 				} else {
-					klog.V(2).InfoS("manifest upsert unwarranted", "gvr", gvr, "manifest", kLogObjRef)
+					klog.V(2).InfoS("manifest upsert unwarranted", "gvr", gvr, "manifest", logObjRef)
 				}
 			} else {
-				klog.ErrorS(result.err, "manifest upsert failed", "gvr", gvr, "manifest", kLogObjRef)
+				klog.ErrorS(result.err, "manifest upsert failed", "gvr", gvr, "manifest", logObjRef)
 			}
 		}
-		results = append(results, result)
+		results[index] = result
 	}
 	return results
 }
@@ -402,8 +402,8 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work *workv1alpha1.Work) []error {
 	var errs []error
 	// Update manifestCondition based on the results.
-	var manifestConditions []workv1alpha1.ManifestCondition
-	for _, result := range results {
+	manifestConditions := make([]workv1alpha1.ManifestCondition, len(results))
+	for index, result := range results {
 		if result.err != nil {
 			errs = append(errs, result.err)
 		}
@@ -417,7 +417,7 @@ func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work 
 			manifestCondition.Conditions = foundmanifestCondition.Conditions
 			meta.SetStatusCondition(&manifestCondition.Conditions, appliedCondition)
 		}
-		manifestConditions = append(manifestConditions, manifestCondition)
+		manifestConditions[index] = manifestCondition
 	}
 
 	work.Status.ManifestConditions = manifestConditions

@@ -258,7 +258,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		}
 		Expect(k8sClient.Update(context.Background(), currentWork)).Should(Succeed())
 
-		By("Verify that the configMaps are removed from the cluster even if the new resouce didn't apply")
+		By("Verify that the configMaps are removed from the cluster even if the new resource didn't apply")
 		Eventually(func() bool {
 			var configMap corev1.ConfigMap
 			return apierrors.IsNotFound(k8sClient.Get(context.Background(), types.NamespacedName{Name: cm.Name, Namespace: resourceNamespace}, &configMap))

@@ -47,6 +47,7 @@ var _ = Describe("Work Controller", func() {
 	var ns corev1.Namespace
 	var cm *corev1.ConfigMap
 	var work *workv1alpha1.Work
+	const defaultNS = "default"
 
 	BeforeEach(func() {
 		workNamespace = "work-" + utilrand.String(5)
@@ -69,7 +70,7 @@ var _ = Describe("Work Controller", func() {
 	Context("Test single work propagation", func() {
 		It("Should have a configmap deployed correctly", func() {
 			cmName := "testcm"
-			cmNamespace := "default"
+			cmNamespace := defaultNS
 			cm = &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "v1",
@@ -93,7 +94,7 @@ var _ = Describe("Work Controller", func() {
 			Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
 			Expect(meta.IsStatusConditionTrue(resultWork.Status.Conditions, ConditionTypeApplied)).Should(BeTrue())
 			Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, ConditionTypeApplied)).Should(BeTrue())
-			expectedResourceId := workv1alpha1.ResourceIdentifier{
+			expectedResourceID := workv1alpha1.ResourceIdentifier{
 				Ordinal:   0,
 				Group:     "",
 				Version:   "v1",
@@ -102,7 +103,7 @@ var _ = Describe("Work Controller", func() {
 				Namespace: cmNamespace,
 				Name:      cm.Name,
 			}
-			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceId)).Should(BeEmpty())
+			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceID)).Should(BeEmpty())
 
 			By("Check applied config map")
 			var configMap corev1.ConfigMap
@@ -114,7 +115,7 @@ var _ = Describe("Work Controller", func() {
 
 		It("Should apply the same manifest in two work properly", func() {
 			cmName := "test-multiple-owner"
-			cmNamespace := "default"
+			cmNamespace := defaultNS
 			cm := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "v1",
@@ -175,7 +176,7 @@ var _ = Describe("Work Controller", func() {
 
 		It("Should pick up the built-in manifest change correctly", func() {
 			cmName := "testconfig"
-			cmNamespace := "default"
+			cmNamespace := defaultNS
 			cm = &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "v1",
@@ -238,7 +239,7 @@ var _ = Describe("Work Controller", func() {
 
 		It("Should merge the third party change correctly", func() {
 			cmName := "test-merge"
-			cmNamespace := "default"
+			cmNamespace := defaultNS
 			cm = &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "v1",
@@ -332,7 +333,7 @@ var _ = Describe("Work Controller", func() {
 
 		It("Should pick up the crd change correctly", func() {
 			cloneName := "testcloneset"
-			cloneNamespace := "default"
+			cloneNamespace := defaultNS
 			cloneSet := &kruisev1alpha1.CloneSet{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
@@ -432,7 +433,7 @@ var _ = Describe("Work Controller", func() {
 
 		It("Check that owner references is merged instead of override", func() {
 			cmName := "test-ownerreference-merge"
-			cmNamespace := "default"
+			cmNamespace := defaultNS
 			cm = &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "v1",
@@ -475,7 +476,7 @@ var _ = Describe("Work Controller", func() {
 
 		It("Check that failed to apply manifest has the proper identification", func() {
 			broadcastName := "testfail"
-			namespace := "default"
+			namespace := defaultNS
 			broadcastJob := &kruisev1alpha1.BroadcastJob{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: kruisev1alpha1.SchemeGroupVersion.String(),
@@ -509,7 +510,7 @@ var _ = Describe("Work Controller", func() {
 				}
 				return true
 			}, timeout, interval).Should(BeTrue())
-			expectedResourceId := workv1alpha1.ResourceIdentifier{
+			expectedResourceID := workv1alpha1.ResourceIdentifier{
 				Ordinal:   0,
 				Group:     "apps.kruise.io",
 				Version:   "v1alpha1",
@@ -517,7 +518,7 @@ var _ = Describe("Work Controller", func() {
 				Namespace: broadcastJob.GetNamespace(),
 				Name:      broadcastJob.GetName(),
 			}
-			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceId)).Should(BeEmpty())
+			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceID)).Should(BeEmpty())
 		})
 	})
 
@@ -534,7 +535,7 @@ var _ = Describe("Work Controller", func() {
 		It("Test join and leave work correctly", func() {
 			By("create the works")
 			var configMap corev1.ConfigMap
-			cmNamespace := "default"
+			cmNamespace := defaultNS
 			var cmNames []string
 			numWork := 10
 			data := map[string]string{

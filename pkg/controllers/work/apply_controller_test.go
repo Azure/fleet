@@ -44,9 +44,9 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-	"sigs.k8s.io/work-api/pkg/utils"
+
+	"go.goms.io/fleet/pkg/utils"
 )
 
 var (
@@ -93,9 +93,8 @@ func (m testMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.
 			GroupVersionKind: testDeployment.GroupVersionKind(),
 			Scope:            nil,
 		}, nil
-	} else {
-		return nil, errors.New("test error: mapping does not exist.")
 	}
+	return nil, errors.New("test error: mapping does not exist")
 }
 
 func TestSetManifestHashAnnotation(t *testing.T) {
@@ -538,7 +537,7 @@ func TestApplyManifest(t *testing.T) {
 			generation:   0,
 			updated:      false,
 			wantGvr:      emptyGvr,
-			wantErr:      errors.New("failed to find group/version/resource from restmapping: test error: mapping does not exist."),
+			wantErr:      errors.New("failed to find group/version/resource from restmapping: test error: mapping does not exist"),
 		},
 		"manifest is in proper format/ should fail applyUnstructured": {
 			reconciler: ApplyWorkReconciler{
@@ -641,7 +640,6 @@ func TestReconcile(t *testing.T) {
 	_, happyDynamicClient, _ := createObjAndDynamicClient(happyManifest.Raw)
 
 	getMockAppliedWork := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-
 		if key.Name != workName {
 			return &apierrors.StatusError{
 				ErrStatus: metav1.Status{
