@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/atomic"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -58,7 +59,7 @@ type ApplyWorkReconciler struct {
 	recorder           record.EventRecorder
 	concurrency        int
 	workNameSpace      string
-	joined             bool
+	joined             *atomic.Bool
 }
 
 func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.Interface, spokeClient client.Client,
@@ -71,6 +72,7 @@ func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.
 		recorder:           recorder,
 		concurrency:        concurrency,
 		workNameSpace:      workNameSpace,
+		joined:             atomic.NewBool(false),
 	}
 }
 
@@ -84,7 +86,7 @@ type applyResult struct {
 
 // Reconcile implement the control loop logic for Work object.
 func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if !r.joined {
+	if !r.joined.Load() {
 		klog.V(2).InfoS("work controller is not started yet, requeue the request", "work", req.NamespacedName)
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
@@ -428,20 +430,20 @@ func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work 
 
 // Join starts to reconcile
 func (r *ApplyWorkReconciler) Join(ctx context.Context) error {
-	if !r.joined {
+	if !r.joined.Load() {
 		klog.InfoS("mark the apply work reconciler joined")
 	}
-	r.joined = true
+	r.joined.Store(true)
 	return nil
 }
 
 // Leave start
 func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 	var works workv1alpha1.WorkList
-	if r.joined {
+	if r.joined.Load() {
 		klog.InfoS("mark the apply work reconciler left")
 	}
-	r.joined = false
+	r.joined.Store(false)
 	// list all the work object we created in the member cluster namespace
 	listOpts := []client.ListOption{
 		client.InNamespace(r.workNameSpace),

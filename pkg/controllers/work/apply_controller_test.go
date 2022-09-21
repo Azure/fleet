@@ -28,6 +28,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -498,7 +499,7 @@ func TestApplyManifest(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
-				joined:             true,
+				joined:             atomic.NewBool(true),
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, testManifest),
 			generation:   0,
@@ -513,7 +514,7 @@ func TestApplyManifest(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
-				joined:             true,
+				joined:             atomic.NewBool(true),
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, InvalidManifest),
 			generation:   0,
@@ -531,7 +532,7 @@ func TestApplyManifest(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
-				joined:             true,
+				joined:             atomic.NewBool(true),
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, MissingManifest),
 			generation:   0,
@@ -546,7 +547,7 @@ func TestApplyManifest(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
-				joined:             true,
+				joined:             atomic.NewBool(true),
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, testManifest),
 			generation:   0,
@@ -678,7 +679,7 @@ func TestReconcile(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
-				joined:             false,
+				joined:             atomic.NewBool(false),
 			},
 			req:     req,
 			wantErr: nil,
@@ -695,7 +696,7 @@ func TestReconcile(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
-				joined:             true,
+				joined:             atomic.NewBool(true),
 			},
 			req:     invalidReq,
 			wantErr: errors.New("client failing"),
@@ -709,6 +710,7 @@ func TestReconcile(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
+				joined:             atomic.NewBool(true),
 			},
 			req:     wrongReq,
 			wantErr: nil,
@@ -726,11 +728,25 @@ func TestReconcile(t *testing.T) {
 						}
 						return nil
 					},
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
 				},
 				spokeDynamicClient: fakeDynamicClient,
-				spokeClient:        &test.MockClient{},
-				restMapper:         testMapper{},
-				recorder:           utils.NewFakeRecorder(1),
+				spokeClient: &test.MockClient{
+					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+						return nil
+					},
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+				restMapper: testMapper{},
+				recorder:   utils.NewFakeRecorder(1),
+				joined:     atomic.NewBool(true),
 			},
 			req:     req,
 			wantErr: nil,
@@ -755,6 +771,7 @@ func TestReconcile(t *testing.T) {
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
+				joined:             atomic.NewBool(true),
 			},
 			req:     req,
 			wantErr: nil,
@@ -785,7 +802,7 @@ func TestReconcile(t *testing.T) {
 				},
 				restMapper: testMapper{},
 				recorder:   utils.NewFakeRecorder(1),
-				joined:     true,
+				joined:     atomic.NewBool(true),
 			},
 			req:     req,
 			wantErr: nil,
@@ -807,7 +824,7 @@ func TestReconcile(t *testing.T) {
 				},
 				restMapper: testMapper{},
 				recorder:   utils.NewFakeRecorder(2),
-				joined:     true,
+				joined:     atomic.NewBool(true),
 			},
 			req:     req,
 			wantErr: errors.New(failMsg),
@@ -826,7 +843,7 @@ func TestReconcile(t *testing.T) {
 				},
 				restMapper: testMapper{},
 				recorder:   utils.NewFakeRecorder(2),
-				joined:     true,
+				joined:     atomic.NewBool(true),
 			},
 			req:     req,
 			wantErr: errors.New("failed"),
@@ -848,7 +865,7 @@ func TestReconcile(t *testing.T) {
 				},
 				restMapper: testMapper{},
 				recorder:   utils.NewFakeRecorder(1),
-				joined:     true,
+				joined:     atomic.NewBool(true),
 			},
 			req:     req,
 			wantErr: nil,
@@ -862,7 +879,7 @@ func TestReconcile(t *testing.T) {
 				assert.Containsf(t, err.Error(), testCase.wantErr.Error(), "incorrect error for Testcase %s", testName)
 			} else {
 				if testCase.requeue {
-					if testCase.reconciler.joined {
+					if testCase.reconciler.joined.Load() {
 						assert.Equal(t, ctrl.Result{RequeueAfter: time.Minute * 5}, ctrlResult, "incorrect ctrlResult for Testcase %s", testName)
 					} else {
 						assert.Equal(t, ctrl.Result{RequeueAfter: time.Second * 5}, ctrlResult, "incorrect ctrlResult for Testcase %s", testName)
