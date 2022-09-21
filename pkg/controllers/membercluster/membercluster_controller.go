@@ -117,7 +117,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Copy status from InternalMemberCluster to MemberCluster.
 	r.syncInternalMemberClusterStatus(currentImc, mc)
 	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
-		klog.ErrorS(err, "failed to update status for", klog.KObj(mc))
+		if apierrors.IsConflict(err) {
+			klog.V(2).InfoS("failed to update status due to conflicts", "memberCluster", mcObjRef)
+		} else {
+			klog.ErrorS(err, "failed to update status", "memberCluster", mcObjRef)
+		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
