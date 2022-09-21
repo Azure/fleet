@@ -78,14 +78,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.markInternalMemberClusterJoined(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
 			if apierrors.IsConflict(err) {
-				klog.V(2).InfoS("failed to update status due to conflicts", "name", imc.Name)
+				klog.V(2).InfoS("failed to update status due to conflicts", "imc", klog.KObj(&imc))
 			} else {
-				klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
+				klog.ErrorS(err, "failed to update status", "imc", klog.KObj(&imc))
 			}
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		if updateHealthErr != nil {
-			klog.ErrorS(updateHealthErr, "failed to update health for %s", klog.KObj(&imc))
+			klog.ErrorS(updateHealthErr, "failed to update health", "imc", klog.KObj(&imc))
 			return ctrl.Result{}, updateHealthErr
 		}
 		return ctrl.Result{RequeueAfter: time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)}, nil
@@ -97,9 +97,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.markInternalMemberClusterLeft(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
 			if apierrors.IsConflict(err) {
-				klog.V(2).InfoS("failed to update status due to conflicts", "name", imc.Name)
+				klog.V(2).InfoS("failed to update status due to conflicts", "imc", klog.KObj(&imc))
 			} else {
-				klog.ErrorS(err, "failed to update status for %s", klog.KObj(&imc))
+				klog.ErrorS(err, "failed to update status", "imc", klog.KObj(&imc))
 			}
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
