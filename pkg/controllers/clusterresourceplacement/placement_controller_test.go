@@ -81,8 +81,8 @@ func TestGenerateManifest(t *testing.T) {
 			expectedManifest: func() *workv1alpha1.Manifest {
 				crd := v1.CustomResourceDefinition{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       "crd-type-name",
-						APIVersion: "crd-type-api/v1",
+						Kind:       "CustomResourceDefinition",
+						APIVersion: "apiextensions.k8s.io/v1",
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:                       "object-name",
