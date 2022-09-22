@@ -60,7 +60,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("create the resources to be propagated")
 		cr := &rbacv1.ClusterRole{
@@ -121,7 +121,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("verify that the cluster resource placement is applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
@@ -147,7 +147,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
@@ -183,6 +183,6 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 	})
 })
