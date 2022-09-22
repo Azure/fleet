@@ -1,4 +1,4 @@
-package e2eJoinLeavePlacement
+package e2e
 
 import (
 	"context"
@@ -16,14 +16,16 @@ import (
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
-var _ = Describe("workload orchestration testing with join/leave", func() {
+var _ = Describe("workload orchestration testing with join/leave", Serial, Ordered, func() {
 	var (
-		mc  *v1alpha1.MemberCluster
 		crp *v1alpha1.ClusterResourcePlacement
 		ctx context.Context
 
-		mcStatusCmpOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"), cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
-			cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}), cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type })}
+		mcStatusCmpOptions = []cmp.Option{
+			cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
+			cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+			cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}), cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type }),
+		}
 	)
 
 	It("Test join and leave with CRP", func() {
@@ -31,6 +33,27 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		cprName := "join-leave-test"
 		labelKey := "fleet.azure.com/name"
 		labelValue := "test"
+
+		By("update member cluster in the hub cluster to leave")
+		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+		mc.Spec.State = v1alpha1.ClusterStateLeave
+		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+
+		By("check if member cluster status is updated to Left")
+		wantMcStatus := v1alpha1.MemberClusterStatus{
+			AgentStatus: imcLeftAgentStatus,
+			Conditions:  mcLeftConditions,
+		}
+		Eventually(func() error {
+			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
+				return err
+			}
+			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
+			}
+			return nil
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMcStatus)
+
 		By("create the resources to be propagated")
 		cr := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
@@ -72,56 +95,15 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
 		}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Failed to verify cluster role %s is not propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
 
-		By("add member cluster in the hub cluster")
-		identity := rbacv1.Subject{
-			Name:      "member-agent-sa",
-			Kind:      "ServiceAccount",
-			Namespace: "fleet-system",
-		}
-		mc = &v1alpha1.MemberCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: MemberCluster.ClusterName,
-			},
-			Spec: v1alpha1.MemberClusterSpec{
-				Identity:               identity,
-				State:                  v1alpha1.ClusterStateJoin,
-				HeartbeatPeriodSeconds: 60,
-			},
-		}
-		Expect(HubCluster.KubeClient.Create(ctx, mc)).Should(Succeed(), "Failed to create member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+		By("update member cluster in the hub cluster to join")
+		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+		mc.Spec.State = v1alpha1.ClusterStateJoin
+		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("check if member cluster condition is updated to Joined")
-		mcAgentStatus := []v1alpha1.AgentStatus{
-			{
-				Type: v1alpha1.MemberAgent,
-				Conditions: []metav1.Condition{
-					{
-						Reason: "InternalMemberClusterHealthy",
-						Status: metav1.ConditionTrue,
-						Type:   string(v1alpha1.AgentHealthy),
-					},
-					{
-						Reason: "InternalMemberClusterJoined",
-						Status: metav1.ConditionTrue,
-						Type:   string(v1alpha1.AgentJoined),
-					},
-				},
-			},
-		}
-		wantMcStatus := v1alpha1.MemberClusterStatus{
-			AgentStatus: mcAgentStatus,
-			Conditions: []metav1.Condition{
-				{
-					Reason: "MemberClusterReadyToJoin",
-					Status: metav1.ConditionTrue,
-					Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
-				},
-				{
-					Reason: "MemberClusterJoined",
-					Status: metav1.ConditionTrue,
-					Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
-				},
-			},
+		wantMcStatus = v1alpha1.MemberClusterStatus{
+			AgentStatus: imcJoinedAgentStatus,
+			Conditions:  mcJoinedConditions,
 		}
 		Eventually(func() error {
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
@@ -131,7 +113,7 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMcStatus)
 
 		By("verify that the cluster resource placement is applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
@@ -139,43 +121,15 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 		By("verify the resource is propagated to member cluster")
 		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)).Should(Succeed(), "Failed to verify cluster role %s is propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
 
-		By("mark the member cluster in the hub cluster as leave")
+		By("update member cluster in the hub cluster to leave")
 		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 		mc.Spec.State = v1alpha1.ClusterStateLeave
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("verify that member cluster is marked as left")
-		mcAgentStatus = []v1alpha1.AgentStatus{
-			{
-				Type: v1alpha1.MemberAgent,
-				Conditions: []metav1.Condition{
-					{
-						Reason: "InternalMemberClusterHealthy",
-						Status: metav1.ConditionTrue,
-						Type:   string(v1alpha1.AgentHealthy),
-					},
-					{
-						Reason: "InternalMemberClusterLeft",
-						Status: metav1.ConditionFalse,
-						Type:   string(v1alpha1.AgentJoined),
-					},
-				},
-			},
-		}
 		wantMcStatus = v1alpha1.MemberClusterStatus{
-			AgentStatus: mcAgentStatus,
-			Conditions: []metav1.Condition{
-				{
-					Reason: "MemberClusterNotReadyToJoin",
-					Status: metav1.ConditionFalse,
-					Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
-				},
-				{
-					Reason: "MemberClusterLeft",
-					Status: metav1.ConditionFalse,
-					Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
-				},
-			},
+			AgentStatus: imcLeftAgentStatus,
+			Conditions:  mcLeftConditions,
 		}
 		Eventually(func() error {
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
@@ -202,5 +156,25 @@ var _ = Describe("workload orchestration testing with join/leave", func() {
 
 		By("delete cluster role on hub cluster")
 		testutils.DeleteClusterRole(*HubCluster, cr)
+
+		By("update member cluster in the hub cluster to join")
+		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+		mc.Spec.State = v1alpha1.ClusterStateJoin
+		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+
+		By("check if member cluster condition is updated to Joined")
+		wantMcStatus = v1alpha1.MemberClusterStatus{
+			AgentStatus: imcJoinedAgentStatus,
+			Conditions:  mcJoinedConditions,
+		}
+		Eventually(func() error {
+			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
+				return err
+			}
+			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
+			}
+			return nil
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMcStatus)
 	})
 })

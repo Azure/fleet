@@ -57,11 +57,80 @@ var (
 	}
 
 	sortOption          = cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type })
-	imcStatusCmpOptions = []cmp.Option{cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}), cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), sortOption}
+	imcStatusCmpOptions = []cmp.Option{
+		cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}),
+		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
+		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+		sortOption,
+	}
 
-	mcStatusCmpOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"), cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"), sortOption}
+	mcStatusCmpOptions = []cmp.Option{
+		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
+		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+		cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"),
+		sortOption,
+	}
+
+	imcJoinedAgentStatus = []v1alpha1.AgentStatus{
+		{
+			Type: v1alpha1.MemberAgent,
+			Conditions: []metav1.Condition{
+				{
+					Reason: "InternalMemberClusterHealthy",
+					Status: metav1.ConditionTrue,
+					Type:   string(v1alpha1.AgentHealthy),
+				},
+				{
+					Reason: "InternalMemberClusterJoined",
+					Status: metav1.ConditionTrue,
+					Type:   string(v1alpha1.AgentJoined),
+				},
+			},
+		},
+	}
+	imcLeftAgentStatus = []v1alpha1.AgentStatus{
+		{
+			Type: v1alpha1.MemberAgent,
+			Conditions: []metav1.Condition{
+				{
+					Reason: "InternalMemberClusterHealthy",
+					Status: metav1.ConditionTrue,
+					Type:   string(v1alpha1.AgentHealthy),
+				},
+				{
+					Reason: "InternalMemberClusterLeft",
+					Status: metav1.ConditionFalse,
+					Type:   string(v1alpha1.AgentJoined),
+				},
+			},
+		},
+	}
+
+	mcJoinedConditions = []metav1.Condition{
+		{
+			Reason: "MemberClusterReadyToJoin",
+			Status: metav1.ConditionTrue,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
+		},
+		{
+			Reason: "MemberClusterJoined",
+			Status: metav1.ConditionTrue,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
+		},
+	}
+
+	mcLeftConditions = []metav1.Condition{
+		{
+			Reason: "MemberClusterNotReadyToJoin",
+			Status: metav1.ConditionFalse,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
+		},
+		{
+			Reason: "MemberClusterLeft",
+			Status: metav1.ConditionFalse,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
+		},
+	}
 
 	//go:embed manifests
 	TestManifestFiles embed.FS
@@ -126,25 +195,7 @@ var _ = BeforeSuite(func() {
 	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to be synced in %s cluster", imc.Name, HubCluster.ClusterName)
 
 	By("check if internal member cluster status is updated to Joined")
-	wantImcStatus := v1alpha1.InternalMemberClusterStatus{
-		AgentStatus: []v1alpha1.AgentStatus{
-			{
-				Type: v1alpha1.MemberAgent,
-				Conditions: []metav1.Condition{
-					{
-						Reason: "InternalMemberClusterHealthy",
-						Status: metav1.ConditionTrue,
-						Type:   string(v1alpha1.AgentHealthy),
-					},
-					{
-						Reason: "InternalMemberClusterJoined",
-						Status: metav1.ConditionTrue,
-						Type:   string(v1alpha1.AgentJoined),
-					},
-				},
-			},
-		},
-	}
+	wantImcStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcJoinedAgentStatus}
 	Eventually(func() error {
 		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
 			return err
@@ -157,19 +208,8 @@ var _ = BeforeSuite(func() {
 
 	By("check if member cluster status is updated to Joined")
 	wantMcStatus := v1alpha1.MemberClusterStatus{
-		AgentStatus: imc.Status.AgentStatus,
-		Conditions: []metav1.Condition{
-			{
-				Reason: "MemberClusterReadyToJoin",
-				Status: metav1.ConditionTrue,
-				Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
-			},
-			{
-				Reason: "MemberClusterJoined",
-				Status: metav1.ConditionTrue,
-				Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
-			},
-		},
+		AgentStatus:   imc.Status.AgentStatus,
+		Conditions:    mcJoinedConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
 	Eventually(func() error {
@@ -190,25 +230,7 @@ var _ = AfterSuite(func() {
 	Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 	By("check if internal member cluster status is updated to Left")
-	wantImcStatus := v1alpha1.InternalMemberClusterStatus{
-		AgentStatus: []v1alpha1.AgentStatus{
-			{
-				Type: v1alpha1.MemberAgent,
-				Conditions: []metav1.Condition{
-					{
-						Reason: "InternalMemberClusterHealthy",
-						Status: metav1.ConditionTrue,
-						Type:   string(v1alpha1.AgentHealthy),
-					},
-					{
-						Reason: "InternalMemberClusterLeft",
-						Status: metav1.ConditionFalse,
-						Type:   string(v1alpha1.AgentJoined),
-					},
-				},
-			},
-		},
-	}
+	wantImcStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcLeftAgentStatus}
 	Eventually(func() error {
 		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
 			return err
@@ -221,19 +243,8 @@ var _ = AfterSuite(func() {
 
 	By("check if member cluster status is updated to Left")
 	wantMcStatus := v1alpha1.MemberClusterStatus{
-		AgentStatus: imc.Status.AgentStatus,
-		Conditions: []metav1.Condition{
-			{
-				Reason: "MemberClusterNotReadyToJoin",
-				Status: metav1.ConditionFalse,
-				Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
-			},
-			{
-				Reason: "MemberClusterLeft",
-				Status: metav1.ConditionFalse,
-				Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
-			},
-		},
+		AgentStatus:   imc.Status.AgentStatus,
+		Conditions:    mcLeftConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
 	Eventually(func() error {

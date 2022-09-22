@@ -169,22 +169,16 @@ install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
 	kubectl delete pod --all -n fleet-system
 
 build-e2e:
-	go test -c ./test/e2e ;\
-	go test -c ./test/e2eJoinLeavePlacement
+	go test -c ./test/e2e
 
-core-e2e:
+run-e2e: build-e2e
 	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e.test -test.v -ginkgo.v
-
-e2e-join-leave-placement:
-	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2eJoinLeavePlacement.test -test.v -ginkgo.v
-
-run-e2e: build-e2e core-e2e e2e-join-leave-placement
 
 .PHONY: creat-kind-cluster
 creat-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
 
 .PHONY: install-helm
-install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
+install-helm:  docker-build-hub-agent docker-build-member-agent docker-build-refresh-token load-hub-docker-image load-member-docker-image install-member-agent-helm
 
 .PHONY: e2e-tests
 e2e-tests: creat-kind-cluster run-e2e
@@ -233,7 +227,7 @@ run-memberagent: manifests generate fmt vet ## Run a controllers from your host.
 ## Images
 ## --------------------------------------
 
-OUTPUT_TYPE ?= type=registry
+OUTPUT_TYPE ?= type=docker
 BUILDX_BUILDER_NAME ?= img-builder
 QEMU_VERSION ?= 5.2.0-2
 
@@ -277,7 +271,7 @@ docker-build-refresh-token: docker-buildx-builder
 		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
 
 ## -----------------------------------
-## Cleanup 
+## Cleanup
 ## -----------------------------------
 
 .PHONY: clean-bin
