@@ -27,12 +27,12 @@ func TestGenerateManifest(t *testing.T) {
 		expectedManifest interface{}
 		expectedError    error
 	}{
-		"should generate sanitized manifest for: k8s.io/apiextensions-apiserver/apis/apiextensions/v1/CustomResourceDefinition": {
+		"should generate sanitized manifest for Kind: CustomResourceDefinition": {
 			unstructuredObj: func() *unstructured.Unstructured {
 				crd := v1.CustomResourceDefinition{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       "crd-type-name",
-						APIVersion: "crd-type-api/v1",
+						Kind:       "CustomResourceDefinition",
+						APIVersion: "apiextensions.k8s.io/v1",
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:                       "object-name",
@@ -120,7 +120,7 @@ func TestGenerateManifest(t *testing.T) {
 			},
 			expectedError: nil,
 		},
-		"should generate sanitized manifest for: k8s.io/api/core/v1/service": {
+		"should generate sanitized manifest for Kind: Service": {
 			unstructuredObj: func() *unstructured.Unstructured {
 				svc := corev1.Service{
 					TypeMeta: metav1.TypeMeta{
@@ -245,7 +245,6 @@ func TestGenerateManifest(t *testing.T) {
 
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-
 			got, err := generateManifest(tt.unstructuredObj.(func() *unstructured.Unstructured)())
 			expected := tt.expectedManifest.(func() *workv1alpha1.Manifest)()
 
