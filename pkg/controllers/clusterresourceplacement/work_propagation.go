@@ -100,7 +100,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		}
 		existingHash := curWork.GetAnnotations()[SpecHashAnnotationKey]
 		if existingHash == specHash || reflect.DeepEqual(curWork.Spec.Workload.Manifests, workerSpec.Workload.Manifests) {
-			klog.V(4).InfoS("skip updating work spec as its identical",
+			klog.V(2).InfoS("skip updating work spec as its identical",
 				"member cluster namespace", memberClusterNsName, "work name", workName, "number of manifests", len(manifests))
 			continue
 		}
@@ -113,13 +113,13 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 			allErr = append(allErr, errors.Wrap(updateErr, fmt.Sprintf("failed to update the work obj %s in namespace %s", workName, memberClusterNsName)))
 			continue
 		}
-		klog.V(3).InfoS("updated work spec with manifests",
+		klog.V(2).InfoS("updated work spec with manifests",
 			"member cluster namespace", memberClusterNsName, "work name", workName, "number of manifests", len(manifests))
 	}
 	if changed {
 		klog.V(2).InfoS("Applied all work to the selected cluster namespaces", "placement", klog.KObj(placement), "number of clusters", len(memberClusterNames))
 	} else {
-		klog.V(3).InfoS("Nothing new to apply for the cluster resource placement", "placement", klog.KObj(placement), "number of clusters", len(memberClusterNames))
+		klog.V(2).InfoS("Nothing new to apply for the cluster resource placement", "placement", klog.KObj(placement), "number of clusters", len(memberClusterNames))
 	}
 
 	return apiErrors.NewAggregate(allErr)
@@ -166,7 +166,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 		work, err := r.getResourceBinding(memberClusterNsName, workName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				klog.V(3).InfoS("the work change has not shown up in the cache yet",
+				klog.V(2).InfoS("the work change has not shown up in the cache yet",
 					"work", klog.KRef(memberClusterNsName, workName), "cluster", cluster)
 				hasPending = true
 				continue
@@ -177,19 +177,19 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workapi.ConditionTypeApplied)
 		if appliedCond == nil {
 			hasPending = true
-			klog.V(4).InfoS("the work is never picked up by the member cluster",
+			klog.V(2).InfoS("the work is never picked up by the member cluster",
 				"work", klog.KObj(work), "cluster", cluster)
 			continue
 		}
 		if appliedCond.ObservedGeneration < work.GetGeneration() {
 			hasPending = true
-			klog.V(4).InfoS("the update of the work is not picked up by the member cluster yet",
+			klog.V(2).InfoS("the update of the work is not picked up by the member cluster yet",
 				"work", klog.KObj(work), "cluster", cluster, "work generation", work.GetGeneration(),
 				"applied generation", appliedCond.ObservedGeneration)
 			continue
 		}
 		if appliedCond.Status == metav1.ConditionTrue {
-			klog.V(4).InfoS("the work is applied successfully by the member cluster",
+			klog.V(2).InfoS("the work is applied successfully by the member cluster",
 				"work", klog.KObj(work), "cluster", cluster)
 			continue
 		}
@@ -204,7 +204,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 			appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workapi.ConditionTypeApplied)
 			// collect if there is an explicit fail
 			if appliedCond != nil && appliedCond.Status != metav1.ConditionTrue {
-				klog.V(3).InfoS("find a failed to apply manifest", "member cluster namespace", memberClusterNsName,
+				klog.V(2).InfoS("find a failed to apply manifest", "member cluster namespace", memberClusterNsName,
 					"manifest name", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
 					"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
 				placement.Status.FailedResourcePlacements = append(placement.Status.FailedResourcePlacements, fleetv1alpha1.FailedResourcePlacement{

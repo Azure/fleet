@@ -42,7 +42,7 @@ func handleTombStoneObj(obj interface{}) (client.Object, error) {
 // onClusterResourcePlacementAdded handles object add event and push the placement to the cluster placement queue.
 func (d *ChangeDetector) onClusterResourcePlacementAdded(obj interface{}) {
 	placementMeta, _ := meta.Accessor(obj)
-	klog.V(4).InfoS("ClusterResourcePlacement Added", "placement", klog.KObj(placementMeta))
+	klog.V(3).InfoS("ClusterResourcePlacement Added", "placement", klog.KObj(placementMeta))
 	d.ClusterResourcePlacementController.Enqueue(obj)
 }
 
@@ -51,11 +51,11 @@ func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interf
 	oldPlacementMeta, _ := meta.Accessor(oldObj)
 	newPlacementMeta, _ := meta.Accessor(newObj)
 	if oldPlacementMeta.GetGeneration() == newPlacementMeta.GetGeneration() {
-		klog.V(5).InfoS("ignore a cluster resource placement update event with no spec change",
+		klog.V(4).InfoS("ignore a cluster resource placement update event with no spec change",
 			"placement", klog.KObj(oldPlacementMeta))
 		return
 	}
-	klog.V(4).InfoS("ClusterResourcePlacement Updated",
+	klog.V(3).InfoS("ClusterResourcePlacement Updated",
 		"placement", klog.KObj(oldPlacementMeta))
 	d.ClusterResourcePlacementController.Enqueue(newObj)
 }
@@ -66,7 +66,7 @@ func (d *ChangeDetector) onClusterResourcePlacementDeleted(obj interface{}) {
 	if err != nil {
 		klog.ErrorS(err, "failed to handle a cluster resource placement object delete event")
 	}
-	klog.V(4).InfoS("a clusterResourcePlacement is deleted", "placement", klog.KObj(clientObj))
+	klog.V(3).InfoS("a clusterResourcePlacement is deleted", "placement", klog.KObj(clientObj))
 	d.ClusterResourcePlacementController.Enqueue(clientObj)
 }
 
@@ -80,7 +80,7 @@ func (d *ChangeDetector) onWorkUpdated(oldObj, newObj interface{}) {
 	}
 	// we never change the placement label of a work
 	if placementName, exist := oldWorkMeta.GetLabels()[utils.LabelWorkPlacementName]; exist {
-		klog.V(4).InfoS("a work object is updated, will enqueue a placement event", "work", klog.KObj(oldWorkMeta), "placement", placementName)
+		klog.V(3).InfoS("a work object is updated, will enqueue a placement event", "work", klog.KObj(oldWorkMeta), "placement", placementName)
 		// the meta key function handles string
 		d.ClusterResourcePlacementController.Enqueue(placementName)
 	} else {
@@ -96,7 +96,7 @@ func (d *ChangeDetector) onWorkDeleted(obj interface{}) {
 		return
 	}
 	if placementName, exist := clientObj.GetLabels()[utils.LabelWorkPlacementName]; exist {
-		klog.V(4).InfoS("a work object is deleted", "work", klog.KObj(clientObj), "placement", placementName)
+		klog.V(3).InfoS("a work object is deleted", "work", klog.KObj(clientObj), "placement", placementName)
 		// the meta key function handles string
 		d.ClusterResourcePlacementController.Enqueue(placementName)
 	} else {
@@ -123,12 +123,12 @@ func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
 	if oldMC.GetGeneration() == newMC.GetGeneration() &&
 		reflect.DeepEqual(oldMC.GetLabels(), newMC.GetLabels()) &&
 		reflect.DeepEqual(oldMC.Status.Conditions, newMC.Status.Conditions) {
-		klog.V(5).InfoS("ignore a memberCluster update event with no real change",
+		klog.V(4).InfoS("ignore a memberCluster update event with no real change",
 			"memberCluster", klog.KObj(&oldMC), "generation", oldMC.GetGeneration())
 		return
 	}
 
-	klog.V(4).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(&oldMC))
+	klog.V(3).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(&oldMC))
 	d.MemberClusterPlacementController.Enqueue(oldObj)
 }
 
@@ -145,7 +145,7 @@ func (d *ChangeDetector) onResourceAdded(obj interface{}) {
 		klog.ErrorS(err, "skip process an unknown obj", "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 		return
 	}
-	klog.V(5).InfoS("A resource is added", "obj", klog.KObj(metaInfo),
+	klog.V(3).InfoS("A resource is added", "obj", klog.KObj(metaInfo),
 		"gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 	d.ResourceChangeController.Enqueue(obj)
 }
@@ -168,12 +168,12 @@ func (d *ChangeDetector) onResourceUpdated(oldObj, newObj interface{}) {
 		return
 	}
 	if oldObjMeta.GetResourceVersion() != newObjMeta.GetResourceVersion() {
-		klog.V(5).InfoS("A resource is updated", "obj", oldObjMeta.GetName(),
+		klog.V(3).InfoS("A resource is updated", "obj", oldObjMeta.GetName(),
 			"namespace", oldObjMeta.GetNamespace(), "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 		d.ResourceChangeController.Enqueue(newObj)
 		return
 	}
-	klog.V(5).InfoS("Received a resource updated event with no change", "obj", oldObjMeta.GetName(),
+	klog.V(4).InfoS("Received a resource updated event with no change", "obj", oldObjMeta.GetName(),
 		"namespace", oldObjMeta.GetNamespace(), "gvk", runtimeObject.GetObjectKind().GroupVersionKind().String())
 }
 
@@ -184,6 +184,6 @@ func (d *ChangeDetector) onResourceDeleted(obj interface{}) {
 		klog.ErrorS(err, "failed to handle an object delete event")
 		return
 	}
-	klog.V(5).InfoS("A resource is deleted", "obj", klog.KObj(clientObj), "gvk", clientObj.GetObjectKind().GroupVersionKind().String())
+	klog.V(3).InfoS("A resource is deleted", "obj", klog.KObj(clientObj), "gvk", clientObj.GetObjectKind().GroupVersionKind().String())
 	d.ResourceChangeController.Enqueue(clientObj)
 }

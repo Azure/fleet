@@ -45,7 +45,7 @@ var (
 )
 
 func (at *Refresher) callFetchToken(ctx context.Context) (interfaces.AuthToken, error) {
-	klog.V(5).InfoS("FetchToken start")
+	klog.V(2).InfoS("FetchToken start")
 	deadline := time.Now().Add(DefaultRefreshDuration)
 	fetchTokenContext, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
@@ -67,7 +67,7 @@ func (at *Refresher) RefreshToken(ctx context.Context) error {
 				continue
 			}
 
-			klog.V(5).InfoS("WriteToken start")
+			klog.V(2).InfoS("WriteToken start")
 			err = at.writer.WriteToken(token)
 			if err != nil {
 				klog.ErrorS(err, "Failed to WriteToken")

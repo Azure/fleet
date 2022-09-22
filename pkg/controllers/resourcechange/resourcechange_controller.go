@@ -56,7 +56,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		klog.ErrorS(err, "we have encountered a fatal error that can't be retried")
 		return ctrl.Result{}, err
 	}
-	klog.V(3).InfoS("Reconciling object", "obj", clusterWideKey)
+	klog.V(2).InfoS("Reconciling object", "obj", clusterWideKey)
 
 	// the clusterObj is set to be the object that the placement direct selects,
 	// in the case of a deleted namespace scoped object, the clusterObj is set to be its parent namespace object.
@@ -79,7 +79,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 			klog.ErrorS(err, "Failed to find the namespace the resource belongs to", "obj", clusterWideKey)
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
-		klog.V(4).InfoS("Find placement that select the namespace that contains a namespace scoped object", "obj", clusterWideKey)
+		klog.V(2).InfoS("Find placement that select the namespace that contains a namespace scoped object", "obj", clusterWideKey)
 	}
 	matchedCrps, err := r.findAffectedPlacements(clusterObj.DeepCopyObject().(*unstructured.Unstructured))
 	if err != nil {
@@ -87,12 +87,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		return ctrl.Result{}, err
 	}
 	if len(matchedCrps) == 0 {
-		klog.V(4).InfoS("change in object does not affect any placement", "obj", clusterWideKey)
+		klog.V(2).InfoS("change in object does not affect any placement", "obj", clusterWideKey)
 		return ctrl.Result{}, nil
 	}
 	// enqueue each CRP object into the CRP controller queue to get reconciled
 	for crp := range matchedCrps {
-		klog.V(3).InfoS("Change in object triggered placement reconcile", "obj", clusterWideKey, "crp", crp)
+		klog.V(2).InfoS("Change in object triggered placement reconcile", "obj", clusterWideKey, "crp", crp)
 		r.PlacementController.Enqueue(crp)
 	}
 
@@ -123,11 +123,11 @@ func (r *Reconciler) findPlacementsSelectedDeletedRes(res keys.ClusterWideKey, c
 		}
 	}
 	if len(matchedCrps) == 0 {
-		klog.V(4).InfoS("change in deleted object does not affect any placement", "obj", res)
+		klog.V(2).InfoS("change in deleted object does not affect any placement", "obj", res)
 		return ctrl.Result{}, nil
 	}
 	for _, crp := range matchedCrps {
-		klog.V(3).InfoS("Change in deleted object triggered placement reconcile", "obj", res, "crp", crp)
+		klog.V(2).InfoS("change in deleted object triggered placement reconcile", "obj", res, "crp", crp)
 		r.PlacementController.Enqueue(crp)
 	}
 	return ctrl.Result{}, nil

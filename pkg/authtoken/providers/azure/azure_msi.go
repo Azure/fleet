@@ -36,7 +36,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 	token := interfaces.AuthToken{}
 	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(a.clientID)}
 
-	klog.V(5).InfoS("FetchToken", "client ID", a.clientID)
+	klog.V(2).InfoS("FetchToken", "client ID", a.clientID)
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 	if err != nil {
 		return token, errors.Wrap(err, "failed to create managed identity cred")
@@ -46,7 +46,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 		func(err error) bool {
 			return ctx.Err() == nil
 		}, func() error {
-			klog.V(5).InfoS("GetToken start", "credential", credential)
+			klog.V(2).InfoS("GetToken start", "credential", credential)
 			azToken, err = credential.GetToken(ctx, policy.TokenRequestOptions{
 				Scopes: []string{aksScope},
 			})

@@ -35,13 +35,13 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		if err != nil {
 			return nil, err
 		}
-		klog.V(4).InfoS("we select all the available clusters in the fleet without a policy",
+		klog.V(2).InfoS("we select all the available clusters in the fleet without a policy",
 			"placement", placement.Name, "clusters", clusterNames)
 		return
 	}
 	// a fix list of clusters set
 	if len(placement.Spec.Policy.ClusterNames) != 0 {
-		klog.V(4).InfoS("use the cluster names provided as the list of cluster we select",
+		klog.V(2).InfoS("use the cluster names provided as the list of cluster we select",
 			"placement", placement.Name, "clusters", placement.Spec.Policy.ClusterNames)
 		clusterNames, err = r.getClusters(placement.Spec.Policy.ClusterNames)
 		if err != nil {
@@ -56,7 +56,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		if err != nil {
 			return nil, err
 		}
-		klog.V(4).InfoS("we select all the available clusters in the fleet without a cluster affinity",
+		klog.V(2).InfoS("we select all the available clusters in the fleet without a cluster affinity",
 			"placement", placement.Name, "clusters", clusterNames)
 		return
 	}
@@ -71,13 +71,13 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("selector = %v", clusterSelector.LabelSelector))
 		}
-		klog.V(4).InfoS("selector matches some cluster", "clusterNum", len(matchClusters), "placement", placement.Name, "selector", clusterSelector.LabelSelector)
+		klog.V(2).InfoS("selector matches some cluster", "clusterNum", len(matchClusters), "placement", placement.Name, "selector", clusterSelector.LabelSelector)
 		for _, clusterName := range matchClusters {
 			selectedClusters[clusterName] = true
 		}
 	}
 	for cluster := range selectedClusters {
-		klog.V(4).InfoS("matched a cluster", "cluster", cluster, "placement", placement.Name)
+		klog.V(2).InfoS("matched a cluster", "cluster", cluster, "placement", placement.Name)
 		clusterNames = append(clusterNames, cluster)
 	}
 	return clusterNames, nil
