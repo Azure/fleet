@@ -26,10 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-	workcontrollers "sigs.k8s.io/work-api/pkg/controllers"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 	//+kubebuilder:scaffold:imports
@@ -200,7 +200,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	// create the work controller, so we can pass it to the internal member cluster reconciler
-	workController := workcontrollers.NewApplyWorkReconciler(
+	workController := workapi.NewApplyWorkReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
 		memberMgr.GetClient(),
