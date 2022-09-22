@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -91,9 +92,9 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
 
 		By("verify the resource is not propagated to member cluster")
-		Consistently(func() error {
-			return MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)
-		}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Failed to verify cluster role %s is not propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
+		Consistently(func() bool {
+			return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr))
+		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to verify cluster role %s is not propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("update member cluster in the hub cluster to join")
 		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
