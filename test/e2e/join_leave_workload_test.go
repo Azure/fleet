@@ -40,7 +40,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("check if member cluster status is updated to Left")
-		wantMcStatus := v1alpha1.MemberClusterStatus{
+		wantMCStatus := v1alpha1.MemberClusterStatus{
 			AgentStatus: imcLeftAgentStatus,
 			Conditions:  mcLeftConditions,
 		}
@@ -48,11 +48,11 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
 				return err
 			}
-			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("create the resources to be propagated")
 		cr := &rbacv1.ClusterRole{
@@ -101,7 +101,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("check if member cluster condition is updated to Joined")
-		wantMcStatus = v1alpha1.MemberClusterStatus{
+		wantMCStatus = v1alpha1.MemberClusterStatus{
 			AgentStatus: imcJoinedAgentStatus,
 			Conditions:  mcJoinedConditions,
 		}
@@ -109,11 +109,11 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
 				return err
 			}
-			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("verify that the cluster resource placement is applied")
 		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
@@ -127,7 +127,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("verify that member cluster is marked as left")
-		wantMcStatus = v1alpha1.MemberClusterStatus{
+		wantMCStatus = v1alpha1.MemberClusterStatus{
 			AgentStatus: imcLeftAgentStatus,
 			Conditions:  mcLeftConditions,
 		}
@@ -135,11 +135,11 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
 				return err
 			}
-			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
@@ -163,7 +163,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 		By("check if member cluster condition is updated to Joined")
-		wantMcStatus = v1alpha1.MemberClusterStatus{
+		wantMCStatus = v1alpha1.MemberClusterStatus{
 			AgentStatus: imcJoinedAgentStatus,
 			Conditions:  mcJoinedConditions,
 		}
@@ -171,10 +171,10 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
 				return err
 			}
-			if statusDiff := cmp.Diff(wantMcStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
 				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
 			}
 			return nil
-		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMcStatus)
+		}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 	})
 })
