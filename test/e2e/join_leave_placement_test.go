@@ -1,15 +1,19 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
 package e2e
 
 import (
 	"context"
 	"fmt"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -17,6 +21,9 @@ import (
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
+// Serial - Ginkgo will guarantee that these specs will never run in parallel with other specs.
+// Ordered - Ginkgo will guarantee that specs in an Ordered container will run sequentially, in the order they are written.
+// This test cannot be run in parallel with other specs in the suite as it's leaving, joining, leaving and joining again.
 var _ = Describe("workload orchestration testing with join/leave", Serial, Ordered, func() {
 	var (
 		crp *v1alpha1.ClusterResourcePlacement
