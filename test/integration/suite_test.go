@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.goms.io/fleet/cmd/hubagent/options"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
@@ -28,6 +26,7 @@ import (
 	// +kubebuilder:scaffold:imports
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	"go.goms.io/fleet/pkg/controllers/membercluster"
 )
