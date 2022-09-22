@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
@@ -29,10 +28,6 @@ var _ = Describe("Work API Controller test", func() {
 
 	var (
 		ctx context.Context
-
-		// These variables are used to join the member cluster.
-		mc *v1alpha1.MemberCluster
-
 		// Includes all works applied to the hub cluster. Used for garbage collection.
 		works []workapi.Work
 
@@ -52,16 +47,12 @@ var _ = Describe("Work API Controller test", func() {
 
 		// This namespace in MemberCluster will store specified test resources created from the Work-api.
 		resourceNamespaceName := "resource-namespace" + utils.RandStr()
-		resourceNamespace = testutils.NewNamespace(resourceNamespaceName)
+		resourceNamespace = &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: resourceNamespaceName,
+			},
+		}
 		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
-
-		// Member Cluster must join the fleet for Work API to work.
-		By("deploy member cluster in the hub cluster")
-		mc = testutils.NewMemberCluster(MemberCluster.ClusterName, 60, v1alpha1.ClusterStateJoin)
-		testutils.CreateMemberCluster(*HubCluster, mc)
-
-		By("check if member cluster condition is updated to Joined")
-		testutils.WaitConditionMemberCluster(*HubCluster, mc, v1alpha1.ConditionTypeMemberClusterJoined, metav1.ConditionTrue, testutils.PollTimeout)
 
 		//Empties the works since they were garbage collected earlier.
 		works = []workapi.Work{}
@@ -69,8 +60,6 @@ var _ = Describe("Work API Controller test", func() {
 
 	AfterEach(func() {
 		testutils.DeleteWork(ctx, *HubCluster, works)
-		testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
-
 		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
 	})
 

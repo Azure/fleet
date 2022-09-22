@@ -5,15 +5,22 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -31,12 +38,99 @@ var (
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
+	mc                *v1alpha1.MemberCluster
+	imc               *v1alpha1.InternalMemberCluster
+	ctx               context.Context
 
 	// This namespace will store Member cluster-related CRs, such as v1alpha1.MemberCluster
-	memberNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+	memberNamespace = &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName),
+		},
+	}
 
 	// This namespace in HubCluster will store v1alpha1.Work to simulate Work-related features in Hub Cluster.
-	workNamespace = testutils.NewNamespace(fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName))
+	workNamespace = &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName),
+		},
+	}
+
+	sortOption          = cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type })
+	imcStatusCmpOptions = []cmp.Option{
+		cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}),
+		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
+		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+		sortOption,
+	}
+
+	mcStatusCmpOptions = []cmp.Option{
+		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
+		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+		cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"),
+		sortOption,
+	}
+
+	imcJoinedAgentStatus = []v1alpha1.AgentStatus{
+		{
+			Type: v1alpha1.MemberAgent,
+			Conditions: []metav1.Condition{
+				{
+					Reason: "InternalMemberClusterHealthy",
+					Status: metav1.ConditionTrue,
+					Type:   string(v1alpha1.AgentHealthy),
+				},
+				{
+					Reason: "InternalMemberClusterJoined",
+					Status: metav1.ConditionTrue,
+					Type:   string(v1alpha1.AgentJoined),
+				},
+			},
+		},
+	}
+	imcLeftAgentStatus = []v1alpha1.AgentStatus{
+		{
+			Type: v1alpha1.MemberAgent,
+			Conditions: []metav1.Condition{
+				{
+					Reason: "InternalMemberClusterHealthy",
+					Status: metav1.ConditionTrue,
+					Type:   string(v1alpha1.AgentHealthy),
+				},
+				{
+					Reason: "InternalMemberClusterLeft",
+					Status: metav1.ConditionFalse,
+					Type:   string(v1alpha1.AgentJoined),
+				},
+			},
+		},
+	}
+
+	mcJoinedConditions = []metav1.Condition{
+		{
+			Reason: "MemberClusterReadyToJoin",
+			Status: metav1.ConditionTrue,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
+		},
+		{
+			Reason: "MemberClusterJoined",
+			Status: metav1.ConditionTrue,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
+		},
+	}
+
+	mcLeftConditions = []metav1.Condition{
+		{
+			Reason: "MemberClusterNotReadyToJoin",
+			Status: metav1.ConditionFalse,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
+		},
+		{
+			Reason: "MemberClusterLeft",
+			Status: metav1.ConditionFalse,
+			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
+		},
+	}
 
 	//go:embed manifests
 	TestManifestFiles embed.FS
@@ -57,25 +151,114 @@ func TestE2E(t *testing.T) {
 var _ = BeforeSuite(func() {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	Expect(kubeconfig).ShouldNot(BeEmpty(), "Failure to retrieve kubeconfig")
-
 	hubURL = os.Getenv("HUB_SERVER_URL")
 	Expect(hubURL).ShouldNot(BeEmpty(), "Failure to retrieve Hub URL")
 
 	// hub setup
 	HubCluster.HubURL = hubURL
 	framework.GetClusterClient(HubCluster)
-
 	//member setup
 	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 
-	testutils.CreateNamespace(*MemberCluster, memberNamespace)
-
 	testutils.CreateNamespace(*HubCluster, workNamespace)
+
+	ctx = context.Background()
+
+	By("deploy member cluster in the hub cluster")
+	identity := rbacv1.Subject{
+		Name:      "member-agent-sa",
+		Kind:      "ServiceAccount",
+		Namespace: "fleet-system",
+	}
+	mc = &v1alpha1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: MemberCluster.ClusterName,
+		},
+		Spec: v1alpha1.MemberClusterSpec{
+			Identity:               identity,
+			State:                  v1alpha1.ClusterStateJoin,
+			HeartbeatPeriodSeconds: 60,
+		},
+	}
+	Expect(HubCluster.KubeClient.Create(ctx, mc)).Should(Succeed(), "Failed to create member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+
+	By("check if internal member cluster created in the hub cluster")
+	imc = &v1alpha1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      MemberCluster.ClusterName,
+			Namespace: memberNamespace.Name,
+		},
+	}
+	Eventually(func() error {
+		return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to be synced in %s cluster", imc.Name, HubCluster.ClusterName)
+
+	By("check if internal member cluster status is updated to Joined")
+	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcJoinedAgentStatus}
+	Eventually(func() error {
+		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantIMCStatus, imc.Status, imcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("internal member cluster(%s) status mismatch (-want +got):\n%s", imc.Name, statusDiff)
+		}
+		return nil
+	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
+
+	By("check if member cluster status is updated to Joined")
+	wantMCStatus := v1alpha1.MemberClusterStatus{
+		AgentStatus:   imc.Status.AgentStatus,
+		Conditions:    mcJoinedConditions,
+		ResourceUsage: imc.Status.ResourceUsage,
+	}
+	Eventually(func() error {
+		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
+		}
+		return nil
+	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
 })
 
 var _ = AfterSuite(func() {
-	testutils.DeleteNamespace(*MemberCluster, memberNamespace)
+	By("update member cluster in the hub cluster")
+	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+	mc.Spec.State = v1alpha1.ClusterStateLeave
+	Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
+	By("check if internal member cluster status is updated to Left")
+	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcLeftAgentStatus}
+	Eventually(func() error {
+		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantIMCStatus, imc.Status, imcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("internal member cluster(%s) status mismatch (-want +got):\n%s", imc.Name, statusDiff)
+		}
+		return nil
+	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
+
+	By("check if member cluster status is updated to Left")
+	wantMCStatus := v1alpha1.MemberClusterStatus{
+		AgentStatus:   imc.Status.AgentStatus,
+		Conditions:    mcLeftConditions,
+		ResourceUsage: imc.Status.ResourceUsage,
+	}
+	Eventually(func() error {
+		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
+		}
+		return nil
+	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
+
+	testutils.DeleteNamespace(*MemberCluster, memberNamespace)
 	testutils.DeleteNamespace(*HubCluster, workNamespace)
+	By("delete member cluster")
+	testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
 })

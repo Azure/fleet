@@ -271,7 +271,7 @@ docker-build-refresh-token: docker-buildx-builder
 		--tag $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) .
 
 ## -----------------------------------
-## Cleanup 
+## Cleanup
 ## -----------------------------------
 
 .PHONY: clean-bin
