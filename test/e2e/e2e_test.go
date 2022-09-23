@@ -167,8 +167,6 @@ var _ = BeforeSuite(func() {
 
 	ctx = context.Background()
 
-	testutils.CreateNamespace(ctx, *HubCluster, workNamespace)
-
 	By("deploy member cluster in the hub cluster")
 	identity := rbacv1.Subject{
 		Name:      "member-agent-sa",
