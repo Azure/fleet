@@ -65,10 +65,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		}
 		if mObj == nil {
 			// This is a corner case that the member cluster is deleted before we handle its status change. We can't use match since we don't have its label.
-			klog.V(3).InfoS("enqueue a placement to reconcile for a deleted member cluster", "memberCluster", memberClusterName, "placement", klog.KObj(&placement))
+			klog.V(2).InfoS("enqueue a placement to reconcile for a deleted member cluster", "memberCluster", memberClusterName, "placement", klog.KObj(&placement))
 			r.PlacementController.Enqueue(crpList[i])
 		} else if matchPlacement(&placement, mObj.(*unstructured.Unstructured).DeepCopy()) {
-			klog.V(3).InfoS("enqueue a placement to reconcile", "memberCluster", memberClusterName, "placement", klog.KObj(&placement))
+			klog.V(2).InfoS("enqueue a placement to reconcile", "memberCluster", memberClusterName, "placement", klog.KObj(&placement))
 			r.PlacementController.Enqueue(crpList[i])
 		}
 	}
@@ -87,7 +87,7 @@ func matchPlacement(placement *fleetv1alpha1.ClusterResourcePlacement, memberClu
 	}
 	// no policy set
 	if placement.Spec.Policy == nil {
-		klog.V(4).InfoS("find a matching placement with no policy",
+		klog.V(2).InfoS("find a matching placement with no policy",
 			"memberCluster", memberCluster.GetName(), "placement", placementObj)
 		return true
 	}
@@ -96,7 +96,7 @@ func matchPlacement(placement *fleetv1alpha1.ClusterResourcePlacement, memberClu
 	if len(placement.Spec.Policy.ClusterNames) != 0 {
 		for _, clusterName := range placement.Spec.Policy.ClusterNames {
 			if clusterName == memberCluster.GetName() {
-				klog.V(4).InfoS("find a matching placement with a list of cluster names",
+				klog.V(2).InfoS("find a matching placement with a list of cluster names",
 					"memberCluster", memberCluster.GetName(), "placement", placementObj)
 				return true
 			}
@@ -106,7 +106,7 @@ func matchPlacement(placement *fleetv1alpha1.ClusterResourcePlacement, memberClu
 	// no cluster affinity set
 	if placement.Spec.Policy.Affinity == nil || placement.Spec.Policy.Affinity.ClusterAffinity == nil ||
 		len(placement.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms) == 0 {
-		klog.V(4).InfoS("find a matching placement with no cluster affinity",
+		klog.V(2).InfoS("find a matching placement with no cluster affinity",
 			"memberCluster", memberCluster.GetName(), "placement", placementObj)
 		return true
 	}
@@ -119,7 +119,7 @@ func matchPlacement(placement *fleetv1alpha1.ClusterResourcePlacement, memberClu
 			continue
 		}
 		if s.Matches(labels.Set(memberCluster.GetLabels())) {
-			klog.V(4).InfoS("find a matching placement with label selector",
+			klog.V(2).InfoS("find a matching placement with label selector",
 				"memberCluster", memberCluster.GetName(), "placement", placementObj, "selector", clusterSelector.LabelSelector)
 			return true
 		}

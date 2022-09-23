@@ -154,7 +154,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	} else if len(staleRes) > 0 {
 		klog.V(2).InfoS("successfully garbage-collected all stale manifests", work.Kind, logObjRef, "number of GCed res", len(staleRes))
 		for _, res := range staleRes {
-			klog.V(5).InfoS("successfully garbage-collected a stale manifest", work.Kind, logObjRef, "res", res)
+			klog.V(2).InfoS("successfully garbage-collected a stale manifest", work.Kind, logObjRef, "res", res)
 		}
 	}
 
@@ -367,7 +367,7 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
 	}
-	klog.V(5).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
+	klog.V(2).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
 		"new hash", manifestObj.GetAnnotations()[manifestHashAnnotation],
 		"existing hash", curObj.GetAnnotations()[manifestHashAnnotation])
 

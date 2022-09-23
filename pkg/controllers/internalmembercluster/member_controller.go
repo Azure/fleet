@@ -150,7 +150,7 @@ func (r *Reconciler) updateHealth(ctx context.Context, imc *fleetv1alpha1.Intern
 
 // updateResourceStats collects and updates resource usage stats of the member cluster.
 func (r *Reconciler) updateResourceStats(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) error {
-	klog.V(4).InfoS("updateResourceStats", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("updateResourceStats", "InternalMemberCluster", klog.KObj(imc))
 	var nodes corev1.NodeList
 	if err := r.memberClient.List(ctx, &nodes); err != nil {
 		return errors.Wrapf(err, "failed to list nodes for member cluster %s", klog.KObj(imc))
@@ -180,7 +180,7 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *fleetv1alpha1
 
 // updateInternalMemberClusterWithRetry updates InternalMemberCluster status.
 func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, imc *fleetv1alpha1.InternalMemberCluster) error {
-	klog.V(4).InfoS("updateInternalMemberClusterWithRetry", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("updateInternalMemberClusterWithRetry", "InternalMemberCluster", klog.KObj(imc))
 	backOffPeriod := retry.DefaultBackoff
 	backOffPeriod.Cap = time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)
 
@@ -195,7 +195,7 @@ func (r *Reconciler) updateInternalMemberClusterWithRetry(ctx context.Context, i
 
 // updateMemberAgentHeartBeat is used to update member agent heart beat for Internal member cluster.
 func updateMemberAgentHeartBeat(imc *fleetv1alpha1.InternalMemberCluster) {
-	klog.V(4).InfoS("update Internal member cluster heartbeat", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("update Internal member cluster heartbeat", "InternalMemberCluster", klog.KObj(imc))
 	desiredAgentStatus := imc.GetAgentStatus(fleetv1alpha1.MemberAgent)
 	if desiredAgentStatus != nil {
 		desiredAgentStatus.LastReceivedHeartbeat = metav1.Now()
@@ -203,7 +203,7 @@ func updateMemberAgentHeartBeat(imc *fleetv1alpha1.InternalMemberCluster) {
 }
 
 func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedAgentObj) {
-	klog.V(4).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentHealthy),
 		Status:             metav1.ConditionTrue,
@@ -222,7 +222,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.ConditionedAgentO
 }
 
 func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedAgentObj, err error) {
-	klog.V(4).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentHealthy),
 		Status:             metav1.ConditionFalse,
@@ -242,7 +242,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.ConditionedAgen
 }
 
 func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedAgentObj) {
-	klog.V(4).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
 		Status:             metav1.ConditionTrue,
@@ -262,7 +262,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc apis.ConditionedAgentOb
 }
 
 func (r *Reconciler) markInternalMemberClusterJoinFailed(imc apis.ConditionedAgentObj, err error) {
-	klog.V(4).InfoS("markInternalMemberCluster join failed", "error", err, "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("markInternalMemberCluster join failed", "error", err, "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
 		Status:             metav1.ConditionUnknown,
@@ -282,7 +282,7 @@ func (r *Reconciler) markInternalMemberClusterJoinFailed(imc apis.ConditionedAge
 }
 
 func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedAgentObj) {
-	klog.V(4).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
 		Status:             metav1.ConditionFalse,
@@ -302,7 +302,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.ConditionedAgentObj)
 }
 
 func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc apis.ConditionedAgentObj, err error) {
-	klog.V(4).InfoS("markInternalMemberCluster leave failed", "error", err, "InternalMemberCluster", klog.KObj(imc))
+	klog.V(2).InfoS("markInternalMemberCluster leave failed", "error", err, "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.AgentJoined),
 		Status:             metav1.ConditionUnknown,

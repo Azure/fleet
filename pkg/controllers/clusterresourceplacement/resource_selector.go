@@ -47,7 +47,7 @@ func (r *Reconciler) selectResources(ctx context.Context, placement *fleetv1alph
 			Namespace: unstructuredObj.GetNamespace(),
 		}
 		placement.Status.SelectedResources = append(placement.Status.SelectedResources, res)
-		klog.V(4).InfoS("selected one resource ", "placement", placement.Name, "resource", res)
+		klog.V(2).InfoS("selected one resource ", "placement", placement.Name, "resource", res)
 		manifest, err := generateManifest(unstructuredObj)
 		if err != nil {
 			return nil, err
@@ -68,7 +68,7 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 		}
 
 		if r.DisabledResourceConfig.IsResourceDisabled(gvk) {
-			klog.V(4).InfoS("Skip select resource", "group version kind", gvk.String())
+			klog.V(2).InfoS("Skip select resource", "group version kind", gvk.String())
 			continue
 		}
 		var objs []runtime.Object
@@ -105,7 +105,7 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 
 // fetchClusterScopedResources retrieve the objects based on the selector.
 func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector fleetv1alpha1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
-	klog.V(4).InfoS("start to fetch the cluster scoped resources by the selector", "selector", selector)
+	klog.V(2).InfoS("start to fetch the cluster scoped resources by the selector", "selector", selector)
 	gk := schema.GroupKind{
 		Group: selector.Group,
 		Kind:  selector.Kind,
@@ -138,7 +138,7 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 		if uObj.GetDeletionTimestamp() != nil {
 			// skip a to be deleted namespace
-			klog.V(4).InfoS("skip the deleting cluster scoped resources by the selector",
+			klog.V(2).InfoS("skip the deleting cluster scoped resources by the selector",
 				"selector", selector, "placeName", placeName, "resource name", uObj.GetName())
 			return []runtime.Object{}, nil
 		}
@@ -165,7 +165,7 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		uObj := objects[i].DeepCopyObject().(*unstructured.Unstructured)
 		if uObj.GetDeletionTimestamp() != nil {
 			// skip a to be deleted namespace
-			klog.V(4).InfoS("skip the deleting cluster scoped resources by the selector",
+			klog.V(2).InfoS("skip the deleting cluster scoped resources by the selector",
 				"selector", selector, "placeName", placeName, "resource name", uObj.GetName())
 			continue
 		}
@@ -177,7 +177,7 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 
 // fetchNamespaceResources retrieve all the objects for a ClusterResourceSelector that is for namespace.
 func (r *Reconciler) fetchNamespaceResources(ctx context.Context, selector fleetv1alpha1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
-	klog.V(4).InfoS("start to fetch the namespace resources by the selector", "selector", selector)
+	klog.V(2).InfoS("start to fetch the namespace resources by the selector", "selector", selector)
 	var resources []runtime.Object
 
 	if len(selector.Name) != 0 {
@@ -229,7 +229,7 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 		return nil, errors.New(fmt.Sprintf("namespace %s is not allowed to propagate", namespaceName))
 	}
 
-	klog.V(4).InfoS("start to fetch all the resources inside a namespace", "namespace", namespaceName)
+	klog.V(2).InfoS("start to fetch all the resources inside a namespace", "namespace", namespaceName)
 	// select the namespace object itself
 	obj, err := r.InformerManager.Lister(utils.NamespaceGVR).Get(namespaceName)
 	if err != nil {
@@ -239,7 +239,7 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 	nameSpaceObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 	if nameSpaceObj.GetDeletionTimestamp() != nil {
 		// skip a to be deleted namespace
-		klog.V(4).InfoS("skip the deleting namespace resources by the selector",
+		klog.V(2).InfoS("skip the deleting namespace resources by the selector",
 			"placeName", placeName, "namespace", namespaceName)
 		return resources, nil
 	}
@@ -285,7 +285,7 @@ func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool 
 	}
 	for _, gvk := range gvks {
 		if r.DisabledResourceConfig.IsResourceDisabled(gvk) {
-			klog.V(4).InfoS("Skip watch resource", "group version kind", gvk.String())
+			klog.V(2).InfoS("Skip watch resource", "group version kind", gvk.String())
 			return false
 		}
 	}
