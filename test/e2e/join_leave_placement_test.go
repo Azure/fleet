@@ -22,9 +22,8 @@ import (
 )
 
 // Serial - Ginkgo will guarantee that these specs will never run in parallel with other specs.
-// Ordered - Ginkgo will guarantee that specs in an Ordered container will run sequentially, in the order they are written.
 // This test cannot be run in parallel with other specs in the suite as it's leaving, joining, leaving and joining again.
-var _ = Describe("workload orchestration testing with join/leave", Serial, Ordered, func() {
+var _ = Describe("workload orchestration testing with join/leave", Serial, func() {
 	var (
 		crp *v1alpha1.ClusterResourcePlacement
 		ctx context.Context
@@ -96,7 +95,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 				},
 			},
 		}
-		testutils.CreateClusterResourcePlacement(*HubCluster, crp)
+		testutils.CreateClusterResourcePlacement(ctx, *HubCluster, crp)
 
 		By("verify the resource is not propagated to member cluster")
 		Consistently(func() bool {
@@ -124,7 +123,33 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
 
 		By("verify that the cluster resource placement is applied")
-		testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
+		//testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
+		crpStatus := v1alpha1.ClusterResourcePlacementStatus{
+			Conditions: []metav1.Condition{
+				{
+					Message: "Successfully scheduled resources for placement",
+					Reason:  "ScheduleSucceeded",
+					Status:  metav1.ConditionTrue,
+					Type:    string(v1alpha1.ResourcePlacementConditionTypeScheduled),
+				},
+				{
+					Message: "Successfully applied resources to member clusters",
+					Reason:  "ApplySucceeded",
+					Status:  metav1.ConditionTrue,
+					Type:    string(v1alpha1.ResourcePlacementStatusConditionTypeApplied),
+				},
+			},
+			SelectedResources: []v1alpha1.ResourceIdentifier{
+				{
+					Group:   "rbac.authorization.k8s.io",
+					Version: "v1",
+					Kind:    "ClusterRole",
+					Name:    cr.Name,
+				},
+			},
+			TargetClusters: []string{"kind-member-testing"},
+		}
+		testutils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, crp, crpStatus, 3*testutils.PollTimeout)
 
 		By("verify the resource is propagated to member cluster")
 		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)).Should(Succeed(), "Failed to verify cluster role %s is propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
@@ -155,7 +180,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, Order
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to verify cluster role %s is still on %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("delete the crp from the hub")
-		testutils.DeleteClusterResourcePlacement(*HubCluster, crp)
+		testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {

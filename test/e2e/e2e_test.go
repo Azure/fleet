@@ -165,9 +165,9 @@ var _ = BeforeSuite(func() {
 	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 
-	testutils.CreateNamespace(*HubCluster, workNamespace)
-
 	ctx = context.Background()
+
+	testutils.CreateNamespace(ctx, *HubCluster, workNamespace)
 
 	By("deploy member cluster in the hub cluster")
 	identity := rbacv1.Subject{
@@ -261,8 +261,6 @@ var _ = AfterSuite(func() {
 		return nil
 	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
 
-	testutils.DeleteNamespace(*MemberCluster, memberNamespace)
-	testutils.DeleteNamespace(*HubCluster, workNamespace)
 	By("delete member cluster")
 	testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
 })

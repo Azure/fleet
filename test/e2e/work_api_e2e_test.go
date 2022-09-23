@@ -71,11 +71,11 @@ var _ = Describe("Work API Controller test", func() {
 				Name: resourceNamespaceName,
 			},
 		}
-		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
+		testutils.CreateNamespace(ctx, *MemberCluster, resourceNamespace)
 	})
 
 	AfterEach(func() {
-		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
+		testutils.DeleteNamespace(ctx, *MemberCluster, resourceNamespace)
 	})
 
 	Context("Work Creation Test", func() {

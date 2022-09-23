@@ -54,53 +54,11 @@ func CreateClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	})
 }
 
-// WaitClusterRole waits for cluster roles to be created.
-func WaitClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	klog.Infof("Waiting for ClusterRole(%s) to be synced", cr.Name)
-	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
-}
-
 // DeleteClusterRole deletes cluster role on cluster.
 func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
 	ginkgo.By(fmt.Sprintf("Deleting ClusterRole(%s)", cr.Name), func() {
 		err := cluster.KubeClient.Delete(context.TODO(), cr)
 		gomega.Expect(err).Should(gomega.Succeed())
-	})
-}
-
-// CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.
-func CreateClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	ginkgo.By(fmt.Sprintf("Creating ClusterResourcePlacement(%s)", crp.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), crp)
-		gomega.Expect(err).Should(gomega.Succeed())
-	})
-	klog.Infof("Waiting for ClusterResourcePlacement(%s) to be synced", crp.Name)
-	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
-}
-
-// WaitConditionClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster with a specific condition.
-func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement,
-	conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
-	klog.Infof("Waiting for ClusterResourcePlacement(%s) condition(%s) status(%s) to be synced", crp.Name, conditionName, status)
-	gomega.Eventually(func() bool {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		cond := crp.GetCondition(conditionName)
-		return cond != nil && cond.Status == status
-	}, customTimeout, PollInterval).Should(gomega.Equal(true))
-}
-
-// DeleteClusterResourcePlacement is used delete ClusterResourcePlacement on the hub cluster.
-func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), crp)
-		gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
 	})
 }
 
@@ -117,27 +75,19 @@ func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workName
 }
 
 // CreateNamespace create namespace and waits for namespace to exist.
-func CreateNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
-	ginkgo.By(fmt.Sprintf("Creating Namespace(%s)", ns.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), ns)
-		gomega.Expect(err).Should(gomega.Succeed(), "Failed to create namespace %s", ns.Name)
-	})
-	klog.Infof("Waiting for Namespace(%s) to be synced", ns.Name)
+func CreateNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
+	gomega.Expect(cluster.KubeClient.Create(ctx, ns)).Should(gomega.Succeed(), "Failed to create namespace %s in %s cluster", ns.Name, cluster.ClusterName)
 	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name, Namespace: ""}, ns)
-
-		return err
-	}, PollTimeout, PollInterval).Should(gomega.Succeed())
+		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for namespace %s to be created in %s cluster", ns.Name, cluster.ClusterName)
 }
 
 // DeleteNamespace delete namespace.
-func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
-	ginkgo.By(fmt.Sprintf("Deleting Namespace(%s)", ns.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), ns)
-		if err != nil && !apierrors.IsNotFound(err) {
-			gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
-		}
-	})
+func DeleteNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
+	gomega.Expect(cluster.KubeClient.Delete(context.TODO(), ns)).Should(gomega.Succeed(), "Failed to delete namespace %s in %s cluster", ns.Name, cluster.ClusterName)
+	gomega.Eventually(func() bool {
+		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns))
+	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for namespace %s to be deleted in %s cluster", ns.Name, cluster.ClusterName)
 }
 
 // CreateWork creates Work object based on manifest given.
