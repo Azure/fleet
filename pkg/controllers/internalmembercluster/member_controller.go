@@ -49,6 +49,9 @@ const (
 	eventReasonInternalMemberClusterFailedToJoin  = "InternalMemberClusterFailedToJoin"
 	eventReasonInternalMemberClusterFailedToLeave = "InternalMemberClusterFailedToLeave"
 	eventReasonInternalMemberClusterLeft          = "InternalMemberClusterLeft"
+
+	// we add +-5% jitter
+	jitterPercent = 10
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
@@ -91,8 +94,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		// add jitter to the heart beat to mitigate the herding of multiple agents
 		hbinterval := 1000 * imc.Spec.HeartbeatPeriodSeconds
-		// we add 10% jitter
-		jitterRange := int64(hbinterval / 10)
+		jitterRange := int64(hbinterval*jitterPercent) / 100
 		return ctrl.Result{RequeueAfter: time.Millisecond *
 			(time.Duration(hbinterval) + time.Duration(utilrand.Int63nRange(0, jitterRange)-jitterRange/2))}, nil
 
