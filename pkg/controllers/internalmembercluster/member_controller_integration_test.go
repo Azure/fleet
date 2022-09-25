@@ -109,7 +109,9 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
+			// take into account the +- jitter
+			Expect(result.RequeueAfter.Milliseconds() < (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 
 			var imc v1alpha1.InternalMemberCluster
@@ -139,7 +141,9 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
+			// take into account the +- jitter
+			Expect(result.RequeueAfter.Milliseconds() < (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 
 			var imc v1alpha1.InternalMemberCluster
@@ -154,7 +158,9 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
-			Expect(result).Should(Equal(ctrl.Result{RequeueAfter: time.Second * time.Duration(HBPeriod)}))
+			// take into account the +- jitter
+			Expect(result.RequeueAfter.Milliseconds() < (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 			Expect(lastReceivedHeartbeat).ShouldNot(Equal(imc.Status.AgentStatus[0].LastReceivedHeartbeat))
