@@ -80,7 +80,6 @@ var _ = Describe("Work API Controller test", func() {
 	})
 
 	AfterEach(func() {
-		testutils.DeleteWork(ctx, *HubCluster, works)
 		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
 	})
 
@@ -552,6 +551,87 @@ var _ = Describe("Work API Controller test", func() {
 			"There is no spec annotation on the resource %s", crd.Name)
 		Expect(customResource.GetAnnotations()[specHashAnnotation]).ToNot(BeEmpty(),
 			"There is no spec annotation on the custom resource %s", customResource.GetName())
+	})
+
+	Context("Updating Work", func() {
+		configMapBeforeUpdate := corev1.ConfigMap{}
+		workBeforeUpdate := workapi.Work{}
+		namespaceType := types.NamespacedName{}
+
+		BeforeEach(func() {
+			workName := testutils.RandomWorkName(5)
+			manifestConfigMapName := "work-update-configmap"
+			configMapBeforeUpdate = corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      manifestConfigMapName,
+					Namespace: resourceNamespace.Name,
+				},
+				Data: map[string]string{
+					"before-update-key": "before-update-data",
+				},
+			}
+
+			// Creating types.NamespacedName to use in retrieving objects.
+			namespaceType = types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
+
+			manifests := testutils.AddManifests([]runtime.Object{&configMapBeforeUpdate}, []workapi.Manifest{})
+			By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
+			workBeforeUpdate = testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
+
+			Eventually(func() string {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceType, &workBeforeUpdate); err != nil {
+					return err.Error()
+				}
+
+				want := []metav1.Condition{
+					{
+						Type:   conditionTypeApplied,
+						Status: metav1.ConditionTrue,
+						Reason: "appliedWorkComplete",
+					},
+				}
+
+				return cmp.Diff(want, workBeforeUpdate.Status.Conditions, cmpOptions...)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
+
+		})
+
+		It("Updating Work object on the Hub Cluster should update the resource on the member cluster.", func() {
+			updatedConfigMap := configMapBeforeUpdate.DeepCopy()
+			updatedConfigMap.Data = map[string]string{
+				"updated-key": "updated-data",
+			}
+			testutils.UpdateWork(ctx, &workBeforeUpdate, HubCluster, []runtime.Object{updatedConfigMap})
+
+			By(fmt.Sprintf("The resource %s should be updated in the member cluster %s", updatedConfigMap.Name, memberClusterName))
+			configMapNamespaceType := types.NamespacedName{Name: updatedConfigMap.Name, Namespace: resourceNamespace.Name}
+			retrievedConfigMap := corev1.ConfigMap{}
+
+			want := corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      updatedConfigMap.Name,
+					Namespace: resourceNamespace.Name,
+				},
+				Data: map[string]string{
+					"updated-key": "updated-data",
+				},
+			}
+
+			configMapCmpOptions := append(cmpOptions,
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "Generation", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
+			)
+
+			Eventually(func() string {
+				if err := MemberCluster.KubeClient.Get(ctx, configMapNamespaceType, &retrievedConfigMap); err != nil {
+					return err.Error()
+				}
+				return cmp.Diff(want, retrievedConfigMap, configMapCmpOptions...)
+			}).Should(BeEmpty(), "Resource %s mismatch (-want, +got):", updatedConfigMap.Name)
+		})
 	})
 })
 

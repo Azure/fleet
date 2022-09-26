@@ -74,16 +74,3 @@ func RetrieveWork(workNamespace string, workName string, hubCluster *framework.C
 	}
 	return &workRetrieved, nil
 }
-
-func UpdateWork(work *workapi.Work, hubCluster *framework.Cluster) (*workapi.Work, error) {
-	err := hubCluster.KubeClient.Update(context.Background(), work)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedWork, err := RetrieveWork(work.Namespace, work.Name, hubCluster)
-	if err != nil {
-		return nil, err
-	}
-	return updatedWork, err
-}
