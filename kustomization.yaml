@@ -1,3 +1,0 @@
-namespace: hello-world
-resources:
-- load-balancer-example.yaml
