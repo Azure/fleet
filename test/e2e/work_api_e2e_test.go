@@ -593,8 +593,8 @@ var _ = Describe("Work API Controller test", func() {
 			testutils.DeleteWork(ctx, *HubCluster, workBeforeDelete)
 
 			By("Deleting the Work Object should also delete the AppliedWork in the member cluster")
-			AppliedWork := workapi.AppliedWork{}
-			Expect(MemberCluster.KubeClient.Get(ctx, namespaceType, &AppliedWork)).ShouldNot(Succeed())
+			appliedWork := workapi.AppliedWork{}
+			Expect(MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)).ShouldNot(Succeed())
 
 			By("Deleting the Work Object should also delete the resources in the member cluster")
 			configMapDeleted := corev1.ConfigMap{}
