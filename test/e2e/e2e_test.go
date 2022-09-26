@@ -8,6 +8,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"os"
 	"testing"
 
@@ -20,7 +21,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -132,6 +132,9 @@ var (
 			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
 		},
 	}
+
+	genericCodecs = serializer.NewCodecFactory(scheme)
+	genericCodec  = genericCodecs.UniversalDeserializer()
 
 	//go:embed manifests
 	TestManifestFiles embed.FS
