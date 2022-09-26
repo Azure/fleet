@@ -12,9 +12,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -60,7 +62,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-
+	utilrand.Seed(time.Now().UnixNano())
 	defer klog.Flush()
 	hubURL := os.Getenv("HUB_SERVER_URL")
 

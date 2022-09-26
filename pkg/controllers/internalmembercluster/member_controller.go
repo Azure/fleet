@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -48,6 +49,9 @@ const (
 	eventReasonInternalMemberClusterFailedToJoin  = "InternalMemberClusterFailedToJoin"
 	eventReasonInternalMemberClusterFailedToLeave = "InternalMemberClusterFailedToLeave"
 	eventReasonInternalMemberClusterLeft          = "InternalMemberClusterLeft"
+
+	// we add +-5% jitter
+	jitterPercent = 10
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
@@ -88,7 +92,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			klog.ErrorS(updateHealthErr, "failed to update health", "imc", klog.KObj(&imc))
 			return ctrl.Result{}, updateHealthErr
 		}
-		return ctrl.Result{RequeueAfter: time.Second * time.Duration(imc.Spec.HeartbeatPeriodSeconds)}, nil
+		// add jitter to the heart beat to mitigate the herding of multiple agents
+		hbinterval := 1000 * imc.Spec.HeartbeatPeriodSeconds
+		jitterRange := int64(hbinterval*jitterPercent) / 100
+		return ctrl.Result{RequeueAfter: time.Millisecond *
+			(time.Duration(hbinterval) + time.Duration(utilrand.Int63nRange(0, jitterRange)-jitterRange/2))}, nil
 
 	case fleetv1alpha1.ClusterStateLeave:
 		if err := r.stopAgents(ctx, &imc); err != nil {
