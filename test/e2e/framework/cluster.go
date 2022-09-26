@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -25,7 +24,6 @@ var (
 type Cluster struct {
 	Scheme        *runtime.Scheme
 	KubeClient    client.Client
-	KubeClientSet kubernetes.Interface
 	DynamicClient dynamic.Interface
 	ClusterName   string
 	HubURL        string
@@ -50,9 +48,6 @@ func GetClusterClient(cluster *Cluster) {
 
 	cluster.KubeClient, err = client.New(restConfig, client.Options{Scheme: cluster.Scheme})
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Kube Client")
-
-	cluster.KubeClientSet, err = kubernetes.NewForConfig(restConfig)
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up KubeClient Set")
 
 	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Dynamic Client")
