@@ -31,8 +31,6 @@ var _ = Describe("Work API Controller test", func() {
 
 	var (
 		ctx context.Context
-		// Includes all works applied to the hub cluster. Used for garbage collection.
-		works []workapi.Work
 
 		// Comparison Options
 		cmpOptions = []cmp.Option{
@@ -73,13 +71,9 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
-
-		//Empties the works since they were garbage collected earlier.
-		works = []workapi.Work{}
 	})
 
 	AfterEach(func() {
-		testutils.DeleteWork(ctx, *HubCluster, works)
 		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
 	})
 
@@ -551,6 +545,57 @@ var _ = Describe("Work API Controller test", func() {
 			"There is no spec annotation on the resource %s", crd.Name)
 		Expect(customResource.GetAnnotations()[specHashAnnotation]).ToNot(BeEmpty(),
 			"There is no spec annotation on the custom resource %s", customResource.GetName())
+	})
+
+	Context("Work-api Deletion tests", func() {
+		It("Deleting a Work Object on Hub Cluster should also delete the corresponding resource on Member Cluster.", func() {
+
+			workName := testutils.RandomWorkName(5)
+			manifestConfigMapName := "work-update-configmap"
+			configMapBeforeDelete := corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      manifestConfigMapName,
+					Namespace: resourceNamespace.Name,
+				},
+				Data: map[string]string{
+					"before-delete-key": "before-delete-data",
+				},
+			}
+
+			// Creating types.NamespacedName to use in retrieving objects.
+			namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
+			resourceNamespaceType := types.NamespacedName{Name: configMapBeforeDelete.Name, Namespace: resourceNamespace.Name}
+			manifests := testutils.AddManifests([]runtime.Object{&configMapBeforeDelete}, []workapi.Manifest{})
+
+			By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
+			workBeforeDelete := testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
+
+			Eventually(func() string {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceType, &workBeforeDelete); err != nil {
+					return err.Error()
+				}
+
+				want := []metav1.Condition{
+					{
+						Type:   conditionTypeApplied,
+						Status: metav1.ConditionTrue,
+						Reason: "appliedWorkComplete",
+					},
+				}
+
+				return cmp.Diff(want, workBeforeDelete.Status.Conditions, cmpOptions...)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
+
+			testutils.DeleteWork(ctx, *HubCluster, workBeforeDelete)
+
+			By("Deleting the Work Object should also delete the resources in the member cluster")
+			configMapDeleted := corev1.ConfigMap{}
+			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).ShouldNot(BeNil())
+		})
 	})
 })
 
