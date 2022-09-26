@@ -180,13 +180,13 @@ func TestGenerateManifest(t *testing.T) {
 						PublishNotReadyAddresses: false,
 						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
 						IPFamilies: []corev1.IPFamily{
-							corev1.IPFamily("IPV4"),
-							corev1.IPFamily("IPV6"),
+							corev1.IPv4Protocol,
+							corev1.IPv6Protocol,
 						},
-						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer("svc-spec-ipFamilyPolicy"),
+						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
 						AllocateLoadBalancerNodePorts: pointer.Bool(false),
 						LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
-						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer("svc-spec-ipFamilyPolicy"),
+						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 					},
 					Status: corev1.ServiceStatus{
 						LoadBalancer: corev1.LoadBalancerStatus{
@@ -246,13 +246,13 @@ func TestGenerateManifest(t *testing.T) {
 						PublishNotReadyAddresses: false,
 						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
 						IPFamilies: []corev1.IPFamily{
-							corev1.IPFamily("IPV4"),
-							corev1.IPFamily("IPV6"),
+							corev1.IPv4Protocol,
+							corev1.IPv6Protocol,
 						},
-						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer("svc-spec-ipFamilyPolicy"),
+						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
 						AllocateLoadBalancerNodePorts: pointer.Bool(false),
 						LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
-						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer("svc-spec-ipFamilyPolicy"),
+						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 					},
 				}
 
@@ -294,11 +294,11 @@ func TestGenerateManifest(t *testing.T) {
 	}
 }
 
-func makeIPFamilyPolicyTypePointer(value string) *corev1.IPFamilyPolicyType {
-	s := corev1.IPFamilyPolicyType(value)
+func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicyType) *corev1.IPFamilyPolicyType {
+	s := policyType
 	return &s
 }
-func makeServiceInternalTrafficPolicyPointer(value string) *corev1.ServiceInternalTrafficPolicyType {
-	p := corev1.ServiceInternalTrafficPolicyType(value)
+func makeServiceInternalTrafficPolicyPointer(policyType corev1.ServiceInternalTrafficPolicyType) *corev1.ServiceInternalTrafficPolicyType {
+	p := policyType
 	return &p
 }
