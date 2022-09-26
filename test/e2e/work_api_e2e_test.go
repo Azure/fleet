@@ -513,8 +513,6 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(wantCRObject, *customResource, cmpOptions...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
-
 		Expect(cmp.Diff(wantCRObject, *customResource,
 			append(cmpOptions, cmp.FilterPath(
 				func(p cmp.Path) bool {
