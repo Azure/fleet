@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
+	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -25,10 +26,22 @@ func (d *ChangeDetector) getWatchableResources() ([]informer.APIResourceMeta, er
 	allErr := make([]error, 0)
 	if discoverError != nil {
 		if discovery.IsGroupDiscoveryFailedError(discoverError) {
-			klog.Warningf("failed to discover some groups: %v", discoverError.(*discovery.ErrGroupDiscoveryFailed).Groups) //nolint
-		} else {
-			klog.Warningf("failed to discover some resources: %v", discoverError)
+			failedGroups := discoverError.(*discovery.ErrGroupDiscoveryFailed).Groups //nolint
+			klog.V(2).InfoS("failed to discover some groups", "groups", failedGroups)
+			metricsGroupCount := 0
+			for gv := range failedGroups {
+				if gv.Group == metricsV1beta1.GroupName {
+					metricsGroupCount++
+				}
+			}
+			// the metrics group is not really a resource we can place, so we sink this error
+			if len(failedGroups) == metricsGroupCount {
+				discoverError = nil
+			}
 		}
+	}
+	// check the error again since we may sink error from different failed group. One is the metrics.k8s.io group.
+	if discoverError != nil {
 		allErr = append(allErr, discoverError)
 	}
 	if allResources == nil {
@@ -36,7 +49,6 @@ func (d *ChangeDetector) getWatchableResources() ([]informer.APIResourceMeta, er
 	}
 
 	watchableGroupVersionResources := make([]informer.APIResourceMeta, 0)
-
 	// This is extracted from discovery.GroupVersionResources to only watch watchable resources
 	watchableResources := discovery.FilteredBy(discovery.SupportsAllVerbs{Verbs: []string{"list", "watch"}}, allResources)
 	for _, rl := range watchableResources {

@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
@@ -65,6 +66,7 @@ func NewDisabledResourceConfig() *DisabledResourceConfig {
 	// disable the below built-in resources
 	r.DisableGroup(eventsv1.GroupName)
 	r.DisableGroup(coordv1.GroupName)
+	r.DisableGroup(metricsV1beta1.GroupName)
 	r.DisableGroupVersionKind(corev1PodGVK)
 	r.DisableGroupVersionKind(corev1NodeGVK)
 	r.DisableGroupVersionKind(serviceImportGVK)
