@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -209,20 +208,4 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	gomega.Expect(err).Should(gomega.Succeed(), "CRD data was not mapped in the restMapper")
 
 	return obj, gvk, mapping.Resource
-}
-
-// CompareCRObject compares the two unstructured objects and returns empty string if they are equal.
-func CompareCRObject(obj1, obj2 unstructured.Unstructured, cmpOptions []cmp.Option) string {
-	// First compares the root level map of the unstructured object.
-	return cmp.Diff(obj1, obj2, append(cmpOptions, cmp.FilterPath(
-		func(p cmp.Path) bool {
-			step, ok := p[len(p)-1].(cmp.MapIndex)
-			return ok && step.Key().String() == "metadata"
-		}, cmp.Ignore()))...) +
-		// Then compares the metadata of the unstructured Object.
-		cmp.Diff(obj1.Object["metadata"], obj2.Object["metadata"], append(cmpOptions, cmp.FilterPath(
-			func(p cmp.Path) bool {
-				step, ok := p[len(p)-1].(cmp.MapIndex)
-				return ok && step.Key().String() != "name"
-			}, cmp.Ignore()))...)
 }
