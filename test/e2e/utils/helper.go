@@ -8,9 +8,9 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"

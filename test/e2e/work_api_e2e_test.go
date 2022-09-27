@@ -3,12 +3,11 @@ package e2e
 import (
 	"context"
 	"fmt"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.goms.io/fleet/pkg/utils"
-	testutils "go.goms.io/fleet/test/e2e/utils"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+
+	"go.goms.io/fleet/pkg/utils"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 // TODO: enable this when join/leave logic is connected to work-api, join the Hub and Member for this test.
