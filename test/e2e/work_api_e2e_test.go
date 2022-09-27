@@ -549,14 +549,14 @@ var _ = Describe("Work API Controller test", func() {
 	})
 
 	Context("Updating Work", func() {
-		configMapBeforeUpdate := corev1.ConfigMap{}
-		workBeforeUpdate := workapi.Work{}
+		configMap := corev1.ConfigMap{}
+		work := workapi.Work{}
 		namespaceType := types.NamespacedName{}
 
 		BeforeEach(func() {
 			workName := testutils.RandomWorkName(5)
 			manifestConfigMapName := "work-update-configmap"
-			configMapBeforeUpdate = corev1.ConfigMap{
+			configMap = corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{
 					APIVersion: "v1",
 					Kind:       "ConfigMap",
@@ -573,12 +573,12 @@ var _ = Describe("Work API Controller test", func() {
 			// Creating types.NamespacedName to use in retrieving objects.
 			namespaceType = types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
 
-			manifests := testutils.AddManifests([]runtime.Object{&configMapBeforeUpdate}, []workapi.Manifest{})
+			manifests := testutils.AddManifests([]runtime.Object{&configMap}, []workapi.Manifest{})
 			By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
-			workBeforeUpdate = testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
+			work = testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
 			Eventually(func() string {
-				if err := HubCluster.KubeClient.Get(ctx, namespaceType, &workBeforeUpdate); err != nil {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceType, &work); err != nil {
 					return err.Error()
 				}
 
@@ -590,17 +590,17 @@ var _ = Describe("Work API Controller test", func() {
 					},
 				}
 
-				return cmp.Diff(want, workBeforeUpdate.Status.Conditions, cmpOptions...)
+				return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
 		})
 
 		It("Updating Work object on the Hub Cluster should update the resource on the member cluster.", func() {
-			updatedConfigMap := configMapBeforeUpdate.DeepCopy()
+			updatedConfigMap := configMap.DeepCopy()
 			updatedConfigMap.Data = map[string]string{
 				"updated-key": "updated-data",
 			}
-			testutils.UpdateWork(ctx, &workBeforeUpdate, HubCluster, []runtime.Object{updatedConfigMap})
+			testutils.UpdateWork(ctx, &work, HubCluster, []runtime.Object{updatedConfigMap})
 
 			By(fmt.Sprintf("The resource %s should be updated in the member cluster %s", updatedConfigMap.Name, memberClusterName))
 			configMapNamespaceType := types.NamespacedName{Name: updatedConfigMap.Name, Namespace: resourceNamespace.Name}
@@ -625,19 +625,19 @@ var _ = Describe("Work API Controller test", func() {
 		})
 
 		It("Deleting a manifest from the Work object should delete the corresponding resource in the member cluster", func() {
-			configMapNamespaceType := types.NamespacedName{Name: configMapBeforeUpdate.Name, Namespace: resourceNamespace.Name}
-			updatedConfigMap := configMapBeforeUpdate.DeepCopy()
+			configMapNamespaceType := types.NamespacedName{Name: configMap.Name, Namespace: resourceNamespace.Name}
+			updatedConfigMap := configMap.DeepCopy()
 			updatedConfigMap.Data = map[string]string{}
-			testutils.UpdateWork(ctx, &workBeforeUpdate, HubCluster, []runtime.Object{})
+			testutils.UpdateWork(ctx, &work, HubCluster, []runtime.Object{})
 
-			By(fmt.Sprintf("The resource %s should be deleted in the member cluster %s", configMapBeforeUpdate.Name, memberClusterName))
+			By(fmt.Sprintf("The resource %s should be deleted in the member cluster %s", configMap.Name, memberClusterName))
 			Eventually(func() error {
 				retrievedConfigMap := corev1.ConfigMap{}
 				if err := MemberCluster.KubeClient.Get(ctx, configMapNamespaceType, &retrievedConfigMap); err != nil {
 					return err
 				}
 				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Resource %s should have been deleted.", configMapBeforeUpdate.Name)
+			}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Resource %s should have been deleted.", configMap.Name)
 
 			By(fmt.Sprintf("The AppliedWork Manifest for Work %s should have been deleted", namespaceType))
 			appliedWork := workapi.AppliedWork{}
@@ -649,15 +649,14 @@ var _ = Describe("Work API Controller test", func() {
 			Expect(cmp.Diff(want, appliedWork.Status)).Should(BeEmpty(),
 				"Status should be empty for AppliedWork %s", appliedWork.Name)
 
-			By(fmt.Sprintf("The Work Condition should have been deleted from the Work Object"))
-			work := workapi.Work{}
-			err = MemberCluster.KubeClient.Get(ctx, namespaceType, &work)
+			By(fmt.Sprintf("The Work Condition for Work %s should have been deleted from the Work Object", work.Name))
+			updatedWork := workapi.Work{}
+			err = MemberCluster.KubeClient.Get(ctx, namespaceType, &updatedWork)
 			Expect(err).Should(Succeed(), "Retrieving Work Object failed")
-			Expect(work.Status.Conditions).Should(BeNil(),
-				"Work Condition for Work Object %s should be empty", work.Name)
-
-			Expect(work.Status.ManifestConditions).Should(BeNil(),
-				"Work Manifest Condition for Work Object %s should be empty", work.Name)
+			Expect(updatedWork.Status.Conditions).Should(BeNil(),
+				"Work Condition for Work Object %s should be empty", updatedWork.Name)
+			Expect(updatedWork.Status.ManifestConditions).Should(BeNil(),
+				"Work Manifest Condition for Work Object %s should be empty", updatedWork.Name)
 		})
 	})
 })
