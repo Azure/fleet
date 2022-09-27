@@ -9,8 +9,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -33,11 +36,28 @@ var _ = Describe("Work API Controller test", func() {
 
 		// Comparison Options
 		cmpOptions = []cmp.Option{
-			cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"),
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
+			cmpopts.IgnoreFields(metav1.ObjectMeta{},
+				"UID",
+				"ResourceVersion",
+				"Generation",
+				"CreationTimestamp",
+				"Annotations",
+				"OwnerReferences",
+				"ManagedFields"),
 		}
+
+		appliedWorkCmpOptions = append(cmpOptions, cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"))
+
+		crdCmpOptions = append(cmpOptions,
+			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "Status"),
+			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinitionSpec{}, "Versions", "Conversion"))
+
+		secretCmpOptions = append(cmpOptions,
+			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
+		)
 
 		resourceNamespace *corev1.Namespace
 	)
@@ -86,6 +106,9 @@ var _ = Describe("Work API Controller test", func() {
 
 		// Creating types.NamespacedName to use in retrieving objects.
 		namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
+
+		//Creating types.NamespacedName for the resource created.
+		resourceNamespaceType := types.NamespacedName{Name: manifestConfigMapName, Namespace: resourceNamespace.Name}
 
 		manifests := testutils.AddManifests([]runtime.Object{&manifestConfigMap}, []workapi.Manifest{})
 		By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
@@ -154,18 +177,18 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(want, appliedWork.Status, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(want, appliedWork.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
-		cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
-		Expect(err).Should(Succeed())
-		Expect(cmp.Diff(manifestConfigMap.Data, cm.Data)).Should(BeEmpty(),
+		retrievedConfigMap := corev1.ConfigMap{}
+		Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedConfigMap)).Should(Succeed(),
+			"Retrieving the resource %s failed", manifestConfigMap.Name)
+		//TODO: Fix this to compare the whole structure instead of just the data
+		Expect(cmp.Diff(manifestConfigMap.Data, retrievedConfigMap.Data)).Should(BeEmpty(),
 			"ConfigMap %s was not created in the cluster %s, or configMap data mismatch(-want, +got):", manifestConfigMapName, MemberCluster.ClusterName)
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, namespaceType))
-		configMap, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
-		Expect(err).Should(Succeed(), "Retrieving resource %s failed", manifestConfigMap.Name)
 		wantOwner := []metav1.OwnerReference{
 			{
 				APIVersion: workapi.GroupVersion.String(),
@@ -175,11 +198,11 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(wantOwner, configMap.OwnerReferences, cmpOptions...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
+		Expect(cmp.Diff(wantOwner, retrievedConfigMap.OwnerReferences, cmpOptions...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestConfigMapName))
-		Expect(configMap.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
-			"SpecHash Annotation does not exist for resource %s", configMap.Name)
+		Expect(retrievedConfigMap.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
+			"SpecHash Annotation does not exist for resource %s", retrievedConfigMap.Name)
 	})
 
 	It("Upon successful creation of 2 work resources with same manifest, work manifest is applied, and only 1 resource is created with merged owner references.", func() {
@@ -276,10 +299,6 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
 
-		appliedWorkOne := workapi.AppliedWork{}
-		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
-			"Retrieving AppliedWork %s failed", workNameOne)
-
 		wantAppliedStatus := workapi.AppliedtWorkStatus{
 			AppliedResources: []workapi.AppliedResourceMeta{
 				{
@@ -295,14 +314,18 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, cmpOptions...)).Should(BeEmpty(),
+		appliedWorkOne := workapi.AppliedWork{}
+		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
+			"Retrieving AppliedWork %s failed", workNameOne)
+
+		Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		appliedWorkTwo := workapi.AppliedWork{}
 		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeTwo, &appliedWorkTwo)).Should(Succeed(),
 			"Retrieving AppliedWork %s failed", workNameTwo)
 
-		Expect(cmp.Diff(wantAppliedStatus, appliedWorkTwo.Status, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(wantAppliedStatus, appliedWorkTwo.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestSecretName, MemberCluster.ClusterName))
@@ -310,12 +333,6 @@ var _ = Describe("Work API Controller test", func() {
 		err := MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedSecret)
 
 		Expect(err).Should(Succeed(), "Secret %s was not created in the cluster %s", manifestSecretName, MemberCluster.ClusterName)
-
-		//Ignore TypeMeta in Secret, because of the Kubernetes's decision not to fill in redundant kind / apiVersion fields.
-		secretCmpOptions := []cmp.Option{
-			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
-			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
-		}
 
 		Expect(cmp.Diff(secret, retrievedSecret, append(cmpOptions, secretCmpOptions...)...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
 
@@ -343,4 +360,206 @@ var _ = Describe("Work API Controller test", func() {
 		Expect(retrievedSecret.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
 			"SpecHash Annotation does not exist for resource %s", secret.Name)
 	})
+	It("Upon successful work creation of a CRD resource, manifest is applied, and resources are created", func() {
+		workName := testutils.RandomWorkName(5)
+
+		// Name of the CRD object from the manifest file
+		crdName := "testcrds.multicluster.x-k8s.io"
+		crdObjectName := "test-crd-object"
+
+		// Creating CRD manifest from test file
+		manifestCRD, crdGVK, crdGVR := testutils.GenerateCRDObjectFromFile(*MemberCluster, TestManifestFiles, "manifests/test-crd.yaml", genericCodec)
+
+		// GVR for the Custom Resource created
+		crGVR := schema.GroupVersionResource{
+			Group:    "multicluster.x-k8s.io",
+			Version:  "v1alpha1",
+			Resource: "testcrds",
+		}
+		customResourceManifestString := "{\"apiVersion\":\"multicluster.x-k8s.io/v1alpha1\",\"kind\":\"TestCRD\",\"metadata\":{\"name\":\"test-crd-object\"}}"
+
+		// Creating types.NamespacedName to use in retrieving objects.
+		namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
+
+		// Creating NamespacedName to retrieve CRD object created
+		crdNamespaceType := types.NamespacedName{Name: crdName}
+
+		By(fmt.Sprintf("creating work %s of %s", namespaceType, crdGVK.Kind))
+		manifests := testutils.AddManifests([]runtime.Object{manifestCRD}, []workapi.Manifest{})
+		manifests = testutils.AddByteArrayToManifest([]byte(customResourceManifestString), manifests)
+		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
+
+		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType))
+		work := workapi.Work{}
+
+		Eventually(func() string {
+			if err := HubCluster.KubeClient.Get(ctx, namespaceType, &work); err != nil {
+				return err.Error()
+			}
+
+			want := []metav1.Condition{
+				{
+					Type:   conditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: "appliedWorkComplete",
+				},
+			}
+
+			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
+			"Applied Condition mismatch for work %s (-want, +got):", workName)
+
+		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType))
+		expectedManifestCondition := []workapi.ManifestCondition{
+			{
+				Conditions: []metav1.Condition{
+					{
+						Type:   conditionTypeApplied,
+						Status: metav1.ConditionTrue,
+						// Will ignore reason for now, there can be 2 different outcomes, Complete and Updated.
+						//Reason: "appliedManifestComplete",
+					},
+				},
+				Identifier: workapi.ResourceIdentifier{
+					Group:    crdGVK.Group,
+					Version:  crdGVK.Version,
+					Kind:     crdGVK.Kind,
+					Name:     crdName,
+					Resource: crdGVR.Resource,
+				},
+			},
+			{
+				Conditions: []metav1.Condition{
+					{
+						Type:   conditionTypeApplied,
+						Status: metav1.ConditionTrue,
+						//Reason: "appliedManifestUpdated",
+					},
+				},
+				Identifier: workapi.ResourceIdentifier{
+					Group:    crGVR.Group,
+					Version:  crGVR.Version,
+					Kind:     "TestCRD",
+					Name:     crdObjectName,
+					Resource: "testcrds",
+				},
+			},
+		}
+
+		options := append(cmpOptions, cmpopts.IgnoreFields(metav1.Condition{}, "Reason"))
+		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, options...)).Should(BeEmpty(),
+			"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
+
+		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", crdGVK.Kind))
+		var appliedWork workapi.AppliedWork
+
+		Expect(MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)).Should(Succeed(),
+			"Retrieving AppliedWork %s failed", workName)
+
+		want := workapi.AppliedtWorkStatus{
+			AppliedResources: []workapi.AppliedResourceMeta{
+				{
+					ResourceIdentifier: workapi.ResourceIdentifier{
+						Group:    crdGVK.Group,
+						Version:  crdGVK.Version,
+						Kind:     crdGVK.Kind,
+						Name:     crdName,
+						Resource: crdGVR.Resource,
+					},
+				},
+				{
+					ResourceIdentifier: workapi.ResourceIdentifier{
+						Group:    crGVR.Group,
+						Version:  crGVR.Version,
+						Kind:     "TestCRD",
+						Name:     crdObjectName,
+						Resource: "testcrds",
+					},
+				},
+			},
+		}
+
+		Expect(cmp.Diff(want, appliedWork.Status, appliedWorkCmpOptions...)).Should(BeEmpty(), "Validate AppliedResourceMeta mismatch (-want, +got):")
+
+		By(fmt.Sprintf("CRD %s should have been created in cluster %s", crdName, MemberCluster.ClusterName))
+
+		crd := apiextensionsv1.CustomResourceDefinition{}
+		err := MemberCluster.KubeClient.Get(ctx, crdNamespaceType, &crd)
+		Expect(err).Should(Succeed(), "Resources %s not created in cluster %s", crdName, MemberCluster.ClusterName)
+
+		wantCRD := apiextensionsv1.CustomResourceDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "testcrds.multicluster.x-k8s.io",
+			},
+			Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+				Group: "multicluster.x-k8s.io",
+				Names: apiextensionsv1.CustomResourceDefinitionNames{
+					Plural:     "testcrds",
+					Singular:   "testcrd",
+					ShortNames: nil,
+					Kind:       "TestCRD",
+					ListKind:   "TestCRDList",
+					Categories: nil,
+				},
+				Scope: "Cluster",
+			},
+		}
+
+		Expect(cmp.Diff(wantCRD, crd, crdCmpOptions...)).Should(BeEmpty(), "Valdate CRD object mismatch (-want, got+):")
+
+		By(fmt.Sprintf("CR %s should have been created in cluster %s", crdObjectName, MemberCluster.ClusterName))
+
+		customResource, err := MemberCluster.DynamicClient.Resource(crGVR).Get(ctx, crdObjectName, metav1.GetOptions{})
+		Expect(err).Should(Succeed(), "retrieving CR %s failed in cluster %s", crdObjectName, MemberCluster.ClusterName)
+		wantCRObject := unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "multicluster.x-k8s.io/v1alpha1",
+				"kind":       "TestCRD",
+				"metadata": map[string]interface{}{
+					"name": "test-crd-object",
+				},
+			},
+		}
+
+		filterMetadataFunc := cmp.FilterPath(IsKeyMetadata, cmp.Ignore())
+		filterNotNameFunc := cmp.FilterPath(IsKeyNotName, cmp.Ignore())
+
+		Expect(cmp.Diff(wantCRObject, *customResource,
+			append(cmpOptions, filterMetadataFunc)...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
+
+		Expect(cmp.Diff(wantCRObject.Object["metadata"], customResource.Object["metadata"],
+			append(cmpOptions, filterNotNameFunc)...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
+
+		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", crdName, namespaceType))
+		wantOwner := []metav1.OwnerReference{
+			{
+				APIVersion: workapi.GroupVersion.String(),
+				Kind:       workapi.AppliedWorkKind,
+				Name:       appliedWork.GetName(),
+				UID:        appliedWork.GetUID(),
+			},
+		}
+
+		Expect(cmp.Diff(wantOwner, crd.OwnerReferences, cmpOptions...)).Should(BeEmpty(),
+			"OwnerReference for resource %s mismatch (-want, +got):", crd.Name)
+		Expect(cmp.Diff(wantOwner, customResource.GetOwnerReferences(), cmpOptions...)).Should(BeEmpty(),
+			"OwnerReference for CR %s mismatch (-want, +got):", customResource.GetName())
+
+		By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", crd.Name))
+
+		Expect(crd.GetAnnotations()[specHashAnnotation]).ToNot(BeEmpty(),
+			"There is no spec annotation on the resource %s", crd.Name)
+		Expect(customResource.GetAnnotations()[specHashAnnotation]).ToNot(BeEmpty(),
+			"There is no spec annotation on the custom resource %s", customResource.GetName())
+	})
 })
+
+func IsKeyMetadata(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() == "metadata"
+}
+
+func IsKeyNotName(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() != "name"
+}
