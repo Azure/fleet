@@ -48,6 +48,11 @@ var _ = Describe("Work API Controller test", func() {
 			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "Status"),
 			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinitionSpec{}, "Versions", "Conversion"))
 
+		secretCmpOptions = append(cmpOptions,
+			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
+			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
+		)
+
 		resourceNamespace *corev1.Namespace
 	)
 
@@ -288,10 +293,6 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
 
-		appliedWorkOne := workapi.AppliedWork{}
-		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
-			"Retrieving AppliedWork %s failed", workNameOne)
-
 		wantAppliedStatus := workapi.AppliedtWorkStatus{
 			AppliedResources: []workapi.AppliedResourceMeta{
 				{
@@ -307,14 +308,18 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, cmpOptions...)).Should(BeEmpty(),
+		appliedWorkOne := workapi.AppliedWork{}
+		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
+			"Retrieving AppliedWork %s failed", workNameOne)
+
+		Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		appliedWorkTwo := workapi.AppliedWork{}
 		Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeTwo, &appliedWorkTwo)).Should(Succeed(),
 			"Retrieving AppliedWork %s failed", workNameTwo)
 
-		Expect(cmp.Diff(wantAppliedStatus, appliedWorkTwo.Status, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(wantAppliedStatus, appliedWorkTwo.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestSecretName, MemberCluster.ClusterName))
@@ -322,12 +327,6 @@ var _ = Describe("Work API Controller test", func() {
 		err := MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedSecret)
 
 		Expect(err).Should(Succeed(), "Secret %s was not created in the cluster %s", manifestSecretName, MemberCluster.ClusterName)
-
-		//Ignore TypeMeta in Secret, because of the Kubernetes's decision not to fill in redundant kind / apiVersion fields.
-		secretCmpOptions := []cmp.Option{
-			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
-			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
-		}
 
 		Expect(cmp.Diff(secret, retrievedSecret, append(cmpOptions, secretCmpOptions...)...)).Should(BeEmpty(), "Secret %s mismatch (-want, +got):")
 
