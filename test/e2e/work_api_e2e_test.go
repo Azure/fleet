@@ -630,7 +630,7 @@ var _ = Describe("Work API Controller test", func() {
 					return err.Error()
 				}
 				return cmp.Diff(want, retrievedConfigMap, configMapCmpOptions...)
-			}).Should(BeEmpty(), "Resource %s mismatch (-want, +got):", updatedConfigMap.Name)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Resource %s mismatch (-want, +got):", updatedConfigMap.Name)
 		})
 	})
 })
