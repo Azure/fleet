@@ -39,18 +39,24 @@ var _ = Describe("Work API Controller test", func() {
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
+			cmpopts.IgnoreFields(metav1.ObjectMeta{},
+				"UID",
+				"ResourceVersion",
+				"Generation",
+				"CreationTimestamp",
+				"Annotations",
+				"OwnerReferences",
+				"ManagedFields"),
 		}
 
 		appliedWorkCmpOptions = append(cmpOptions, cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"))
 
 		crdCmpOptions = append(cmpOptions,
-			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "Generation", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
 			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "Status"),
 			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinitionSpec{}, "Versions", "Conversion"))
 
 		secretCmpOptions = append(cmpOptions,
 			cmpopts.IgnoreFields(corev1.Secret{}, "TypeMeta"),
-			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
 		)
 
 		resourceNamespace *corev1.Namespace
@@ -515,11 +521,14 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
+		filterMetadataFunc := cmp.FilterPath(IsKeyMetadata, cmp.Ignore())
+		filterNotNameFunc := cmp.FilterPath(IsKeyNotName, cmp.Ignore())
+
 		Expect(cmp.Diff(wantCRObject, *customResource,
-			append(cmpOptions, cmp.FilterPath(testutils.IsKeyMetadata, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
+			append(cmpOptions, filterMetadataFunc)...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
 
 		Expect(cmp.Diff(wantCRObject.Object["metadata"], customResource.Object["metadata"],
-			append(cmpOptions, cmp.FilterPath(testutils.IsKeyNotName, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
+			append(cmpOptions, filterNotNameFunc)...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", crdName, namespaceType))
 		wantOwner := []metav1.OwnerReference{
@@ -544,3 +553,13 @@ var _ = Describe("Work API Controller test", func() {
 			"There is no spec annotation on the custom resource %s", customResource.GetName())
 	})
 })
+
+func IsKeyMetadata(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() == "metadata"
+}
+
+func IsKeyNotName(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() != "name"
+}
