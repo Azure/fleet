@@ -7,10 +7,10 @@ package utils
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
+	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -57,7 +57,7 @@ func CheckMemberClusterStatus(ctx context.Context, cluster framework.Cluster, wa
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait member cluster %s to have status %s", mc.Name, wantMCStatus)
 }
 
-// CheckInternalMemberClusterStatus is used to check member cluster status.
+// CheckInternalMemberClusterStatus is used to check internal member cluster status.
 func CheckInternalMemberClusterStatus(ctx context.Context, cluster framework.Cluster, wantIMCStatus v1alpha1.InternalMemberClusterStatus, imc *v1alpha1.InternalMemberCluster, imcStatusCmpOptions []cmp.Option) {
 	gomega.Eventually(func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
