@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -107,7 +108,6 @@ func (d *ChangeDetector) onWorkDeleted(obj interface{}) {
 // The next one is for the memberCluster informer
 // onMemberClusterUpdated handles object update event and push the memberCluster name to the memberCluster controller queue.
 func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
-	// Only enqueue if the change can affect placement decisions. i.e. label and spec and condition
 	var oldMC, newMC fleetv1alpha1.MemberCluster
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(oldObj.(*unstructured.Unstructured).Object, &oldMC)
 	if err != nil {
@@ -120,12 +120,25 @@ func (d *ChangeDetector) onMemberClusterUpdated(oldObj, newObj interface{}) {
 		klog.ErrorS(err, "failed to handle a member cluster object update event")
 		return
 	}
+	// Only enqueue if the change can affect placement decisions. i.e. label and spec and work agent condition
 	if oldMC.GetGeneration() == newMC.GetGeneration() &&
-		reflect.DeepEqual(oldMC.GetLabels(), newMC.GetLabels()) &&
-		reflect.DeepEqual(oldMC.Status.Conditions, newMC.Status.Conditions) {
-		klog.V(4).InfoS("ignore a memberCluster update event with no real change",
-			"memberCluster", klog.KObj(&oldMC), "generation", oldMC.GetGeneration())
-		return
+		reflect.DeepEqual(oldMC.GetLabels(), newMC.GetLabels()) {
+		var oldAgentCond, newAgentCond []metav1.Condition
+		for _, agentStatus := range oldMC.Status.AgentStatus {
+			if agentStatus.Type == fleetv1alpha1.MemberAgent {
+				oldAgentCond = agentStatus.Conditions
+			}
+		}
+		for _, agentStatus := range newMC.Status.AgentStatus {
+			if agentStatus.Type == fleetv1alpha1.MemberAgent {
+				newAgentCond = agentStatus.Conditions
+			}
+		}
+		if reflect.DeepEqual(oldAgentCond, newAgentCond) {
+			klog.V(4).InfoS("ignore a memberCluster update event with no real change",
+				"memberCluster", klog.KObj(&oldMC), "generation", oldMC.GetGeneration())
+			return
+		}
 	}
 
 	klog.V(3).InfoS("a memberCluster is updated", "memberCluster", klog.KObj(&oldMC))
