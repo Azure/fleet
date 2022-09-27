@@ -21,7 +21,6 @@ import (
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
-// TODO: enable this when join/leave logic is connected to work-api, join the Hub and Member for this test.
 var _ = Describe("Work API Controller test", func() {
 
 	const (
