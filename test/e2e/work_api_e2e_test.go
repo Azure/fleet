@@ -32,8 +32,6 @@ var _ = Describe("Work API Controller test", func() {
 
 	var (
 		ctx context.Context
-		// Includes all works applied to the hub cluster. Used for garbage collection.
-		works []workapi.Work
 
 		// Comparison Options
 		cmpOptions = []cmp.Option{
@@ -74,9 +72,6 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
-
-		//Empties the works since they were garbage collected earlier.
-		works = []workapi.Work{}
 	})
 
 	AfterEach(func() {
@@ -521,8 +516,8 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		filterMetadataFunc := cmp.FilterPath(IsKeyMetadata, cmp.Ignore())
-		filterNotNameFunc := cmp.FilterPath(IsKeyNotName, cmp.Ignore())
+		filterMetadataFunc := cmp.FilterPath(isKeyMetadata, cmp.Ignore())
+		filterNotNameFunc := cmp.FilterPath(isKeyNotName, cmp.Ignore())
 
 		Expect(cmp.Diff(wantCRObject, *customResource,
 			append(cmpOptions, filterMetadataFunc)...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
@@ -621,26 +616,58 @@ var _ = Describe("Work API Controller test", func() {
 				},
 			}
 
-			configMapCmpOptions := append(cmpOptions,
-				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "Generation", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
-			)
-
 			Eventually(func() string {
 				if err := MemberCluster.KubeClient.Get(ctx, configMapNamespaceType, &retrievedConfigMap); err != nil {
 					return err.Error()
 				}
-				return cmp.Diff(want, retrievedConfigMap, configMapCmpOptions...)
+				return cmp.Diff(want, retrievedConfigMap, cmpOptions...)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Resource %s mismatch (-want, +got):", updatedConfigMap.Name)
+		})
+
+		It("Deleting a manifest from the Work object should delete the corresponding resource in the member cluster", func() {
+			configMapNamespaceType := types.NamespacedName{Name: configMapBeforeUpdate.Name, Namespace: resourceNamespace.Name}
+			updatedConfigMap := configMapBeforeUpdate.DeepCopy()
+			updatedConfigMap.Data = map[string]string{}
+			testutils.UpdateWork(ctx, &workBeforeUpdate, HubCluster, []runtime.Object{})
+
+			By(fmt.Sprintf("The resource %s should be deleted in the member cluster %s", configMapBeforeUpdate.Name, memberClusterName))
+			Eventually(func() error {
+				retrievedConfigMap := corev1.ConfigMap{}
+				if err := MemberCluster.KubeClient.Get(ctx, configMapNamespaceType, &retrievedConfigMap); err != nil {
+					return err
+				}
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Resource %s should have been deleted.", configMapBeforeUpdate.Name)
+
+			By(fmt.Sprintf("The AppliedWork Manifest should have been deleted"))
+			appliedWork := workapi.AppliedWork{}
+			err := MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
+			Expect(err).Should(Succeed(), "Retrieving AppliedWork Manifest Failed")
+			want := workapi.AppliedtWorkStatus{
+				AppliedResources: []workapi.AppliedResourceMeta{},
+			}
+			Expect(cmp.Diff(want, appliedWork.Status)).Should(BeEmpty(),
+				"Status should be empty for AppliedWork %s", appliedWork.Name)
+
+			By(fmt.Sprintf("The Work Condition should have been deleted from the Work Object"))
+			work := workapi.Work{}
+			err = MemberCluster.KubeClient.Get(ctx, namespaceType, &work)
+			Expect(err).Should(Succeed(), "Retrieving Work Object failed")
+			Expect(work.Status.Conditions).Should(BeNil(),
+				"Work Condition for Work Object %s should be empty", work.Name)
+
+			Expect(work.Status.ManifestConditions).Should(BeNil(),
+				"Work Manifest Condition for Work Object %s should be empty", work.Name)
 		})
 	})
 })
 
-func IsKeyMetadata(p cmp.Path) bool {
+func isKeyMetadata(p cmp.Path) bool {
 	step, ok := p[len(p)-1].(cmp.MapIndex)
 	return ok && step.Key().String() == "metadata"
 }
 
-func IsKeyNotName(p cmp.Path) bool {
+func isKeyNotName(p cmp.Path) bool {
 	step, ok := p[len(p)-1].(cmp.MapIndex)
 	return ok && step.Key().String() != "name"
 }
