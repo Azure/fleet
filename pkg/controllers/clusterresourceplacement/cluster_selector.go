@@ -138,8 +138,12 @@ func convertObjToMemberCluster(obj runtime.Object) (*fleetv1alpha1.MemberCluster
 }
 
 // isClusterEligible checks whether a member cluster is eligible to be selected in CRP.
+// a cluster is eligible if it has a joined condition that is not marked explicitly as Left.
+// This is the most rudimentary filter for a cluster based on its status.
+// We will add mechanisms to use a chain of filters later
 func isClusterEligible(mc *fleetv1alpha1.MemberCluster) bool {
-	// TODO: check the health condition of the cluster when its aggregated
 	joinCond := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
-	return joinCond != nil && joinCond.Status == metav1.ConditionTrue && joinCond.ObservedGeneration == mc.Generation
+	// we do not care if the observed generation of the condition since it will be out of date as soon
+	// as the member cluster spec changes.
+	return joinCond != nil && joinCond.Status != metav1.ConditionFalse
 }
