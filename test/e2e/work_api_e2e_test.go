@@ -643,10 +643,7 @@ var _ = Describe("Work API Controller test", func() {
 			appliedWork := workapi.AppliedWork{}
 			err := MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
 			Expect(err).Should(Succeed(), "Retrieving AppliedWork Manifest Failed")
-			want := workapi.AppliedtWorkStatus{
-				AppliedResources: []workapi.AppliedResourceMeta{},
-			}
-			Expect(cmp.Diff(want, appliedWork.Status)).Should(BeEmpty(),
+			Expect(appliedWork.Status.AppliedResources).Should(BeEmpty(),
 				"Status should be empty for AppliedWork %s", appliedWork.Name)
 
 			By(fmt.Sprintf("The Work Condition for Work %s should have been deleted from the Work Object", work.Name))
