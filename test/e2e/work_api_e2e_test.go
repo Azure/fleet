@@ -90,6 +90,9 @@ var _ = Describe("Work API Controller test", func() {
 		// Creating types.NamespacedName to use in retrieving objects.
 		namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
 
+		//Creating types.NamespacedName for the resource created.
+		resourceNamespaceType := types.NamespacedName{Name: manifestConfigMapName, Namespace: resourceNamespace.Name}
+
 		manifests := testutils.AddManifests([]runtime.Object{&manifestConfigMap}, []workapi.Manifest{})
 		By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
@@ -161,14 +164,14 @@ var _ = Describe("Work API Controller test", func() {
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
-		cm, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
-		Expect(err).Should(Succeed())
-		Expect(cmp.Diff(manifestConfigMap.Data, cm.Data)).Should(BeEmpty(),
+		retrievedConfigMap := corev1.ConfigMap{}
+		Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &retrievedConfigMap)).Should(Succeed(),
+			"Retrieving the resource %s failed", manifestConfigMap.Name)
+		//TODO: Fix this to compare the whole structure instead of just the data
+		Expect(cmp.Diff(manifestConfigMap.Data, retrievedConfigMap.Data)).Should(BeEmpty(),
 			"ConfigMap %s was not created in the cluster %s, or configMap data mismatch(-want, +got):", manifestConfigMapName, MemberCluster.ClusterName)
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", manifestConfigMapName, namespaceType))
-		configMap, err := MemberCluster.KubeClientSet.CoreV1().ConfigMaps(manifestConfigMap.Namespace).Get(ctx, manifestConfigMapName, metav1.GetOptions{})
-		Expect(err).Should(Succeed(), "Retrieving resource %s failed", manifestConfigMap.Name)
 		wantOwner := []metav1.OwnerReference{
 			{
 				APIVersion: workapi.GroupVersion.String(),
@@ -178,11 +181,11 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(wantOwner, configMap.OwnerReferences, cmpOptions...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
+		Expect(cmp.Diff(wantOwner, retrievedConfigMap.OwnerReferences, cmpOptions...)).Should(BeEmpty(), "OwnerReference mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestConfigMapName))
-		Expect(configMap.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
-			"SpecHash Annotation does not exist for resource %s", configMap.Name)
+		Expect(retrievedConfigMap.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
+			"SpecHash Annotation does not exist for resource %s", retrievedConfigMap.Name)
 	})
 
 	It("Upon successful creation of 2 work resources with same manifest, work manifest is applied, and only 1 resource is created with merged owner references.", func() {
