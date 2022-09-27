@@ -373,13 +373,13 @@ var _ = Describe("Work API Controller test", func() {
 		// Creating NamespacedName to retrieve CRD object created
 		crdNamespaceType := types.NamespacedName{Name: crdName}
 
-		By(fmt.Sprintf("creating work %s of %s", namespaceType.String(), crdGVK.Kind))
+		By(fmt.Sprintf("creating work %s of %s", namespaceType, crdGVK.Kind))
 		manifests := testutils.AddManifests([]runtime.Object{manifestCRD}, []workapi.Manifest{})
 
 		manifests = testutils.AddByteArrayToManifest([]byte(customResourceManifestString), manifests)
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
-		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType.String()))
+		By(fmt.Sprintf("Applied Condition should be set to True for Work %s", namespaceType))
 		work := workapi.Work{}
 
 		Eventually(func() string {
@@ -398,9 +398,9 @@ var _ = Describe("Work API Controller test", func() {
 
 			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
-			"Applied Condition mismatch (-want, +got):", workName)
+			"Applied Condition mismatch for work %s (-want, +got):", workName)
 
-		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType.String()))
+		By(fmt.Sprintf("Manifest Condiitons on Work Objects %s should be applied", namespaceType))
 		expectedManifestCondition := []workapi.ManifestCondition{
 			{
 				Conditions: []metav1.Condition{
@@ -439,7 +439,7 @@ var _ = Describe("Work API Controller test", func() {
 
 		options := append(cmpOptions, cmpopts.IgnoreFields(metav1.Condition{}, "Reason"))
 		Expect(cmp.Diff(expectedManifestCondition, work.Status.ManifestConditions, options...)).Should(BeEmpty(),
-			"Manifest Condition not matching for work %s (-want, +got):", namespaceType.String())
+			"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", crdGVK.Kind))
 		var appliedWork workapi.AppliedWork
@@ -530,7 +530,7 @@ var _ = Describe("Work API Controller test", func() {
 					return ok && step.Key().String() != "name"
 				}, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
 
-		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", crdName, namespaceType.String()))
+		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", crdName, namespaceType))
 		wantOwner := []metav1.OwnerReference{
 			{
 				APIVersion: workapi.GroupVersion.String(),
