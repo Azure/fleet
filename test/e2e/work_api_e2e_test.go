@@ -639,7 +639,7 @@ var _ = Describe("Work API Controller test", func() {
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(), "Resource %s should have been deleted.", configMapBeforeUpdate.Name)
 
-			By(fmt.Sprintf("The AppliedWork Manifest should have been deleted"))
+			By(fmt.Sprintf("The AppliedWork Manifest for Work %s should have been deleted", namespaceType))
 			appliedWork := workapi.AppliedWork{}
 			err := MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
 			Expect(err).Should(Succeed(), "Retrieving AppliedWork Manifest Failed")
