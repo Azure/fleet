@@ -3,11 +3,12 @@ package e2e
 import (
 	"context"
 	"fmt"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.goms.io/fleet/pkg/utils"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,9 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-
-	"go.goms.io/fleet/pkg/utils"
-	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 // TODO: enable this when join/leave logic is connected to work-api, join the Hub and Member for this test.
@@ -36,11 +34,17 @@ var _ = Describe("Work API Controller test", func() {
 
 		// Comparison Options
 		cmpOptions = []cmp.Option{
-			cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"),
 			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
 		}
+
+		appliedWorkCmpOptions = append(cmpOptions, cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"))
+
+		crdCmpOptions = append(cmpOptions,
+			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "Generation", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
+			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "Status"),
+			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinitionSpec{}, "Versions", "Conversion"))
 
 		resourceNamespace *corev1.Namespace
 	)
@@ -160,7 +164,7 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(want, appliedWork.Status, cmpOptions...)).Should(BeEmpty(),
+		Expect(cmp.Diff(want, appliedWork.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 			"Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Resource %s should have been created in cluster %s", manifestConfigMapName, MemberCluster.ClusterName))
@@ -375,7 +379,6 @@ var _ = Describe("Work API Controller test", func() {
 
 		By(fmt.Sprintf("creating work %s of %s", namespaceType, crdGVK.Kind))
 		manifests := testutils.AddManifests([]runtime.Object{manifestCRD}, []workapi.Manifest{})
-
 		manifests = testutils.AddByteArrayToManifest([]byte(customResourceManifestString), manifests)
 		testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
@@ -384,7 +387,6 @@ var _ = Describe("Work API Controller test", func() {
 
 		Eventually(func() string {
 			if err := HubCluster.KubeClient.Get(ctx, namespaceType, &work); err != nil {
-
 				return err.Error()
 			}
 
@@ -470,7 +472,7 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		Expect(cmp.Diff(want, appliedWork.Status, cmpOptions...)).Should(BeEmpty(), "Validate AppliedResourceMeta mismatch (-want, +got):")
+		Expect(cmp.Diff(want, appliedWork.Status, appliedWorkCmpOptions...)).Should(BeEmpty(), "Validate AppliedResourceMeta mismatch (-want, +got):")
 
 		By(fmt.Sprintf("CRD %s should have been created in cluster %s", crdName, MemberCluster.ClusterName))
 
@@ -496,10 +498,6 @@ var _ = Describe("Work API Controller test", func() {
 			},
 		}
 
-		crdCmpOptions := append(options,
-			cmpopts.IgnoreFields(metav1.ObjectMeta{}, "UID", "ResourceVersion", "Generation", "CreationTimestamp", "Annotations", "OwnerReferences", "ManagedFields"),
-			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "Status"),
-			cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinitionSpec{}, "Versions", "Conversion"))
 		Expect(cmp.Diff(wantCRD, crd, crdCmpOptions...)).Should(BeEmpty(), "Valdate CRD object mismatch (-want, got+):")
 
 		By(fmt.Sprintf("CR %s should have been created in cluster %s", crdObjectName, MemberCluster.ClusterName))
@@ -517,18 +515,10 @@ var _ = Describe("Work API Controller test", func() {
 		}
 
 		Expect(cmp.Diff(wantCRObject, *customResource,
-			append(cmpOptions, cmp.FilterPath(
-				func(p cmp.Path) bool {
-					step, ok := p[len(p)-1].(cmp.MapIndex)
-					return ok && step.Key().String() == "metadata"
-				}, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
+			append(cmpOptions, cmp.FilterPath(testutils.IsKeyMetadata, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
 
 		Expect(cmp.Diff(wantCRObject.Object["metadata"], customResource.Object["metadata"],
-			append(cmpOptions, cmp.FilterPath(
-				func(p cmp.Path) bool {
-					step, ok := p[len(p)-1].(cmp.MapIndex)
-					return ok && step.Key().String() != "name"
-				}, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
+			append(cmpOptions, cmp.FilterPath(testutils.IsKeyNotName, cmp.Ignore()))...)).Should(BeEmpty(), "Validate CR Object Metadata mismatch (-want, +got):")
 
 		By(fmt.Sprintf("Validating that the resource %s is owned by the work %s", crdName, namespaceType))
 		wantOwner := []metav1.OwnerReference{

@@ -8,6 +8,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
@@ -208,4 +209,14 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	gomega.Expect(err).Should(gomega.Succeed(), "CRD data was not mapped in the restMapper")
 
 	return obj, gvk, mapping.Resource
+}
+
+func IsKeyMetadata(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() == "metadata"
+}
+
+func IsKeyNotName(p cmp.Path) bool {
+	step, ok := p[len(p)-1].(cmp.MapIndex)
+	return ok && step.Key().String() != "name"
 }
