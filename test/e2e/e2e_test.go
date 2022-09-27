@@ -196,15 +196,7 @@ var _ = BeforeSuite(func() {
 
 	By("check if internal member cluster status is updated to Joined")
 	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcJoinedAgentStatus}
-	Eventually(func() error {
-		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
-			return err
-		}
-		if statusDiff := cmp.Diff(wantIMCStatus, imc.Status, imcStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("internal member cluster(%s) status mismatch (-want +got):\n%s", imc.Name, statusDiff)
-		}
-		return nil
-	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
+	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, wantIMCStatus, imc, imcStatusCmpOptions)
 
 	By("check if member cluster status is updated to Joined")
 	wantMCStatus := v1alpha1.MemberClusterStatus{
@@ -212,15 +204,7 @@ var _ = BeforeSuite(func() {
 		Conditions:    mcJoinedConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
-	Eventually(func() error {
-		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
-			return err
-		}
-		if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
-		}
-		return nil
-	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
+	testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
 })
 
 var _ = AfterSuite(func() {
@@ -231,15 +215,7 @@ var _ = AfterSuite(func() {
 
 	By("check if internal member cluster status is updated to Left")
 	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcLeftAgentStatus}
-	Eventually(func() error {
-		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
-			return err
-		}
-		if statusDiff := cmp.Diff(wantIMCStatus, imc.Status, imcStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("internal member cluster(%s) status mismatch (-want +got):\n%s", imc.Name, statusDiff)
-		}
-		return nil
-	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
+	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, wantIMCStatus, imc, imcStatusCmpOptions)
 
 	By("check if member cluster status is updated to Left")
 	wantMCStatus := v1alpha1.MemberClusterStatus{
@@ -247,15 +223,7 @@ var _ = AfterSuite(func() {
 		Conditions:    mcLeftConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
-	Eventually(func() error {
-		if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
-			return err
-		}
-		if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
-		}
-		return nil
-	}, 3*testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
+	testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
 
 	testutils.DeleteNamespace(*MemberCluster, memberNamespace)
 	testutils.DeleteNamespace(*HubCluster, workNamespace)
