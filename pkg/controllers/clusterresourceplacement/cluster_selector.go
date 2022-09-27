@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -138,12 +139,18 @@ func convertObjToMemberCluster(obj runtime.Object) (*fleetv1alpha1.MemberCluster
 }
 
 // isClusterEligible checks whether a member cluster is eligible to be selected in CRP.
-// a cluster is eligible if it has a joined condition that is not marked explicitly as Left.
+// a cluster is eligible if its workAgent has a joined condition that is not marked explicitly as Left.
 // This is the most rudimentary filter for a cluster based on its status.
-// We will add mechanisms to use a chain of filters later
+// We will add mechanisms to use a chain of filters later.
 func isClusterEligible(mc *fleetv1alpha1.MemberCluster) bool {
-	joinCond := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
-	// we do not care if the observed generation of the condition since it will be out of date as soon
-	// as the member cluster spec changes.
-	return joinCond != nil && joinCond.Status != metav1.ConditionFalse
+	// we only care about the work agent's status for workload placement
+	for _, agentStatus := range mc.Status.AgentStatus {
+		if agentStatus.Type == fleetv1alpha1.MemberAgent {
+			joinCond := meta.FindStatusCondition(agentStatus.Conditions, string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
+			// we do not care if the observed generation of the condition since it will be out of date as soon
+			// as the member cluster spec changes.
+			return joinCond != nil && joinCond.Status != metav1.ConditionFalse
+		}
+	}
+	return false
 }
