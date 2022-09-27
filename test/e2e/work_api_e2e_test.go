@@ -649,7 +649,7 @@ var _ = Describe("Work API Controller test", func() {
 			By(fmt.Sprintf("The Work Condition for Work %s should have been deleted from the Work Object", work.Name))
 			updatedWork := workapi.Work{}
 			err = MemberCluster.KubeClient.Get(ctx, namespaceType, &updatedWork)
-			Expect(err).Should(Succeed(), "Retrieving Work Object failed")
+			Expect(err).ShouldNot(Succeed(), "Retrieving Work Object should fail")
 			Expect(updatedWork.Status.Conditions).Should(BeNil(),
 				"Work Condition for Work Object %s should be empty", updatedWork.Name)
 			Expect(updatedWork.Status.ManifestConditions).Should(BeNil(),
