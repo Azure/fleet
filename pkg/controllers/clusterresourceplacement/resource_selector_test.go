@@ -295,10 +295,8 @@ func TestGenerateManifest(t *testing.T) {
 }
 
 func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicyType) *corev1.IPFamilyPolicyType {
-	s := policyType
-	return &s
+	return &policyType
 }
 func makeServiceInternalTrafficPolicyPointer(policyType corev1.ServiceInternalTrafficPolicyType) *corev1.ServiceInternalTrafficPolicyType {
-	p := policyType
-	return &p
+	return &policyType
 }
