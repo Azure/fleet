@@ -20,8 +20,6 @@ spec:
         "openAPIV3Schema":
           description: A test CRD for the WorkAPI.
           type: object
-          required:
-            - spec
           properties:
             apiVersion:
               description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
@@ -34,8 +32,6 @@ spec:
             spec:
               description: Spec represents the desired configuration of TestCRD.
               type: object
-              required:
-                - tesetprop
               properties:
                 testprop:
                   description: A test property.
