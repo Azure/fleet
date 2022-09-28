@@ -55,7 +55,7 @@ func TestRefreshTokenOnce(t *testing.T) {
 	}
 }
 
-//TestRefreshToken test to refresh/rewrite token multiple times
+// TestRefreshToken test to refresh/rewrite token multiple times
 func TestRefreshToken(t *testing.T) {
 	provider := MockAuthTokenProvider{
 		Token: interfaces.AuthToken{
@@ -94,7 +94,7 @@ func TestRefreshToken(t *testing.T) {
 	}
 }
 
-//TestRefresherCancelContext test if the func will be canceled/returned once the ctx is canceled
+// TestRefresherCancelContext test if the func will be canceled/returned once the ctx is canceled
 func TestRefresherCancelContext(t *testing.T) {
 	provider := MockAuthTokenProvider{
 		Token: interfaces.AuthToken{
@@ -102,6 +102,7 @@ func TestRefresherCancelContext(t *testing.T) {
 			ExpiresOn: time.Now(),
 		},
 	}
+	var err error
 	testChan := make(chan bool)
 	ctx, cancel := context.WithCancel(context.TODO())
 
@@ -109,7 +110,7 @@ func TestRefresherCancelContext(t *testing.T) {
 
 	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, DefaultCreateTicker)
 	go func() {
-		_ = refresher.RefreshToken(ctx)
+		err = refresher.RefreshToken(ctx)
 		testChan <- true
 	}()
 
@@ -117,8 +118,11 @@ func TestRefresherCancelContext(t *testing.T) {
 
 	select {
 	case <-testChan:
+		if err != context.Canceled {
+			assert.Fail(t, "Refresh token errored but was not cancelled", "TestRefresherCancelContext")
+		}
 		return
-	case <-time.Tick(1 * time.Second):
+	case <-time.Tick(DefaultRefreshDuration):
 		assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 	}
 }
