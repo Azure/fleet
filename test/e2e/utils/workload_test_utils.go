@@ -15,6 +15,7 @@ import (
 	"github.com/onsi/gomega"
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +37,21 @@ func CmpClusterRole(ctx context.Context, cluster framework.Cluster, actualCluste
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for cluster role %s to be updated in %s cluster", actualClusterRole.Name, cluster.ClusterName)
 }
 
+// CmpNamespace compares actual namespace with expected namespace.
+func CmpNamespace(ctx context.Context, cluster framework.Cluster, actualNamespace, expectedNamespace *corev1.Namespace) {
+	gomega.Eventually(func() error {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: actualNamespace.Name}, actualNamespace); err != nil {
+			return err
+		}
+		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
+			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
+		if diff := cmp.Diff(expectedNamespace, actualNamespace, ignoreOptions...); diff != "" {
+			return fmt.Errorf(" namespace(%s) mismatch (-want +got):\n%s", actualNamespace.Name, diff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected namespaces in %s cluster", cluster.ClusterName)
+}
+
 // CmpRole compares actual role with expected role.
 func CmpRole(ctx context.Context, cluster framework.Cluster, actualRole, expectedRole *rbacv1.Role) {
 	gomega.Eventually(func() error {
@@ -45,10 +61,25 @@ func CmpRole(ctx context.Context, cluster framework.Cluster, actualRole, expecte
 		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
 		if diff := cmp.Diff(expectedRole, actualRole, ignoreOptions...); diff != "" {
-			return fmt.Errorf("cluster Role(%s) mismatch (-want +got):\n%s", actualRole.Name, diff)
+			return fmt.Errorf("Role(%s) mismatch (-want +got):\n%s", actualRole.Name, diff)
 		}
 		return nil
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for role %s to be updated in %s cluster", actualRole.Name, cluster.ClusterName)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected roles in %s cluster", cluster.ClusterName)
+}
+
+// CmpRoleBinding compares actual role binding with expected role binding.
+func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, actualRoleBinding, expectedRoleBinding *rbacv1.RoleBinding) {
+	gomega.Eventually(func() error {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: actualRoleBinding.Name, Namespace: actualRoleBinding.Namespace}, actualRoleBinding); err != nil {
+			return err
+		}
+		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
+			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
+		if diff := cmp.Diff(expectedRoleBinding, actualRoleBinding, ignoreOptions...); diff != "" {
+			return fmt.Errorf("Role Binding(%s) mismatch (-want +got):\n%s", actualRoleBinding.Name, diff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected role bindings in %s cluster", cluster.ClusterName)
 }
 
 // CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.

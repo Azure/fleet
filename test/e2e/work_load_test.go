@@ -113,7 +113,7 @@ var _ = Describe("workload orchestration testing", func() {
 			expectedClusterRole.OwnerReferences = ownerReferences
 			clusterRole = &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-cluster-role",
+					Name: clusterRole.Name,
 				},
 			}
 			testutils.CmpClusterRole(ctx, *MemberCluster, clusterRole, expectedClusterRole)
@@ -275,9 +275,40 @@ var _ = Describe("workload orchestration testing", func() {
 			testutils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, crp, crpStatus, 3*testutils.PollTimeout)
 
 			By("check if resources in namespace are propagated to member cluster")
-			Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace.Name}, namespace)).Should(Succeed(), "Failed to get namespace %s in %s cluster", namespace.Name, MemberCluster.ClusterName)
-			Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, role)).Should(Succeed(), "Failed to get role %s in %s cluster", role.Name, MemberCluster.ClusterName)
-			Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, roleBinding), "Failed to get role binding %s in %s cluster", roleBinding.Name, MemberCluster.ClusterName)
+			ownerReferences := []metav1.OwnerReference{
+				{
+					APIVersion:         workapi.GroupVersion.String(),
+					BlockOwnerDeletion: pointer.Bool(false),
+					Kind:               "AppliedWork",
+					Name:               crp.Name,
+				},
+			}
+			expectedNamespace := namespace
+			expectedRole := role
+			expectedRoleBinding := roleBinding
+			expectedNamespace.OwnerReferences = ownerReferences
+			expectedRole.OwnerReferences = ownerReferences
+			expectedRoleBinding.OwnerReferences = ownerReferences
+			namespace = &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace.Name,
+				},
+			}
+			role = &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      role.Name,
+					Namespace: role.Namespace,
+				},
+			}
+			roleBinding = &rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      roleBinding.Name,
+					Namespace: roleBinding.Namespace,
+				},
+			}
+			testutils.CmpNamespace(ctx, *MemberCluster, namespace, expectedNamespace)
+			testutils.CmpRole(ctx, *MemberCluster, role, expectedRole)
+			testutils.CmpRoleBinding(ctx, *MemberCluster, roleBinding, expectedRoleBinding)
 
 			By("update role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -295,29 +326,7 @@ var _ = Describe("workload orchestration testing", func() {
 				Rules: rules,
 			}
 			Expect(HubCluster.KubeClient.Update(ctx, updatedRole)).Should(Succeed(), "Failed to update role %s in %s cluster", updatedRole.Name, HubCluster.ClusterName)
-
-			role = &rbacv1.Role{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      role.Name,
-					Namespace: namespace.Name,
-				},
-			}
-
-			expectedRole := &rbacv1.Role{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      role.Name,
-					Namespace: namespace.Name,
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion:         workapi.GroupVersion.String(),
-							Kind:               "AppliedWork",
-							Name:               crp.Name,
-							BlockOwnerDeletion: pointer.Bool(false),
-						},
-					},
-				},
-				Rules: rules,
-			}
+			expectedRole.Rules = rules
 
 			By("check if role got updated in member cluster")
 			testutils.CmpRole(ctx, *MemberCluster, role, expectedRole)
