@@ -350,7 +350,7 @@ func TestApplyUnstructured(t *testing.T) {
 		reconciler     ApplyWorkReconciler
 		workObj        *unstructured.Unstructured
 		resultSpecHash string
-		resultBool     bool
+		resultAction   applyAction
 		resultErr      error
 	}{
 		"test creation succeeds when the object does not exist": {
@@ -363,7 +363,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj.DeepCopy(),
 			resultSpecHash: correctSpecHash,
-			resultBool:     true,
+			resultAction:   manifestCreatedAction,
 			resultErr:      nil,
 		},
 		"test creation succeeds when the object has a generated name": {
@@ -376,7 +376,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        generatedSpecObj.DeepCopy(),
 			resultSpecHash: generatedSpecHash,
-			resultBool:     true,
+			resultAction:   manifestCreatedAction,
 			resultErr:      nil,
 		},
 		"client error looking for object / fail": {
@@ -387,9 +387,9 @@ func TestApplyUnstructured(t *testing.T) {
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
-			workObj:    correctObj.DeepCopy(),
-			resultBool: false,
-			resultErr:  errors.New("client error"),
+			workObj:      correctObj.DeepCopy(),
+			resultAction: manifestNoChangeAction,
+			resultErr:    errors.New("client error"),
 		},
 		"owner reference comparison failure / fail": {
 			reconciler: ApplyWorkReconciler{
@@ -399,9 +399,9 @@ func TestApplyUnstructured(t *testing.T) {
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
-			workObj:    correctObj.DeepCopy(),
-			resultBool: false,
-			resultErr:  errors.New("resource is not managed by the work controller"),
+			workObj:      correctObj.DeepCopy(),
+			resultAction: manifestNoChangeAction,
+			resultErr:    errors.New("resource is not managed by the work controller"),
 		},
 		"equal spec hash of current vs work object / succeed without updates": {
 			reconciler: ApplyWorkReconciler{
@@ -410,7 +410,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj.DeepCopy(),
 			resultSpecHash: correctSpecHash,
-			resultBool:     false,
+			resultAction:   manifestNoChangeAction,
 			resultErr:      nil,
 		},
 		"unequal spec hash of current vs work object / client patch fail": {
@@ -418,9 +418,9 @@ func TestApplyUnstructured(t *testing.T) {
 				spokeDynamicClient: patchFailClient,
 				recorder:           utils.NewFakeRecorder(1),
 			},
-			workObj:    correctObj.DeepCopy(),
-			resultBool: false,
-			resultErr:  errors.New("patch failed"),
+			workObj:      correctObj.DeepCopy(),
+			resultAction: manifestNoChangeAction,
+			resultErr:    errors.New("patch failed"),
 		},
 		"happy path - with updates": {
 			reconciler: ApplyWorkReconciler{
@@ -430,15 +430,15 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj,
 			resultSpecHash: diffSpecHash,
-			resultBool:     true,
+			resultAction:   manifestUpdatedAction,
 			resultErr:      nil,
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			applyResult, applyResultBool, err := testCase.reconciler.applyUnstructured(context.Background(), testGvr, testCase.workObj)
-			assert.Equalf(t, testCase.resultBool, applyResultBool, "updated boolean not matching for Testcase %s", testName)
+			applyResult, applyAction, err := testCase.reconciler.applyUnstructured(context.Background(), testGvr, testCase.workObj)
+			assert.Equalf(t, testCase.resultAction, applyAction, "updated boolean not matching for Testcase %s", testName)
 			if testCase.resultErr != nil {
 				assert.Containsf(t, err.Error(), testCase.resultErr.Error(), "error not matching for Testcase %s", testName)
 			} else {
@@ -488,7 +488,7 @@ func TestApplyManifest(t *testing.T) {
 		reconciler   ApplyWorkReconciler
 		manifestList []workv1alpha1.Manifest
 		generation   int64
-		updated      bool
+		action       applyAction
 		wantGvr      schema.GroupVersionResource
 		wantErr      error
 	}{
@@ -501,9 +501,9 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]workv1alpha1.Manifest{}, testManifest),
+			manifestList: []workv1alpha1.Manifest{testManifest},
 			generation:   0,
-			updated:      true,
+			action:       manifestCreatedAction,
 			wantGvr:      expectedGvr,
 			wantErr:      nil,
 		},
@@ -518,7 +518,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, InvalidManifest),
 			generation:   0,
-			updated:      false,
+			action:       manifestNoChangeAction,
 			wantGvr:      emptyGvr,
 			wantErr: &json.UnmarshalTypeError{
 				Value: "string",
@@ -536,7 +536,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, MissingManifest),
 			generation:   0,
-			updated:      false,
+			action:       manifestNoChangeAction,
 			wantGvr:      emptyGvr,
 			wantErr:      errors.New("failed to find group/version/resource from restmapping: test error: mapping does not exist"),
 		},
@@ -551,7 +551,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, testManifest),
 			generation:   0,
-			updated:      false,
+			action:       manifestNoChangeAction,
 			wantGvr:      expectedGvr,
 			wantErr:      errors.New(failMsg),
 		},
@@ -563,9 +563,10 @@ func TestApplyManifest(t *testing.T) {
 			for _, result := range resultList {
 				if testCase.wantErr != nil {
 					assert.Containsf(t, result.err.Error(), testCase.wantErr.Error(), "Incorrect error for Testcase %s", testName)
+				} else {
+					assert.Equalf(t, testCase.generation, result.generation, "Testcase %s: generation incorrect", testName)
+					assert.Equalf(t, testCase.action, result.action, "Testcase %s: Updated action incorrect", testName)
 				}
-				assert.Equalf(t, testCase.generation, result.generation, "Testcase %s: generation incorrect", testName)
-				assert.Equalf(t, testCase.updated, result.updated, "Testcase %s: Updated boolean incorrect", testName)
 			}
 		})
 	}

@@ -46,8 +46,8 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		Kind:               placement.GroupVersionKind().Kind,
 		Name:               placement.GetName(),
 		UID:                placement.GetUID(),
-		BlockOwnerDeletion: pointer.BoolPtr(true),
-		Controller:         pointer.BoolPtr(true),
+		BlockOwnerDeletion: pointer.Bool(true),
+		Controller:         pointer.Bool(true),
 	}
 	workerSpec := workv1alpha1.WorkSpec{
 		Workload: workv1alpha1.WorkloadTemplate{
