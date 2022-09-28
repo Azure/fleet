@@ -160,6 +160,7 @@ func TestGenerateManifest(t *testing.T) {
 						ClusterIP:           utilrand.String(10),
 						ClusterIPs:          []string{},
 						HealthCheckNodePort: int32(utilrand.Int()),
+						Selector:            map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
 						Ports: []corev1.ServicePort{
 							{
 								Name:        "svc-port",
@@ -169,6 +170,23 @@ func TestGenerateManifest(t *testing.T) {
 								NodePort:    int32(utilrand.Int()),
 							},
 						},
+						Type:                     corev1.ServiceType("svc-spec-type"),
+						ExternalIPs:              []string{"svc-spec-externalIps-1"},
+						SessionAffinity:          corev1.ServiceAffinity("svc-spec-sessionAffinity"),
+						LoadBalancerIP:           "192.168.1.3",
+						LoadBalancerSourceRanges: []string{"192.168.1.1"},
+						ExternalName:             "svc-spec-externalName",
+						ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
+						PublishNotReadyAddresses: false,
+						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+						IPFamilies: []corev1.IPFamily{
+							corev1.IPv4Protocol,
+							corev1.IPv6Protocol,
+						},
+						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
+						AllocateLoadBalancerNodePorts: pointer.Bool(false),
+						LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 					},
 					Status: corev1.ServiceStatus{
 						LoadBalancer: corev1.LoadBalancerStatus{
@@ -209,6 +227,7 @@ func TestGenerateManifest(t *testing.T) {
 						},
 					},
 					Spec: corev1.ServiceSpec{
+						Selector: map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
 						Ports: []corev1.ServicePort{
 							{
 								Name:        "svc-port",
@@ -217,6 +236,23 @@ func TestGenerateManifest(t *testing.T) {
 								Port:        9001,
 							},
 						},
+						Type:                     corev1.ServiceType("svc-spec-type"),
+						ExternalIPs:              []string{"svc-spec-externalIps-1"},
+						SessionAffinity:          corev1.ServiceAffinity("svc-spec-sessionAffinity"),
+						LoadBalancerIP:           "192.168.1.3",
+						LoadBalancerSourceRanges: []string{"192.168.1.1"},
+						ExternalName:             "svc-spec-externalName",
+						ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
+						PublishNotReadyAddresses: false,
+						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+						IPFamilies: []corev1.IPFamily{
+							corev1.IPv4Protocol,
+							corev1.IPv6Protocol,
+						},
+						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
+						AllocateLoadBalancerNodePorts: pointer.Bool(false),
+						LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 					},
 				}
 
@@ -256,4 +292,13 @@ func TestGenerateManifest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicyType) *corev1.IPFamilyPolicyType {
+	s := policyType
+	return &s
+}
+func makeServiceInternalTrafficPolicyPointer(policyType corev1.ServiceInternalTrafficPolicyType) *corev1.ServiceInternalTrafficPolicyType {
+	p := policyType
+	return &p
 }
