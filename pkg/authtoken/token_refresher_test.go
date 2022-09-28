@@ -118,10 +118,10 @@ func TestRefresherCancelContext(t *testing.T) {
 
 	select {
 	case <-testChan:
-		if err != context.Canceled {
-			assert.Fail(t, "Refresh token errored but was not cancelled", "TestRefresherCancelContext")
+		if assert.ErrorIs(t, err, context.Canceled, t) {
+			return
 		}
-		return
+		assert.Fail(t, "Refresh token errored but was not cancelled", "TestRefresherCancelContext")
 	case <-time.Tick(DefaultRefreshDuration):
 		assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 	}
