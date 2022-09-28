@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -44,6 +45,32 @@ func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *v1a
 	gomega.Eventually(func() bool {
 		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for member cluster %s to be deleted in %s cluster", mc.Name, cluster.ClusterName)
+}
+
+// CheckMemberClusterStatus is used to check member cluster status.
+func CheckMemberClusterStatus(ctx context.Context, cluster framework.Cluster, wantMCStatus v1alpha1.MemberClusterStatus, mc *v1alpha1.MemberCluster, mcStatusCmpOptions []cmp.Option) {
+	gomega.Eventually(func() error {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait member cluster %s to have status %s", mc.Name, wantMCStatus)
+}
+
+// CheckInternalMemberClusterStatus is used to check internal member cluster status.
+func CheckInternalMemberClusterStatus(ctx context.Context, cluster framework.Cluster, wantIMCStatus v1alpha1.InternalMemberClusterStatus, imc *v1alpha1.InternalMemberCluster, imcStatusCmpOptions []cmp.Option) {
+	gomega.Eventually(func() error {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantIMCStatus, imc.Status, imcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", imc.Name, statusDiff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
 }
 
 // CreateClusterRole create cluster role in the hub cluster.
