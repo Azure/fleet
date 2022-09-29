@@ -8,6 +8,8 @@ package e2e
 import (
 	"context"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -23,14 +25,13 @@ import (
 )
 
 var _ = Describe("workload orchestration testing", func() {
-	var crp *v1alpha1.ClusterResourcePlacement
-	var ctx context.Context
-	labelKey := "fleet.azure.com/name"
-	labelValue := "test"
-
-	BeforeEach(func() {
-		ctx = context.Background()
-	})
+	var (
+		crp                   *v1alpha1.ClusterResourcePlacement
+		labelKey              = "fleet.azure.com/name"
+		labelValue            = "test"
+		resourceIgnoreOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
+			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
+	)
 
 	Context("Test Workload Orchestration", func() {
 		It("Apply CRP and check if cluster role gets propagated, update cluster role", func() {
@@ -116,7 +117,7 @@ var _ = Describe("workload orchestration testing", func() {
 					Name: clusterRole.Name,
 				},
 			}
-			testutils.CmpClusterRole(ctx, *MemberCluster, clusterRole, expectedClusterRole)
+			testutils.CmpClusterRole(ctx, *MemberCluster, clusterRole, expectedClusterRole, resourceIgnoreOptions)
 
 			By("update cluster role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -150,7 +151,7 @@ var _ = Describe("workload orchestration testing", func() {
 			}
 
 			By("check if cluster role got updated in member cluster")
-			testutils.CmpClusterRole(ctx, *MemberCluster, clusterRole, expectedClusterRole)
+			testutils.CmpClusterRole(ctx, *MemberCluster, clusterRole, expectedClusterRole, resourceIgnoreOptions)
 
 			By("delete cluster role on hub cluster")
 			Expect(HubCluster.KubeClient.Delete(ctx, clusterRole)).Should(Succeed(), "Failed to delete cluster role %s in %s cluster", clusterRole.Name, HubCluster.ClusterName)
@@ -306,9 +307,9 @@ var _ = Describe("workload orchestration testing", func() {
 					Namespace: roleBinding.Namespace,
 				},
 			}
-			testutils.CmpNamespace(ctx, *MemberCluster, namespace, expectedNamespace)
-			testutils.CmpRole(ctx, *MemberCluster, role, expectedRole)
-			testutils.CmpRoleBinding(ctx, *MemberCluster, roleBinding, expectedRoleBinding)
+			testutils.CmpNamespace(ctx, *MemberCluster, namespace, expectedNamespace, resourceIgnoreOptions)
+			testutils.CmpRole(ctx, *MemberCluster, role, expectedRole, resourceIgnoreOptions)
+			testutils.CmpRoleBinding(ctx, *MemberCluster, roleBinding, expectedRoleBinding, resourceIgnoreOptions)
 
 			By("update role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -329,7 +330,7 @@ var _ = Describe("workload orchestration testing", func() {
 			expectedRole.Rules = rules
 
 			By("check if role got updated in member cluster")
-			testutils.CmpRole(ctx, *MemberCluster, role, expectedRole)
+			testutils.CmpRole(ctx, *MemberCluster, role, expectedRole, resourceIgnoreOptions)
 
 			By("delete namespace")
 			Expect(HubCluster.KubeClient.Delete(context.TODO(), namespace)).Should(Succeed(), "Failed to delete namespace %s in %s cluster", namespace.Name, HubCluster.ClusterName)

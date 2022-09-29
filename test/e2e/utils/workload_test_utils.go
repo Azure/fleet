@@ -24,14 +24,12 @@ import (
 )
 
 // CmpClusterRole compares actual cluster role with expected cluster role.
-func CmpClusterRole(ctx context.Context, cluster framework.Cluster, actualClusterRole, expectedClusterRole *rbacv1.ClusterRole) {
+func CmpClusterRole(ctx context.Context, cluster framework.Cluster, actualClusterRole, expectedClusterRole *rbacv1.ClusterRole, cmpOptions []cmp.Option) {
 	gomega.Eventually(func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: actualClusterRole.Name}, actualClusterRole); err != nil {
 			return err
 		}
-		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
-			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
-		if diff := cmp.Diff(expectedClusterRole, actualClusterRole, ignoreOptions...); diff != "" {
+		if diff := cmp.Diff(expectedClusterRole, actualClusterRole, cmpOptions...); diff != "" {
 			return fmt.Errorf("cluster role(%s) mismatch (-want +got):\n%s", actualClusterRole.Name, diff)
 		}
 		return nil
@@ -39,14 +37,12 @@ func CmpClusterRole(ctx context.Context, cluster framework.Cluster, actualCluste
 }
 
 // CmpNamespace compares actual namespace with expected namespace.
-func CmpNamespace(ctx context.Context, cluster framework.Cluster, actualNamespace, expectedNamespace *corev1.Namespace) {
+func CmpNamespace(ctx context.Context, cluster framework.Cluster, actualNamespace, expectedNamespace *corev1.Namespace, cmpOptions []cmp.Option) {
 	gomega.Eventually(func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: actualNamespace.Name}, actualNamespace); err != nil {
 			return err
 		}
-		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
-			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
-		if diff := cmp.Diff(expectedNamespace, actualNamespace, ignoreOptions...); diff != "" {
+		if diff := cmp.Diff(expectedNamespace, actualNamespace, cmpOptions...); diff != "" {
 			return fmt.Errorf(" namespace(%s) mismatch (-want +got):\n%s", actualNamespace.Name, diff)
 		}
 		return nil
@@ -54,14 +50,12 @@ func CmpNamespace(ctx context.Context, cluster framework.Cluster, actualNamespac
 }
 
 // CmpRole compares actual role with expected role.
-func CmpRole(ctx context.Context, cluster framework.Cluster, actualRole, expectedRole *rbacv1.Role) {
+func CmpRole(ctx context.Context, cluster framework.Cluster, actualRole, expectedRole *rbacv1.Role, cmpOptions []cmp.Option) {
 	gomega.Eventually(func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: actualRole.Name, Namespace: actualRole.Namespace}, actualRole); err != nil {
 			return err
 		}
-		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
-			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
-		if diff := cmp.Diff(expectedRole, actualRole, ignoreOptions...); diff != "" {
+		if diff := cmp.Diff(expectedRole, actualRole, cmpOptions...); diff != "" {
 			return fmt.Errorf("role(%s) mismatch (-want +got):\n%s", actualRole.Name, diff)
 		}
 		return nil
@@ -69,14 +63,12 @@ func CmpRole(ctx context.Context, cluster framework.Cluster, actualRole, expecte
 }
 
 // CmpRoleBinding compares actual role binding with expected role binding.
-func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, actualRoleBinding, expectedRoleBinding *rbacv1.RoleBinding) {
+func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, actualRoleBinding, expectedRoleBinding *rbacv1.RoleBinding, cmpOptions []cmp.Option) {
 	gomega.Eventually(func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: actualRoleBinding.Name, Namespace: actualRoleBinding.Namespace}, actualRoleBinding); err != nil {
 			return err
 		}
-		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
-			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
-		if diff := cmp.Diff(expectedRoleBinding, actualRoleBinding, ignoreOptions...); diff != "" {
+		if diff := cmp.Diff(expectedRoleBinding, actualRoleBinding, cmpOptions...); diff != "" {
 			return fmt.Errorf("role binding(%s) mismatch (-want +got):\n%s", actualRoleBinding.Name, diff)
 		}
 		return nil
