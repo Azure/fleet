@@ -363,7 +363,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj.DeepCopy(),
 			resultSpecHash: correctSpecHash,
-			resultAction:   manifestCreatedAction,
+			resultAction:   ManifestCreatedAction,
 			resultErr:      nil,
 		},
 		"test creation succeeds when the object has a generated name": {
@@ -376,7 +376,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        generatedSpecObj.DeepCopy(),
 			resultSpecHash: generatedSpecHash,
-			resultAction:   manifestCreatedAction,
+			resultAction:   ManifestCreatedAction,
 			resultErr:      nil,
 		},
 		"client error looking for object / fail": {
@@ -388,7 +388,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: manifestNoChangeAction,
+			resultAction: ManifestNoChangeAction,
 			resultErr:    errors.New("client error"),
 		},
 		"owner reference comparison failure / fail": {
@@ -400,7 +400,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: manifestNoChangeAction,
+			resultAction: ManifestNoChangeAction,
 			resultErr:    errors.New("resource is not managed by the work controller"),
 		},
 		"equal spec hash of current vs work object / succeed without updates": {
@@ -410,7 +410,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj.DeepCopy(),
 			resultSpecHash: correctSpecHash,
-			resultAction:   manifestNoChangeAction,
+			resultAction:   ManifestNoChangeAction,
 			resultErr:      nil,
 		},
 		"unequal spec hash of current vs work object / client patch fail": {
@@ -419,7 +419,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: manifestNoChangeAction,
+			resultAction: ManifestNoChangeAction,
 			resultErr:    errors.New("patch failed"),
 		},
 		"happy path - with updates": {
@@ -430,7 +430,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj,
 			resultSpecHash: diffSpecHash,
-			resultAction:   manifestUpdatedAction,
+			resultAction:   ManifestUpdatedAction,
 			resultErr:      nil,
 		},
 	}
@@ -503,7 +503,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: []workv1alpha1.Manifest{testManifest},
 			generation:   0,
-			action:       manifestCreatedAction,
+			action:       ManifestCreatedAction,
 			wantGvr:      expectedGvr,
 			wantErr:      nil,
 		},
@@ -518,7 +518,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, InvalidManifest),
 			generation:   0,
-			action:       manifestNoChangeAction,
+			action:       ManifestNoChangeAction,
 			wantGvr:      emptyGvr,
 			wantErr: &json.UnmarshalTypeError{
 				Value: "string",
@@ -536,7 +536,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, MissingManifest),
 			generation:   0,
-			action:       manifestNoChangeAction,
+			action:       ManifestNoChangeAction,
 			wantGvr:      emptyGvr,
 			wantErr:      errors.New("failed to find group/version/resource from restmapping: test error: mapping does not exist"),
 		},
@@ -551,7 +551,7 @@ func TestApplyManifest(t *testing.T) {
 			},
 			manifestList: append([]workv1alpha1.Manifest{}, testManifest),
 			generation:   0,
-			action:       manifestNoChangeAction,
+			action:       ManifestNoChangeAction,
 			wantGvr:      expectedGvr,
 			wantErr:      errors.New(failMsg),
 		},

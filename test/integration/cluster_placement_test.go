@@ -1293,6 +1293,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("add finalizer to the work and mark it as applied")
 			markWorkAppliedStatusSuccess(crp, &clusterA)
 
+			By("mark the member cluster left")
+			markInternalMCLeft(clusterA)
+
 			By("delete the member cluster")
 			Expect(k8sClient.Delete(ctx, &clusterA)).Should(Succeed())
 

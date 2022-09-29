@@ -81,14 +81,14 @@ func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.
 type applyAction string
 
 const (
-	// manifestCreatedAction indicates that we created the manifest for the first time.
-	manifestCreatedAction applyAction = "ManifestCreated"
+	// ManifestCreatedAction indicates that we created the manifest for the first time.
+	ManifestCreatedAction applyAction = "ManifestCreated"
 
-	// manifestUpdatedAction indicates that we updated the manifest.
-	manifestUpdatedAction applyAction = "ManifestUpdated"
+	// ManifestUpdatedAction indicates that we updated the manifest.
+	ManifestUpdatedAction applyAction = "ManifestUpdated"
 
-	// manifestNoChangeAction indicates that we don't need to change the manifest.
-	manifestNoChangeAction applyAction = "ManifestNoChange"
+	// ManifestNoChangeAction indicates that we don't need to change the manifest.
+	ManifestNoChangeAction applyAction = "ManifestNoChange"
 )
 
 // applyResult contains the result of a manifest being applied.
@@ -325,22 +325,22 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 	// compute the hash without taking into consider the last applied annotation
 	if err := setManifestHashAnnotation(manifestObj); err != nil {
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
 		// record the raw manifest with the hash annotation in the manifest
 		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-			return nil, manifestNoChangeAction, err
+			return nil, ManifestNoChangeAction, err
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
 			klog.V(2).InfoS("successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
-			return actual, manifestCreatedAction, nil
+			return actual, ManifestCreatedAction, nil
 		}
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// support resources with generated name
@@ -355,14 +355,14 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	case apierrors.IsNotFound(err):
 		return createFunc()
 	case err != nil:
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
 		err = fmt.Errorf("resource is not managed by the work controller")
 		klog.ErrorS(err, "skip applying a not managed manifest", "gvr", gvr, "obj", manifestRef)
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// We only try to update the object if its spec hash value has changed.
@@ -370,7 +370,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 	}
 
-	return curObj, manifestNoChangeAction, nil
+	return curObj, ManifestNoChangeAction, nil
 }
 
 // patchCurrentResource uses three way merge to patch the current resource with the new manifest we get from the work.
@@ -389,28 +389,28 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 	manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
 	// record the raw manifest with the hash annotation in the manifest
 	if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 	data, err := patch.Data(manifestObj)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, manifestNoChangeAction, err
+		return nil, ManifestNoChangeAction, err
 	}
 	// Use client side apply the patch to the member cluster
 	manifestObj, patchErr := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).
 		Patch(ctx, manifestObj.GetName(), patch.Type(), data, metav1.PatchOptions{FieldManager: workFieldManagerName})
 	if patchErr != nil {
 		klog.ErrorS(patchErr, "failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
-		return nil, manifestNoChangeAction, patchErr
+		return nil, ManifestNoChangeAction, patchErr
 	}
 	klog.V(2).InfoS("manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, manifestUpdatedAction, nil
+	return manifestObj, ManifestUpdatedAction, nil
 }
 
 // generateWorkCondition constructs the work condition based on the apply result
