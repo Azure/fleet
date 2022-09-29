@@ -6,8 +6,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
@@ -51,15 +49,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcLeftAgentStatus,
 			Conditions:  mcLeftConditions,
 		}
-		Eventually(func() error {
-			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
-				return err
-			}
-			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
-			}
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
 
 		By("create the resources to be propagated")
 		cr := &rbacv1.ClusterRole{
@@ -112,18 +102,9 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcJoinedAgentStatus,
 			Conditions:  mcJoinedConditions,
 		}
-		Eventually(func() error {
-			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
-				return err
-			}
-			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
-			}
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
 
 		By("verify that the cluster resource placement is applied")
-		//testutils.WaitConditionClusterResourcePlacement(*HubCluster, crp, string(v1alpha1.ResourcePlacementStatusConditionTypeApplied), metav1.ConditionTrue, testutils.PollTimeout)
 		crpStatus := v1alpha1.ClusterResourcePlacementStatus{
 			Conditions: []metav1.Condition{
 				{
@@ -164,15 +145,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcLeftAgentStatus,
 			Conditions:  mcLeftConditions,
 		}
-		Eventually(func() error {
-			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
-				return err
-			}
-			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
-			}
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to have status %s", mc.Name, wantMCStatus)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
@@ -200,14 +173,6 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcJoinedAgentStatus,
 			Conditions:  mcJoinedConditions,
 		}
-		Eventually(func() error {
-			if err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
-				return err
-			}
-			if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-				return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
-			}
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to have status %s", mc.Name, wantMCStatus)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
 	})
 })

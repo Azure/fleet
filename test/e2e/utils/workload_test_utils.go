@@ -31,7 +31,7 @@ func CmpClusterRole(ctx context.Context, cluster framework.Cluster, actualCluste
 		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
 		if diff := cmp.Diff(expectedClusterRole, actualClusterRole, ignoreOptions...); diff != "" {
-			return fmt.Errorf("cluster Role(%s) mismatch (-want +got):\n%s", actualClusterRole.Name, diff)
+			return fmt.Errorf("cluster role(%s) mismatch (-want +got):\n%s", actualClusterRole.Name, diff)
 		}
 		return nil
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for cluster role %s to be updated in %s cluster", actualClusterRole.Name, cluster.ClusterName)
@@ -61,7 +61,7 @@ func CmpRole(ctx context.Context, cluster framework.Cluster, actualRole, expecte
 		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
 		if diff := cmp.Diff(expectedRole, actualRole, ignoreOptions...); diff != "" {
-			return fmt.Errorf("Role(%s) mismatch (-want +got):\n%s", actualRole.Name, diff)
+			return fmt.Errorf("role(%s) mismatch (-want +got):\n%s", actualRole.Name, diff)
 		}
 		return nil
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected roles in %s cluster", cluster.ClusterName)
@@ -76,7 +76,7 @@ func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, actualRoleBi
 		ignoreOptions := []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
 		if diff := cmp.Diff(expectedRoleBinding, actualRoleBinding, ignoreOptions...); diff != "" {
-			return fmt.Errorf("Role Binding(%s) mismatch (-want +got):\n%s", actualRoleBinding.Name, diff)
+			return fmt.Errorf("role binding(%s) mismatch (-want +got):\n%s", actualRoleBinding.Name, diff)
 		}
 		return nil
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected role bindings in %s cluster", cluster.ClusterName)
