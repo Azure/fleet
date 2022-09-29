@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"time"
 
+	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
