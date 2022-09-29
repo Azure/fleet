@@ -59,6 +59,9 @@ const (
 
 	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster
 	MemberClusterFinalizer = "work.fleet.azure.com/membercluster-finalizer"
+
+	// LastUpdateAnnotationKey is used to mark the last update time on a work object
+	LastUpdateAnnotationKey = "work.fleet.azure.com/last-update-time"
 )
 
 var (

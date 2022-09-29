@@ -31,8 +31,7 @@ import (
 )
 
 const (
-	LastUpdateAnnotationKey = "work.fleet.azure.com/last-update-time"
-	SpecHashAnnotationKey   = "work.fleet.azure.com/spec-hash-value"
+	specHashAnnotationKey = "work.fleet.azure.com/spec-hash-value"
 )
 
 // scheduleWork creates or updates the work object to reflect the new placement decision.
@@ -63,8 +62,8 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		utils.LabelFleetObj:          utils.LabelFleetObjValue,
 	}
 	workAnnotation := map[string]string{
-		LastUpdateAnnotationKey: time.Now().Format(time.RFC3339),
-		SpecHashAnnotationKey:   specHash,
+		utils.LastUpdateAnnotationKey: time.Now().Format(time.RFC3339),
+		specHashAnnotationKey:         specHash,
 	}
 	changed := false
 	for _, memberClusterName := range memberClusterNames {
@@ -98,7 +97,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 			changed = true
 			continue
 		}
-		existingHash := curWork.GetAnnotations()[SpecHashAnnotationKey]
+		existingHash := curWork.GetAnnotations()[specHashAnnotationKey]
 		if existingHash == specHash || reflect.DeepEqual(curWork.Spec.Workload.Manifests, workerSpec.Workload.Manifests) {
 			klog.V(2).InfoS("skip updating work spec as its identical",
 				"member cluster namespace", memberClusterNsName, "work name", workName, "number of manifests", len(manifests))

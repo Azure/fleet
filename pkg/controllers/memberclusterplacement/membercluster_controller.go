@@ -48,6 +48,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
+		mObj = nil //guard against unexpected informer lib behavior
 	}
 	crpList, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).List(labels.Everything())
 	if err != nil {

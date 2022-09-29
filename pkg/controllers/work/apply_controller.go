@@ -42,8 +42,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+
+	"go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -141,6 +143,17 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Apply the manifests to the member cluster
 	results := r.applyManifests(ctx, work.Spec.Workload.Manifests, owner)
+	lastUpdateTime, ok := work.GetAnnotations()[utils.LastUpdateAnnotationKey]
+	if ok {
+		workUpdateTime, err := time.Parse(time.RFC3339, lastUpdateTime)
+		if err != nil {
+			klog.ErrorS(err, "failed to get the last work update time", "work", logObjRef)
+		} else {
+			latency := time.Since(workUpdateTime)
+			metrics.WorkApplyTime.WithLabelValues(work.GetName()).Observe(latency.Seconds())
+			klog.V(2).InfoS("work is applied", "work", work.GetName(), "latency", latency.Milliseconds())
+		}
+	}
 
 	// generate the work condition based on the manifest apply result
 	errs := r.generateWorkCondition(results, work)
