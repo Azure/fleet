@@ -8,6 +8,7 @@ package memberclusterplacement
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,12 +35,18 @@ type Reconciler struct {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
+	startTime := time.Now()
 	memberClusterName, ok := key.(string)
 	if !ok {
 		err := fmt.Errorf("got a resource key %+v not of type cluster wide key", key)
 		klog.ErrorS(err, "we have encountered a fatal error that can't be retried")
 		return ctrl.Result{}, err
 	}
+
+	// add latency log
+	defer func() {
+		klog.V(2).InfoS("MemberClusterPlacement reconciliation loop ends", "memberCluster", memberClusterName, "latency", time.Since(startTime).Milliseconds())
+	}()
 
 	klog.V(2).InfoS("Start to reconcile a member cluster to enqueue placement events", "memberCluster", memberClusterName)
 	mObj, err := r.InformerManager.Lister(utils.MemberClusterGVR).Get(memberClusterName)

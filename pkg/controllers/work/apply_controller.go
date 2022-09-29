@@ -141,18 +141,22 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		BlockOwnerDeletion: pointer.Bool(false),
 	}
 
-	// Apply the manifests to the member cluster
+	// apply the manifests to the member cluster
 	results := r.applyManifests(ctx, work.Spec.Workload.Manifests, owner)
-	lastUpdateTime, ok := work.GetAnnotations()[utils.LastUpdateAnnotationKey]
+
+	// collect the latency from the work update time to now.
+	lastUpdateTime, ok := work.GetAnnotations()[utils.LastWorkUpdateTimeAnnotationKey]
 	if ok {
-		workUpdateTime, err := time.Parse(time.RFC3339, lastUpdateTime)
-		if err != nil {
-			klog.ErrorS(err, "failed to get the last work update time", "work", logObjRef)
+		workUpdateTime, parseErr := time.Parse(time.RFC3339, lastUpdateTime)
+		if parseErr != nil {
+			klog.ErrorS(parseErr, "failed to parse the last work update time", "work", logObjRef)
 		} else {
 			latency := time.Since(workUpdateTime)
 			metrics.WorkApplyTime.WithLabelValues(work.GetName()).Observe(latency.Seconds())
 			klog.V(2).InfoS("work is applied", "work", work.GetName(), "latency", latency.Milliseconds())
 		}
+	} else {
+		klog.V(2).InfoS("work has no last update time", "work", work.GetName())
 	}
 
 	// generate the work condition based on the manifest apply result

@@ -37,12 +37,27 @@ kubectl --context=kind-hub-testing apply -f test/integration/manifests/placement
 check the logs of the hub cluster controller
 ```shell
 kubectl --context=kind-hub-testing -n fleet-system get pod 
+
+NAME                       READY   STATUS    RESTARTS   AGE
+hub-agent-8bb6d658-6jj7n   1/1     Running   0          11m
+
 ```
 
 check the logs of the member cluster controller
 ```shell
 kubectl --context=kind-member-testing -n fleet-system get pod 
 ```
+
+check the hub metrics
+```shell
+kubectl --context=kind-hub-testing -n fleet-system  port-forward hub-agent-xxxx-xxx 13622:8080
+
+Forwarding from 127.0.0.1:13622 -> 8080
+Forwarding from [::1]:13622 -> 8080
+
+curl http://127.0.0.1:13622/metrics
+```
+
 
 5.uninstall the resources
 ```shell

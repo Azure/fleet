@@ -8,6 +8,7 @@ package resourcechange
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -50,6 +51,7 @@ type Reconciler struct {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
+	startTime := time.Now()
 	clusterWideKey, ok := key.(keys.ClusterWideKey)
 	if !ok {
 		err := fmt.Errorf("got a resource key %+v not of type cluster wide key", key)
@@ -57,6 +59,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 		return ctrl.Result{}, err
 	}
 	klog.V(2).InfoS("Reconciling object", "obj", clusterWideKey)
+
+	// add latency log
+	defer func() {
+		klog.V(2).InfoS("ResourceChange reconciliation loop ends", "obj", clusterWideKey, "latency", time.Since(startTime).Milliseconds())
+	}()
 
 	// the clusterObj is set to be the object that the placement direct selects,
 	// in the case of a deleted namespace scoped object, the clusterObj is set to be its parent namespace object.

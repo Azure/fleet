@@ -62,8 +62,8 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		utils.LabelFleetObj:          utils.LabelFleetObjValue,
 	}
 	workAnnotation := map[string]string{
-		utils.LastUpdateAnnotationKey: time.Now().Format(time.RFC3339),
-		specHashAnnotationKey:         specHash,
+		utils.LastWorkUpdateTimeAnnotationKey: time.Now().Format(time.RFC3339),
+		specHashAnnotationKey:                 specHash,
 	}
 	changed := false
 	for _, memberClusterName := range memberClusterNames {

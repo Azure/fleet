@@ -282,7 +282,7 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 			}
 		}
 	}
-	lastUpdateTime, err := time.Parse(time.RFC3339, clusterWork.GetAnnotations()[utils.LastUpdateAnnotationKey])
+	lastUpdateTime, err := time.Parse(time.RFC3339, clusterWork.GetAnnotations()[utils.LastWorkUpdateTimeAnnotationKey])
 	Expect(err).Should(Succeed())
 	return lastUpdateTime
 }
