@@ -66,7 +66,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 				},
 			},
 		}
-		testutils.CreateClusterRole(*HubCluster, cr)
+		Expect(HubCluster.KubeClient.Create(ctx, cr)).Should(Succeed(), "Failed to create cluster role %s in %s cluster", cr.Name, HubCluster.ClusterName)
 
 		By("create the cluster resource placement in the hub cluster")
 		crp = &v1alpha1.ClusterResourcePlacement{
@@ -162,7 +162,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to verify cluster role %s is still on %s cluster", cr.Name, MemberCluster.ClusterName)
 
 		By("delete cluster role on hub cluster")
-		testutils.DeleteClusterRole(*HubCluster, cr)
+		Expect(HubCluster.KubeClient.Delete(ctx, cr)).Should(Succeed(), "Failed to delete cluster role %s in %s cluster", cr.Name, HubCluster.ClusterName)
 
 		By("update member cluster in the hub cluster to join")
 		Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)

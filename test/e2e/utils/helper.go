@@ -11,11 +11,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
-	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -71,22 +68,6 @@ func CheckInternalMemberClusterStatus(ctx context.Context, cluster framework.Clu
 		}
 		return nil
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
-}
-
-// CreateClusterRole create cluster role in the hub cluster.
-func CreateClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), cr)
-		gomega.Expect(err).Should(gomega.Succeed())
-	})
-}
-
-// DeleteClusterRole deletes cluster role on cluster.
-func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	ginkgo.By(fmt.Sprintf("Deleting ClusterRole(%s)", cr.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), cr)
-		gomega.Expect(err).Should(gomega.Succeed())
-	})
 }
 
 // WaitWork waits for Work to be present on the hub cluster.
