@@ -13,13 +13,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/onsi/gomega"
-	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/test/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 // CmpClusterRole compares actual cluster role with expected cluster role.
