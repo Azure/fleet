@@ -76,11 +76,26 @@ func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.
 	}
 }
 
+// applyAction represents the action we take to apply the manifest
+// +enum
+type applyAction string
+
+const (
+	// ManifestCreatedAction indicates that we created the manifest for the first time.
+	ManifestCreatedAction applyAction = "ManifestCreated"
+
+	// ManifestUpdatedAction indicates that we updated the manifest.
+	ManifestUpdatedAction applyAction = "ManifestUpdated"
+
+	// ManifestNoChangeAction indicates that we don't need to change the manifest.
+	ManifestNoChangeAction applyAction = "ManifestNoChange"
+)
+
 // applyResult contains the result of a manifest being applied.
 type applyResult struct {
 	identifier workv1alpha1.ResourceIdentifier
 	generation int64
-	updated    bool
+	action     applyAction
 	err        error
 }
 
@@ -266,7 +281,7 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []wo
 
 		default:
 			addOwnerRef(owner, rawObj)
-			appliedObj, result.updated, result.err = r.applyUnstructured(ctx, gvr, rawObj)
+			appliedObj, result.action, result.err = r.applyUnstructured(ctx, gvr, rawObj)
 			result.identifier = buildResourceIdentifier(index, rawObj, gvr)
 			logObjRef := klog.ObjectRef{
 				Name:      result.identifier.Name,
@@ -274,11 +289,8 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []wo
 			}
 			if result.err == nil {
 				result.generation = appliedObj.GetGeneration()
-				if result.updated {
-					klog.V(2).InfoS("manifest upsert succeeded", "gvr", gvr, "manifest", logObjRef, "new ObservedGeneration", result.generation)
-				} else {
-					klog.V(2).InfoS("manifest upsert unwarranted", "gvr", gvr, "manifest", logObjRef)
-				}
+				klog.V(2).InfoS("apply manifest succeeded", "gvr", gvr, "manifest", logObjRef,
+					"apply action", result.action, "new ObservedGeneration", result.generation)
 			} else {
 				klog.ErrorS(result.err, "manifest upsert failed", "gvr", gvr, "manifest", logObjRef)
 			}
@@ -305,29 +317,30 @@ func (r *ApplyWorkReconciler) decodeManifest(manifest workv1alpha1.Manifest) (sc
 }
 
 // Determines if an unstructured manifest object can & should be applied. If so, it applies (creates) the resource on the cluster.
-func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.GroupVersionResource, manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, bool, error) {
+func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.GroupVersionResource,
+	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
 	}
 	// compute the hash without taking into consider the last applied annotation
 	if err := setManifestHashAnnotation(manifestObj); err != nil {
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// extract the common create procedure to reuse
-	var createFunc = func() (*unstructured.Unstructured, bool, error) {
+	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
 		// record the raw manifest with the hash annotation in the manifest
 		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-			return nil, false, err
+			return nil, ManifestNoChangeAction, err
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
 			klog.V(2).InfoS("successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
-			return actual, true, nil
+			return actual, ManifestCreatedAction, nil
 		}
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// support resources with generated name
@@ -342,14 +355,14 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	case apierrors.IsNotFound(err):
 		return createFunc()
 	case err != nil:
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
 		err = fmt.Errorf("resource is not managed by the work controller")
 		klog.ErrorS(err, "skip applying a not managed manifest", "gvr", gvr, "obj", manifestRef)
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// We only try to update the object if its spec hash value has changed.
@@ -357,12 +370,12 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 	}
 
-	return curObj, false, nil
+	return curObj, ManifestNoChangeAction, nil
 }
 
 // patchCurrentResource uses three way merge to patch the current resource with the new manifest we get from the work.
 func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr schema.GroupVersionResource,
-	manifestObj, curObj *unstructured.Unstructured) (*unstructured.Unstructured, bool, error) {
+	manifestObj, curObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
@@ -376,28 +389,28 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 	manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
 	// record the raw manifest with the hash annotation in the manifest
 	if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 	data, err := patch.Data(manifestObj)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, false, err
+		return nil, ManifestNoChangeAction, err
 	}
 	// Use client side apply the patch to the member cluster
 	manifestObj, patchErr := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).
 		Patch(ctx, manifestObj.GetName(), patch.Type(), data, metav1.PatchOptions{FieldManager: workFieldManagerName})
 	if patchErr != nil {
 		klog.ErrorS(patchErr, "failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
-		return nil, false, patchErr
+		return nil, ManifestNoChangeAction, patchErr
 	}
 	klog.V(2).InfoS("manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, true, nil
+	return manifestObj, ManifestUpdatedAction, nil
 }
 
 // generateWorkCondition constructs the work condition based on the apply result
@@ -409,7 +422,7 @@ func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work 
 		if result.err != nil {
 			errs = append(errs, result.err)
 		}
-		appliedCondition := buildManifestAppliedCondition(result.err, result.updated, result.generation)
+		appliedCondition := buildManifestAppliedCondition(result.err, result.action, result.generation)
 		manifestCondition := workv1alpha1.ManifestCondition{
 			Identifier: result.identifier,
 			Conditions: []metav1.Condition{appliedCondition},
@@ -577,7 +590,7 @@ func buildResourceIdentifier(index int, object *unstructured.Unstructured, gvr s
 	}
 }
 
-func buildManifestAppliedCondition(err error, updated bool, observedGeneration int64) metav1.Condition {
+func buildManifestAppliedCondition(err error, action applyAction, observedGeneration int64) metav1.Condition {
 	if err != nil {
 		return metav1.Condition{
 			Type:               ConditionTypeApplied,
@@ -589,27 +602,17 @@ func buildManifestAppliedCondition(err error, updated bool, observedGeneration i
 		}
 	}
 
-	if updated {
-		return metav1.Condition{
-			Type:               ConditionTypeApplied,
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.Now(),
-			ObservedGeneration: observedGeneration,
-			Reason:             "appliedManifestUpdated",
-			Message:            "appliedManifest updated",
-		}
-	}
 	return metav1.Condition{
 		Type:               ConditionTypeApplied,
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
 		ObservedGeneration: observedGeneration,
-		Reason:             "appliedManifestComplete",
-		Message:            "Apply manifest complete",
+		Reason:             string(action),
+		Message:            string(action),
 	}
 }
 
-// generateWorkAppliedCondition generate appied status condition for work.
+// generateWorkAppliedCondition generate applied status condition for work.
 // If one of the manifests is applied failed on the spoke, the applied status condition of the work is false.
 func generateWorkAppliedCondition(manifestConditions []workv1alpha1.ManifestCondition, observedGeneration int64) metav1.Condition {
 	for _, manifestCond := range manifestConditions {

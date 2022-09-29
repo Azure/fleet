@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	workcontroller "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
@@ -36,7 +37,7 @@ var _ = Describe("Work API Controller test", func() {
 
 		// Comparison Options
 		cmpOptions = []cmp.Option{
-			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration"),
+			cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime", "ObservedGeneration", "Reason"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "BlockOwnerDeletion"),
 			cmpopts.IgnoreFields(workapi.ResourceIdentifier{}, "Ordinal"),
 			cmpopts.IgnoreFields(metav1.ObjectMeta{},
@@ -121,7 +122,6 @@ var _ = Describe("Work API Controller test", func() {
 			if err := HubCluster.KubeClient.Get(ctx, namespaceType, &work); err != nil {
 				return err.Error()
 			}
-
 			want := []metav1.Condition{
 				{
 					Type:   conditionTypeApplied,
@@ -129,7 +129,6 @@ var _ = Describe("Work API Controller test", func() {
 					Reason: "appliedWorkComplete",
 				},
 			}
-
 			return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
@@ -140,7 +139,6 @@ var _ = Describe("Work API Controller test", func() {
 					{
 						Type:   conditionTypeApplied,
 						Status: metav1.ConditionTrue,
-						Reason: "appliedManifestUpdated",
 					},
 				},
 				Identifier: workapi.ResourceIdentifier{
@@ -156,6 +154,7 @@ var _ = Describe("Work API Controller test", func() {
 
 		Expect(cmp.Diff(wantManifestCondition, work.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 			"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
+		Expect(work.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction)).Should(BeTrue())
 
 		By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 		appliedWork := workapi.AppliedWork{}
@@ -251,22 +250,18 @@ var _ = Describe("Work API Controller test", func() {
 		}
 
 		workOne := workapi.Work{}
-
 		Eventually(func() string {
 			if err := HubCluster.KubeClient.Get(ctx, namespaceTypeOne, &workOne); err != nil {
 				return err.Error()
 			}
-
 			return cmp.Diff(want, workOne.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
 		workTwo := workapi.Work{}
-
 		Eventually(func() string {
 			if err := HubCluster.KubeClient.Get(ctx, namespaceTypeTwo, &workTwo); err != nil {
 				return err.Error()
 			}
-
 			return cmp.Diff(want, workTwo.Status.Conditions, cmpOptions...)
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
@@ -277,7 +272,6 @@ var _ = Describe("Work API Controller test", func() {
 					{
 						Type:   conditionTypeApplied,
 						Status: metav1.ConditionTrue,
-						Reason: "appliedManifestUpdated",
 					},
 				},
 				Identifier: workapi.ResourceIdentifier{
@@ -297,8 +291,14 @@ var _ = Describe("Work API Controller test", func() {
 		Expect(cmp.Diff(wantManifestCondition, workTwo.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 			"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeTwo)
 
-		By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
+		// One of them should be a ManifestCreatedAction and one of them should be an ManifestUpdatedAction
+		By(fmt.Sprintf("Verify that either works %s and %s condition reason should be updated", namespaceTypeOne, namespaceTypeTwo))
+		Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction) ||
+			workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction)).Should(BeTrue())
+		Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestUpdatedAction) ||
+			workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestUpdatedAction)).Should(BeTrue())
 
+		By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
 		wantAppliedStatus := workapi.AppliedtWorkStatus{
 			AppliedResources: []workapi.AppliedResourceMeta{
 				{
@@ -360,6 +360,7 @@ var _ = Describe("Work API Controller test", func() {
 		Expect(retrievedSecret.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
 			"SpecHash Annotation does not exist for resource %s", secret.Name)
 	})
+
 	It("Upon successful work creation of a CRD resource, manifest is applied, and resources are created", func() {
 		workName := testutils.RandomWorkName(5)
 
