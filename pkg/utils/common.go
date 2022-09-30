@@ -57,8 +57,11 @@ const (
 	// This label aims to enable different work objects to be managed by different placement.
 	LabelWorkPlacementName = "work.fleet.azure.com/placement-name"
 
-	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster
+	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster.
 	MemberClusterFinalizer = "work.fleet.azure.com/membercluster-finalizer"
+
+	// LastWorkUpdateTimeAnnotationKey is used to mark the last update time on a work object.
+	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
 )
 
 var (

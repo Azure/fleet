@@ -32,7 +32,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -283,7 +282,7 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 			}
 		}
 	}
-	lastUpdateTime, err := time.Parse(time.RFC3339, clusterWork.GetAnnotations()[clusterresourceplacement.LastUpdateAnnotationKey])
+	lastUpdateTime, err := time.Parse(time.RFC3339, clusterWork.GetAnnotations()[utils.LastWorkUpdateTimeAnnotationKey])
 	Expect(err).Should(Succeed())
 	return lastUpdateTime
 }

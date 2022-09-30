@@ -527,7 +527,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		recorder.Event(mc, corev1.EventTypeNormal, reasonMemberClusterJoined, "member cluster left")
 		klog.V(2).InfoS("memberCluster left", "memberCluster", klog.KObj(mc))
-		metrics.ReportJoinResultMetric()
+		metrics.ReportLeaveResultMetric()
 	}
 
 	mc.SetConditions(newCondition, notReadyCondition)
