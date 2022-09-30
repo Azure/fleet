@@ -50,7 +50,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcLeftAgentStatus,
 			Conditions:  mcLeftConditions,
 		}
-		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
 		By("create the resources to be propagated")
 		cr := &rbacv1.ClusterRole{
@@ -103,7 +103,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcJoinedAgentStatus,
 			Conditions:  mcJoinedConditions,
 		}
-		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
 		By("verify that the cluster resource placement is applied")
 		crpStatus := v1alpha1.ClusterResourcePlacementStatus{
@@ -131,7 +131,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			},
 			TargetClusters: []string{"kind-member-testing"},
 		}
-		testutils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, crp, crpStatus, 3*testutils.PollTimeout)
+		testutils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, &types.NamespacedName{Name: crp.Name}, crpStatus, crpStatusCmpOptions, 3*testutils.PollTimeout)
 
 		By("verify the resource is propagated to member cluster")
 		Expect(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cr.Name}, cr)).Should(Succeed(), "Failed to verify cluster role %s is propagated to %s cluster", cr.Name, MemberCluster.ClusterName)
@@ -146,7 +146,7 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcLeftAgentStatus,
 			Conditions:  mcLeftConditions,
 		}
-		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
 		By("verify that the resource is still on the member cluster")
 		Consistently(func() error {
@@ -174,6 +174,6 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 			AgentStatus: imcJoinedAgentStatus,
 			Conditions:  mcJoinedConditions,
 		}
-		testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
+		testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 	})
 })

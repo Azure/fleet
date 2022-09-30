@@ -25,7 +25,7 @@ import (
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -38,7 +38,7 @@ var (
 )
 
 // DeleteMemberCluster deletes MemberCluster in the hub cluster.
-func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
+func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *fleetv1alpha1.MemberCluster) {
 	gomega.Expect(cluster.KubeClient.Delete(ctx, mc)).Should(gomega.Succeed(), "Failed to delete member cluster %s in %s cluster", mc.Name, cluster.ClusterName)
 	gomega.Eventually(func() bool {
 		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
@@ -46,29 +46,31 @@ func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *v1a
 }
 
 // CheckMemberClusterStatus is used to check member cluster status.
-func CheckMemberClusterStatus(ctx context.Context, cluster framework.Cluster, wantMCStatus v1alpha1.MemberClusterStatus, mc *v1alpha1.MemberCluster, mcStatusCmpOptions []cmp.Option) {
+func CheckMemberClusterStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantMCStatus fleetv1alpha1.MemberClusterStatus, mcStatusCmpOptions []cmp.Option) {
+	gotMC := &fleetv1alpha1.MemberCluster{}
 	gomega.Eventually(func() error {
-		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc); err != nil {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: objectKey.Name}, gotMC); err != nil {
 			return err
 		}
-		if statusDiff := cmp.Diff(wantMCStatus, mc.Status, mcStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", mc.Name, statusDiff)
+		if statusDiff := cmp.Diff(wantMCStatus, gotMC.Status, mcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", gotMC.Name, statusDiff)
 		}
 		return nil
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait member cluster %s to have status %s", mc.Name, wantMCStatus)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait member cluster %s to have status %s", gotMC.Name, wantMCStatus)
 }
 
 // CheckInternalMemberClusterStatus is used to check internal member cluster status.
-func CheckInternalMemberClusterStatus(ctx context.Context, cluster framework.Cluster, wantIMCStatus v1alpha1.InternalMemberClusterStatus, imc *v1alpha1.InternalMemberCluster, imcStatusCmpOptions []cmp.Option) {
+func CheckInternalMemberClusterStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantIMCStatus fleetv1alpha1.InternalMemberClusterStatus, imcStatusCmpOptions []cmp.Option) {
+	gotIMC := &fleetv1alpha1.InternalMemberCluster{}
 	gomega.Eventually(func() error {
-		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc); err != nil {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: objectKey.Name, Namespace: objectKey.Namespace}, gotIMC); err != nil {
 			return err
 		}
-		if statusDiff := cmp.Diff(wantIMCStatus, imc.Status, imcStatusCmpOptions...); statusDiff != "" {
-			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", imc.Name, statusDiff)
+		if statusDiff := cmp.Diff(wantIMCStatus, gotIMC.Status, imcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", gotIMC.Name, statusDiff)
 		}
 		return nil
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for internal member cluster %s to have status %s", imc.Name, wantIMCStatus)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for internal member cluster %s to have status %s", gotIMC.Name, wantIMCStatus)
 }
 
 // WaitWork waits for Work to be present on the hub cluster.

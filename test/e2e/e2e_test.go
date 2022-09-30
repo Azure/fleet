@@ -64,11 +64,14 @@ var (
 		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
 		sortOption,
 	}
-
 	mcStatusCmpOptions = []cmp.Option{
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
 		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
 		cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"),
+		sortOption,
+	}
+	crpStatusCmpOptions = []cmp.Option{
+		cmpopts.IgnoreFields(metav1.Condition{}, "ObservedGeneration", "LastTransitionTime"),
 		sortOption,
 	}
 
@@ -198,15 +201,16 @@ var _ = BeforeSuite(func() {
 
 	By("check if internal member cluster status is updated to Joined")
 	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcJoinedAgentStatus}
-	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, wantIMCStatus, imc, imcStatusCmpOptions)
+	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, wantIMCStatus, imcStatusCmpOptions)
 
 	By("check if member cluster status is updated to Joined")
+	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)).Should(Succeed(), "Failed to retrieve internal member cluster %s in %s cluster", imc.Name, HubCluster.ClusterName)
 	wantMCStatus := v1alpha1.MemberClusterStatus{
 		AgentStatus:   imc.Status.AgentStatus,
 		Conditions:    mcJoinedConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
-	testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
+	testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 })
 
 var _ = AfterSuite(func() {
@@ -217,15 +221,16 @@ var _ = AfterSuite(func() {
 
 	By("check if internal member cluster status is updated to Left")
 	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcLeftAgentStatus}
-	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, wantIMCStatus, imc, imcStatusCmpOptions)
+	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, wantIMCStatus, imcStatusCmpOptions)
 
 	By("check if member cluster status is updated to Left")
+	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)).Should(Succeed(), "Failed to retrieve internal member cluster %s in %s cluster", imc.Name, HubCluster.ClusterName)
 	wantMCStatus := v1alpha1.MemberClusterStatus{
 		AgentStatus:   imc.Status.AgentStatus,
 		Conditions:    mcLeftConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
-	testutils.CheckMemberClusterStatus(ctx, *HubCluster, wantMCStatus, mc, mcStatusCmpOptions)
+	testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
 	By("delete member cluster")
 	testutils.DeleteMemberCluster(ctx, *HubCluster, mc)
