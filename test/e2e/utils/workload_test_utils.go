@@ -18,7 +18,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -79,7 +79,7 @@ func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, objectKey *t
 }
 
 // CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.
-func CreateClusterResourcePlacement(ctx context.Context, cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
+func CreateClusterResourcePlacement(ctx context.Context, cluster framework.Cluster, crp *fleetv1alpha1.ClusterResourcePlacement) {
 	gomega.Expect(cluster.KubeClient.Create(ctx, crp)).Should(gomega.Succeed())
 	gomega.Eventually(func() error {
 		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)
@@ -87,8 +87,8 @@ func CreateClusterResourcePlacement(ctx context.Context, cluster framework.Clust
 }
 
 // WaitCreateClusterResourcePlacementStatus waits for ClusterResourcePlacement to present on th hub cluster with a specific status.
-func WaitCreateClusterResourcePlacementStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantCRPStatus v1alpha1.ClusterResourcePlacementStatus, crpStatusCmpOptions []cmp.Option, customTimeout time.Duration) {
-	gotCRP := &v1alpha1.ClusterResourcePlacement{}
+func WaitCreateClusterResourcePlacementStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantCRPStatus fleetv1alpha1.ClusterResourcePlacementStatus, crpStatusCmpOptions []cmp.Option, customTimeout time.Duration) {
+	gotCRP := &fleetv1alpha1.ClusterResourcePlacement{}
 	gomega.Eventually(func() error {
 		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: objectKey.Name}, gotCRP); err != nil {
 			return err
@@ -101,7 +101,7 @@ func WaitCreateClusterResourcePlacementStatus(ctx context.Context, cluster frame
 }
 
 // DeleteClusterResourcePlacement is used delete ClusterResourcePlacement on the hub cluster.
-func DeleteClusterResourcePlacement(ctx context.Context, cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
+func DeleteClusterResourcePlacement(ctx context.Context, cluster framework.Cluster, crp *fleetv1alpha1.ClusterResourcePlacement) {
 	gomega.Expect(cluster.KubeClient.Delete(ctx, crp)).Should(gomega.Succeed(), "Failed to delete cluster resource placement %s in %s cluster", crp.Name, cluster.ClusterName)
 	gomega.Eventually(func() bool {
 		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp))
