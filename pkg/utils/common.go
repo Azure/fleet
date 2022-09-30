@@ -62,9 +62,6 @@ const (
 
 	// LastWorkUpdateTimeAnnotationKey is used to mark the last update time on a work object.
 	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
-
-	// LastCRPScheduleAnnotationKey is used to mark the last successful schedule time on cluster resource placement.
-	LastCRPScheduleAnnotationKey = "crp.fleet.azure.com/last-successful-schedule-time"
 )
 
 var (
