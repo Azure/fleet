@@ -665,12 +665,11 @@ var _ = Describe("Work API Controller test", func() {
 					{
 						Type:   conditionTypeApplied,
 						Status: metav1.ConditionTrue,
-						Reason: "appliedManifestUpdated",
 					},
 				},
 				ManifestConditions: nil,
 			}
-			Expect(cmp.Diff(wantWorkStatus, updatedWork.Status)).Should(BeEmpty(),
+			Expect(cmp.Diff(wantWorkStatus, updatedWork.Status, cmpOptions...)).Should(BeEmpty(),
 				"Work Condition for Work Object %s should be empty / mismatch (-want, +got): ")
 		})
 	})
