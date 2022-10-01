@@ -158,18 +158,24 @@ var _ = Describe("workload orchestration testing", func() {
 
 		It("Apply CRP selecting namespace by label and check if namespace gets propagated with role, role binding, then update existing role", func() {
 			By("create the resources to be propagated")
-			namespace := &corev1.Namespace{
+			namespace1 := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   "test-namespace",
+					Name:   "test-namespace1",
 					Labels: map[string]string{labelKey: labelValue},
 				},
 			}
-			testutils.CreateNamespace(ctx, *HubCluster, namespace)
+			namespace2 := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace2",
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, namespace1)).Should(Succeed(), "Failed to create namespace %s in %s cluster", namespace1.Name, HubCluster.ClusterName)
+			Expect(HubCluster.KubeClient.Create(ctx, namespace2)).Should(Succeed(), "Failed to create namespace %s in %s cluster", namespace2.Name, HubCluster.ClusterName)
 
 			role := &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod-reader",
-					Namespace: namespace.Name,
+					Namespace: namespace1.Name,
 				},
 				Rules: []rbacv1.PolicyRule{
 					{
@@ -184,7 +190,7 @@ var _ = Describe("workload orchestration testing", func() {
 			roleBinding := &rbacv1.RoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "read-pods",
-					Namespace: namespace.Name,
+					Namespace: namespace1.Name,
 				},
 				Subjects: []rbacv1.Subject{
 					{
@@ -211,7 +217,7 @@ var _ = Describe("workload orchestration testing", func() {
 							Version: "v1",
 							Kind:    "Namespace",
 							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: namespace.Labels,
+								MatchLabels: namespace1.Labels,
 							},
 						},
 					},
@@ -256,7 +262,7 @@ var _ = Describe("workload orchestration testing", func() {
 					{
 						Version: "v1",
 						Kind:    "Namespace",
-						Name:    namespace.Name,
+						Name:    namespace1.Name,
 					},
 				},
 				TargetClusters: []string{"kind-member-testing"},
@@ -272,15 +278,20 @@ var _ = Describe("workload orchestration testing", func() {
 					Name:               crp.Name,
 				},
 			}
-			expectedNamespace := namespace
+			expectedNamespace := namespace1
 			expectedRole := role
 			expectedRoleBinding := roleBinding
 			expectedNamespace.OwnerReferences = ownerReferences
 			expectedRole.OwnerReferences = ownerReferences
 			expectedRoleBinding.OwnerReferences = ownerReferences
-			testutils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace.Name}, expectedNamespace, resourceIgnoreOptions)
+			testutils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, expectedNamespace, resourceIgnoreOptions)
 			testutils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
 			testutils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, expectedRoleBinding, resourceIgnoreOptions)
+
+			By("check if namespace not selected by CRP doesn't exist on member cluster")
+			Consistently(func() bool {
+				return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace2.Name}, namespace2))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to verify namespace %s is not propagated to %s cluster", namespace2.Name, MemberCluster.ClusterName)
 
 			By("update role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -293,7 +304,7 @@ var _ = Describe("workload orchestration testing", func() {
 			updatedRole := &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      role.Name,
-					Namespace: namespace.Name,
+					Namespace: namespace1.Name,
 				},
 				Rules: rules,
 			}
@@ -304,15 +315,15 @@ var _ = Describe("workload orchestration testing", func() {
 			testutils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
 
 			By("delete namespace")
-			Expect(HubCluster.KubeClient.Delete(context.TODO(), namespace)).Should(Succeed(), "Failed to delete namespace %s in %s cluster", namespace.Name, HubCluster.ClusterName)
+			Expect(HubCluster.KubeClient.Delete(context.TODO(), namespace1)).Should(Succeed(), "Failed to delete namespace %s in %s cluster", namespace1.Name, HubCluster.ClusterName)
 			Eventually(func() bool {
-				return apierrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace.Name}, namespace))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for namespace %s to be deleted in %s cluster", namespace.Name, HubCluster.ClusterName)
+				return apierrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace1.Name}, namespace1))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for namespace %s to be deleted in %s cluster", namespace1.Name, HubCluster.ClusterName)
 
 			By("check if namespace got deleted on member cluster")
 			Eventually(func() bool {
-				return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace.Name}, namespace))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", namespace.Name, MemberCluster.ClusterName)
+				return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace1.Name}, namespace1))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", namespace1.Name, MemberCluster.ClusterName)
 
 			By("delete cluster resource placement on hub cluster")
 			testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
