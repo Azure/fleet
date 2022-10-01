@@ -160,7 +160,7 @@ func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, wor
 }
 
 // UpdateWork updates an existing Work Object by replacing the Spec.Manifest with a new objects given from parameter.
-func UpdateWork(ctx context.Context, work *workapi.Work, hubCluster *framework.Cluster, objects []runtime.Object) *workapi.Work {
+func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workapi.Work, objects []runtime.Object) *workapi.Work {
 	manifests := make([]workapi.Manifest, len(objects))
 	for index, obj := range objects {
 		rawObj, err := json.Marshal(obj)
