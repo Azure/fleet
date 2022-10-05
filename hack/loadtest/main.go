@@ -33,7 +33,8 @@ var (
 )
 
 var (
-	placementDeadline   = flag.Int("placement-deadline-second", 60, "The deadline for a placement to be applied (in seconds)")
+	placementDeadline   = flag.Int("placement-deadline-second", 300, "The deadline for a placement to be applied (in seconds)")
+	pollInterval        = flag.Int("poll-interval-millisecond", 250, "The poll interval for verification (in milli-second)")
 	maxCurrentPlacement = flag.Int("max-current-placement", 10, "The number of current placement load.")
 	clusterNames        util.ClusterNames
 )
@@ -69,7 +70,6 @@ func main() {
 
 	// run the loadtest in the background
 	go runLoadTest(ctx, config)
-
 	// setup prometheus server
 	http.Handle("/metrics", promhttp.Handler())
 	if err = http.ListenAndServe(":4848", nil); err != nil {
@@ -84,7 +84,7 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 		go func() {
 			// each use a separate client to avoid client side throttling
 			time.Sleep(time.Millisecond * time.Duration(utilrand.Intn(1000)))
-			hubClient, err := client.New(config, client.Options{
+			hubClient, err := client.NewWithWatch(config, client.Options{
 				Scheme: scheme,
 			})
 			if err != nil {
@@ -97,7 +97,7 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 				case <-ctx.Done():
 					return
 				default:
-					if err := util.MeasureOnePlacement(ctx, hubClient, time.Duration(*placementDeadline)*time.Second, *maxCurrentPlacement, clusterNames); err != nil {
+					if err = util.MeasureOnePlacement(ctx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames); err != nil {
 						klog.ErrorS(err, "placement load test failed")
 					}
 				}
@@ -105,5 +105,11 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 		}()
 	}
 	wg.Wait()
+	hubClient, _ := client.New(config, client.Options{
+		Scheme: scheme,
+	})
+	if err := util.CleanupAll(hubClient); err != nil {
+		klog.ErrorS(err, "clean up placement load test hit an error")
+	}
 	klog.InfoS(" placement load test finished")
 }
