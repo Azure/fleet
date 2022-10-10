@@ -1,0 +1,16 @@
+Package: netbase
+Version: 6.3
+Architecture: all
+Maintainer: Marco d'Itri <md@linux.it>
+Installed-Size: 41
+Breaks: ebtables (<< 2.0.11-2)
+Replaces: ebtables (<< 2.0.11-2)
+Section: admin
+Priority: important
+Multi-Arch: foreign
+Description: Basic TCP/IP networking system
+ This package provides the necessary infrastructure for basic TCP/IP based
+ networking.
+ .
+ In particular, it supplies common name-to-number mappings in /etc/services,
+ /etc/rpc, /etc/protocols and /etc/ethertypes.

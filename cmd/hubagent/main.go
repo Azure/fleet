@@ -8,6 +8,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -25,7 +26,7 @@ import (
 	"go.goms.io/fleet/pkg/controllers/membercluster"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
-	//+kubebuilder:scaffold:imports
+	// +kubebuilder:scaffold:imports
 )
 
 var (
@@ -49,7 +50,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
-	//+kubebuilder:scaffold:scheme
+	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.PlacementApplyFailedCount, fleetmetrics.PlacementApplySucceedCount)
@@ -109,7 +110,7 @@ func main() {
 	}
 
 	if opts.EnableWebhook {
-		if err := SetupWebhook(mgr); err != nil {
+		if err := SetupWebhook(mgr, opts.WebhookClientConnectionType); err != nil {
 			klog.ErrorS(err, "unable to set up webhook")
 			exitWithErrorFunc()
 		}
@@ -121,7 +122,7 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	//+kubebuilder:scaffold:builder
+	// +kubebuilder:scaffold:builder
 
 	if err := mgr.Start(ctx); err != nil {
 		klog.ErrorS(err, "problem starting manager")
@@ -129,8 +130,15 @@ func main() {
 	}
 }
 
-// SetupWebhook generate the webhook cert and then setup the webhook configurator
-func SetupWebhook(mgr manager.Manager) error {
+// SetupWebhook generate the webhook cert and then set up the webhook configurator
+func SetupWebhook(mgr manager.Manager, webhookClientConnectionType string) error {
+	var connectionType options.WebhookClientConnectionType
+	switch strings.ToLower(webhookClientConnectionType) {
+	case "url":
+		connectionType = options.URL
+	case "service":
+		connectionType = options.Service
+	}
 	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start
 	caPEM, err := webhook.GenCertificate(FleetWebhookCertDir)
 	if err != nil {
@@ -139,9 +147,10 @@ func SetupWebhook(mgr manager.Manager) error {
 	}
 
 	if err := mgr.Add(&webhookApiserverConfigurator{
-		mgr:   mgr,
-		caPEM: caPEM,
-		port:  FleetWebhookPort,
+		mgr:            mgr,
+		caPEM:          caPEM,
+		port:           FleetWebhookPort,
+		connectionType: &connectionType,
 	}); err != nil {
 		klog.ErrorS(err, "unable to add webhookApiserverConfigurator")
 		return err
@@ -154,16 +163,17 @@ func SetupWebhook(mgr manager.Manager) error {
 }
 
 type webhookApiserverConfigurator struct {
-	mgr   manager.Manager
-	caPEM []byte
-	port  int
+	mgr            manager.Manager
+	caPEM          []byte
+	port           int
+	connectionType *options.WebhookClientConnectionType
 }
 
 var _ manager.Runnable = &webhookApiserverConfigurator{}
 
 func (c *webhookApiserverConfigurator) Start(ctx context.Context) error {
 	klog.V(2).InfoS("setting up webhooks in apiserver from the leader")
-	if err := webhook.CreateFleetWebhookConfiguration(ctx, c.mgr.GetClient(), c.caPEM, c.port); err != nil {
+	if err := webhook.CreateFleetWebhookConfiguration(ctx, c.mgr.GetClient(), c.caPEM, c.port, c.connectionType); err != nil {
 		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
 		return err
 	}

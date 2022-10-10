@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/cmd/hubagent/options"
 )
 
 const (
@@ -58,7 +59,7 @@ func AddToManager(m manager.Manager) error {
 }
 
 // CreateFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook
-func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, caPEM []byte, port int) error {
+func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, caPEM []byte, port int, clientConnectType *options.WebhookClientConnectionType) error {
 	failPolicy := admv1.Fail // reject request if the webhook doesn't work
 	sideEffortsNone := admv1.SideEffectClassNone
 
