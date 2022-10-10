@@ -645,6 +645,7 @@ var _ = Describe("Work API Controller test", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{}, "Resource %s should have been deleted.", configMap.Name)
 
 			By(fmt.Sprintf("The AppliedWork Manifest for Work %s should have been deleted", namespaceType))
+			// The AppliedWork should still exist, as the work still exists.
 			appliedWork := workapi.AppliedWork{}
 			err := MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
 			Expect(err).Should(Succeed(), "Retrieving AppliedWork Manifest Failed")
@@ -667,7 +668,6 @@ var _ = Describe("Work API Controller test", func() {
 						Status: metav1.ConditionTrue,
 					},
 				},
-				ManifestConditions: nil,
 			}
 			Expect(cmp.Diff(wantWorkStatus, updatedWork.Status, cmpOptions...)).Should(BeEmpty(),
 				"Work Condition for Work Object %s should be empty / mismatch (-want, +got): ")
