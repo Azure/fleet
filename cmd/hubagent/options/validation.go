@@ -6,6 +6,8 @@ Licensed under the MIT license.
 package options
 
 import (
+	"strings"
+
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"go.goms.io/fleet/pkg/utils"
@@ -27,6 +29,10 @@ func (o *Options) Validate() field.ErrorList {
 	}
 	if o.WorkPendingGracePeriod.Duration <= 0 {
 		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "must be greater than 0"))
+	}
+	connectionType := strings.ToLower(o.WebhookClientConnectionType)
+	if !(connectionType == "url" || connectionType == "service") {
+		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.WebhookClientConnectionType, "must be \"service\" or \"url\""))
 	}
 
 	return errs
