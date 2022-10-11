@@ -153,7 +153,7 @@ func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, cl
 	config := &admv1.WebhookClientConfig{}
 	config.CABundle = caBundle
 	var serviceEndpoint string
-	// var serviceEndpoint string
+
 	serviceRef := admv1.ServiceReference{
 		Namespace: serviceNs,
 		Name:      FleetWebhookSvcName,
@@ -201,8 +201,8 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 	ca := &x509.Certificate{
 		SerialNumber: big.NewInt(2022),
 		Subject: pkix.Name{
-			CommonName:         fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, serviceNs),
-			OrganizationalUnit: []string{"Azure", "Container Services", "Azure Kubernetes Service"},
+			CommonName:         fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, serviceNs),
+			OrganizationalUnit: []string{"Azure Kubernetes Service"},
 			Organization:       []string{"Microsoft"},
 			Locality:           []string{"Redmond"},
 			Province:           []string{"Washington"},
@@ -239,17 +239,15 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 	caPEMByte = caPEM.Bytes()
 
 	dnsNames := []string{
-		fmt.Sprintf("%s.%s", FleetWebhookSvcName, serviceNs),
 		fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, serviceNs),
-		fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, serviceNs),
 	}
 	// server cert config
 	cert := &x509.Certificate{
 		DNSNames:     dnsNames,
 		SerialNumber: big.NewInt(2022),
 		Subject: pkix.Name{
-			CommonName:         fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, serviceNs),
-			OrganizationalUnit: []string{"Azure", "Container Services", "Azure Kubernetes Service"},
+			CommonName:         fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, serviceNs),
+			OrganizationalUnit: []string{"Azure Kubernetes Service"},
 			Organization:       []string{"Microsoft"},
 			Locality:           []string{"Redmond"},
 			Province:           []string{"Washington"},
