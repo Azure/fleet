@@ -178,10 +178,9 @@ func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workap
 	return work
 }
 
+// DeleteWork deletes the given Work object.
 func DeleteWork(ctx context.Context, hubCluster framework.Cluster, work workapi.Work) {
-	// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &work)).Should(gomega.SatisfyAny(gomega.Succeed(),
-		&utils.NotFoundMatcher{}), "Deletion of work %s failed", work.Name)
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &work)).Should(gomega.Succeed(), "Deletion of work %s failed", work.Name)
 }
 
 // AddManifests adds manifests to be included within a Work.

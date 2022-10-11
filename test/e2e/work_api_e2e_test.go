@@ -722,18 +722,18 @@ var _ = Describe("Work API Controller test", func() {
 			Eventually(func() error {
 				appliedWork := workapi.AppliedWork{}
 				return MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
-			}, testutils.PollTimeout, testutils.PollInterval).ShouldNot(Succeed(),
-				"AppliedWork was not deleted from the cluster %s", workName, MemberCluster.ClusterName)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{},
+				"AppliedWork %s was either not deleted or encountered an error in cluster %s", workName, MemberCluster.ClusterName)
 
 			By("Deleting the Work Object should also delete the resources in the member cluster")
 			configMapDeleted := corev1.ConfigMap{}
-			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).ShouldNot(Succeed(),
-				"resource %s was not deleted from the cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
+			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).Should(&utils.NotFoundMatcher{},
+				"resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
 
 			By(fmt.Sprintf("The Work Object %s was deleted from the Hub Cluster %s", workName, HubCluster.ClusterName))
 			deletedWork := workapi.Work{}
-			Expect(HubCluster.KubeClient.Get(ctx, namespaceType, &deletedWork)).ShouldNot(Succeed(),
-				"The Work resource %s was not deleted on the hub cluster %s", workName, HubCluster.ClusterName)
+			Expect(HubCluster.KubeClient.Get(ctx, namespaceType, &deletedWork)).Should(&utils.NotFoundMatcher{},
+				"The Work resource %s was either not deleted or encountered an error in hub cluster %s", workName, HubCluster.ClusterName)
 		})
 	})
 })
