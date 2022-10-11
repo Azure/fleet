@@ -7,9 +7,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"os"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -133,12 +133,11 @@ func main() {
 
 // SetupWebhook generate the webhook cert and then set up the webhook configurator
 func SetupWebhook(mgr manager.Manager, webhookClientConnectionType string) error {
-	var connectionType options.WebhookClientConnectionType
-	switch strings.ToLower(webhookClientConnectionType) {
-	case "url":
-		connectionType = options.URL
-	case "service":
-		connectionType = options.Service
+	connectionType, ok := options.ParseWebhookClientConnectionString(webhookClientConnectionType)
+	if !ok {
+		err := errors.New("invalid webhook client connection type")
+		klog.Error(err)
+		return err
 	}
 
 	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start
