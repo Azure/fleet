@@ -90,7 +90,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&o.LeaderElection.LeaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
 	flags.DurationVar(&o.LeaderElection.LeaseDuration.Duration, "leader-lease-duration", 15*time.Second, "This is effectively the maximum duration that a leader can be stopped before someone else will replace it.")
 	flag.StringVar(&o.LeaderElection.ResourceNamespace, "leader-election-namespace", utils.FleetSystemNamespace, "The namespace in which the leader election resource will be created.")
-	flag.BoolVar(&o.EnableWebhook, "enable-webhook", false, "If set, the fleet webhook is enabled.")
+	flag.BoolVar(&o.EnableWebhook, "enable-webhook", true, "If set, the fleet webhook is enabled.")
 	flag.StringVar(&o.WebhookClientConnectionType, "webhook-client-connection-type", "url", "Sets the connection type used by the webhook client. Only URL or Service is valid.")
 	flag.BoolVar(&o.NetworkingAgentsEnabled, "networking-agents-enabled", false, "Whether the networking agents are enabled or not.")
 	flags.DurationVar(&o.ClusterUnhealthyThreshold.Duration, "cluster-unhealthy-threshold", 60*time.Second, "The duration for a member cluster to be in a degraded state before considered unhealthy.")
