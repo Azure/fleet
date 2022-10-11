@@ -644,7 +644,7 @@ var _ = Describe("Work API Controller test", func() {
 				return MemberCluster.KubeClient.Get(ctx, configMapNamespaceType, &retrievedConfigMap)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{}, "Resource %s should have been deleted.", configMap.Name)
 
-			By(fmt.Sprintf("The AppliedWork Manifest for Work %s should have been deleted", namespaceType))
+			By(fmt.Sprintf("Condition for AppliedWork %s should be empty", namespaceType))
 			appliedWork := workapi.AppliedWork{}
 			err := MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
 			Expect(err).Should(Succeed(), "AppliedWork should still exist.")
@@ -653,7 +653,7 @@ var _ = Describe("Work API Controller test", func() {
 			Expect(cmp.Diff(wantAppliedWorkStatus, appliedWork.Status)).Should(BeEmpty(),
 				"Status should be empty for AppliedWork %s (-want, +got):", appliedWork.Name)
 
-			By(fmt.Sprintf("The Work Condition for Work %s should have been deleted from the Work Object", work.Name))
+			By(fmt.Sprintf("Applied Condition for Work %s should still be true", namespaceType))
 			updatedWork := workapi.Work{}
 			err = HubCluster.KubeClient.Get(ctx, namespaceType, &updatedWork)
 			Expect(err).Should(Succeed(), "Retrieving Work Object should succeed")
@@ -669,7 +669,7 @@ var _ = Describe("Work API Controller test", func() {
 				},
 			}
 			Expect(cmp.Diff(wantWorkStatus, updatedWork.Status, cmpOptions...)).Should(BeEmpty(),
-				"Work Condition for Work Object %s should be empty / mismatch (-want, +got): ")
+				"Work Condition for Work Object %s should still be applied / mismatch (-want, +got): ")
 		})
 	})
 })
