@@ -16,8 +16,8 @@ const (
 
 var (
 	capabilitiesMap = map[string]WebhookClientConnectionType{
-		"service": URL,
-		"url":     Service,
+		"service": Service,
+		"url":     URL,
 	}
 )
 

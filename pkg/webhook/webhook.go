@@ -107,7 +107,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 			},
 			{
 				Name:                    "fleet.clusterresourceplacement.validating",
-				ClientConfig:            *createWebhookClientConfig(&corev1.Pod{}, caPEM, clientConnectionType),
+				ClientConfig:            *createWebhookClientConfig(fleetv1alpha1.ClusterResourcePlacement{}, caPEM, clientConnectionType),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -152,6 +152,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, clientConnectionType *options.WebhookClientConnectionType) *admv1.WebhookClientConfig {
 	config := &admv1.WebhookClientConfig{}
 	config.CABundle = caBundle
+	var serviceEndpoint string
 	// var serviceEndpoint string
 	serviceRef := admv1.ServiceReference{
 		Namespace: serviceNs,
@@ -161,18 +162,18 @@ func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, cl
 
 	switch webhookInterface.(type) {
 	case corev1.Pod:
-		// serviceEndpoint = serviceURL + pod.ValidationPath
+		serviceEndpoint = serviceURL + pod.ValidationPath
 		serviceRef.Path = pointer.String(pod.ValidationPath)
 	case fleetv1alpha1.ClusterResourcePlacement:
-		// serviceEndpoint = serviceURL + clusterresourceplacement.ValidationPath
+		serviceEndpoint = serviceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
 	}
 
 	switch *clientConnectionType {
 	case options.Service:
 		config.Service = &serviceRef
-	default:
-		config.Service = &serviceRef
+	case options.URL:
+		config.URL = pointer.String(serviceEndpoint)
 	}
 
 	return config
