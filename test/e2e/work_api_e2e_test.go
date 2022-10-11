@@ -642,12 +642,12 @@ var _ = Describe("Work API Controller test", func() {
 			Eventually(func() error {
 				retrievedConfigMap := corev1.ConfigMap{}
 				return MemberCluster.KubeClient.Get(ctx, configMapNamespaceType, &retrievedConfigMap)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{}, "Resource %s should have been deleted.", configMap.Name)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{}, "Resource %s should have been deleted", configMap.Name)
 
-			By(fmt.Sprintf("Condition for AppliedWork %s should be empty", namespaceType))
+			By(fmt.Sprintf("Condition for resource %s should be removed from AppliedWork", configMap.Name))
 			appliedWork := workapi.AppliedWork{}
 			err := MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
-			Expect(err).Should(Succeed(), "AppliedWork should still exist.")
+			Expect(err).Should(Succeed(), "AppliedWork for Work %s should still exist", namespaceType)
 
 			wantAppliedWorkStatus := workapi.AppliedtWorkStatus{AppliedResources: nil}
 			Expect(cmp.Diff(wantAppliedWorkStatus, appliedWork.Status)).Should(BeEmpty(),
