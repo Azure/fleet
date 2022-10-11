@@ -159,12 +159,23 @@ func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, wor
 	return work
 }
 
-// DeleteWork deletes all works used in the current test.
-func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []workapi.Work) {
-	// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
-	for i := range works {
-		gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed", works[i].Name)
+// UpdateWork updates an existing Work Object by replacing the Spec.Manifest with a new objects given from parameter.
+func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workapi.Work, objects []runtime.Object) *workapi.Work {
+	manifests := make([]workapi.Manifest, len(objects))
+	for index, obj := range objects {
+		rawObj, err := json.Marshal(obj)
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", obj)
+
+		manifests[index] = workapi.Manifest{
+			RawExtension: runtime.RawExtension{Object: obj, Raw: rawObj},
+		}
 	}
+	work.Spec.Workload.Manifests = manifests
+
+	err := hubCluster.KubeClient.Update(ctx, work)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to update work %s in namespace %v", work.Name, work.Namespace)
+
+	return work
 }
 
 // AddManifests adds manifests to be included within a Work.
