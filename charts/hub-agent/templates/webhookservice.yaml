@@ -7,9 +7,6 @@ metadata:
   name: fleetwebhook
   namespace: {{ .Values.namespace }} 
 spec:
-  clusterIP: None
-  clusterIPs:
-  - None
   ipFamilies:
   - IPv4
   ipFamilyPolicy: SingleStack

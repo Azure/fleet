@@ -86,7 +86,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 		Webhooks: []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.pod.validating",
-				ClientConfig:            *createWebhookClientConfig(&corev1.Pod{}, caPEM, clientConnectionType),
+				ClientConfig:            *createWebhookClientConfig(corev1.Pod{}, caPEM, clientConnectionType),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -152,7 +152,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, clientConnectionType *options.WebhookClientConnectionType) *admv1.WebhookClientConfig {
 	config := &admv1.WebhookClientConfig{}
 	config.CABundle = caBundle
-	var serviceEndpoint string
+	// var serviceEndpoint string
 	serviceRef := admv1.ServiceReference{
 		Namespace: serviceNs,
 		Name:      FleetWebhookSvcName,
@@ -161,10 +161,10 @@ func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, cl
 
 	switch webhookInterface.(type) {
 	case corev1.Pod:
-		serviceEndpoint = serviceURL + pod.ValidationPath
+		// serviceEndpoint = serviceURL + pod.ValidationPath
 		serviceRef.Path = pointer.String(pod.ValidationPath)
 	case fleetv1alpha1.ClusterResourcePlacement:
-		serviceEndpoint = serviceURL + clusterresourceplacement.ValidationPath
+		// serviceEndpoint = serviceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
 	}
 
@@ -172,7 +172,7 @@ func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, cl
 	case options.Service:
 		config.Service = &serviceRef
 	default:
-		config.URL = pointer.String(serviceEndpoint)
+		config.Service = &serviceRef
 	}
 
 	return config
@@ -200,7 +200,12 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 	ca := &x509.Certificate{
 		SerialNumber: big.NewInt(2022),
 		Subject: pkix.Name{
-			Organization: []string{"fleet.azure.com"},
+			CommonName:         fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, serviceNs),
+			OrganizationalUnit: []string{"Azure", "Container Services", "Azure Kubernetes Service"},
+			Organization:       []string{"Microsoft"},
+			Locality:           []string{"Redmond"},
+			Province:           []string{"Washington"},
+			Country:            []string{"United States of America"},
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(10, 0, 0), // Set expiration time to be 10 years for now
@@ -233,15 +238,21 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 	caPEMByte = caPEM.Bytes()
 
 	dnsNames := []string{
-		fmt.Sprintf("fleetwebhook.%s.svc.cluster.local", serviceNs),
+		fmt.Sprintf("%s.%s", FleetWebhookSvcName, serviceNs),
+		fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, serviceNs),
+		fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, serviceNs),
 	}
 	// server cert config
 	cert := &x509.Certificate{
 		DNSNames:     dnsNames,
 		SerialNumber: big.NewInt(2022),
 		Subject: pkix.Name{
-			CommonName:   "fleetWebhookServer",
-			Organization: []string{"fleet.azure.com"},
+			CommonName:         fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, serviceNs),
+			OrganizationalUnit: []string{"Azure", "Container Services", "Azure Kubernetes Service"},
+			Organization:       []string{"Microsoft"},
+			Locality:           []string{"Redmond"},
+			Province:           []string{"Washington"},
+			Country:            []string{"United States of America"},
 		},
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().AddDate(10, 0, 0),
