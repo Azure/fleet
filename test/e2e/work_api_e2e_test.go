@@ -729,11 +729,6 @@ var _ = Describe("Work API Controller test", func() {
 			resourceNamespaceType := types.NamespacedName{Name: configMapBeforeDelete.Name, Namespace: resourceNamespace.Name}
 			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).Should(&utils.NotFoundMatcher{},
 				"resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
-
-			By(fmt.Sprintf("The Work Object %s was deleted from the Hub Cluster %s", workName, HubCluster.ClusterName))
-			deletedWork := workapi.Work{}
-			Expect(HubCluster.KubeClient.Get(ctx, namespaceType, &deletedWork)).Should(&utils.NotFoundMatcher{},
-				"The Work resource %s was either not deleted or encountered an error in hub cluster %s", workName, HubCluster.ClusterName)
 		})
 	})
 })

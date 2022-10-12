@@ -180,7 +180,16 @@ func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workap
 
 // DeleteWork deletes the given Work object.
 func DeleteWork(ctx context.Context, hubCluster framework.Cluster, work workapi.Work) {
+	// Deleting Work
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &work)).Should(gomega.Succeed(), "Deletion of work %s failed", work.Name)
+
+	// Waiting for the Work to be deleted and not found.
+	gomega.Eventually(func() error {
+		namespaceType := types.NamespacedName{Name: work.Name, Namespace: work.Namespace}
+
+		return hubCluster.KubeClient.Get(ctx, namespaceType, &work)
+	}).Should(&utils.NotFoundMatcher{},
+		"The Work resource %s was not deleted", work.Name, hubCluster.ClusterName)
 }
 
 // AddManifests adds manifests to be included within a Work.
