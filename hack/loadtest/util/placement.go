@@ -37,37 +37,37 @@ var (
 	LoadTestApplyErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_apply_errors_total",
 		Help: "Total number of placement errors",
-	}, []string{"currency", "fleetSize", "mode"})
+	}, []string{"concurrency", "fleetSize", "mode"})
 
 	LoadTestApplySuccessCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_apply_total",
 		Help: "Total number of placement",
-	}, []string{"currency", "fleetSize"})
+	}, []string{"concurrency", "fleetSize"})
 
 	LoadTestApplyLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "workload_apply_latency",
 		Help:    "Length of time from placement change to it is applied to the member cluster",
 		Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0, 5, 7, 9, 10, 13, 17, 20, 23, 27, 30, 36, 45, 60, 90, 120, 150, 180},
-	}, []string{"currency", "fleetSize"})
+	}, []string{"concurrency", "fleetSize"})
 
 	LoadTestDeleteErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_delete_errors_total",
 		Help: "Total number of placement delete errors",
-	}, []string{"currency", "fleetSize"})
+	}, []string{"concurrency", "fleetSize"})
 
 	LoadTestDeleteSuccessCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_delete_total",
 		Help: "Total number of placement deleted",
-	}, []string{"currency", "fleetSize"})
+	}, []string{"concurrency", "fleetSize"})
 
 	LoadTestDeleteLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "workload_delete_latency",
 		Help:    "Length of time from resource deletion to it is deleted from the member cluster",
 		Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0, 5, 7, 9, 10, 13, 17, 20, 23, 27, 30, 36, 45, 60, 90, 120, 150, 180},
-	}, []string{"currency", "fleetSize"})
+	}, []string{"concurrency", "fleetSize"})
 )
 
-func MeasureOnePlacement(ctx context.Context, hubClient client.WithWatch, deadline, interval time.Duration, maxCurrentPlacement int, clusterNames ClusterNames) error {
+func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline, interval time.Duration, maxCurrentPlacement int, clusterNames ClusterNames) error {
 	crpName := crpPrefix + utilrand.String(10)
 	nsName := nsPrefix + utilrand.String(10)
 	fleetSize := strconv.Itoa(len(clusterNames))
@@ -126,7 +126,7 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.WithWatch, deadli
 }
 
 // collect the crp apply metrics
-func collectApplyMetrics(ctx context.Context, hubClient client.WithWatch, deadline, pollInterval time.Duration, crpName string, currency string, fleetSize string) {
+func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, currency string, fleetSize string) {
 	startTime := time.Now()
 	applyDeadline := startTime.Add(deadline)
 	var crp v1alpha1.ClusterResourcePlacement
@@ -162,7 +162,7 @@ func collectApplyMetrics(ctx context.Context, hubClient client.WithWatch, deadli
 	}
 }
 
-func collectDeleteMetrics(ctx context.Context, hubClient client.WithWatch, deadline, pollInterval time.Duration, crpName string, clusterNames ClusterNames, currency string, fleetSize string) {
+func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, clusterNames ClusterNames, currency string, fleetSize string) {
 	var crp v1alpha1.ClusterResourcePlacement
 	startTime := time.Now()
 	deleteDeadline := startTime.Add(deadline)

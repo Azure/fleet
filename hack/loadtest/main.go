@@ -54,7 +54,7 @@ func main() {
 	flag.Parse()
 	defer klog.Flush()
 
-	klog.InfoS("start to run placement load test", "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "clusterNames", clusterNames)
+	klog.InfoS("start to run placement load test", "pollInterval", *pollInterval, "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "clusterNames", clusterNames)
 	config := config.GetConfigOrDie()
 	config.QPS, config.Burst = float32(100), 500
 	hubClient, err := client.New(config, client.Options{
@@ -82,9 +82,10 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 	wg.Add(*maxCurrentPlacement)
 	for i := 0; i < *maxCurrentPlacement; i++ {
 		go func() {
-			// each use a separate client to avoid client side throttling
-			time.Sleep(time.Millisecond * time.Duration(utilrand.Intn(1000)))
-			hubClient, err := client.NewWithWatch(config, client.Options{
+			// each use a separate client to avoid client side throttling, start each client side with a jitter
+			// to avoid creating too many clients at the same time.
+			time.Sleep(time.Millisecond * time.Duration(utilrand.Intn(100**maxCurrentPlacement)))
+			hubClient, err := client.New(config, client.Options{
 				Scheme: scheme,
 			})
 			if err != nil {

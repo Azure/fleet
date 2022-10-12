@@ -48,9 +48,9 @@ check the logs of the member cluster controller
 kubectl --context=kind-member-testing -n fleet-system get pod 
 ```
 
-check the hub metrics
+5.  check the hub metrics
 ```shell
-kubectl --context=kind-hub-testing -n fleet-system  port-forward hub-agent-xxxx-xxx 13622:8080
+kubectl --context=kind-hub-testing -n fleet-system  port-forward hub-agent-8bb6d658-6jj7n 13622:8080
 
 Forwarding from 127.0.0.1:13622 -> 8080
 Forwarding from [::1]:13622 -> 8080
@@ -58,8 +58,12 @@ Forwarding from [::1]:13622 -> 8080
 curl http://127.0.0.1:13622/metrics
 ```
 
+Use a local prometheus to draw graphs. Download prometheus binary for your local machine. Start the prometheus.
+```shell
+prometheus --config.file=test/e2e/prometheus.yml 
+```
 
-5.uninstall the resources
+6.uninstall the resources
 ```shell
 make uninstall-helm
 make clean-e2e-tests
