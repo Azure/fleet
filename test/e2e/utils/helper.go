@@ -178,7 +178,7 @@ func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workap
 	return work
 }
 
-// DeleteWork deletes the given Work object.
+// DeleteWork deletes the given Work object and waits until work becomes not found.
 func DeleteWork(ctx context.Context, hubCluster framework.Cluster, work workapi.Work) {
 	// Deleting Work
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &work)).Should(gomega.Succeed(), "Deletion of work %s failed", work.Name)
