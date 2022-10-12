@@ -718,10 +718,8 @@ var _ = Describe("Work API Controller test", func() {
 			testutils.DeleteWork(ctx, *HubCluster, workBeforeDelete)
 
 			By("Deleting the Work Object should also delete the AppliedWork in the member cluster")
-			Eventually(func() error {
-				appliedWork := workapi.AppliedWork{}
-				return MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{},
+			appliedWork := workapi.AppliedWork{}
+			Expect(MemberCluster.KubeClient.Get(ctx, namespaceType, &appliedWork)).Should(&utils.NotFoundMatcher{},
 				"AppliedWork %s was either not deleted or encountered an error in cluster %s", workName, MemberCluster.ClusterName)
 
 			By("Deleting the Work Object should also delete the resources in the member cluster")
