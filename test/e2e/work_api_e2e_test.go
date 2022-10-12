@@ -783,13 +783,6 @@ var _ = Describe("Work API Controller test", func() {
 				"OwnerReference mismatch for resource %s (-want, +got):", testNamespace.Name)
 			Expect(cmp.Diff(wantOwnerForServiceAccount, retrievedServiceAccount.OwnerReferences, cmpOptions...)).Should(BeEmpty(),
 				"OwnerReference mismatch for resource %s (-want, +got):", testServiceAccount.Name)
-
-			// TODO: spec has isn't being created when resources such as namespace and service account is being created by the work-api. Possible bug?
-			//Expect(testNamespace.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
-			//	"SpecHash Annotation does not exist for resource %s", testNamespace.Name)
-			//Expect(testServiceAccount.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
-			//	"SpecHash Annotation does not exist for resource %s", testServiceAccount.Name)
-
 		})
 	})
 
