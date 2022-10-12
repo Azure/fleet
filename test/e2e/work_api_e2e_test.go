@@ -694,7 +694,6 @@ var _ = Describe("Work API Controller test", func() {
 
 			// Creating types.NamespacedName to use in retrieving objects.
 			namespaceType := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
-			resourceNamespaceType := types.NamespacedName{Name: configMapBeforeDelete.Name, Namespace: resourceNamespace.Name}
 			manifests := testutils.AddManifests([]runtime.Object{&configMapBeforeDelete}, []workapi.Manifest{})
 
 			By(fmt.Sprintf("creating work %s of %s", namespaceType, manifestConfigMapName))
@@ -727,6 +726,7 @@ var _ = Describe("Work API Controller test", func() {
 
 			By("Deleting the Work Object should also delete the resources in the member cluster")
 			configMapDeleted := corev1.ConfigMap{}
+			resourceNamespaceType := types.NamespacedName{Name: configMapBeforeDelete.Name, Namespace: resourceNamespace.Name}
 			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).Should(&utils.NotFoundMatcher{},
 				"resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
 
