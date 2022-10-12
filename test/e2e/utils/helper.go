@@ -178,6 +178,19 @@ func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workap
 	return work
 }
 
+// DeleteWork deletes the given Work object and waits until work becomes not found.
+func DeleteWork(ctx context.Context, hubCluster framework.Cluster, work workapi.Work) {
+	// Deleting Work
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &work)).Should(gomega.Succeed(), "Deletion of work %s failed", work.Name)
+
+	// Waiting for the Work to be deleted and not found.
+	gomega.Eventually(func() error {
+		namespaceType := types.NamespacedName{Name: work.Name, Namespace: work.Namespace}
+		return hubCluster.KubeClient.Get(ctx, namespaceType, &work)
+	}).Should(&utils.NotFoundMatcher{},
+		"The Work resource %s was not deleted", work.Name, hubCluster.ClusterName)
+}
+
 // AddManifests adds manifests to be included within a Work.
 func AddManifests(objects []runtime.Object, manifests []workapi.Manifest) []workapi.Manifest {
 	for _, obj := range objects {
