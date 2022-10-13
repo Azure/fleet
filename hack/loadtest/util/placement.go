@@ -12,6 +12,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.uber.org/atomic"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,26 +35,31 @@ var (
 )
 
 var (
-	LoadTestApplyCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	applySuccessCount        atomic.Int32
+	applyFailCount           atomic.Int32
+	applyTimeoutCount        atomic.Int32
+	LoadTestApplyCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_apply_total",
 		Help: "Total number of placement",
 	}, []string{"concurrency", "fleetSize", "result"})
 
-	LoadTestApplyLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	LoadTestApplyLatencyMetric = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "workload_apply_latency",
 		Help:    "Length of time from placement change to it is applied to the member cluster",
-		Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0, 5, 7, 9, 10, 13, 17, 20, 23, 27, 30, 36, 45, 60, 90, 120, 150, 180},
+		Buckets: []float64{0.1, 0.5, 1.0, 2.0, 3, 4, 6, 8, 10, 13, 16, 20, 23, 26, 30, 37, 45, 60, 90, 120, 150, 180, 300, 600, 1200, 1500, 3000},
 	}, []string{"concurrency", "fleetSize"})
 
-	LoadTestDeleteCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	deleteSuccessCount        atomic.Int32
+	deleteTimeoutCount        atomic.Int32
+	LoadTestDeleteCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_delete_total",
 		Help: "Total number of placement delete",
 	}, []string{"concurrency", "fleetSize", "result"})
 
-	LoadTestDeleteLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	LoadTestDeleteLatencyMetric = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "workload_delete_latency",
 		Help:    "Length of time from resource deletion to it is deleted from the member cluster",
-		Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0, 5, 7, 9, 10, 13, 17, 20, 23, 27, 30, 36, 45, 60, 90, 120, 150, 180},
+		Buckets: []float64{0.1, 0.5, 1.0, 1.25, 1.5, 1.75, 2.0, 3, 4, 6, 8, 10, 13, 16, 20, 23, 26, 30, 37, 45, 60, 90, 120, 150, 180, 300, 600, 1200, 1500, 3000},
 	}, []string{"concurrency", "fleetSize"})
 )
 
@@ -124,6 +130,13 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 	for ; ctx.Err() == nil; time.Sleep(pollInterval) {
 		if err = hubClient.Get(ctx, types.NamespacedName{Name: crpName, Namespace: ""}, &crp); err != nil {
 			klog.ErrorS(err, "failed to get crp", "crp", crpName)
+			if time.Now().After(applyDeadline) {
+				// timeout
+				klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
+				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+				applyTimeoutCount.Inc()
+				break
+			}
 			continue
 		}
 		// check if the condition is true
@@ -133,19 +146,22 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 		} else if cond != nil && cond.Status == metav1.ConditionTrue {
 			// succeeded
 			klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
-			LoadTestApplyCount.WithLabelValues(currency, fleetSize, "succeed").Inc()
-			LoadTestApplyLatency.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
+			LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
+			applySuccessCount.Inc()
+			LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
 			break
 		}
 		if time.Now().After(applyDeadline) {
 			if cond != nil && cond.Status == metav1.ConditionFalse {
 				// failed
 				klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
-				LoadTestApplyCount.WithLabelValues(currency, fleetSize, "failed").Inc()
+				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+				applyFailCount.Inc()
 			} else {
 				// timeout
 				klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
-				LoadTestApplyCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
+				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+				applyTimeoutCount.Inc()
 			}
 			break
 		}
@@ -168,7 +184,8 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 			if time.Now().After(deleteDeadline) {
 				// timeout
 				klog.V(3).Infof("the cluster resource placement `%s` delete timeout", crpName)
-				LoadTestDeleteCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
+				LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+				deleteTimeoutCount.Inc()
 				break
 			}
 			continue
@@ -187,15 +204,23 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 		if allRemoved {
 			// succeeded
 			klog.V(3).Infof("the cluster resource placement `%s` delete succeeded", crpName)
-			LoadTestDeleteCount.WithLabelValues(currency, fleetSize, "succeed").Inc()
-			LoadTestDeleteLatency.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
+			LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
+			deleteSuccessCount.Inc()
+			LoadTestDeleteLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
 			break
 		}
 		if time.Now().After(deleteDeadline) {
 			// timeout
 			klog.V(3).Infof("the cluster resource placement `%s` delete timeout", crpName)
-			LoadTestDeleteCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
+			LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+			deleteTimeoutCount.Inc()
 			break
 		}
 	}
+}
+
+func PrintTestMetrics() {
+	klog.InfoS("Placement apply result", "total applySuccessCount", applySuccessCount.Load(), "applyFailCount", applyFailCount.Load(), "applyTimeoutCount", applyTimeoutCount.Load())
+
+	klog.InfoS("Placement delete result", "total deleteSuccessCount", deleteSuccessCount.Load(), "deleteTimeoutCount", deleteTimeoutCount.Load())
 }

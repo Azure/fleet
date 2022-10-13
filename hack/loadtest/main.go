@@ -68,7 +68,8 @@ func main() {
 	if err = util.ApplyClusterScopeManifests(ctx, hubClient); err != nil {
 		panic(err)
 	}
-	loadTestCtx, _ := context.WithDeadline(ctx, time.Now().Add(time.Minute*time.Duration(*loadTestLength)))
+	loadTestCtx, canFunc := context.WithDeadline(ctx, time.Now().Add(time.Minute*time.Duration(*loadTestLength)))
+	defer canFunc()
 	// run the loadtest in the background
 	go runLoadTest(loadTestCtx, config)
 	// setup prometheus server
@@ -113,5 +114,6 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 	if err := util.CleanupAll(hubClient); err != nil {
 		klog.ErrorS(err, "clean up placement load test hit an error")
 	}
-	klog.InfoS(" placement load test finished, please check the metrics")
+	util.PrintTestMetrics()
+	klog.InfoS(" placement load test finished. For more metrics, please use prometheus")
 }
