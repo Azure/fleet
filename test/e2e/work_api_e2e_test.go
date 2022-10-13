@@ -572,10 +572,6 @@ var _ = Describe("Work API Controller test", func() {
 					Name: "test-namespace",
 				},
 			}
-			// Ns abbreviated to avoid duplicate wording
-			nsNamespaceType := types.NamespacedName{
-				Name: testNamespace.Name,
-			}
 
 			testServiceAccount := corev1.ServiceAccount{
 				TypeMeta: metav1.TypeMeta{
@@ -587,13 +583,6 @@ var _ = Describe("Work API Controller test", func() {
 					Namespace: testNamespace.Name,
 				},
 			}
-			serviceAccountNamespaceType := types.NamespacedName{
-				Name:      testServiceAccount.Name,
-				Namespace: testNamespace.Name,
-			}
-
-			namespaceTypeForNamespace := types.NamespacedName{Name: workNameForNamespace, Namespace: workNamespace.Name}
-			namespaceTypeForServiceAccount := types.NamespacedName{Name: workNameForServiceAccount, Namespace: workNamespace.Name}
 
 			manifestNamespace := testutils.AddManifests([]runtime.Object{&testNamespace}, []workapi.Manifest{})
 			manifestServiceAccount := testutils.AddManifests([]runtime.Object{&testServiceAccount}, []workapi.Manifest{})
@@ -601,7 +590,7 @@ var _ = Describe("Work API Controller test", func() {
 			workForNamespace := testutils.CreateWork(ctx, *HubCluster, workNameForNamespace, workNamespace.Name, manifestNamespace)
 			workForServiceAccount := testutils.CreateWork(ctx, *HubCluster, workNameForServiceAccount, workNamespace.Name, manifestServiceAccount)
 
-			By(fmt.Sprintf("Applied Condition should be set to True for Work %s and %s", namespaceTypeForNamespace, namespaceTypeForServiceAccount))
+			By(fmt.Sprintf("Applied Condition should be set to True for Work %s and %s", workNameForNamespace, workNameForServiceAccount))
 
 			wantAppliedCondition := []metav1.Condition{
 				{
@@ -614,8 +603,10 @@ var _ = Describe("Work API Controller test", func() {
 			receivedWorkForNamespace := workapi.Work{}
 			receivedWorkForServiceAccount := workapi.Work{}
 
+			namespaceTypeForNamespaceWork := types.NamespacedName{Name: workNameForNamespace, Namespace: workNamespace.Name}
+
 			Eventually(func() string {
-				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForNamespace, &receivedWorkForNamespace); err != nil {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForNamespaceWork, &receivedWorkForNamespace); err != nil {
 					return err.Error()
 				}
 
@@ -623,8 +614,10 @@ var _ = Describe("Work API Controller test", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 				"Validate WorkStatus for work %s mismatch (-want, +got):", workForNamespace)
 
+			namespaceTypeForServiceAccountWork := types.NamespacedName{Name: workNameForServiceAccount, Namespace: workNamespace.Name}
+
 			Eventually(func() string {
-				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForServiceAccount, &receivedWorkForServiceAccount); err != nil {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForServiceAccountWork, &receivedWorkForServiceAccount); err != nil {
 					return err.Error()
 				}
 
@@ -632,7 +625,7 @@ var _ = Describe("Work API Controller test", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
 				"Validate WorkStatus for work %s mismatch (-want, +got):", workForServiceAccount)
 
-			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s and %s should be applied", namespaceTypeForNamespace, namespaceTypeForServiceAccount))
+			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s and %s should be applied", namespaceTypeForNamespaceWork, namespaceTypeForServiceAccountWork))
 			wantNamespaceManifestCondition := []workapi.ManifestCondition{
 				{
 					Conditions: []metav1.Condition{
@@ -673,14 +666,14 @@ var _ = Describe("Work API Controller test", func() {
 			}
 
 			Expect(cmp.Diff(wantNamespaceManifestCondition, receivedWorkForNamespace.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
-				"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeForNamespace)
+				"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeForNamespaceWork)
 
 			Expect(cmp.Diff(wantServiceAccountManifestCondition, receivedWorkForServiceAccount.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
-				"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeForServiceAccount)
+				"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeForServiceAccountWork)
 
 			By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s and %s", testNamespace.Name, testServiceAccount.Name))
 			appliedWorkForNamespace := workapi.AppliedWork{}
-			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForNamespace, &appliedWorkForNamespace)).Should(Succeed(),
+			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForNamespaceWork, &appliedWorkForNamespace)).Should(Succeed(),
 				"Retrieving AppliedWork %s failed", workNameForNamespace)
 
 			wantAppliedWorkConditionNamespace := workapi.AppliedtWorkStatus{
@@ -702,7 +695,7 @@ var _ = Describe("Work API Controller test", func() {
 				"Validate AppliedResourceMeta mismatch for appliedWork %s (-want, +got):", appliedWorkForNamespace.Name)
 
 			appliedWorkForServiceAccount := workapi.AppliedWork{}
-			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForServiceAccount, &appliedWorkForServiceAccount)).Should(Succeed(),
+			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForServiceAccountWork, &appliedWorkForServiceAccount)).Should(Succeed(),
 				"Retrieving AppliedWork %s failed", workNameForServiceAccount)
 
 			wantAppliedConditionServiceAccount := workapi.AppliedtWorkStatus{
@@ -725,40 +718,37 @@ var _ = Describe("Work API Controller test", func() {
 
 			By(fmt.Sprintf("The resources %s and %s should both be created in the member cluster.", testNamespace.Name, testServiceAccount.Name))
 			retrievedNamespace := corev1.Namespace{}
+
+			// Ns abbreviated to avoid duplicate wording
+			nsNamespaceType := types.NamespacedName{
+				Name: testNamespace.Name,
+			}
+
 			Expect(MemberCluster.KubeClient.Get(ctx, nsNamespaceType, &retrievedNamespace)).Should(Succeed(),
 				"Failed in retrieving resource %s", testNamespace)
 			wantNamespace := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-namespace",
 				},
+				Status: corev1.NamespaceStatus{
+					Phase: corev1.NamespaceActive,
+				},
 			}
 
 			namespaceCmpOptions := append(cmpOptions,
-				cmpopts.IgnoreFields(corev1.Namespace{}, "Spec", "Status"))
+				cmpopts.IgnoreFields(corev1.Namespace{}, "Spec"))
 
 			Expect(cmp.Diff(wantNamespace, retrievedNamespace, namespaceCmpOptions...)).Should(BeEmpty(),
 				"Validate Namespace %s mismatch (-want, +got):", wantNamespace.Name)
 
+			serviceAccountNamespaceType := types.NamespacedName{
+				Name:      testServiceAccount.Name,
+				Namespace: testNamespace.Name,
+			}
+
 			retrievedServiceAccount := corev1.ServiceAccount{}
 			Expect(MemberCluster.KubeClient.Get(ctx, serviceAccountNamespaceType, &retrievedServiceAccount)).Should(Succeed(),
 				"Failed in retrieving resource %s", testServiceAccount)
-
-			wantServiceAccount := corev1.ServiceAccount{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "ServiceAccount",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-service-account",
-					Namespace: testNamespace.Name,
-				},
-			}
-
-			serviceAccountCmpOptions := append(cmpOptions,
-				cmpopts.IgnoreFields(corev1.ServiceAccount{}, "TypeMeta", "Secrets"))
-
-			Expect(cmp.Diff(wantServiceAccount, retrievedServiceAccount, serviceAccountCmpOptions...)).Should(BeEmpty(),
-				"Validate Service Account %s mismatch (-want, +got):", wantServiceAccount.Name)
 
 			By(fmt.Sprintf("Validating that the resource %s and %s is owned by the respective work", testNamespace.Name, testServiceAccount.Name))
 			wantOwnerForNamespace := []metav1.OwnerReference{
