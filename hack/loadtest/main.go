@@ -36,6 +36,7 @@ var (
 	placementDeadline   = flag.Int("placement-deadline-second", 300, "The deadline for a placement to be applied (in seconds)")
 	pollInterval        = flag.Int("poll-interval-millisecond", 250, "The poll interval for verification (in milli-second)")
 	maxCurrentPlacement = flag.Int("max-current-placement", 10, "The number of current placement load.")
+	loadTestLength      = flag.Int("load-test-length-minute", 15, "The length of the load test in miniutes.")
 	clusterNames        util.ClusterNames
 )
 
@@ -67,9 +68,9 @@ func main() {
 	if err = util.ApplyClusterScopeManifests(ctx, hubClient); err != nil {
 		panic(err)
 	}
-
+	loadTestCtx, _ := context.WithDeadline(ctx, time.Now().Add(time.Minute*time.Duration(*loadTestLength)))
 	// run the loadtest in the background
-	go runLoadTest(ctx, config)
+	go runLoadTest(loadTestCtx, config)
 	// setup prometheus server
 	http.Handle("/metrics", promhttp.Handler())
 	if err = http.ListenAndServe(":4848", nil); err != nil {
@@ -112,5 +113,5 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 	if err := util.CleanupAll(hubClient); err != nil {
 		klog.ErrorS(err, "clean up placement load test hit an error")
 	}
-	klog.InfoS(" placement load test finished")
+	klog.InfoS(" placement load test finished, please check the metrics")
 }

@@ -34,15 +34,10 @@ var (
 )
 
 var (
-	LoadTestApplyErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "workload_apply_errors_total",
-		Help: "Total number of placement errors",
-	}, []string{"concurrency", "fleetSize", "mode"})
-
-	LoadTestApplySuccessCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	LoadTestApplyCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_apply_total",
 		Help: "Total number of placement",
-	}, []string{"concurrency", "fleetSize"})
+	}, []string{"concurrency", "fleetSize", "result"})
 
 	LoadTestApplyLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "workload_apply_latency",
@@ -50,15 +45,10 @@ var (
 		Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0, 5, 7, 9, 10, 13, 17, 20, 23, 27, 30, 36, 45, 60, 90, 120, 150, 180},
 	}, []string{"concurrency", "fleetSize"})
 
-	LoadTestDeleteErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "workload_delete_errors_total",
-		Help: "Total number of placement delete errors",
-	}, []string{"concurrency", "fleetSize"})
-
-	LoadTestDeleteSuccessCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	LoadTestDeleteCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_delete_total",
-		Help: "Total number of placement deleted",
-	}, []string{"concurrency", "fleetSize"})
+		Help: "Total number of placement delete",
+	}, []string{"concurrency", "fleetSize", "result"})
 
 	LoadTestDeleteLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "workload_delete_latency",
@@ -143,7 +133,7 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 		} else if cond != nil && cond.Status == metav1.ConditionTrue {
 			// succeeded
 			klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
-			LoadTestApplySuccessCount.WithLabelValues(currency, fleetSize).Inc()
+			LoadTestApplyCount.WithLabelValues(currency, fleetSize, "succeed").Inc()
 			LoadTestApplyLatency.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
 			break
 		}
@@ -151,11 +141,11 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 			if cond != nil && cond.Status == metav1.ConditionFalse {
 				// failed
 				klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
-				LoadTestApplyErrorCount.WithLabelValues(currency, fleetSize, "failed").Inc()
+				LoadTestApplyCount.WithLabelValues(currency, fleetSize, "failed").Inc()
 			} else {
 				// timeout
 				klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
-				LoadTestApplyErrorCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
+				LoadTestApplyCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
 			}
 			break
 		}
@@ -178,7 +168,7 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 			if time.Now().After(deleteDeadline) {
 				// timeout
 				klog.V(3).Infof("the cluster resource placement `%s` delete timeout", crpName)
-				LoadTestDeleteErrorCount.WithLabelValues(currency, fleetSize).Inc()
+				LoadTestDeleteCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
 				break
 			}
 			continue
@@ -197,14 +187,14 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 		if allRemoved {
 			// succeeded
 			klog.V(3).Infof("the cluster resource placement `%s` delete succeeded", crpName)
-			LoadTestDeleteSuccessCount.WithLabelValues(currency, fleetSize).Inc()
+			LoadTestDeleteCount.WithLabelValues(currency, fleetSize, "succeed").Inc()
 			LoadTestDeleteLatency.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
 			break
 		}
 		if time.Now().After(deleteDeadline) {
 			// timeout
 			klog.V(3).Infof("the cluster resource placement `%s` delete timeout", crpName)
-			LoadTestDeleteErrorCount.WithLabelValues(currency, fleetSize).Inc()
+			LoadTestDeleteCount.WithLabelValues(currency, fleetSize, "timeout").Inc()
 			break
 		}
 	}
