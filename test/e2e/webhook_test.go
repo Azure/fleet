@@ -26,8 +26,8 @@ const (
 
 var (
 	whitelistedNamespaces = []corev1.Namespace{
-		corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsKubeSystem}},
-		corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsFleetSystem}},
+		{ObjectMeta: metav1.ObjectMeta{Name: nsKubeSystem}},
+		{ObjectMeta: metav1.ObjectMeta{Name: nsFleetSystem}},
 	}
 )
 
