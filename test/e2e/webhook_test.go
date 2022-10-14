@@ -129,10 +129,6 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 						case admv1.Create:
 							err := executeKubeClientAdmissionOperation(op, pod)
 							Expect(err).ShouldNot(HaveOccurred())
-
-							// verify creation
-							err = HubCluster.KubeClient.Get(ctx, objKey, &retrievedPod)
-							Expect(err).ShouldNot(HaveOccurred())
 						case admv1.Update:
 							var podV2 *corev1.Pod
 							Eventually(func() error {
@@ -143,20 +139,9 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 								err = executeKubeClientAdmissionOperation(op, podV2)
 								return err
 							}, timeout, interval).ShouldNot(HaveOccurred())
-
-							// verify update
-							Eventually(func() string {
-								err := HubCluster.KubeClient.Get(ctx, objKey, &retrievedPod)
-								Expect(err).ShouldNot(HaveOccurred())
-								return cmp.Diff(retrievedPod.Labels, podV2.Labels)
-							}, timeout, interval).Should(BeEmpty())
 						case admv1.Delete:
 							err := executeKubeClientAdmissionOperation(op, pod)
 							Expect(err).ShouldNot(HaveOccurred())
-
-							Eventually(func() error {
-								return HubCluster.KubeClient.Get(ctx, objKey, &retrievedPod)
-							}, timeout, interval).Should(HaveOccurred())
 						}
 					})
 				}
