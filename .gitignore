@@ -28,6 +28,7 @@ ut-coverage.xml
 
 # editor and IDE paraphernalia
 .idea
+.DS_Store
 *.swp
 *.swo
 *~
