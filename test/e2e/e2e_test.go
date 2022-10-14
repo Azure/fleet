@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -30,6 +31,11 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 	testutils "go.goms.io/fleet/test/e2e/utils"
+)
+
+const (
+	interval = time.Millisecond * 250
+	timeout  = time.Second * 5
 )
 
 var (
@@ -161,7 +167,7 @@ var _ = BeforeSuite(func() {
 	// hub setup
 	HubCluster.HubURL = hubURL
 	framework.GetClusterClient(HubCluster)
-	//member setup
+	// member setup
 	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 
