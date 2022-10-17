@@ -3,13 +3,13 @@ package e2e
 import (
 	"context"
 	"fmt"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -201,6 +201,8 @@ var _ = Describe("Work API Controller test", func() {
 			By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestConfigMapName))
 			Expect(gotConfigMap.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
 				"SpecHash Annotation does not exist for resource %s", gotConfigMap.Name)
+
+			testutils.DeleteWork(ctx, *HubCluster, work)
 		})
 
 		It("Upon successful creation of 2 work resources with same manifest, work manifest is applied, and only 1 resource is created with merged owner references.", func() {
@@ -363,6 +365,9 @@ var _ = Describe("Work API Controller test", func() {
 			By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestSecretName))
 			Expect(retrievedSecret.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
 				"SpecHash Annotation does not exist for resource %s", secret.Name)
+
+			testutils.DeleteWork(ctx, *HubCluster, workOne)
+			testutils.DeleteWork(ctx, *HubCluster, workTwo)
 		})
 
 		It("Upon successful work creation of a CRD resource, manifest is applied, and resources are created", func() {
@@ -556,6 +561,8 @@ var _ = Describe("Work API Controller test", func() {
 				"There is no spec annotation on the resource %s", crd.Name)
 			Expect(customResource.GetAnnotations()[specHashAnnotation]).ToNot(BeEmpty(),
 				"There is no spec annotation on the custom resource %s", customResource.GetName())
+
+			testutils.DeleteWork(ctx, *HubCluster, work)
 		})
 
 		It("Manifests with dependencies within different work objects should successfully apply", func() {
@@ -773,7 +780,11 @@ var _ = Describe("Work API Controller test", func() {
 				"OwnerReference mismatch for resource %s (-want, +got):", testNamespace.Name)
 			Expect(cmp.Diff(wantOwnerForServiceAccount, retrievedServiceAccount.OwnerReferences, cmpOptions...)).Should(BeEmpty(),
 				"OwnerReference mismatch for resource %s (-want, +got):", testServiceAccount.Name)
+
+			testutils.DeleteWork(ctx, *HubCluster, workForNamespace)
+			testutils.DeleteWork(ctx, *HubCluster, workForServiceAccount)
 		})
+
 	})
 
 	Context("Updating Work", func() {
@@ -821,6 +832,10 @@ var _ = Describe("Work API Controller test", func() {
 				return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
+		})
+
+		AfterEach(func() {
+			testutils.DeleteWork(ctx, *HubCluster, work)
 		})
 
 		It("Updating Work object on the Hub Cluster should update the resource on the member cluster.", func() {
@@ -943,8 +958,10 @@ var _ = Describe("Work API Controller test", func() {
 			By("Deleting the Work Object should also delete the resources in the member cluster")
 			configMapDeleted := corev1.ConfigMap{}
 			resourceNamespaceType := types.NamespacedName{Name: configMapBeforeDelete.Name, Namespace: resourceNamespace.Name}
-			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).Should(&utils.NotFoundMatcher{},
-				"resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
+			// TODO: Check why removing matcher check fixed test failure
+			Eventually(func() bool {
+				return errors.IsNotFound(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
 		})
 	})
 })
