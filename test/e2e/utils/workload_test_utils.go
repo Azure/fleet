@@ -78,14 +78,6 @@ func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, objectKey *t
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected role bindings in %s cluster", cluster.ClusterName)
 }
 
-// CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.
-func CreateClusterResourcePlacement(ctx context.Context, cluster framework.Cluster, crp *fleetv1alpha1.ClusterResourcePlacement) {
-	gomega.Expect(cluster.KubeClient.Create(ctx, crp)).Should(gomega.Succeed())
-	gomega.Eventually(func() error {
-		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to create cluster resource placement %s in %s cluster", crp.Name, cluster.ClusterName)
-}
-
 // WaitCreateClusterResourcePlacementStatus waits for ClusterResourcePlacement to present on th hub cluster with a specific status.
 func WaitCreateClusterResourcePlacementStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantCRPStatus fleetv1alpha1.ClusterResourcePlacementStatus, crpStatusCmpOptions []cmp.Option, customTimeout time.Duration) {
 	gotCRP := &fleetv1alpha1.ClusterResourcePlacement{}

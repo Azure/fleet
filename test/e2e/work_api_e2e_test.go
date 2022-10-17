@@ -71,7 +71,8 @@ var _ = Describe("Work API Controller test", func() {
 				Name: resourceNamespaceName,
 			},
 		}
-		testutils.CreateNamespace(ctx, *MemberCluster, resourceNamespace)
+		//testutils.CreateNamespace(ctx, *MemberCluster, resourceNamespace)
+		Expect(MemberCluster.KubeClient.Create(ctx, resourceNamespace)).Should(Succeed(), "Failed to create namespace %s in %s cluster", resourceNamespace.Name, MemberCluster.ClusterName)
 	})
 
 	AfterEach(func() {

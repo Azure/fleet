@@ -85,14 +85,6 @@ func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workName
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s not synced", name)
 }
 
-// CreateNamespace create namespace and waits for namespace to exist.
-func CreateNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
-	gomega.Expect(cluster.KubeClient.Create(ctx, ns)).Should(gomega.Succeed(), "Failed to create namespace %s in %s cluster", ns.Name, cluster.ClusterName)
-	gomega.Eventually(func() error {
-		return cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for namespace %s to be created in %s cluster", ns.Name, cluster.ClusterName)
-}
-
 // DeleteNamespace delete namespace.
 func DeleteNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
 	gomega.Expect(cluster.KubeClient.Delete(context.TODO(), ns)).Should(gomega.Succeed(), "Failed to delete namespace %s in %s cluster", ns.Name, cluster.ClusterName)

@@ -71,7 +71,7 @@ var (
 		sortOption,
 	}
 	crpStatusCmpOptions = []cmp.Option{
-		cmpopts.IgnoreFields(metav1.Condition{}, "ObservedGeneration", "LastTransitionTime"),
+		cmpopts.IgnoreFields(metav1.Condition{}, "ObservedGeneration", "LastTransitionTime", "Message"),
 		sortOption,
 	}
 

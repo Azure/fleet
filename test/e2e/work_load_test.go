@@ -6,22 +6,20 @@ Licensed under the MIT license.
 package e2e
 
 import (
-	"context"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	testutils "go.goms.io/fleet/test/e2e/utils"
+	"go.goms.io/fleet/test/e2e/utils"
 )
 
 var _ = Describe("workload orchestration testing", func() {
@@ -70,22 +68,20 @@ var _ = Describe("workload orchestration testing", func() {
 			Expect(HubCluster.KubeClient.Create(ctx, crp)).Should(Succeed(), "Failed to create cluster resource placement %s in %s cluster", crp.Name, HubCluster.ClusterName)
 
 			By("check if work gets created for cluster resource placement")
-			testutils.WaitWork(ctx, *HubCluster, crp.Name, memberNamespace.Name)
+			utils.WaitWork(ctx, *HubCluster, crp.Name, memberNamespace.Name)
 
 			By("check if cluster resource placement status is updated")
 			crpStatus := v1alpha1.ClusterResourcePlacementStatus{
 				Conditions: []metav1.Condition{
 					{
-						Message: "Successfully scheduled resources for placement",
-						Reason:  "ScheduleSucceeded",
-						Status:  metav1.ConditionTrue,
-						Type:    string(v1alpha1.ResourcePlacementConditionTypeScheduled),
+						Reason: "ScheduleSucceeded",
+						Status: metav1.ConditionTrue,
+						Type:   string(v1alpha1.ResourcePlacementConditionTypeScheduled),
 					},
 					{
-						Message: "Successfully applied resources to member clusters",
-						Reason:  "ApplySucceeded",
-						Status:  metav1.ConditionTrue,
-						Type:    string(v1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Reason: "ApplySucceeded",
+						Status: metav1.ConditionTrue,
+						Type:   string(v1alpha1.ResourcePlacementStatusConditionTypeApplied),
 					},
 				},
 				SelectedResources: []v1alpha1.ResourceIdentifier{
@@ -98,7 +94,7 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				TargetClusters: []string{"kind-member-testing"},
 			}
-			testutils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, &types.NamespacedName{Name: crp.Name}, crpStatus, crpStatusCmpOptions, 3*testutils.PollTimeout)
+			utils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, &types.NamespacedName{Name: crp.Name}, crpStatus, crpStatusCmpOptions, 3*utils.PollTimeout)
 
 			By("check if cluster role is propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
@@ -111,7 +107,7 @@ var _ = Describe("workload orchestration testing", func() {
 			}
 			expectedClusterRole := clusterRole
 			expectedClusterRole.OwnerReferences = ownerReferences
-			testutils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
+			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
 
 			By("update cluster role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -139,21 +135,21 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				Rules: rules,
 			}
-			testutils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
+			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
 
 			By("delete cluster role on hub cluster")
 			Expect(HubCluster.KubeClient.Delete(ctx, clusterRole)).Should(Succeed(), "Failed to delete cluster role %s in %s cluster", clusterRole.Name, HubCluster.ClusterName)
 			Eventually(func() bool {
-				return apierrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: clusterRole.Name}, clusterRole))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", clusterRole.Name, HubCluster.ClusterName)
+				return errors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: clusterRole.Name}, clusterRole))
+			}, utils.PollTimeout, utils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", clusterRole.Name, HubCluster.ClusterName)
 
 			By("check if cluster role got deleted on member cluster")
 			Eventually(func() bool {
-				return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: clusterRole.Name}, clusterRole))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", clusterRole.Name, MemberCluster.ClusterName)
+				return errors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: clusterRole.Name}, clusterRole))
+			}, utils.PollTimeout, utils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", clusterRole.Name, MemberCluster.ClusterName)
 
 			By("delete cluster resource placement on hub cluster")
-			testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
+			utils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
 		})
 
 		It("Apply CRP selecting namespace by label and check if namespace gets propagated with role, role binding, then update existing role", func() {
@@ -226,22 +222,20 @@ var _ = Describe("workload orchestration testing", func() {
 			Expect(HubCluster.KubeClient.Create(ctx, crp)).Should(Succeed(), "Failed to create cluster resource placement %s in %s cluster", crp.Name, HubCluster.ClusterName)
 
 			By("check if work gets created for cluster resource placement")
-			testutils.WaitWork(ctx, *HubCluster, crp.Name, memberNamespace.Name)
+			utils.WaitWork(ctx, *HubCluster, crp.Name, memberNamespace.Name)
 
 			By("check if cluster resource placement status is updated")
 			crpStatus := v1alpha1.ClusterResourcePlacementStatus{
 				Conditions: []metav1.Condition{
 					{
-						Message: "Successfully scheduled resources for placement",
-						Reason:  "ScheduleSucceeded",
-						Status:  metav1.ConditionTrue,
-						Type:    string(v1alpha1.ResourcePlacementConditionTypeScheduled),
+						Reason: "ScheduleSucceeded",
+						Status: metav1.ConditionTrue,
+						Type:   string(v1alpha1.ResourcePlacementConditionTypeScheduled),
 					},
 					{
-						Message: "Successfully applied resources to member clusters",
-						Reason:  "ApplySucceeded",
-						Status:  metav1.ConditionTrue,
-						Type:    string(v1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Reason: "ApplySucceeded",
+						Status: metav1.ConditionTrue,
+						Type:   string(v1alpha1.ResourcePlacementStatusConditionTypeApplied),
 					},
 				},
 				SelectedResources: []v1alpha1.ResourceIdentifier{
@@ -267,7 +261,7 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				TargetClusters: []string{"kind-member-testing"},
 			}
-			testutils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, &types.NamespacedName{Name: crp.Name}, crpStatus, crpStatusCmpOptions, 3*testutils.PollTimeout)
+			utils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, &types.NamespacedName{Name: crp.Name}, crpStatus, crpStatusCmpOptions, 3*utils.PollTimeout)
 
 			By("check if resources in namespace are propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
@@ -284,14 +278,14 @@ var _ = Describe("workload orchestration testing", func() {
 			expectedNamespace.OwnerReferences = ownerReferences
 			expectedRole.OwnerReferences = ownerReferences
 			expectedRoleBinding.OwnerReferences = ownerReferences
-			testutils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, expectedNamespace, resourceIgnoreOptions)
-			testutils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
-			testutils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, expectedRoleBinding, resourceIgnoreOptions)
+			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, expectedNamespace, resourceIgnoreOptions)
+			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
+			utils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, expectedRoleBinding, resourceIgnoreOptions)
 
 			By("check if namespace not selected by CRP doesn't exist on member cluster")
 			Consistently(func() bool {
-				return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace2.Name}, namespace2))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to verify namespace %s is not propagated to %s cluster", namespace2.Name, MemberCluster.ClusterName)
+				return errors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace2.Name}, namespace2))
+			}, utils.PollTimeout, utils.PollInterval).Should(BeTrue(), "Failed to verify namespace %s is not propagated to %s cluster", namespace2.Name, MemberCluster.ClusterName)
 
 			By("update role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -312,21 +306,19 @@ var _ = Describe("workload orchestration testing", func() {
 			expectedRole.Rules = rules
 
 			By("check if role got updated in member cluster")
-			testutils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
+			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
 
-			By("delete namespace")
-			Expect(HubCluster.KubeClient.Delete(context.TODO(), namespace1)).Should(Succeed(), "Failed to delete namespace %s in %s cluster", namespace1.Name, HubCluster.ClusterName)
-			Eventually(func() bool {
-				return apierrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace1.Name}, namespace1))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for namespace %s to be deleted in %s cluster", namespace1.Name, HubCluster.ClusterName)
+			By("delete namespaces")
+			utils.DeleteNamespace(ctx, *HubCluster, namespace1)
+			utils.DeleteNamespace(ctx, *HubCluster, namespace2)
 
 			By("check if namespace got deleted on member cluster")
 			Eventually(func() bool {
-				return apierrors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace1.Name}, namespace1))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", namespace1.Name, MemberCluster.ClusterName)
+				return errors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace1.Name}, namespace1))
+			}, utils.PollTimeout, utils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", namespace1.Name, MemberCluster.ClusterName)
 
 			By("delete cluster resource placement on hub cluster")
-			testutils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
+			utils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
 		})
 	})
 })
