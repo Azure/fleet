@@ -30,7 +30,8 @@ var _ = Describe("workload orchestration testing with join/leave", Serial, func(
 		mcStatusCmpOptions = []cmp.Option{
 			cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
 			cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
-			cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}), cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type }),
+			cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}),
+			sortOption,
 		}
 	)
 
