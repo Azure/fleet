@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"context"
+	errors "errors"
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
@@ -14,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -122,9 +124,9 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				pod := generateGenericPod(objKey.Name, objKey.Namespace)
 
 				var retrievedPod corev1.Pod
-				opsToTest := buildOrderedWriteOperationSlice(admv1.OperationAll)
+				opsToTest := []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete}
 				for _, op := range opsToTest {
-					By(fmt.Sprintf("expecting successful operation %s of Pod in whitelisted namespace %s", op, ns.ObjectMeta.Name), func() {
+					By(fmt.Sprintf("expecting admission of operation %s of Pod in whitelisted namespace %s", op, ns.ObjectMeta.Name), func() {
 						switch op {
 						case admv1.Create:
 							err := executeKubeClientAdmissionOperation(op, pod)
@@ -147,7 +149,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				}
 			}
 		})
-		It("Operations on Pods within non-whitelisted namespaces should be rejected", func() {
+		It("Admission operations on Pods within non-whitelisted namespaces should be denied", func() {
 			ctx = context.Background()
 
 			// Retrieve list of existing namespaces, remove whitelisted namespaces.
@@ -168,24 +170,17 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				ctx = context.Background()
 				pod := generateGenericPod(objKey.Name, objKey.Namespace)
 
-				opsToTest := buildOrderedWriteOperationSlice(admv1.OperationAll)
-				for _, op := range opsToTest {
-					By(fmt.Sprintf("expecting unsuccessful operation %s of Pod in non-whitelisted namespace %s", op, ns.ObjectMeta.Name), func() {
-						switch op {
-						case admv1.Create:
-							err := executeKubeClientAdmissionOperation(op, pod)
-							Expect(err).Should(HaveOccurred())
-						case admv1.Update:
-							podV2 := pod.DeepCopy()
-							podV2.Labels = map[string]string{utils.RandStr(): utils.RandStr()}
-							err := executeKubeClientAdmissionOperation(op, podV2)
-							Expect(err).Should(HaveOccurred())
-						case admv1.Delete:
-							err := executeKubeClientAdmissionOperation(op, pod)
-							Expect(err).Should(HaveOccurred())
-						}
-					})
-				}
+				// Update & Delete cannot be currently tested as a pod should not exist nor can be created in a non-whitelisted namespace while the webhook is enabled.
+				// Kubernetes Admission Control pipeline will first validate if a resource exists prior to calling the webhook. Thus, the error returned
+				// from the test would be a 404, not an admission webhook request denial.
+				By(fmt.Sprintf("expecting denial of operation %s of Pod in non-whitelisted namespace %s", admv1.Create, ns.ObjectMeta.Name), func() {
+					err := executeKubeClientAdmissionOperation(admv1.Create, pod)
+					Expect(err).Should(HaveOccurred())
+					var statusErr *k8sErrors.StatusError
+					ok := errors.As(err, &statusErr)
+					Expect(ok).To(BeTrue())
+					Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook.*denied the request.*`))
+				})
 			}
 		})
 	})
@@ -216,15 +211,6 @@ func generateGenericPod(name string, namespace string) *corev1.Pod {
 				},
 			},
 		},
-	}
-}
-
-func buildOrderedWriteOperationSlice(option admv1.OperationType) []admv1.OperationType {
-	switch option {
-	case admv1.OperationAll:
-		return []admv1.OperationType{admv1.Create, admv1.Update, admv1.Delete}
-	default:
-		return []admv1.OperationType{option}
 	}
 }
 
