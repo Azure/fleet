@@ -44,7 +44,8 @@ var _ = Describe("Work API Controller test", func() {
 				"CreationTimestamp",
 				"Annotations",
 				"OwnerReferences",
-				"ManagedFields"),
+				"ManagedFields",
+				"Labels"),
 		}
 
 		appliedWorkCmpOptions = append(cmpOptions, cmpopts.IgnoreFields(workapi.AppliedResourceMeta{}, "UID"))
@@ -555,6 +556,223 @@ var _ = Describe("Work API Controller test", func() {
 				"There is no spec annotation on the resource %s", crd.Name)
 			Expect(customResource.GetAnnotations()[specHashAnnotation]).ToNot(BeEmpty(),
 				"There is no spec annotation on the custom resource %s", customResource.GetName())
+		})
+
+		It("Manifests with dependencies within different work objects should successfully apply", func() {
+
+			workNameForNamespace := testutils.RandomWorkName(5)
+			workNameForServiceAccount := testutils.RandomWorkName(6)
+
+			testNamespace := corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+				},
+			}
+
+			testServiceAccount := corev1.ServiceAccount{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ServiceAccount",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service-account",
+					Namespace: testNamespace.Name,
+				},
+			}
+
+			manifestNamespace := testutils.AddManifests([]runtime.Object{&testNamespace}, []workapi.Manifest{})
+			manifestServiceAccount := testutils.AddManifests([]runtime.Object{&testServiceAccount}, []workapi.Manifest{})
+
+			workForNamespace := testutils.CreateWork(ctx, *HubCluster, workNameForNamespace, workNamespace.Name, manifestNamespace)
+			workForServiceAccount := testutils.CreateWork(ctx, *HubCluster, workNameForServiceAccount, workNamespace.Name, manifestServiceAccount)
+
+			By(fmt.Sprintf("Applied Condition should be set to True for Work %s and %s", workNameForNamespace, workNameForServiceAccount))
+
+			wantAppliedCondition := []metav1.Condition{
+				{
+					Type:   conditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: "appliedWorkComplete",
+				},
+			}
+
+			receivedWorkForNamespace := workapi.Work{}
+			receivedWorkForServiceAccount := workapi.Work{}
+
+			namespaceTypeForNamespaceWork := types.NamespacedName{Name: workNameForNamespace, Namespace: workNamespace.Name}
+
+			Eventually(func() string {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForNamespaceWork, &receivedWorkForNamespace); err != nil {
+					return err.Error()
+				}
+
+				return cmp.Diff(wantAppliedCondition, receivedWorkForNamespace.Status.Conditions, cmpOptions...)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
+				"Validate WorkStatus for work %s mismatch (-want, +got):", workForNamespace)
+
+			namespaceTypeForServiceAccountWork := types.NamespacedName{Name: workNameForServiceAccount, Namespace: workNamespace.Name}
+
+			Eventually(func() string {
+				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForServiceAccountWork, &receivedWorkForServiceAccount); err != nil {
+					return err.Error()
+				}
+
+				return cmp.Diff(wantAppliedCondition, receivedWorkForServiceAccount.Status.Conditions, cmpOptions...)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(),
+				"Validate WorkStatus for work %s mismatch (-want, +got):", workForServiceAccount)
+
+			By(fmt.Sprintf("Manifest Condiitons on Work Objects %s and %s should be applied", namespaceTypeForNamespaceWork, namespaceTypeForServiceAccountWork))
+			wantNamespaceManifestCondition := []workapi.ManifestCondition{
+				{
+					Conditions: []metav1.Condition{
+						{
+							Type:   conditionTypeApplied,
+							Status: metav1.ConditionTrue,
+							Reason: "appliedManifestUpdated",
+						},
+					},
+					Identifier: workapi.ResourceIdentifier{
+						Group:     testNamespace.GroupVersionKind().Group,
+						Version:   testNamespace.GroupVersionKind().Version,
+						Kind:      testNamespace.GroupVersionKind().Kind,
+						Namespace: testNamespace.Namespace,
+						Name:      testNamespace.Name,
+						Resource:  "namespaces",
+					},
+				},
+			}
+			wantServiceAccountManifestCondition := []workapi.ManifestCondition{
+				{
+					Conditions: []metav1.Condition{
+						{
+							Type:   conditionTypeApplied,
+							Status: metav1.ConditionTrue,
+							Reason: "appliedManifestUpdated",
+						},
+					},
+					Identifier: workapi.ResourceIdentifier{
+						Group:     testServiceAccount.GroupVersionKind().Group,
+						Version:   testServiceAccount.GroupVersionKind().Version,
+						Kind:      testServiceAccount.GroupVersionKind().Kind,
+						Namespace: testServiceAccount.Namespace,
+						Name:      testServiceAccount.Name,
+						Resource:  "serviceaccounts",
+					},
+				},
+			}
+
+			Expect(cmp.Diff(wantNamespaceManifestCondition, receivedWorkForNamespace.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
+				"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeForNamespaceWork)
+
+			Expect(cmp.Diff(wantServiceAccountManifestCondition, receivedWorkForServiceAccount.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
+				"Manifest Condition not matching for work %s (-want, +got):", namespaceTypeForServiceAccountWork)
+
+			By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s and %s", testNamespace.Name, testServiceAccount.Name))
+			appliedWorkForNamespace := workapi.AppliedWork{}
+			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForNamespaceWork, &appliedWorkForNamespace)).Should(Succeed(),
+				"Retrieving AppliedWork %s failed", workNameForNamespace)
+
+			wantAppliedWorkConditionNamespace := workapi.AppliedtWorkStatus{
+				AppliedResources: []workapi.AppliedResourceMeta{
+					{
+						ResourceIdentifier: workapi.ResourceIdentifier{
+							Group:     testNamespace.GroupVersionKind().Group,
+							Version:   testNamespace.GroupVersionKind().Version,
+							Kind:      testNamespace.GroupVersionKind().Kind,
+							Namespace: testNamespace.Namespace,
+							Name:      testNamespace.Name,
+							Resource:  "namespaces",
+						},
+					},
+				},
+			}
+
+			Expect(cmp.Diff(wantAppliedWorkConditionNamespace, appliedWorkForNamespace.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
+				"Validate AppliedResourceMeta mismatch for appliedWork %s (-want, +got):", appliedWorkForNamespace.Name)
+
+			appliedWorkForServiceAccount := workapi.AppliedWork{}
+			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForServiceAccountWork, &appliedWorkForServiceAccount)).Should(Succeed(),
+				"Retrieving AppliedWork %s failed", workNameForServiceAccount)
+
+			wantAppliedConditionServiceAccount := workapi.AppliedtWorkStatus{
+				AppliedResources: []workapi.AppliedResourceMeta{
+					{
+						ResourceIdentifier: workapi.ResourceIdentifier{
+							Group:     testServiceAccount.GroupVersionKind().Group,
+							Version:   testServiceAccount.GroupVersionKind().Version,
+							Kind:      testServiceAccount.GroupVersionKind().Kind,
+							Namespace: testServiceAccount.Namespace,
+							Name:      testServiceAccount.Name,
+							Resource:  "serviceaccounts",
+						},
+					},
+				},
+			}
+
+			Expect(cmp.Diff(wantAppliedConditionServiceAccount, appliedWorkForServiceAccount.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
+				"Validate AppliedResourceMeta mismatch for appliedWork %s (-want, +got):", appliedWorkForServiceAccount.Name)
+
+			By(fmt.Sprintf("The resources %s and %s should both be created in the member cluster.", testNamespace.Name, testServiceAccount.Name))
+			retrievedNamespace := corev1.Namespace{}
+
+			// Ns abbreviated to avoid duplicate wording
+			nsNamespaceType := types.NamespacedName{
+				Name: testNamespace.Name,
+			}
+
+			Expect(MemberCluster.KubeClient.Get(ctx, nsNamespaceType, &retrievedNamespace)).Should(Succeed(),
+				"Failed in retrieving resource %s", testNamespace)
+			wantNamespace := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+				},
+				Status: corev1.NamespaceStatus{
+					Phase: corev1.NamespaceActive,
+				},
+			}
+
+			namespaceCmpOptions := append(cmpOptions,
+				cmpopts.IgnoreFields(corev1.Namespace{}, "Spec"))
+
+			Expect(cmp.Diff(wantNamespace, retrievedNamespace, namespaceCmpOptions...)).Should(BeEmpty(),
+				"Validate Namespace %s mismatch (-want, +got):", wantNamespace.Name)
+
+			serviceAccountNamespaceType := types.NamespacedName{
+				Name:      testServiceAccount.Name,
+				Namespace: testNamespace.Name,
+			}
+
+			retrievedServiceAccount := corev1.ServiceAccount{}
+			Expect(MemberCluster.KubeClient.Get(ctx, serviceAccountNamespaceType, &retrievedServiceAccount)).Should(Succeed(),
+				"Failed in retrieving resource %s", testServiceAccount)
+
+			By(fmt.Sprintf("Validating that the resource %s and %s is owned by the respective work", testNamespace.Name, testServiceAccount.Name))
+			wantOwnerForNamespace := []metav1.OwnerReference{
+				{
+					APIVersion: workapi.GroupVersion.String(),
+					Kind:       workapi.AppliedWorkKind,
+					Name:       appliedWorkForNamespace.GetName(),
+					UID:        appliedWorkForNamespace.GetUID(),
+				},
+			}
+
+			wantOwnerForServiceAccount := []metav1.OwnerReference{
+				{
+					APIVersion: workapi.GroupVersion.String(),
+					Kind:       workapi.AppliedWorkKind,
+					Name:       appliedWorkForServiceAccount.GetName(),
+					UID:        appliedWorkForServiceAccount.GetUID(),
+				},
+			}
+
+			Expect(cmp.Diff(wantOwnerForNamespace, retrievedNamespace.OwnerReferences, cmpOptions...)).Should(BeEmpty(),
+				"OwnerReference mismatch for resource %s (-want, +got):", testNamespace.Name)
+			Expect(cmp.Diff(wantOwnerForServiceAccount, retrievedServiceAccount.OwnerReferences, cmpOptions...)).Should(BeEmpty(),
+				"OwnerReference mismatch for resource %s (-want, +got):", testServiceAccount.Name)
 		})
 	})
 
