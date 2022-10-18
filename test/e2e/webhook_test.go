@@ -149,7 +149,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				}
 			}
 		})
-		It("Admission operations on Pods within non-whitelisted namespaces should be denied", func() {
+		It("Admission operation CREATE on Pods within non-whitelisted namespaces should be denied", func() {
 			ctx = context.Background()
 
 			// Retrieve list of existing namespaces, remove whitelisted namespaces.
