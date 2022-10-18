@@ -63,8 +63,10 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 	sideEffortsNone := admv1.SideEffectClassNone
 
 	// We assume a headless service named fleetwebhook has been created in the pod namespace (e.g., via helm chart)
-	podWebhookURL := fmt.Sprintf("https://fleetwebhook.%s.svc.cluster.local:%d/validate-v1-pod", WebhookServiceNs, port)
 	crpWebhookURL := fmt.Sprintf("https://fleetwebhook.%s.svc.cluster.local:%d/validate-fleet-azure-com-v1alpha1-clusterresourceplacement", WebhookServiceNs, port)
+	replicaSetWebhookURL := fmt.Sprintf("https://fleetwebhook.%s.svc.cluster.local:%d/validate-v1-replicaset", WebhookServiceNs, port)
+	podWebhookURL := fmt.Sprintf("https://fleetwebhook.%s.svc.cluster.local:%d/validate-v1-pod", WebhookServiceNs, port)
+
 	namespacedScope := admv1.NamespacedScope
 	clusterScope := admv1.ClusterScope
 	whCfg := admv1.ValidatingWebhookConfiguration{
@@ -75,30 +77,6 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 			},
 		},
 		Webhooks: []admv1.ValidatingWebhook{
-			{
-				Name: "fleet.pod.validating",
-				ClientConfig: admv1.WebhookClientConfig{
-					URL:      &podWebhookURL,
-					CABundle: caPEM,
-				},
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
-
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: []admv1.OperationType{
-							admv1.OperationAll,
-						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{""},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"pods"},
-							Scope:       &namespacedScope,
-						},
-					},
-				},
-			},
 			{
 				Name: "fleet.clusterresourceplacement.validating",
 				ClientConfig: admv1.WebhookClientConfig{
@@ -119,6 +97,54 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 							APIVersions: []string{"v1alpha1"},
 							Resources:   []string{fleetv1alpha1.ClusterResourcePlacementResource},
 							Scope:       &clusterScope,
+						},
+					},
+				},
+			},
+			{
+				Name: "fleet.replicaset.validating",
+				ClientConfig: admv1.WebhookClientConfig{
+					URL:      &replicaSetWebhookURL,
+					CABundle: caPEM,
+				},
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.Create,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{"apps"},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"replicaset"},
+							Scope:       &namespacedScope,
+						},
+					},
+				},
+			},
+			{
+				Name: "fleet.pod.validating",
+				ClientConfig: admv1.WebhookClientConfig{
+					URL:      &podWebhookURL,
+					CABundle: caPEM,
+				},
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.OperationAll,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{""},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"pods"},
+							Scope:       &namespacedScope,
 						},
 					},
 				},
