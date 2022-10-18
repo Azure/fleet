@@ -370,13 +370,10 @@ var _ = Describe("Work API Controller test", func() {
 			Expect(retrievedSecret.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
 				"SpecHash Annotation does not exist for resource %s", secret.Name)
 
-			//testutils.DeleteWork(ctx, *HubCluster, workOne)
 			testutils.DeleteWork(ctx, *HubCluster, workTwo)
 		})
 
 		It("Upon successful work creation of a CRD resource, manifest is applied, and resources are created", func() {
-			//workName := testutils.RandomWorkName(5)
-
 			// Name of the CRD object from the manifest file
 			crdName := "testcrds.multicluster.x-k8s.io"
 			crdObjectName := "test-crd-object"
