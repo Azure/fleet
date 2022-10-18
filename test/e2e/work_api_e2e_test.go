@@ -59,6 +59,7 @@ var _ = Describe("Work API Controller test", func() {
 		)
 
 		resourceNamespace *corev1.Namespace
+		workName          string
 	)
 
 	BeforeEach(func() {
@@ -71,17 +72,23 @@ var _ = Describe("Work API Controller test", func() {
 				Name: resourceNamespaceName,
 			},
 		}
-		testutils.CreateNamespace(*MemberCluster, resourceNamespace)
+		Expect(MemberCluster.KubeClient.Create(ctx, resourceNamespace)).Should(Succeed(), "Failed to create namespace %s in %s cluster", resourceNamespace.Name, MemberCluster.ClusterName)
 	})
 
 	AfterEach(func() {
-		testutils.DeleteNamespace(*MemberCluster, resourceNamespace)
+		testutils.DeleteNamespace(ctx, *MemberCluster, resourceNamespace)
 	})
 
 	Context("Work Creation Test", func() {
-		It("Upon successful work creation of a single resource, work manifest is applied and resource is created", func() {
-			workName := testutils.RandomWorkName(5)
+		BeforeEach(func() {
+			workName = testutils.RandomWorkName(5)
+		})
 
+		AfterEach(func() {
+			testutils.DeleteWork(ctx, *HubCluster, workapi.Work{ObjectMeta: metav1.ObjectMeta{Name: workName, Namespace: workNamespace.Name}})
+		})
+
+		It("Upon successful work creation of a single resource, work manifest is applied and resource is created", func() {
 			By(fmt.Sprintf("Here is the work Name %s", workName))
 
 			// Configmap will be included in this work object.
@@ -204,7 +211,6 @@ var _ = Describe("Work API Controller test", func() {
 		})
 
 		It("Upon successful creation of 2 work resources with same manifest, work manifest is applied, and only 1 resource is created with merged owner references.", func() {
-			workNameOne := testutils.RandomWorkName(5)
 			workNameTwo := testutils.RandomWorkName(5)
 
 			manifestSecretName := "test-secret"
@@ -225,7 +231,7 @@ var _ = Describe("Work API Controller test", func() {
 			}
 
 			// Creating types.NamespacedName to use in retrieving objects.
-			namespaceTypeOne := types.NamespacedName{Name: workNameOne, Namespace: workNamespace.Name}
+			namespaceTypeOne := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
 			namespaceTypeTwo := types.NamespacedName{Name: workNameTwo, Namespace: workNamespace.Name}
 
 			resourceNamespaceType := types.NamespacedName{Name: manifestSecretName, Namespace: resourceNamespace.Name}
@@ -233,7 +239,7 @@ var _ = Describe("Work API Controller test", func() {
 			manifests := testutils.AddManifests([]runtime.Object{&secret}, []workapi.Manifest{})
 
 			By(fmt.Sprintf("creating work %s of %s", namespaceTypeOne, manifestSecretName))
-			testutils.CreateWork(ctx, *HubCluster, workNameOne, workNamespace.Name, manifests)
+			testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifests)
 
 			By(fmt.Sprintf("creating work %s of %s", namespaceTypeTwo, manifestSecretName))
 			testutils.CreateWork(ctx, *HubCluster, workNameTwo, workNamespace.Name, manifests)
@@ -320,7 +326,7 @@ var _ = Describe("Work API Controller test", func() {
 
 			appliedWorkOne := workapi.AppliedWork{}
 			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeOne, &appliedWorkOne)).Should(Succeed(),
-				"Retrieving AppliedWork %s failed", workNameOne)
+				"Retrieving AppliedWork %s failed", workName)
 
 			Expect(cmp.Diff(wantAppliedStatus, appliedWorkOne.Status, appliedWorkCmpOptions...)).Should(BeEmpty(),
 				"Validate AppliedResourceMeta mismatch (-want, +got):")
@@ -363,11 +369,11 @@ var _ = Describe("Work API Controller test", func() {
 			By(fmt.Sprintf("Validating that the annotation of resource's spec exists on the resource %s", manifestSecretName))
 			Expect(retrievedSecret.ObjectMeta.Annotations[specHashAnnotation]).ToNot(BeEmpty(),
 				"SpecHash Annotation does not exist for resource %s", secret.Name)
+
+			testutils.DeleteWork(ctx, *HubCluster, workTwo)
 		})
 
 		It("Upon successful work creation of a CRD resource, manifest is applied, and resources are created", func() {
-			workName := testutils.RandomWorkName(5)
-
 			// Name of the CRD object from the manifest file
 			crdName := "testcrds.multicluster.x-k8s.io"
 			crdObjectName := "test-crd-object"
@@ -559,8 +565,6 @@ var _ = Describe("Work API Controller test", func() {
 		})
 
 		It("Manifests with dependencies within different work objects should successfully apply", func() {
-
-			workNameForNamespace := testutils.RandomWorkName(5)
 			workNameForServiceAccount := testutils.RandomWorkName(6)
 
 			testNamespace := corev1.Namespace{
@@ -587,10 +591,10 @@ var _ = Describe("Work API Controller test", func() {
 			manifestNamespace := testutils.AddManifests([]runtime.Object{&testNamespace}, []workapi.Manifest{})
 			manifestServiceAccount := testutils.AddManifests([]runtime.Object{&testServiceAccount}, []workapi.Manifest{})
 
-			workForNamespace := testutils.CreateWork(ctx, *HubCluster, workNameForNamespace, workNamespace.Name, manifestNamespace)
+			workForNamespace := testutils.CreateWork(ctx, *HubCluster, workName, workNamespace.Name, manifestNamespace)
 			workForServiceAccount := testutils.CreateWork(ctx, *HubCluster, workNameForServiceAccount, workNamespace.Name, manifestServiceAccount)
 
-			By(fmt.Sprintf("Applied Condition should be set to True for Work %s and %s", workNameForNamespace, workNameForServiceAccount))
+			By(fmt.Sprintf("Applied Condition should be set to True for Work %s and %s", workName, workNameForServiceAccount))
 
 			wantAppliedCondition := []metav1.Condition{
 				{
@@ -603,7 +607,7 @@ var _ = Describe("Work API Controller test", func() {
 			receivedWorkForNamespace := workapi.Work{}
 			receivedWorkForServiceAccount := workapi.Work{}
 
-			namespaceTypeForNamespaceWork := types.NamespacedName{Name: workNameForNamespace, Namespace: workNamespace.Name}
+			namespaceTypeForNamespaceWork := types.NamespacedName{Name: workName, Namespace: workNamespace.Name}
 
 			Eventually(func() string {
 				if err := HubCluster.KubeClient.Get(ctx, namespaceTypeForNamespaceWork, &receivedWorkForNamespace); err != nil {
@@ -674,7 +678,7 @@ var _ = Describe("Work API Controller test", func() {
 			By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s and %s", testNamespace.Name, testServiceAccount.Name))
 			appliedWorkForNamespace := workapi.AppliedWork{}
 			Expect(MemberCluster.KubeClient.Get(ctx, namespaceTypeForNamespaceWork, &appliedWorkForNamespace)).Should(Succeed(),
-				"Retrieving AppliedWork %s failed", workNameForNamespace)
+				"Retrieving AppliedWork %s failed", workName)
 
 			wantAppliedWorkConditionNamespace := workapi.AppliedtWorkStatus{
 				AppliedResources: []workapi.AppliedResourceMeta{
@@ -773,7 +777,10 @@ var _ = Describe("Work API Controller test", func() {
 				"OwnerReference mismatch for resource %s (-want, +got):", testNamespace.Name)
 			Expect(cmp.Diff(wantOwnerForServiceAccount, retrievedServiceAccount.OwnerReferences, cmpOptions...)).Should(BeEmpty(),
 				"OwnerReference mismatch for resource %s (-want, +got):", testServiceAccount.Name)
+
+			testutils.DeleteWork(ctx, *HubCluster, workForServiceAccount)
 		})
+
 	})
 
 	Context("Updating Work", func() {
@@ -821,6 +828,10 @@ var _ = Describe("Work API Controller test", func() {
 				return cmp.Diff(want, work.Status.Conditions, cmpOptions...)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeEmpty(), "Validate WorkStatus mismatch (-want, +got):")
 
+		})
+
+		AfterEach(func() {
+			testutils.DeleteWork(ctx, *HubCluster, work)
 		})
 
 		It("Updating Work object on the Hub Cluster should update the resource on the member cluster.", func() {
@@ -943,8 +954,9 @@ var _ = Describe("Work API Controller test", func() {
 			By("Deleting the Work Object should also delete the resources in the member cluster")
 			configMapDeleted := corev1.ConfigMap{}
 			resourceNamespaceType := types.NamespacedName{Name: configMapBeforeDelete.Name, Namespace: resourceNamespace.Name}
-			Expect(MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)).Should(&utils.NotFoundMatcher{},
-				"resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
+			Eventually(func() error {
+				return MemberCluster.KubeClient.Get(ctx, resourceNamespaceType, &configMapDeleted)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(&utils.NotFoundMatcher{}, "resource %s was either not deleted or encountered an error in cluster %s", configMapBeforeDelete.Name, MemberCluster.ClusterName)
 		})
 	})
 })
