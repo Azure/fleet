@@ -7,7 +7,6 @@ package integration
 
 import (
 	"fmt"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"reflect"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 )
 
