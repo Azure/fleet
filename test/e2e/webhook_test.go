@@ -164,15 +164,11 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				}
 			}
 
-			// Attempt operations of pod resource within all non-whitelisted namespaces.
+			// Attempt the create operation of a pod resource within all non-whitelisted namespaces.
 			for _, ns := range nsList.Items {
 				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: ns.ObjectMeta.Name}
 				ctx = context.Background()
 				pod := generateGenericPod(objKey.Name, objKey.Namespace)
-
-				// Update & Delete cannot be currently tested as a pod should not exist nor can be created in a non-whitelisted namespace while the webhook is enabled.
-				// Kubernetes Admission Control pipeline will first validate if a resource exists prior to calling the webhook. Thus, the error returned
-				// from the test would be a 404, not an admission webhook request denial.
 				By(fmt.Sprintf("expecting denial of operation %s of Pod in non-whitelisted namespace %s", admv1.Create, ns.ObjectMeta.Name), func() {
 					err := executeKubeClientAdmissionOperation(admv1.Create, pod)
 					Expect(err).Should(HaveOccurred())
