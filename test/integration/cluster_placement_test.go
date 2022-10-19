@@ -7,6 +7,7 @@ package integration
 
 import (
 	"fmt"
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"reflect"
 	"time"
 
@@ -1318,8 +1319,102 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		XIt("Test partial failed apply", func() {
+		It("Test partial failed apply", func() {
+			By("create clusterResourcePlacement CR")
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-test-change",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							Name:    "test-cluster-role",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
 
+			By("verify that we have created work objects that contain the resource selected")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
+
+			var clusterWork workv1alpha1.Work
+			resourceIdentifier := workv1alpha1.ResourceIdentifier{
+				Group:    rbacv1.GroupName,
+				Kind:     ClusterRoleKind,
+				Name:     "test-cluster-role",
+				Ordinal:  0,
+				Resource: "clusterroles",
+				Version:  "v1",
+			}
+
+			// update work in clusterA to have applied condition as true for manifest and work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+
+			appliedCondition := metav1.Condition{
+				Type:               workapi.ConditionTypeApplied,
+				Status:             metav1.ConditionTrue,
+				Reason:             "appliedWorkComplete",
+				ObservedGeneration: clusterWork.GetGeneration(),
+				LastTransitionTime: metav1.Now(),
+			}
+
+			manifestCondition := workv1alpha1.ManifestCondition{
+				Identifier: resourceIdentifier,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionTrue,
+						Reason:             "ManifestCreated",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+
+			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
+			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+
+			// update work in clusterB to have applied condition as false for manifest and work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
+			}, &clusterWork)).Should(Succeed())
+
+			appliedCondition = metav1.Condition{
+				Type:               workapi.ConditionTypeApplied,
+				Status:             metav1.ConditionFalse,
+				Reason:             "appliedWorkFailed",
+				ObservedGeneration: clusterWork.GetGeneration(),
+				LastTransitionTime: metav1.Now(),
+			}
+
+			manifestCondition = workv1alpha1.ManifestCondition{
+				Identifier: resourceIdentifier,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionFalse,
+						Reason:             "appliedManifestFailed",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+
+			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
+			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+
+			Eventually(func() bool {
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+				return len(crp.Status.FailedResourcePlacements) == 1
+			}, timeout, interval).Should(BeTrue())
 		})
 	})
 })
