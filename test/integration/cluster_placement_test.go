@@ -1023,8 +1023,66 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			markInternalMCJoined(clusterA)
 		})
 
-		XIt("Test  cluster scoped resource change unpick by a placement", func() {
+		It("Test cluster scoped resource change unpick by a placement", func() {
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-select",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/name": "test",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			By("Select resource by label clusterResourcePlacement created")
 
+			// verify that we have created work objects that contain the resource selected
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
+			By("Update CRP to not pick cluster role")
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "resource-select",
+					ResourceVersion: crp.ResourceVersion,
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"fleet.azure.com/env": "prod",
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
+
+			// verify that the work object created is not present anymore since we are not picking cluster role
+			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
+			Eventually(func() bool {
+				var clusterWork workv1alpha1.Work
+				return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{
+					Name:      crp.Name,
+					Namespace: nsName,
+				}, &clusterWork))
+			}, timeout, interval).Should(BeTrue())
+			By("Verified the work object is removed")
 		})
 
 		It("Test a cluster scoped resource selected by multiple placements", func() {
