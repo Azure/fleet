@@ -70,7 +70,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 
 				expectedScope := admv1.NamespacedScope
 				expectedRule := admv1.RuleWithOperations{
-					Operations: []admv1.OperationType{admv1.OperationAll},
+					Operations: []admv1.OperationType{admv1.Create},
 					Rule: admv1.Rule{
 						APIGroups:   []string{""},
 						APIVersions: []string{"v1"},
@@ -103,7 +103,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 
 				expectedScope := admv1.ClusterScope
 				expectedRule := admv1.RuleWithOperations{
-					Operations: []admv1.OperationType{admv1.OperationAll},
+					Operations: []admv1.OperationType{admv1.Create},
 					Rule: admv1.Rule{
 						APIGroups:   []string{"fleet.azure.com"},
 						APIVersions: []string{"v1alpha1"},
