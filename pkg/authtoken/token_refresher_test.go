@@ -110,7 +110,7 @@ func TestRefresherCancelContext(t *testing.T) {
 	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, DefaultCreateTicker)
 
 	go func() {
-		err = refresher.RefreshToken(ctx)
+		_ = refresher.RefreshToken(ctx)
 		testChan <- true
 	}()
 
