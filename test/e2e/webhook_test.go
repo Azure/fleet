@@ -22,11 +22,8 @@ import (
 )
 
 const (
-	kubeSystemNs             = "kube-system"
-	fleetSystemNs            = "fleet-system"
-	fleetWebhookCfgName      = "fleet-validating-webhook-configuration"
-	podValidationWebhookName = "fleet.pod.validating"
-	crpValidationWebhookName = "fleet.clusterresourceplacement.validating"
+	kubeSystemNs  = "kube-system"
+	fleetSystemNs = "fleet-system"
 )
 
 var (
