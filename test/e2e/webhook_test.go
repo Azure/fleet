@@ -38,11 +38,36 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 		It("Admission operations on Pods within whitelisted namespaces should be admitted", func() {
 			for _, ns := range whitelistedNamespaces {
 				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: ns.ObjectMeta.Name}
-				pod := generateGenericPod(objKey.Name, objKey.Namespace)
+				nginxPod := &corev1.Pod{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Pod",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      objKey.Name,
+						Namespace: objKey.Namespace,
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.14.2",
+								Ports: []corev1.ContainerPort{
+									{
+										Name:          "http",
+										Protocol:      corev1.ProtocolTCP,
+										ContainerPort: 80,
+									},
+								},
+							},
+						},
+					},
+				}
+
 				var err error
 
 				By(fmt.Sprintf("expecting admission of operation CREATE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
-				err = HubCluster.KubeClient.Create(ctx, pod)
+				err = HubCluster.KubeClient.Create(ctx, nginxPod)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				By(fmt.Sprintf("expecting admission of operation UPDATE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
@@ -58,7 +83,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				}, timeout, interval).ShouldNot(HaveOccurred())
 
 				By(fmt.Sprintf("expecting admission of operation DELETE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
-				err = HubCluster.KubeClient.Delete(ctx, pod)
+				err = HubCluster.KubeClient.Delete(ctx, nginxPod)
 				Expect(err).ShouldNot(HaveOccurred())
 			}
 		})
@@ -80,9 +105,34 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			for _, ns := range nsList.Items {
 				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: ns.ObjectMeta.Name}
 				ctx = context.Background()
-				pod := generateGenericPod(objKey.Name, objKey.Namespace)
+				nginxPod := &corev1.Pod{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Pod",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      objKey.Name,
+						Namespace: objKey.Namespace,
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:1.14.2",
+								Ports: []corev1.ContainerPort{
+									{
+										Name:          "http",
+										Protocol:      corev1.ProtocolTCP,
+										ContainerPort: 80,
+									},
+								},
+							},
+						},
+					},
+				}
+
 				By(fmt.Sprintf("expecting denial of operation %s of Pod in non-whitelisted namespace %s", admv1.Create, ns.ObjectMeta.Name))
-				err := HubCluster.KubeClient.Create(ctx, pod)
+				err := HubCluster.KubeClient.Create(ctx, nginxPod)
 				Expect(err).Should(HaveOccurred())
 				var statusErr *k8sErrors.StatusError
 				ok := errors.As(err, &statusErr)
@@ -92,34 +142,6 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 		})
 	})
 })
-
-func generateGenericPod(name string, namespace string) *corev1.Pod {
-	return &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Pod",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  "nginx",
-					Image: "nginx:1.14.2",
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "http",
-							Protocol:      corev1.ProtocolTCP,
-							ContainerPort: 80,
-						},
-					},
-				},
-			},
-		},
-	}
-}
 
 func findIndexOfNamespace(nsName string, nsList corev1.NamespaceList) int {
 	for i, ns := range nsList.Items {
