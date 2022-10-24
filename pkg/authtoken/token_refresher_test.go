@@ -119,7 +119,6 @@ func TestRefresherCancelContext(t *testing.T) {
 		select {
 		case err := <-testChan:
 			if err.Error() == "context canceled" {
-				chanOpen = false
 				return
 			}
 		case <-time.Tick(1 * time.Second):
