@@ -99,7 +99,7 @@ func TestRefresherCancelContext(t *testing.T) {
 	provider := MockAuthTokenProvider{
 		Token: interfaces.AuthToken{
 			Token:     "test token",
-			ExpiresOn: time.Now(),
+			ExpiresOn: time.Now().Add(100 * time.Millisecond),
 		},
 	}
 	testChan := make(chan error)
@@ -121,7 +121,7 @@ func TestRefresherCancelContext(t *testing.T) {
 			if err.Error() == "context canceled" {
 				return
 			}
-		case <-time.Tick(1 * time.Second):
+		case <-time.Tick(5 * time.Second):
 			chanOpen = false
 			assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 		}
