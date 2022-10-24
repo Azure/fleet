@@ -102,27 +102,29 @@ func TestRefresherCancelContext(t *testing.T) {
 			ExpiresOn: time.Now(),
 		},
 	}
-
-	var err error
-	testChan := make(chan bool)
+	testChan := make(chan error)
+	chanOpen := true
 	ctx, cancel := context.WithCancel(context.TODO())
-	bufferWriter := NewWriter(NewBufferWriterFactory().Create)
-	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, DefaultCreateTicker)
 
+	bufferWriter := NewWriter(NewBufferWriterFactory().Create)
+
+	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, DefaultCreateTicker)
 	go func() {
-		_ = refresher.RefreshToken(ctx)
-		testChan <- true
+		testChan <- refresher.RefreshToken(ctx)
 	}()
 
 	cancel()
 
-	select {
-	case <-testChan:
-		if assert.ErrorIs(t, err, context.Canceled, t) {
-			return
+	for chanOpen {
+		select {
+		case err := <-testChan:
+			if err.Error() == "context canceled" {
+				chanOpen = false
+				return
+			}
+		case <-time.Tick(1 * time.Second):
+			chanOpen = false
+			assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 		}
-		assert.Fail(t, "Refresh token errored but was not cancelled", "TestRefresherCancelContext")
-	case <-time.Tick(5 * time.Second):
-		assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 	}
 }
