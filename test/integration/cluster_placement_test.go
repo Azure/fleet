@@ -1049,6 +1049,47 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created work objects that contain the resource selected
 			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
 
+			// Apply is Pending because work api controller is not being run for this test suite
+			fleetResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+				Group:   rbacv1.GroupName,
+				Version: "v1",
+				Kind:    ClusterRoleKind,
+				Name:    "test-cluster-role",
+			}
+			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 1,
+						Reason:             "ScheduleSucceeded",
+					},
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Status:             metav1.ConditionUnknown,
+						ObservedGeneration: 1,
+						Reason:             "ApplyPending",
+					},
+				},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier},
+				TargetClusters:    []string{clusterA.Name},
+			}
+
+			crpStatusCmpOptions := []cmp.Option{
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message"),
+				cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type }),
+			}
+
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantCRPStatus, crp.Status, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
+
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			By("Update CRP to not pick cluster role")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
@@ -1083,6 +1124,33 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				}, &clusterWork))
 			}, timeout, interval).Should(BeTrue())
 			By("Verified the work object is removed")
+
+			wantCRPStatus = fleetv1alpha1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+						Status:             metav1.ConditionFalse,
+						ObservedGeneration: 2,
+						Reason:             "ScheduleFailed",
+					},
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Status:             metav1.ConditionUnknown,
+						ObservedGeneration: 1,
+						Reason:             "ApplyPending",
+					},
+				},
+			}
+
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantCRPStatus, crp.Status, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
 		})
 
 		It("Test a cluster scoped resource selected by multiple placements", func() {
