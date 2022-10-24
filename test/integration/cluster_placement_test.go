@@ -1158,31 +1158,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
 
 			By("revert update to cluster role since other tests are using it")
-			cr = &rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-cluster-role",
-					Labels: map[string]string{
-						"fleet.azure.com/name": "test",
-					},
-				},
-				Rules: []rbacv1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"secrets"},
-						Verbs:     []string{"get", "list", "watch"},
-					},
-					{
-						APIGroups: []string{""},
-						Resources: []string{"events"},
-						Verbs:     []string{"get", "list", "watch", "create", "patch"},
-					},
-					{
-						APIGroups: []string{""},
-						Resources: []string{"nodes"},
-						Verbs:     []string{"get", "list", "watch"},
-					},
-				},
+			oldLabels := map[string]string{
+				"fleet.azure.com/name": "test",
 			}
+			cr.ObjectMeta.Labels = oldLabels
 			Expect(k8sClient.Update(ctx, cr)).Should(Succeed())
 		})
 
