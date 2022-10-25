@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	adminv1 "k8s.io/api/admissionregistration/v1"
@@ -28,6 +30,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -1318,8 +1321,150 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		XIt("Test partial failed apply", func() {
+		It("Test partial failed apply", func() {
+			By("create clusterResourcePlacement CR")
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "resource-test-change",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							Name:    "test-cluster-role",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
 
+			By("verify that we have created work objects that contain the resource selected")
+			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
+
+			var clusterWork workv1alpha1.Work
+			workResourceIdentifier := workv1alpha1.ResourceIdentifier{
+				Group:    rbacv1.GroupName,
+				Kind:     ClusterRoleKind,
+				Name:     "test-cluster-role",
+				Ordinal:  0,
+				Resource: "clusterroles",
+				Version:  "v1",
+			}
+
+			// update work in clusterA to have applied condition as true for manifest and work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+
+			appliedCondition := metav1.Condition{
+				Type:               workapi.ConditionTypeApplied,
+				Status:             metav1.ConditionTrue,
+				Reason:             "appliedWorkComplete",
+				ObservedGeneration: clusterWork.GetGeneration(),
+				LastTransitionTime: metav1.Now(),
+			}
+
+			manifestCondition := workv1alpha1.ManifestCondition{
+				Identifier: workResourceIdentifier,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionTrue,
+						Reason:             "ManifestCreated",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+
+			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
+			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+
+			// update work in clusterB to have applied condition as false for manifest and work
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
+			}, &clusterWork)).Should(Succeed())
+
+			appliedCondition = metav1.Condition{
+				Type:               workapi.ConditionTypeApplied,
+				Status:             metav1.ConditionFalse,
+				Reason:             "appliedWorkFailed",
+				ObservedGeneration: clusterWork.GetGeneration(),
+				LastTransitionTime: metav1.Now(),
+			}
+
+			manifestCondition = workv1alpha1.ManifestCondition{
+				Identifier: workResourceIdentifier,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionFalse,
+						Reason:             "appliedManifestFailed",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+
+			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
+			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+
+			fleetResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
+				Group:   rbacv1.GroupName,
+				Version: "v1",
+				Kind:    ClusterRoleKind,
+				Name:    "test-cluster-role",
+			}
+			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 1,
+						Reason:             "ScheduleSucceeded",
+					},
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Status:             metav1.ConditionFalse,
+						ObservedGeneration: 1,
+						Reason:             "ApplyFailed",
+					},
+				},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier},
+				TargetClusters:    []string{clusterA.Name, clusterB.Name},
+				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
+					{
+						ResourceIdentifier: fleetResourceIdentifier,
+						ClusterName:        clusterB.Name,
+						Condition: metav1.Condition{
+							Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 0,
+							Reason:             "appliedManifestFailed",
+						},
+					},
+				},
+			}
+
+			crpStatusCmpOptions := []cmp.Option{
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message"),
+				cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type }),
+				cmpopts.SortSlices(func(ref1, ref2 string) bool { return ref1 < ref2 }),
+			}
+
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantCRPStatus, crp.Status, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterB.Name)
 		})
 	})
 })
