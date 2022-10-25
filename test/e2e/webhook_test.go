@@ -9,6 +9,7 @@ import (
 	"context"
 	errors "errors"
 	"fmt"
+	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,7 +37,7 @@ var (
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	Context("Pod validation webhook", func() {
-		It("Admission operations on Pods within whitelisted namespaces should be admitted", func() {
+		It("should admit operations on Pods within whitelisted namespaces", func() {
 			for _, ns := range whitelistedNamespaces {
 				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: ns.ObjectMeta.Name}
 				nginxPod := &corev1.Pod{
@@ -88,7 +89,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 			}
 		})
-		It("Admission operation CREATE on Pods within non-whitelisted namespaces should be denied", func() {
+		It("should deny CREATE on Pods within non-whitelisted namespaces", func() {
 			ctx = context.Background()
 
 			// Retrieve list of existing namespaces, remove whitelisted namespaces.
@@ -143,13 +144,14 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 		})
 	})
 	Context("ClusterResourcePlacement validation webhook", func() {
-		It("Admission operations CREATE should be denied for invalid ClusterResourcePlacements", func() {
+		It("should admit operations on valid ClusterResourcePlacements", func() {})
+		It("should deny operations for invalid ClusterResourcePlacements", func() {
 			var err error
 			var ok bool
 			var statusErr *k8sErrors.StatusError
 			var invalidCRP fleetv1alpha1.ClusterResourcePlacement
 
-			By("which specifies a resource selector for both label & name")
+			By("which specifies both a label & name values within a resource selector")
 			invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ClusterResourcePlacement",
@@ -161,64 +163,67 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
 						{
-							Group:         "Core",
-							Version:       "V1",
-							Kind:          "Pod",
-							Name:          utils.RandStr(),
-							LabelSelector: &metav1.LabelSelector{},
+							Group:   "core",
+							Version: "v1",
+							Kind:    "Pod",
+							Name:    utils.RandStr(),
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"SomeKey": "SomeValue"},
+							},
 						},
 					},
 				},
 			}
-			invalidCRP.Spec.ResourceSelectors = []fleetv1alpha1.ClusterResourceSelector{}
 
 			err = HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			Expect(err).Should(HaveOccurred())
-
 			ok = errors.As(err, &statusErr)
 			Expect(ok).To(BeTrue())
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook.*denied the request.*`))
-			// todo - check for error text "the labelSelector in resource selector {selector} is invalid
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the labelSelector and name fields are mutually exclusive"))
 
-			// WIP
-			By("which contains an invalid ClusterSelectorTerm")
-			// invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
-			// 	TypeMeta: metav1.TypeMeta{
-			// 		Kind:       "ClusterResourcePlacement",
-			// 		APIVersion: "v1alpha1",
-			// 	},
-			// 	ObjectMeta: metav1.ObjectMeta{
-			// 		Name: utils.RandStr(),
-			// 	},
-			// 	Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-			// 		Policy: &fleetv1alpha1.PlacementPolicy{
-			// 			ClusterNames: nil,
-			// 			Affinity: &fleetv1alpha1.Affinity{
-			// 				ClusterAffinity: &fleetv1alpha1.ClusterAffinity{
-			// 					ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
-			// 						{
-			// 							LabelSelector: metav1.LabelSelector{
-			// 								MatchLabels:      nil,
-			// 								MatchExpressions: nil,
-			// 							},
-			// 						},
-			// 					},
-			// 				},
-			// 			},
-			// 		},
-			// 		ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-			// 			fleetv1alpha1.ClusterResourceSelector{
-			// 				Group:         utils.RandStr(),
-			// 				Version:       utils.RandStr(),
-			// 				Kind:          utils.RandStr(),
-			// 				Name:          utils.RandStr(),
-			// 				LabelSelector: &metav1.LabelSelector{},
-			// 			},
-			// 		},
-			// 	},
-			// }
+			By("which specifies an invalid MatchExpression within the ClusterAffinity")
+			invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ClusterResourcePlacement",
+					APIVersion: "v1alpha1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.RandStr(),
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					Policy: &fleetv1alpha1.PlacementPolicy{
+						ClusterNames: nil,
+						Affinity: &fleetv1alpha1.Affinity{
+							ClusterAffinity: &fleetv1alpha1.ClusterAffinity{
+								ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
+									{
+										LabelSelector: metav1.LabelSelector{
+											MatchLabels: nil,
+											MatchExpressions: []metav1.LabelSelectorRequirement{
+												{
+													Key:      "SomeKey",
+													Operator: "invalid-operator",
+													Values:   []string{"SomeValue"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{},
+				},
+			}
+			err = HubCluster.KubeClient.Create(ctx, &invalidCRP)
+			Expect(err).Should(HaveOccurred())
+			ok = errors.As(err, &statusErr)
+			Expect(ok).To(BeTrue())
+			Expect(statusErr.Status().Message)
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in cluster selector %+v is invalid:", invalidCRP.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms[0]))))
 
-			// WIP
 			By("which specifies resource selectors of unknown GVK")
 			invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
 				TypeMeta: metav1.TypeMeta{
@@ -240,12 +245,19 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				},
 			}
+			invalidGVK := metav1.GroupVersionKind{
+				Group:   invalidCRP.Spec.ResourceSelectors[0].Group,
+				Version: invalidCRP.Spec.ResourceSelectors[0].Version,
+				Kind:    invalidCRP.Spec.ResourceSelectors[0].Kind,
+			}
+
 			err = HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			Expect(err).Should(HaveOccurred())
 			ok = errors.As(err, &statusErr)
 			Expect(ok).To(BeTrue())
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook.*denied the request.*`))
-			// todo - check for error text "the resource is not found in schema (please retry) or it is not a cluster scoped resource"
+			fmt.Println(statusErr.DebugError())
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %s", invalidGVK))))
 		})
 	})
 })
