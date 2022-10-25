@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -139,6 +140,112 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				Expect(ok).To(BeTrue())
 				Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook.*denied the request.*`))
 			}
+		})
+	})
+	Context("ClusterResourcePlacement validation webhook", func() {
+		It("Admission operations CREATE should be denied for invalid ClusterResourcePlacements", func() {
+			var err error
+			var ok bool
+			var statusErr *k8sErrors.StatusError
+			var invalidCRP fleetv1alpha1.ClusterResourcePlacement
+
+			By("which specifies a resource selector for both label & name")
+			invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ClusterResourcePlacement",
+					APIVersion: "v1alpha1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.RandStr(),
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:         "Core",
+							Version:       "V1",
+							Kind:          "Pod",
+							Name:          utils.RandStr(),
+							LabelSelector: &metav1.LabelSelector{},
+						},
+					},
+				},
+			}
+			invalidCRP.Spec.ResourceSelectors = []fleetv1alpha1.ClusterResourceSelector{}
+
+			err = HubCluster.KubeClient.Create(ctx, &invalidCRP)
+			Expect(err).Should(HaveOccurred())
+
+			ok = errors.As(err, &statusErr)
+			Expect(ok).To(BeTrue())
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook.*denied the request.*`))
+			// todo - check for error text "the labelSelector in resource selector {selector} is invalid
+
+			// WIP
+			By("which contains an invalid ClusterSelectorTerm")
+			// invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
+			// 	TypeMeta: metav1.TypeMeta{
+			// 		Kind:       "ClusterResourcePlacement",
+			// 		APIVersion: "v1alpha1",
+			// 	},
+			// 	ObjectMeta: metav1.ObjectMeta{
+			// 		Name: utils.RandStr(),
+			// 	},
+			// 	Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+			// 		Policy: &fleetv1alpha1.PlacementPolicy{
+			// 			ClusterNames: nil,
+			// 			Affinity: &fleetv1alpha1.Affinity{
+			// 				ClusterAffinity: &fleetv1alpha1.ClusterAffinity{
+			// 					ClusterSelectorTerms: []fleetv1alpha1.ClusterSelectorTerm{
+			// 						{
+			// 							LabelSelector: metav1.LabelSelector{
+			// 								MatchLabels:      nil,
+			// 								MatchExpressions: nil,
+			// 							},
+			// 						},
+			// 					},
+			// 				},
+			// 			},
+			// 		},
+			// 		ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+			// 			fleetv1alpha1.ClusterResourceSelector{
+			// 				Group:         utils.RandStr(),
+			// 				Version:       utils.RandStr(),
+			// 				Kind:          utils.RandStr(),
+			// 				Name:          utils.RandStr(),
+			// 				LabelSelector: &metav1.LabelSelector{},
+			// 			},
+			// 		},
+			// 	},
+			// }
+
+			// WIP
+			By("which specifies resource selectors of unknown GVK")
+			invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ClusterResourcePlacement",
+					APIVersion: "v1alpha1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.RandStr(),
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:         utils.RandStr(),
+							Version:       utils.RandStr(),
+							Kind:          utils.RandStr(),
+							Name:          utils.RandStr(),
+							LabelSelector: &metav1.LabelSelector{},
+						},
+					},
+				},
+			}
+			err = HubCluster.KubeClient.Create(ctx, &invalidCRP)
+			Expect(err).Should(HaveOccurred())
+			ok = errors.As(err, &statusErr)
+			Expect(ok).To(BeTrue())
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook.*denied the request.*`))
+			// todo - check for error text "the resource is not found in schema (please retry) or it is not a cluster scoped resource"
 		})
 	})
 })
