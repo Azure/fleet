@@ -94,7 +94,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
-							admv1.Create,
+							admv1.OperationAll,
 						},
 						Rule: admv1.Rule{
 							APIGroups:   []string{""},
@@ -115,7 +115,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
-							admv1.Create,
+							admv1.OperationAll,
 						},
 						Rule: admv1.Rule{
 							APIGroups:   []string{"fleet.azure.com"},
