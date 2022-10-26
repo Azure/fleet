@@ -1033,7 +1033,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						{
 							Group:   rbacv1.GroupName,
 							Version: "v1",
-							Kind:    ClusterRoleKind,
+							Kind:    "ClusterRoleBinding",
 							LabelSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									"fleet.azure.com/name": "test",
@@ -1047,14 +1047,14 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			By("Select resource by label clusterResourcePlacement created")
 
 			// verify that we have created work objects that contain the resource selected
-			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			verifyWorkObjects(crp, []string{"ClusterRoleBinding"}, []*fleetv1alpha1.MemberCluster{&clusterA})
 
 			// Apply is Pending because work api controller is not being run for this test suite
 			fleetResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
 				Group:   rbacv1.GroupName,
 				Version: "v1",
-				Kind:    ClusterRoleKind,
-				Name:    "test-cluster-role",
+				Kind:    "ClusterRoleBinding",
+				Name:    "test-cluster-role-binding",
 			}
 			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
 				Conditions: []metav1.Condition{
@@ -1091,35 +1091,23 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
-			By("Update cluster role such that CRP doesn't pick it up")
-			cr := &rbacv1.ClusterRole{
+			By("Update cluster role binding such that CRP doesn't pick it up")
+			crb := &rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-cluster-role",
+					Name: "test-cluster-role-binding",
 					Labels: map[string]string{
 						"fleet.azure.com/env": "prod",
 					},
 				},
-				Rules: []rbacv1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"secrets"},
-						Verbs:     []string{"get", "list", "watch"},
-					},
-					{
-						APIGroups: []string{""},
-						Resources: []string{"events"},
-						Verbs:     []string{"get", "list", "watch", "create", "patch"},
-					},
-					{
-						APIGroups: []string{""},
-						Resources: []string{"nodes"},
-						Verbs:     []string{"get", "list", "watch"},
-					},
+				RoleRef: rbacv1.RoleRef{
+					APIGroup: rbacv1.GroupName,
+					Kind:     ClusterRoleKind,
+					Name:     "test-cluster-role",
 				},
 			}
-			Expect(k8sClient.Update(ctx, cr)).Should(Succeed())
+			Expect(k8sClient.Update(ctx, crb)).Should(Succeed())
 
-			// verify that the work object created is not present anymore since we are not picking cluster role
+			// verify that the work object created is not present anymore since we are not picking the namespace
 			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
 			Eventually(func() bool {
 				var clusterWork workv1alpha1.Work
@@ -1156,13 +1144,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				}
 				return nil
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
-
-			By("revert update to cluster role since other tests are using it")
-			oldLabels := map[string]string{
-				"fleet.azure.com/name": "test",
-			}
-			cr.ObjectMeta.Labels = oldLabels
-			Expect(k8sClient.Update(ctx, cr)).Should(Succeed())
 		})
 
 		It("Test a cluster scoped resource selected by multiple placements", func() {
