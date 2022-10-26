@@ -1107,7 +1107,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}
 			Expect(k8sClient.Update(ctx, crb)).Should(Succeed())
 
-			// verify that the work object created is not present anymore since we are not picking the namespace
+			// verify that the work object created is not present anymore since we are not picking the cluster role binding
 			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
 			Eventually(func() bool {
 				var clusterWork workv1alpha1.Work
