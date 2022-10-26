@@ -1457,7 +1457,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("Test partial failed apply", func() {
+		It("Test partial work failed to apply", func() {
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1600,7 +1600,157 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterB.Name)
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
+		})
+
+		It("Test partial manifest failed to apply", func() {
+			By("create clusterResourcePlacement CR")
+			crp = &fleetv1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "partial-manifest-test",
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   rbacv1.GroupName,
+							Version: "v1",
+							Kind:    ClusterRoleKind,
+							Name:    "test-cluster-role",
+						},
+						{
+							Group:   apiextensionsv1.GroupName,
+							Version: "v1",
+							Kind:    "CustomResourceDefinition",
+							Name:    "clonesets.apps.kruise.io",
+						},
+					},
+					Policy: &fleetv1alpha1.PlacementPolicy{
+						ClusterNames: []string{clusterA.Name},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+
+			By("verify that we have created work objects that contain the resource selected")
+			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA})
+
+			var clusterWork workv1alpha1.Work
+			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
+				Group:    rbacv1.GroupName,
+				Kind:     ClusterRoleKind,
+				Name:     "test-cluster-role",
+				Ordinal:  0,
+				Resource: "clusterroles",
+				Version:  "v1",
+			}
+			workResourceIdentifier2 := workv1alpha1.ResourceIdentifier{
+				Group:    apiextensionsv1.GroupName,
+				Kind:     "CustomResourceDefinition",
+				Name:     "clonesets.apps.kruise.io",
+				Ordinal:  1,
+				Resource: "clonesets",
+				Version:  "v1",
+			}
+
+			// update work in clusterA to have applied condition as false work, and have one manifest condition as false
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      crp.Name,
+				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
+			}, &clusterWork)).Should(Succeed())
+
+			appliedCondition := metav1.Condition{
+				Type:               workapi.ConditionTypeApplied,
+				Status:             metav1.ConditionFalse,
+				Reason:             "appliedWorkFailed",
+				ObservedGeneration: clusterWork.GetGeneration(),
+				LastTransitionTime: metav1.Now(),
+			}
+
+			manifestCondition1 := workv1alpha1.ManifestCondition{
+				Identifier: workResourceIdentifier1,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionTrue,
+						Reason:             "ManifestCreated",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+			manifestCondition2 := workv1alpha1.ManifestCondition{
+				Identifier: workResourceIdentifier2,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionFalse,
+						Reason:             "appliedManifestFailed",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+
+			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
+			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition1, manifestCondition2}
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+
+			fleetResourceIdentifier1 := fleetv1alpha1.ResourceIdentifier{
+				Group:   rbacv1.GroupName,
+				Version: "v1",
+				Kind:    ClusterRoleKind,
+				Name:    "test-cluster-role",
+			}
+			fleetResourceIdentifier2 := fleetv1alpha1.ResourceIdentifier{
+				Group:   apiextensionsv1.GroupName,
+				Version: "v1",
+				Kind:    "CustomResourceDefinition",
+				Name:    "clonesets.apps.kruise.io",
+			}
+			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 1,
+						Reason:             "ScheduleSucceeded",
+					},
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Status:             metav1.ConditionFalse,
+						ObservedGeneration: 1,
+						Reason:             "ApplyFailed",
+					},
+				},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2},
+				TargetClusters:    []string{clusterA.Name},
+				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
+					{
+						ResourceIdentifier: fleetResourceIdentifier2,
+						ClusterName:        clusterA.Name,
+						Condition: metav1.Condition{
+							Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 0,
+							Reason:             "appliedManifestFailed",
+						},
+					},
+				},
+			}
+
+			crpStatusCmpOptions := []cmp.Option{
+				cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message"),
+				cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type }),
+				cmpopts.SortSlices(func(ref1, ref2 string) bool { return ref1 < ref2 }),
+			}
+
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantCRPStatus, crp.Status, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 		})
 	})
 })
