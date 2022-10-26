@@ -1489,7 +1489,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Version:  "v1",
 			}
 
-			// update work in clusterA to have applied condition as true for manifest and work
+			// update work for clusterA to have applied condition as true for manifest and work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
@@ -1519,7 +1519,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
 			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
 
-			// update work in clusterB to have applied condition as false for manifest and work
+			// update work for clusterB to have applied condition as false for manifest and work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
@@ -1652,7 +1652,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Version:  "v1",
 			}
 
-			// update work in clusterA to have applied condition as false work, and have one manifest condition as false
+			// update work for clusterA to have applied condition as false, and have one manifest condition as false
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
