@@ -1088,7 +1088,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			By("Update cluster role binding such that CRP doesn't pick it up")
@@ -1143,7 +1143,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in %s cluster", clusterA.Name)
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 		})
 
 		It("Test a cluster scoped resource selected by multiple placements", func() {
