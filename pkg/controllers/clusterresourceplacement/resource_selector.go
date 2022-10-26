@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -79,7 +78,7 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 			objs, err = r.fetchClusterScopedResources(ctx, selector, placement.GetName())
 		}
 		if err != nil {
-			return nil, errors.Wrapf(err, "selector = %v", selector)
+			return nil, fmt.Errorf("selector = %v: %w", selector, err)
 		}
 		resources = append(resources, objs...)
 	}
@@ -112,7 +111,7 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 	}
 	restMapping, err := r.RestMapper.RESTMapping(gk, selector.Version)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get GVR of the selector")
+		return nil, fmt.Errorf("failed to get GVR of the selector: %w", err)
 	}
 	gvr := restMapping.Resource
 	gvk := schema.GroupVersionKind{
@@ -121,10 +120,10 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		Kind:    selector.Kind,
 	}
 	if !r.InformerManager.IsClusterScopedResources(gvk) {
-		return nil, errors.New(fmt.Sprintf("%+v is not a cluster scoped resource", restMapping.Resource))
+		return nil, fmt.Errorf("%+v is not a cluster scoped resource", restMapping.Resource)
 	}
 	if !r.InformerManager.IsInformerSynced(gvr) {
-		return nil, errors.New(fmt.Sprintf("informer cache for %+v is not synced yet", restMapping.Resource))
+		return nil, fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource)
 	}
 
 	lister := r.InformerManager.Lister(gvr)
@@ -152,13 +151,13 @@ func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector f
 		// TODO: validator should enforce the validity of the labelSelector
 		labelSelector, err = metav1.LabelSelectorAsSelector(selector.LabelSelector)
 		if err != nil {
-			return nil, errors.Wrap(err, "cannot convert the label selector to a selector")
+			return nil, fmt.Errorf("cannot convert the label selector to a selector: %w", err)
 		}
 	}
 	var selectedObjs []runtime.Object
 	objects, err := lister.List(labelSelector)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot list all the objets")
+		return nil, fmt.Errorf("cannot list all the objets: %w", err)
 	}
 	// go ahead and claim all objects by adding a finalizer and insert the placement in its annotation
 	for i := 0; i < len(objects); i++ {
@@ -198,18 +197,18 @@ func (r *Reconciler) fetchNamespaceResources(ctx context.Context, selector fleet
 	} else {
 		labelSelector, err = metav1.LabelSelectorAsSelector(selector.LabelSelector)
 		if err != nil {
-			return nil, errors.Wrap(err, "cannot convert the label selector to a selector")
+			return nil, fmt.Errorf("cannot convert the label selector to a selector: %w", err)
 		}
 	}
 	namespaces, err := r.InformerManager.Lister(utils.NamespaceGVR).List(labelSelector)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot list all the namespaces given the label selector")
+		return nil, fmt.Errorf("cannot list all the namespaces given the label selector: %w", err)
 	}
 
 	for _, namespace := range namespaces {
 		ns, err := meta.Accessor(namespace)
 		if err != nil {
-			return nil, errors.Wrap(err, "cannot get the name of a namespace object")
+			return nil, fmt.Errorf("cannot get the name of a namespace object: %w", err)
 		}
 		objs, err := r.fetchAllResourcesInOneNamespace(ctx, ns.GetName(), placeName)
 		if err != nil {
@@ -226,7 +225,7 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 	var resources []runtime.Object
 
 	if !utils.ShouldPropagateNamespace(namespaceName, r.SkippedNamespaces) {
-		return nil, errors.New(fmt.Sprintf("namespace %s is not allowed to propagate", namespaceName))
+		return nil, fmt.Errorf("namespace %s is not allowed to propagate", namespaceName)
 	}
 
 	klog.V(2).InfoS("start to fetch all the resources inside a namespace", "namespace", namespaceName)
@@ -256,13 +255,13 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namesp
 		lister := r.InformerManager.Lister(gvr)
 		objs, err := lister.ByNamespace(namespaceName).List(labels.Everything())
 		if err != nil {
-			return nil, errors.Wrapf(err, "cannot list all the objects of type %+v in namespace %s", gvr, namespaceName)
+			return nil, fmt.Errorf("cannot list all the objects of type %+v in namespace %s: %w", gvr, namespaceName, err)
 		}
 		for _, obj := range objs {
 			uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 			shouldInclude, err := utils.ShouldPropagateObj(r.InformerManager, uObj)
 			if err != nil {
-				return nil, errors.Wrap(err, "cannot determine if we should propagate an object")
+				return nil, fmt.Errorf("cannot determine if we should propagate an object: %w", err)
 			}
 			if shouldInclude {
 				resources = append(resources, obj)
@@ -339,13 +338,13 @@ func generateManifest(object *unstructured.Unstructured) (*workv1alpha1.Manifest
 			}
 		}
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get the ports field in Serivce object, name =%s", object.GetName())
+			return nil, fmt.Errorf("failed to get the ports field in Serivce object, name =%s: %w", object.GetName(), err)
 		}
 	}
 
 	rawContent, err := object.MarshalJSON()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to marshal the unstructured object gvk = %s, name =%s", object.GroupVersionKind(), object.GetName())
+		return nil, fmt.Errorf("failed to marshal the unstructured object gvk = %s, name =%s: %w", object.GroupVersionKind(), object.GetName(), err)
 	}
 	return &workv1alpha1.Manifest{
 		RawExtension: runtime.RawExtension{Raw: rawContent},

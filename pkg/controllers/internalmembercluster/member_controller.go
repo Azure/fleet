@@ -7,9 +7,9 @@ package internalmembercluster
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -148,7 +148,7 @@ func (r *Reconciler) updateHealth(ctx context.Context, imc *fleetv1alpha1.Intern
 	klog.V(2).InfoS("updateHealth", "InternalMemberCluster", klog.KObj(imc))
 
 	if err := r.updateResourceStats(ctx, imc); err != nil {
-		r.markInternalMemberClusterUnhealthy(imc, errors.Wrapf(err, "failed to update resource stats %s", klog.KObj(imc)))
+		r.markInternalMemberClusterUnhealthy(imc, fmt.Errorf("failed to update resource stats %s: %w", klog.KObj(imc), err))
 		return err
 	}
 
@@ -161,7 +161,7 @@ func (r *Reconciler) updateResourceStats(ctx context.Context, imc *fleetv1alpha1
 	klog.V(2).InfoS("updateResourceStats", "InternalMemberCluster", klog.KObj(imc))
 	var nodes corev1.NodeList
 	if err := r.memberClient.List(ctx, &nodes); err != nil {
-		return errors.Wrapf(err, "failed to list nodes for member cluster %s", klog.KObj(imc))
+		return fmt.Errorf("failed to list nodes for member cluster %s: %w", klog.KObj(imc), err)
 	}
 
 	var capacityCPU, capacityMemory, allocatableCPU, allocatableMemory resource.Quantity

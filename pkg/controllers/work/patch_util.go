@@ -2,8 +2,9 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -82,7 +83,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	var modified []byte
 	annotations, err := metadataAccessor.Annotations(obj)
 	if err != nil {
-		return errors.Wrap(err, "cannot access metadata.annotations")
+		return fmt.Errorf("cannot access metadata.annotations: %w", err)
 	}
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -113,7 +114,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 	annots, err := metadataAccessor.Annotations(obj)
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot access metadata.annotations")
+		return nil, fmt.Errorf("cannot access metadata.annotations: %w", err)
 	}
 	if annots == nil {
 		return nil, errors.New("object does not have lastAppliedConfigAnnotation")
