@@ -21,6 +21,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	testUtils "go.goms.io/fleet/test/e2e/utils"
 )
 
 const (
@@ -82,7 +83,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					podV2.Labels = map[string]string{utils.RandStr(): utils.RandStr()}
 					err = HubCluster.KubeClient.Update(ctx, podV2)
 					return err
-				}, timeout, interval).ShouldNot(HaveOccurred())
+				}, testUtils.PollTimeout, testUtils.PollInterval).ShouldNot(HaveOccurred())
 
 				By(fmt.Sprintf("expecting admission of operation DELETE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
 				err = HubCluster.KubeClient.Delete(ctx, nginxPod)
@@ -199,13 +200,13 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			Eventually(func() bool {
 				err = HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP)
 				return len(createdCRP.Status.Conditions) > 0
-			}, timeout, interval).Should(BeTrue())
+			}, testUtils.PollTimeout, testUtils.PollInterval).Should(BeTrue())
 
 			createdCRP.Spec.ResourceSelectors[0].Name = utils.RandStr()
 
 			Eventually(func() error {
 				return HubCluster.KubeClient.Update(ctx, &createdCRP)
-			}, timeout, interval).ShouldNot(HaveOccurred())
+			}, testUtils.PollTimeout, testUtils.PollInterval).ShouldNot(HaveOccurred())
 
 			By("attempting to delete a CRP")
 			err = HubCluster.KubeClient.Delete(ctx, &createdCRP)
@@ -443,14 +444,14 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			Eventually(func() bool {
 				err = HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP)
 				return len(createdCRP.Status.Conditions) > 0
-			}, timeout, interval).Should(BeTrue())
+			}, testUtils.PollTimeout, testUtils.PollInterval).Should(BeTrue())
 
 			createdCRP.Spec.ResourceSelectors[0].LabelSelector.MatchExpressions[0].Operator = "invalid-operator"
 			Eventually(func() string {
 				err = HubCluster.KubeClient.Update(ctx, &createdCRP)
 				errors.As(err, &statusErr)
 				return statusErr.ErrStatus.Message
-			}, timeout, interval).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("admission webhook \"fleet.clusterresourceplacement.validating\" denied the request: the labelSelector in resource selector %+v is invalid:", createdCRP.Spec.ResourceSelectors[0]))))
+			}, testUtils.PollTimeout, testUtils.PollInterval).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("admission webhook \"fleet.clusterresourceplacement.validating\" denied the request: the labelSelector in resource selector %+v is invalid:", createdCRP.Spec.ResourceSelectors[0]))))
 		})
 	})
 })
