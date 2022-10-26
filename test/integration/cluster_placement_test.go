@@ -1024,6 +1024,23 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 		})
 
 		It("Test cluster scoped resource change unpick by a placement", func() {
+			By("create cluster role binding")
+			crb := &rbacv1.ClusterRoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-role-binding",
+					Labels: map[string]string{
+						"fleet.azure.com/name": "test",
+					},
+				},
+				RoleRef: rbacv1.RoleRef{
+					APIGroup: rbacv1.GroupName,
+					Kind:     ClusterRoleKind,
+					Name:     "test-cluster-role",
+				},
+			}
+			Expect(k8sClient.Create(ctx, crb)).Should(Succeed())
+
+			By("create cluster resource placement")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "resource-select",
@@ -1092,7 +1109,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			By("Update cluster role binding such that CRP doesn't pick it up")
-			crb := &rbacv1.ClusterRoleBinding{
+			// changing label
+			crb = &rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cluster-role-binding",
 					Labels: map[string]string{

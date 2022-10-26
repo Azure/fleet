@@ -81,7 +81,7 @@ func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) {
 // applyTestManifests creates the test manifests in the hub cluster.
 // Here is the list, please do NOT change this list unless you know what you are doing.
 // ClusterScoped resource:
-// Cloneset CRD, ClusterRole, ClusterRoleBinding, Namespace.
+// Cloneset CRD, ClusterRole, Namespace.
 // Namespaced resources:
 // Cloneset CR, Pdb, Configmap, Secret, Service.
 func applyTestManifests() {
@@ -93,10 +93,6 @@ func applyTestManifests() {
 	By("Create testClusterRole resource")
 	GetObjectFromManifest("manifests/resources/test_clusterrole.yaml", &testClusterRole)
 	Expect(k8sClient.Create(ctx, &testClusterRole)).Should(Succeed())
-
-	By("Create testClusterRoleBinding resource")
-	GetObjectFromManifest("manifests/resources/test_clusterrolebinding.yaml", &testClusterRoleBinding)
-	Expect(k8sClient.Create(ctx, &testClusterRoleBinding)).Should(Succeed())
 
 	By("Create namespace")
 	GetObjectFromManifest("manifests/resources/test_namespace.yaml", &testNameSpace)
@@ -127,9 +123,6 @@ func deleteTestManifests() {
 	// check that the manifest is clean
 	By("Delete testClusterRole resource")
 	Expect(k8sClient.Delete(ctx, &testClusterRole)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
-
-	By("Delete testClusterRoleBinding resource")
-	Expect(k8sClient.Delete(ctx, &testClusterRoleBinding)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	By("Delete PodDisruptionBudget")
 	Expect(k8sClient.Delete(ctx, &testPdb)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
@@ -178,6 +171,7 @@ func verifyManifest(manifest unstructured.Unstructured) {
 
 	case "ClusterRoleBinding":
 		var workClusterRoleBinding rbacv1.ClusterRoleBinding
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-cluster-role-binding"}, &testClusterRoleBinding))
 		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workClusterRoleBinding)).Should(Succeed())
 		Expect(workClusterRoleBinding.GetName()).Should(Equal(testClusterRoleBinding.GetName()))
 		Expect(workClusterRoleBinding.RoleRef).Should(Equal(testClusterRoleBinding.RoleRef))
