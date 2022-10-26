@@ -81,7 +81,7 @@ func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) {
 // applyTestManifests creates the test manifests in the hub cluster.
 // Here is the list, please do NOT change this list unless you know what you are doing.
 // ClusterScoped resource:
-// Cloneset CRD, ClusterRole, Namespace.
+// Cloneset CRD, ClusterRole, Namespace
 // Namespaced resources:
 // Cloneset CR, Pdb, Configmap, Secret, Service.
 func applyTestManifests() {
