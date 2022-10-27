@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -185,21 +184,21 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1alpha1.MemberCluster, 
 
 	namespaceName, err := r.syncNamespace(ctx, mc)
 	if err != nil {
-		return errors.Wrapf(err, "failed to sync namespace")
+		return fmt.Errorf("failed to sync namespace: %w", err)
 	}
 
 	roleName, err := r.syncRole(ctx, mc, namespaceName)
 	if err != nil {
-		return errors.Wrapf(err, "failed to sync role")
+		return fmt.Errorf("failed to sync role: %w", err)
 	}
 
 	err = r.syncRoleBinding(ctx, mc, namespaceName, roleName)
 	if err != nil {
-		return errors.Wrapf(err, "failed to sync role binding")
+		return fmt.Errorf("failed to sync role binding: %w", err)
 	}
 
 	if _, err := r.syncInternalMemberCluster(ctx, mc, namespaceName, imc); err != nil {
-		return errors.Wrapf(err, "failed to sync internal member cluster spec")
+		return fmt.Errorf("failed to sync internal member cluster spec: %w", err)
 	}
 
 	markMemberClusterReadyToJoin(r.recorder, mc)
@@ -219,7 +218,7 @@ func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster,
 	// Copy spec from member cluster to internal member cluster.
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	if _, err := r.syncInternalMemberCluster(ctx, mc, namespaceName, imc); err != nil {
-		return errors.Wrapf(err, "failed to sync internal member cluster spec")
+		return fmt.Errorf("failed to sync internal member cluster spec: %w", err)
 	}
 
 	return nil
@@ -240,12 +239,12 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 	var currentNS corev1.Namespace
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &currentNS); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return "", errors.Wrapf(err, "failed to get namespace %s", namespaceName)
+			return "", fmt.Errorf("failed to get namespace %s: %w", namespaceName, err)
 		}
 		klog.V(2).InfoS("creating namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 		// Make sure the entire namespace is removed if the member cluster is deleted.
 		if err = r.Client.Create(ctx, &expectedNS, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-			return "", errors.Wrapf(err, "failed to create namespace %s", namespaceName)
+			return "", fmt.Errorf("failed to create namespace %s: %w", namespaceName, err)
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created")
 		klog.V(2).InfoS("created namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
@@ -275,11 +274,11 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	var currentRole rbacv1.Role
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: roleName, Namespace: namespaceName}, &currentRole); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return "", errors.Wrapf(err, "failed to get role %s", roleName)
+			return "", fmt.Errorf("failed to get role %s: %w", roleName, err)
 		}
 		klog.V(2).InfoS("creating role", "memberCluster", klog.KObj(mc), "role", roleName)
 		if err = r.Client.Create(ctx, &expectedRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-			return "", errors.Wrapf(err, "failed to create role %s with rules %+v", roleName, expectedRole.Rules)
+			return "", fmt.Errorf("failed to create role %s with rules %+v: %w", roleName, expectedRole.Rules, err)
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
 		klog.V(2).InfoS("created role", "memberCluster", klog.KObj(mc), "role", roleName)
@@ -293,7 +292,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	currentRole.Rules = expectedRole.Rules
 	klog.V(2).InfoS("updating role", "memberCluster", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return "", errors.Wrapf(err, "failed to update role %s with rules %+v", roleName, currentRole.Rules)
+		return "", fmt.Errorf("failed to update role %s with rules %+v: %w", roleName, currentRole.Rules, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
 	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName)
@@ -323,11 +322,11 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	var currentRoleBinding rbacv1.RoleBinding
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: roleBindingName, Namespace: namespaceName}, &currentRoleBinding); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return errors.Wrapf(err, "failed to get role binding %s", roleBindingName)
+			return fmt.Errorf("failed to get role binding %s: %w", roleBindingName, err)
 		}
 		klog.V(2).InfoS("creating role binding", "memberCluster", klog.KObj(mc), "roleBinding", roleBindingName)
 		if err = r.Client.Create(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-			return errors.Wrapf(err, "failed to create role binding %s", roleBindingName)
+			return fmt.Errorf("failed to create role binding %s: %w", roleBindingName, err)
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 		klog.V(2).InfoS("created role binding", "memberCluster", klog.KObj(mc), "roleBinding", roleBindingName)
@@ -342,7 +341,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	currentRoleBinding.RoleRef = expectedRoleBinding.RoleRef
 	klog.V(2).InfoS("updating role binding", "memberCluster", klog.KObj(mc), "roleBinding", roleBindingName)
 	if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return errors.Wrapf(err, "failed to update role binding %s", roleBindingName)
+		return fmt.Errorf("failed to update role binding %s: %w", roleBindingName, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
 	klog.V(2).InfoS("updated role binding", "memberCluster", klog.KObj(mc), "roleBinding", roleBindingName)
@@ -369,7 +368,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1a
 	if currentImc == nil {
 		klog.V(2).InfoS("creating internal member cluster", "InternalMemberCluster", klog.KObj(&expectedImc), "spec", expectedImc.Spec)
 		if err := r.Client.Create(ctx, &expectedImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-			return nil, errors.Wrapf(err, "failed to create internal member cluster %s with spec %+v", klog.KObj(&expectedImc), expectedImc.Spec)
+			return nil, fmt.Errorf("failed to create internal member cluster %s with spec %+v: %w", klog.KObj(&expectedImc), expectedImc.Spec, err)
 		}
 		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 		klog.V(2).InfoS("created internal member cluster", "InternalMemberCluster", klog.KObj(&expectedImc), "spec", expectedImc.Spec)
@@ -383,7 +382,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1a
 	currentImc.Spec = expectedImc.Spec
 	klog.V(2).InfoS("updating internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)
 	if err := r.Client.Update(ctx, currentImc, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return nil, errors.Wrapf(err, "failed to update internal member cluster %s with spec %+v", klog.KObj(currentImc), currentImc.Spec)
+		return nil, fmt.Errorf("failed to update internal member cluster %s with spec %+v: %w", klog.KObj(currentImc), currentImc.Spec, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
 	klog.V(2).InfoS("updated internal member cluster", "InternalMemberCluster", klog.KObj(currentImc), "spec", currentImc.Spec)

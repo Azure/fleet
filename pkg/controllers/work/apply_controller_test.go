@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -26,7 +27,6 @@ import (
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 	appsv1 "k8s.io/api/apps/v1"

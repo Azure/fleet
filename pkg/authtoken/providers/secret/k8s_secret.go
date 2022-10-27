@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -33,7 +32,7 @@ type secretAuthTokenProvider struct {
 func New(secretName, namespace string) (interfaces.AuthTokenProvider, error) {
 	client, err := getClient()
 	if err != nil {
-		return nil, errors.Wrapf(err, "an error occurd will creating client")
+		return nil, fmt.Errorf("an error occurd will creating client: %w", err)
 	}
 	return &secretAuthTokenProvider{
 		client:          client,
@@ -47,7 +46,7 @@ func (s *secretAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Au
 	token := interfaces.AuthToken{}
 	secret, err := s.fetchSecret(ctx)
 	if err != nil {
-		return token, errors.Wrapf(err, "cannot get the secret")
+		return token, fmt.Errorf("cannot get the secret: %w", err)
 	}
 
 	if len(secret.Data[tokenKey]) == 0 {
