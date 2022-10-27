@@ -1457,7 +1457,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("Test partial work failed to apply", func() {
+		It("Test manifest failed to apply in one cluster and succeed in another", func() {
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1603,7 +1603,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 		})
 
-		It("Test partial manifest failed to apply", func() {
+		It("Test one of two manifests failed to apply in cluster", func() {
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
