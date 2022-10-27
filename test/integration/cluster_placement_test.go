@@ -1116,7 +1116,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			By("Update cluster role binding such that CRP doesn't pick it up")
-			// changing label
 			crb.ObjectMeta.Labels = map[string]string{
 				"fleet.azure.com/env": "prod",
 			}
