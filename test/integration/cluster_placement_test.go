@@ -1656,20 +1656,20 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
-				Group:    corev1.GroupName,
-				Kind:     "Namespace",
-				Name:     "test-namespace",
-				Ordinal:  0,
-				Resource: "namespaces",
-				Version:  "v1",
-			}
-			workResourceIdentifier2 := workv1alpha1.ResourceIdentifier{
 				Group:    kruisev1alpha1.GroupVersion.Group,
 				Kind:     "CloneSet",
 				Name:     "test-cloneset",
-				Ordinal:  1,
+				Ordinal:  0,
 				Resource: "clonesets",
 				Version:  kruisev1alpha1.GroupVersion.Version,
+			}
+			workResourceIdentifier2 := workv1alpha1.ResourceIdentifier{
+				Group:    corev1.GroupName,
+				Kind:     "Namespace",
+				Name:     "test-namespace",
+				Ordinal:  1,
+				Resource: "namespaces",
+				Version:  "v1",
 			}
 
 			Eventually(func() error {
@@ -1693,8 +1693,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Conditions: []metav1.Condition{
 					{
 						Type:               workapi.ConditionTypeApplied,
-						Status:             metav1.ConditionTrue,
-						Reason:             "ManifestCreated",
+						Status:             metav1.ConditionFalse,
+						Reason:             "appliedManifestFailed",
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1704,8 +1704,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Conditions: []metav1.Condition{
 					{
 						Type:               workapi.ConditionTypeApplied,
-						Status:             metav1.ConditionFalse,
-						Reason:             "appliedManifestFailed",
+						Status:             metav1.ConditionTrue,
+						Reason:             "ManifestNoChange",
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1716,17 +1716,17 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
 
 			fleetResourceIdentifier1 := fleetv1alpha1.ResourceIdentifier{
-				Group:   corev1.GroupName,
-				Version: "v1",
-				Kind:    "Namespace",
-				Name:    "test-namespace",
-			}
-			fleetResourceIdentifier2 := fleetv1alpha1.ResourceIdentifier{
 				Group:     kruisev1alpha1.GroupVersion.Group,
 				Version:   kruisev1alpha1.GroupVersion.Version,
 				Kind:      "CloneSet",
 				Name:      "test-cloneset",
 				Namespace: "test-namespace",
+			}
+			fleetResourceIdentifier2 := fleetv1alpha1.ResourceIdentifier{
+				Group:   corev1.GroupName,
+				Version: "v1",
+				Kind:    "Namespace",
+				Name:    "test-namespace",
 			}
 			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
 				Conditions: []metav1.Condition{
@@ -1743,7 +1743,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Reason:             "ApplyFailed",
 					},
 				},
-				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier2, fleetResourceIdentifier1},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2},
 				TargetClusters:    []string{clusterA.Name},
 				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
 					{
@@ -1752,6 +1752,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 							Version: kruisev1alpha1.GroupVersion.Version,
 							Kind:    "CloneSet",
 							Name:    "test-cloneset",
+							// Namespace for clone set is not being picked up
 						},
 						ClusterName: clusterA.Name,
 						Condition: metav1.Condition{
@@ -1779,6 +1780,55 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				}
 				return nil
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
+
+			By("Update CRP to select CRD")
+			crp.Spec.ResourceSelectors = []fleetv1alpha1.ClusterResourceSelector{
+				{
+					Group:   apiextensionsv1.GroupName,
+					Version: "v1",
+					Kind:    "CustomResourceDefinition",
+					Name:    "clonesets.apps.kruise.io",
+				},
+				{
+					Group:   corev1.GroupName,
+					Version: "v1",
+					Kind:    "Namespace",
+					Name:    "test-namespace",
+				},
+			}
+			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
+
+			// Update work status
+			appliedCondition.Status = metav1.ConditionTrue
+			appliedCondition.Reason = "appliedWorkComplete"
+			workResourceIdentifier2.Ordinal = 2
+			workResourceIdentifier3 := workResourceIdentifier2
+			workResourceIdentifier2 = workv1alpha1.ResourceIdentifier{
+				Group:    apiextensionsv1.GroupName,
+				Kind:     "CustomResourceDefinition",
+				Name:     "clonesets.apps.kruise.io",
+				Ordinal:  1,
+				Resource: "customresourcedefinitions",
+				Version:  "v1",
+			}
+			manifestCondition1.Conditions[0].Status = metav1.ConditionTrue
+			manifestCondition1.Conditions[0].Reason = "ManifestCreated"
+			manifestCondition2.Identifier = workResourceIdentifier2
+			manifestCondition3 := workv1alpha1.ManifestCondition{
+				Identifier: workResourceIdentifier3,
+				Conditions: []metav1.Condition{
+					{
+						Type:               workapi.ConditionTypeApplied,
+						Status:             metav1.ConditionTrue,
+						Reason:             "ManifestNoChange",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+
+			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
+			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition1, manifestCondition2, manifestCondition3}
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
 		})
 	})
 })
