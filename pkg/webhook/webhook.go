@@ -86,7 +86,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 		Webhooks: []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.pod.validating",
-				ClientConfig:            *createWebhookClientConfig(corev1.Pod{}, caPEM, clientConnectionType),
+				ClientConfig:            createWebhookClientConfig(corev1.Pod{}, caPEM, clientConnectionType),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -107,7 +107,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 			},
 			{
 				Name:                    "fleet.clusterresourceplacement.validating",
-				ClientConfig:            *createWebhookClientConfig(fleetv1alpha1.ClusterResourcePlacement{}, caPEM, clientConnectionType),
+				ClientConfig:            createWebhookClientConfig(fleetv1alpha1.ClusterResourcePlacement{}, caPEM, clientConnectionType),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -149,7 +149,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 	return nil
 }
 
-func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, clientConnectionType *options.WebhookClientConnectionType) *admv1.WebhookClientConfig {
+func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, clientConnectionType *options.WebhookClientConnectionType) admv1.WebhookClientConfig {
 	config := &admv1.WebhookClientConfig{}
 	config.CABundle = caBundle
 	var serviceEndpoint string
@@ -176,7 +176,7 @@ func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, cl
 		config.URL = pointer.String(serviceEndpoint)
 	}
 
-	return config
+	return *config
 }
 
 // GenCertificate generates the serving cerficiate for the webhook server
