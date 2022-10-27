@@ -42,15 +42,15 @@ const (
 )
 
 var (
-	fleetWHSvcNs   string
-	fleetWHSvcPort int
-	fleetWHSvcURL  string
+	fleetWebhookServiceNamespace string
+	fleetWebhookServicePort      int
+	fleetWebhookServiceURL       string
 )
 
 func init() {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec
-	fleetWHSvcNs = os.Getenv("POD_NAMESPACE")
-	if fleetWHSvcNs == "" {
+	fleetWebhookServiceNamespace = os.Getenv("POD_NAMESPACE")
+	if fleetWebhookServiceNamespace == "" {
 		panic("Fail to obtain Pod namespace from env")
 	}
 }
@@ -69,8 +69,8 @@ func AddToManager(m manager.Manager) error {
 
 // CreateFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook
 func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, caPEM []byte, port int, clientConnectionType *options.WebhookClientConnectionType) error {
-	fleetWHSvcPort = port
-	fleetWHSvcURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", FleetWebhookSvcName, fleetWHSvcNs, fleetWHSvcPort)
+	fleetWebhookServicePort = port
+	fleetWebhookServiceURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", FleetWebhookSvcName, fleetWebhookServiceNamespace, fleetWebhookServicePort)
 	failPolicy := admv1.Fail // reject request if the webhook doesn't work
 	sideEffortsNone := admv1.SideEffectClassNone
 	namespacedScope := admv1.NamespacedScope
@@ -150,22 +150,23 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 }
 
 func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, clientConnectionType *options.WebhookClientConnectionType) admv1.WebhookClientConfig {
-	config := &admv1.WebhookClientConfig{}
-	config.CABundle = caBundle
+	config := &admv1.WebhookClientConfig{
+		CABundle: caBundle,
+	}
 	var serviceEndpoint string
 
 	serviceRef := admv1.ServiceReference{
-		Namespace: fleetWHSvcNs,
+		Namespace: fleetWebhookServiceNamespace,
 		Name:      FleetWebhookSvcName,
-		Port:      pointer.Int32(int32(fleetWHSvcPort)),
+		Port:      pointer.Int32(int32(fleetWebhookServicePort)),
 	}
 
 	switch webhookInterface.(type) {
 	case corev1.Pod:
-		serviceEndpoint = fleetWHSvcURL + pod.ValidationPath
+		serviceEndpoint = fleetWebhookServiceURL + pod.ValidationPath
 		serviceRef.Path = pointer.String(pod.ValidationPath)
 	case fleetv1alpha1.ClusterResourcePlacement:
-		serviceEndpoint = fleetWHSvcURL + clusterresourceplacement.ValidationPath
+		serviceEndpoint = fleetWebhookServiceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
 	}
 
@@ -239,8 +240,8 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 	caPEMByte = caPEM.Bytes()
 
 	dnsNames := []string{
-		fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, fleetWHSvcNs),
-		fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, fleetWHSvcNs),
+		fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, fleetWebhookServiceNamespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, fleetWebhookServiceNamespace),
 	}
 	// server cert config
 	cert := &x509.Certificate{

@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	// ValidationPath is the webhook service path which admission requests are routed to for validating ClusterResourcePlacement resources.
 	ValidationPath = "/validate-fleet-azure-com-v1alpha1-clusterresourceplacement"
 )
 
