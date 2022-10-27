@@ -49,15 +49,14 @@ var (
 	genericCodec runtime.Decoder
 
 	// pre loaded test manifests
-	testClonesetCRD        apiextensionsv1.CustomResourceDefinition
-	testClusterRole        rbacv1.ClusterRole
-	testClusterRoleBinding rbacv1.ClusterRoleBinding
-	testNameSpace          corev1.Namespace
-	testCloneset           kruisev1alpha1.CloneSet
-	testConfigMap          corev1.ConfigMap
-	testSecret             corev1.Secret
-	testService            corev1.Service
-	testPdb                policyv1.PodDisruptionBudget
+	testClonesetCRD apiextensionsv1.CustomResourceDefinition
+	testClusterRole rbacv1.ClusterRole
+	testNameSpace   corev1.Namespace
+	testCloneset    kruisev1alpha1.CloneSet
+	testConfigMap   corev1.ConfigMap
+	testSecret      corev1.Secret
+	testService     corev1.Service
+	testPdb         policyv1.PodDisruptionBudget
 )
 
 // GetObjectFromRawExtension returns an object decoded from the raw byte array
@@ -168,13 +167,6 @@ func verifyManifest(manifest unstructured.Unstructured) {
 		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workClusterRole)).Should(Succeed())
 		Expect(workClusterRole.GetName()).Should(Equal(testClusterRole.GetName()))
 		Expect(workClusterRole.Rules).Should(Equal(testClusterRole.Rules))
-
-	case "ClusterRoleBinding":
-		var workClusterRoleBinding rbacv1.ClusterRoleBinding
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-cluster-role-binding"}, &testClusterRoleBinding))
-		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(manifest.Object, &workClusterRoleBinding)).Should(Succeed())
-		Expect(workClusterRoleBinding.GetName()).Should(Equal(testClusterRoleBinding.GetName()))
-		Expect(workClusterRoleBinding.RoleRef).Should(Equal(testClusterRoleBinding.RoleRef))
 
 	case "Namespace":
 		var workNameSpace corev1.Namespace

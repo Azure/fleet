@@ -1063,8 +1063,15 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
 			By("Select resource by label clusterResourcePlacement created")
 
-			// verify that we have created work objects that contain the resource selected
-			verifyWorkObjects(crp, []string{"ClusterRoleBinding"}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			// verify that we have created the work object
+			var clusterWork workv1alpha1.Work
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name: crp.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)}, &clusterWork); err != nil {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to retrieve %s work", crp.Name)
 
 			// Apply is Pending because work api controller is not being run for this test suite
 			fleetResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
@@ -1110,18 +1117,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed())
 			By("Update cluster role binding such that CRP doesn't pick it up")
 			// changing label
-			crb = &rbacv1.ClusterRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-cluster-role-binding",
-					Labels: map[string]string{
-						"fleet.azure.com/env": "prod",
-					},
-				},
-				RoleRef: rbacv1.RoleRef{
-					APIGroup: rbacv1.GroupName,
-					Kind:     ClusterRoleKind,
-					Name:     "test-cluster-role",
-				},
+			crb.ObjectMeta.Labels = map[string]string{
+				"fleet.azure.com/env": "prod",
 			}
 			Expect(k8sClient.Update(ctx, crb)).Should(Succeed())
 
