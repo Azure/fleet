@@ -7,6 +7,8 @@ package integration
 
 import (
 	"fmt"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"reflect"
 	"time"
 
@@ -1603,7 +1605,33 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 		})
 
-		It("Test one of two manifests failed to apply in cluster", func() {
+		It("Test one of many manifests failed to apply in cluster", func() {
+			By("create namespace")
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+				},
+			}
+			Expect(k8sClient.Create(ctx, ns)).Should(Succeed())
+			By("create clone set")
+			cs := &kruisev1alpha1.CloneSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cloneset",
+					Namespace: "test-namespace",
+				},
+				Spec: kruisev1alpha1.CloneSetSpec{
+					Replicas: to.Int32Ptr(20),
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app.kubernetes.io/name": "test-clone-set"},
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{"app.kubernetes.io/name": "test-clone-set"},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, cs)).Should(Succeed())
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1612,16 +1640,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
 					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
 						{
-							Group:   rbacv1.GroupName,
+							Group:   corev1.GroupName,
 							Version: "v1",
-							Kind:    ClusterRoleKind,
-							Name:    "test-cluster-role",
-						},
-						{
-							Group:   apiextensionsv1.GroupName,
-							Version: "v1",
-							Kind:    "CustomResourceDefinition",
-							Name:    "clonesets.apps.kruise.io",
+							Kind:    "Namespace",
+							Name:    "test-namespace",
 						},
 					},
 					Policy: &fleetv1alpha1.PlacementPolicy{
@@ -1630,34 +1652,34 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
-
-			By("verify that we have created work objects that contain the resource selected")
-			verifyWorkObjects(crp, []string{ClusterRoleKind, "CustomResourceDefinition"}, []*fleetv1alpha1.MemberCluster{&clusterA})
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp))
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
-				Group:    rbacv1.GroupName,
-				Kind:     ClusterRoleKind,
-				Name:     "test-cluster-role",
+				Group:    corev1.GroupName,
+				Kind:     "Namespace",
+				Name:     "test-namespace",
 				Ordinal:  0,
-				Resource: "clusterroles",
+				Resource: "namespaces",
 				Version:  "v1",
 			}
 			workResourceIdentifier2 := workv1alpha1.ResourceIdentifier{
-				Group:    apiextensionsv1.GroupName,
-				Kind:     "CustomResourceDefinition",
-				Name:     "clonesets.apps.kruise.io",
+				Group:    kruisev1alpha1.GroupVersion.Group,
+				Kind:     "CloneSet",
+				Name:     "test-cloneset",
 				Ordinal:  1,
 				Resource: "clonesets",
-				Version:  "v1",
+				Version:  kruisev1alpha1.GroupVersion.Version,
 			}
 
-			// update work for clusterA to have applied condition as false, and have one manifest condition as false
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      crp.Name,
-				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
-			}, &clusterWork)).Should(Succeed())
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)}, &clusterWork); err != nil {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed(), "Failed to retrieve %s work", crp.Name)
 
+			// update work for clusterA to have applied condition as false, and have one manifest condition as false
 			appliedCondition := metav1.Condition{
 				Type:               workapi.ConditionTypeApplied,
 				Status:             metav1.ConditionFalse,
@@ -1694,16 +1716,17 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
 
 			fleetResourceIdentifier1 := fleetv1alpha1.ResourceIdentifier{
-				Group:   rbacv1.GroupName,
+				Group:   corev1.GroupName,
 				Version: "v1",
-				Kind:    ClusterRoleKind,
-				Name:    "test-cluster-role",
+				Kind:    "Namespace",
+				Name:    "test-namespace",
 			}
 			fleetResourceIdentifier2 := fleetv1alpha1.ResourceIdentifier{
-				Group:   apiextensionsv1.GroupName,
-				Version: "v1",
-				Kind:    "CustomResourceDefinition",
-				Name:    "clonesets.apps.kruise.io",
+				Group:     kruisev1alpha1.GroupVersion.Group,
+				Version:   kruisev1alpha1.GroupVersion.Version,
+				Kind:      "CloneSet",
+				Name:      "test-cloneset",
+				Namespace: "test-namespace",
 			}
 			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
 				Conditions: []metav1.Condition{
@@ -1720,12 +1743,17 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Reason:             "ApplyFailed",
 					},
 				},
-				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier2, fleetResourceIdentifier1},
 				TargetClusters:    []string{clusterA.Name},
 				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
 					{
-						ResourceIdentifier: fleetResourceIdentifier2,
-						ClusterName:        clusterA.Name,
+						ResourceIdentifier: fleetv1alpha1.ResourceIdentifier{
+							Group:   kruisev1alpha1.GroupVersion.Group,
+							Version: kruisev1alpha1.GroupVersion.Version,
+							Kind:    "CloneSet",
+							Name:    "test-cloneset",
+						},
+						ClusterName: clusterA.Name,
 						Condition: metav1.Condition{
 							Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 							Status:             metav1.ConditionFalse,
