@@ -7,15 +7,15 @@ package integration
 
 import (
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	"reflect"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
 	adminv1 "k8s.io/api/admissionregistration/v1"
 	coordv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
