@@ -21,7 +21,7 @@ var (
 	}
 )
 
-func ParseWebhookClientConnectionString(str string) (WebhookClientConnectionType, bool) {
+func parseWebhookClientConnectionString(str string) (WebhookClientConnectionType, bool) {
 	t, ok := capabilitiesMap[strings.ToLower(str)]
 	return t, ok
 }

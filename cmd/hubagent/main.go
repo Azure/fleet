@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"os"
 
@@ -111,7 +110,7 @@ func main() {
 	}
 
 	if opts.EnableWebhook {
-		if err := SetupWebhook(mgr, opts.WebhookClientConnectionType); err != nil {
+		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType)); err != nil {
 			klog.ErrorS(err, "unable to set up webhook")
 			exitWithErrorFunc()
 		}
@@ -131,16 +130,9 @@ func main() {
 	}
 }
 
-// SetupWebhook generate the webhook cert and then set up the webhook configurator
-func SetupWebhook(mgr manager.Manager, webhookClientConnectionType string) error {
-	connectionType, ok := options.ParseWebhookClientConnectionString(webhookClientConnectionType)
-	if !ok {
-		err := errors.New("invalid webhook client connection type")
-		klog.Error(err)
-		return err
-	}
-
-	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start
+// SetupWebhook generate the webhook cert and then set up the webhook configurator.
+func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType) error {
+	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start.
 	caPEM, err := webhook.GenCertificate(FleetWebhookCertDir)
 	if err != nil {
 		klog.ErrorS(err, "fail to generate certificates for webhook server")
@@ -151,7 +143,7 @@ func SetupWebhook(mgr manager.Manager, webhookClientConnectionType string) error
 		mgr:            mgr,
 		caPEM:          caPEM,
 		port:           FleetWebhookPort,
-		connectionType: &connectionType,
+		connectionType: &webhookClientConnectionType,
 	}); err != nil {
 		klog.ErrorS(err, "unable to add webhookApiserverConfigurator")
 		return err
