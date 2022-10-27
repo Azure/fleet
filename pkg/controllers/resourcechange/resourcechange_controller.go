@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -144,7 +143,7 @@ func (r *Reconciler) findPlacementsSelectedDeletedRes(res keys.ClusterWideKey, c
 func (r *Reconciler) getUnstructuredObject(objectKey keys.ClusterWideKey) (runtime.Object, bool, error) {
 	restMapping, err := r.RestMapper.RESTMapping(objectKey.GroupKind(), objectKey.Version)
 	if err != nil {
-		return nil, false, errors.Wrap(err, "Failed to get GVR of object")
+		return nil, false, fmt.Errorf("failed to get GVR of object: %w", err)
 	}
 	gvr := restMapping.Resource
 	isClusterScoped := r.InformerManager.IsClusterScopedResources(objectKey.GroupVersionKind())
@@ -158,7 +157,7 @@ func (r *Reconciler) getUnstructuredObject(objectKey keys.ClusterWideKey) (runti
 		obj, err = r.InformerManager.Lister(gvr).ByNamespace(objectKey.Namespace).Get(objectKey.Name)
 	}
 	if err != nil {
-		return nil, isClusterScoped, errors.Wrap(err, "failed to get the object")
+		return nil, isClusterScoped, fmt.Errorf("failed to get the object: %w", err)
 	}
 
 	return obj, isClusterScoped, nil
@@ -171,7 +170,7 @@ func (r *Reconciler) findAffectedPlacements(res *unstructured.Unstructured) (map
 	// we have to list all the CRPs
 	crpList, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).List(labels.Everything())
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to list all the cluster placement")
+		return nil, fmt.Errorf("failed to list all the cluster placement: %w", err)
 	}
 	return collectAllAffectedPlacements(res, crpList), nil
 }

@@ -6,11 +6,11 @@ package azure
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/pkg/errors"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
@@ -39,7 +39,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 	klog.V(2).InfoS("FetchToken", "client ID", a.clientID)
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 	if err != nil {
-		return token, errors.Wrap(err, "failed to create managed identity cred")
+		return token, fmt.Errorf("failed to create managed identity cred: %w", err)
 	}
 	var azToken *azcore.AccessToken
 	err = retry.OnError(retry.DefaultBackoff,
@@ -56,7 +56,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 			return err
 		})
 	if err != nil {
-		return token, errors.Wrap(err, "failed to get a token")
+		return token, fmt.Errorf("failed to get a token: %w", err)
 	}
 
 	token.Token = azToken.Token

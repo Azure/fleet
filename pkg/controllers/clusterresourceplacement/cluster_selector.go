@@ -8,7 +8,6 @@ package clusterresourceplacement
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,11 +65,11 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 	for _, clusterSelector := range placement.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms {
 		selector, err := metav1.LabelSelectorAsSelector(&clusterSelector.LabelSelector)
 		if err != nil {
-			return nil, errors.Wrap(err, "cannot convert the label clusterSelector to a clusterSelector")
+			return nil, fmt.Errorf("cannot convert the label clusterSelector to a clusterSelector: %w", err)
 		}
 		matchClusters, err := r.listClusters(selector)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("selector = %v", clusterSelector.LabelSelector))
+			return nil, fmt.Errorf("selector = %v: %w", clusterSelector.LabelSelector, err)
 		}
 		klog.V(2).InfoS("selector matches some cluster", "clusterNum", len(matchClusters), "placement", placement.Name, "selector", clusterSelector.LabelSelector)
 		for _, clusterName := range matchClusters {
@@ -88,7 +87,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 func (r *Reconciler) listClusters(labelSelector labels.Selector) ([]string, error) {
 	objs, err := r.InformerManager.Lister(utils.MemberClusterGVR).List(labelSelector)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to list the clusters according to obj label selector")
+		return nil, fmt.Errorf("failed to list the clusters according to obj label selector: %w", err)
 	}
 
 	clusterNames := make([]string, 0)
@@ -133,7 +132,7 @@ func convertObjToMemberCluster(obj runtime.Object) (*fleetv1alpha1.MemberCluster
 	uObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 	var clusterObj fleetv1alpha1.MemberCluster
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &clusterObj); err != nil {
-		return nil, errors.Wrap(err, "cannot decode the member cluster object")
+		return nil, fmt.Errorf("cannot decode the member cluster object: %w", err)
 	}
 	return &clusterObj, nil
 }

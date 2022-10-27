@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +54,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 	}
 	specHash, err := generateSpecHash(workerSpec.Workload)
 	if err != nil {
-		return errors.Wrap(err, "failed to calculate the spec hash of the newly generated work resource")
+		return fmt.Errorf("failed to calculate the spec hash of the newly generated work resource: %w", err)
 	}
 	workLabels := map[string]string{
 		utils.LabelWorkPlacementName: placement.GetName(),
@@ -71,7 +70,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		curWork, err := r.getResourceBinding(memberClusterNsName, workName)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
-				allErr = append(allErr, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s in namespace %s", workName, memberClusterName)))
+				allErr = append(allErr, fmt.Errorf("failed to get the work obj %s in namespace %s: %w", workName, memberClusterName, err))
 				continue
 			}
 			// create the work CR since it doesn't exist
@@ -89,7 +88,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 			}
 			if createErr := r.Client.Create(ctx, workCR, client.FieldOwner(utils.PlacementFieldManagerName)); createErr != nil {
 				klog.ErrorS(createErr, "failed to create the work", "work", workName, "namespace", memberClusterNsName)
-				allErr = append(allErr, errors.Wrap(createErr, fmt.Sprintf("failed to create the work obj %s in namespace %s", workName, memberClusterNsName)))
+				allErr = append(allErr, fmt.Errorf("failed to create the work obj %s in namespace %s: %w", workName, memberClusterNsName, createErr))
 				continue
 			}
 			klog.V(2).InfoS("created work spec with manifests",
@@ -109,7 +108,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		curWork.SetOwnerReferences([]metav1.OwnerReference{workerOwnerRef})
 		curWork.SetAnnotations(workAnnotation)
 		if updateErr := r.Client.Update(ctx, curWork, client.FieldOwner(utils.PlacementFieldManagerName)); updateErr != nil {
-			allErr = append(allErr, errors.Wrap(updateErr, fmt.Sprintf("failed to update the work obj %s in namespace %s", workName, memberClusterNsName)))
+			allErr = append(allErr, fmt.Errorf("failed to update the work obj %s in namespace %s: %w", workName, memberClusterNsName, updateErr))
 			continue
 		}
 		klog.V(2).InfoS("updated work spec with manifests",
@@ -143,7 +142,7 @@ func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string,
 				},
 			}
 			if deleteErr := r.Client.Delete(ctx, workCR); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
-				allErr = append(allErr, errors.Wrap(deleteErr, fmt.Sprintf("failed to delete the work obj %s from namespace %s", workName, memberClusterNsName)))
+				allErr = append(allErr, fmt.Errorf("failed to delete the work obj %s from namespace %s: %w", workName, memberClusterNsName, deleteErr))
 				continue
 			}
 			removed++
@@ -170,7 +169,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 				hasPending = true
 				continue
 			}
-			return false, errors.Wrap(err, fmt.Sprintf("failed to get the work obj %s from namespace %s", workName, memberClusterNsName))
+			return false, fmt.Errorf("failed to get the work obj %s from namespace %s: %w", workName, memberClusterNsName, err)
 		}
 		// check the overall condition
 		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workapi.ConditionTypeApplied)
