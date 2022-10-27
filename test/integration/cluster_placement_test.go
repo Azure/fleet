@@ -1162,6 +1162,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				}
 				return nil
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
+
+			By("Delete cluster role binding")
+			Expect(k8sClient.Delete(ctx, crb)).Should(Succeed())
 		})
 
 		It("Test a cluster scoped resource selected by multiple placements", func() {
