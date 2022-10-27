@@ -70,8 +70,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				var err error
 
 				By(fmt.Sprintf("expecting admission of operation CREATE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
-				err = HubCluster.KubeClient.Create(ctx, nginxPod)
-				Expect(err).ShouldNot(HaveOccurred())
+				Expect(HubCluster.KubeClient.Create(ctx, nginxPod)).Should(Succeed())
 
 				By(fmt.Sprintf("expecting admission of operation UPDATE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
 				var podV2 *corev1.Pod
@@ -86,8 +85,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				}, testUtils.PollTimeout, testUtils.PollInterval).ShouldNot(HaveOccurred())
 
 				By(fmt.Sprintf("expecting admission of operation DELETE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
-				err = HubCluster.KubeClient.Delete(ctx, nginxPod)
-				Expect(err).ShouldNot(HaveOccurred())
+				Expect(HubCluster.KubeClient.Delete(ctx, nginxPod)).Should(Succeed())
 			}
 		})
 		It("should deny create operation on Pods within non-whitelisted namespaces", func() {
@@ -95,8 +93,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 
 			// Retrieve list of existing namespaces, remove whitelisted namespaces.
 			var nsList corev1.NamespaceList
-			err := HubCluster.KubeClient.List(ctx, &nsList)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(HubCluster.KubeClient.List(ctx, &nsList)).Should(Succeed())
 			for _, ns := range whitelistedNamespaces {
 				i := findIndexOfNamespace(ns.Name, nsList)
 				if i >= 0 {
@@ -146,13 +143,9 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	})
 	Context("ClusterResourcePlacement validation webhook", func() {
 		It("should admit write operations for valid ClusterResourcePlacement resources", func() {
-			var createdCRP fleetv1alpha1.ClusterResourcePlacement
-			var validCRP fleetv1alpha1.ClusterResourcePlacement
-
-			var err error
 
 			By("attempting to create a valid CRP")
-			validCRP = fleetv1alpha1.ClusterResourcePlacement{
+			validCRP := fleetv1alpha1.ClusterResourcePlacement{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ClusterResourcePlacement",
 					APIVersion: "v1alpha1",
@@ -171,8 +164,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				},
 			}
-			err = HubCluster.KubeClient.Create(ctx, &validCRP)
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(HubCluster.KubeClient.Create(ctx, &validCRP)).Should(Succeed())
 
 			By("attempting to update a valid CRP")
 			validCRP = fleetv1alpha1.ClusterResourcePlacement{
@@ -194,11 +186,10 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				},
 			}
-			err = HubCluster.KubeClient.Create(ctx, &validCRP)
-			Expect(err).ShouldNot(HaveOccurred())
-
+			Expect(HubCluster.KubeClient.Create(ctx, &validCRP)).Should(Succeed())
+			var createdCRP fleetv1alpha1.ClusterResourcePlacement
 			Eventually(func() bool {
-				err = HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP)
+				_ = HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP)
 				return len(createdCRP.Status.Conditions) > 0
 			}, testUtils.PollTimeout, testUtils.PollInterval).Should(BeTrue())
 
@@ -209,20 +200,11 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			}, testUtils.PollTimeout, testUtils.PollInterval).ShouldNot(HaveOccurred())
 
 			By("attempting to delete a CRP")
-			err = HubCluster.KubeClient.Delete(ctx, &createdCRP)
-			Expect(err).ShouldNot(HaveOccurred())
-
+			Expect(HubCluster.KubeClient.Delete(ctx, &createdCRP)).Should(Succeed())
 		})
 		It("should deny write operations for invalid ClusterResourcePlacement resources", func() {
-			var err error
-			var ok bool
-			var statusErr *k8sErrors.StatusError
-			var createdCRP fleetv1alpha1.ClusterResourcePlacement
-			var invalidCRP fleetv1alpha1.ClusterResourcePlacement
-			var validCRP fleetv1alpha1.ClusterResourcePlacement
-
 			By("attempting to create a CRP which specifies both a label & name within a resource selector")
-			invalidCRP = fleetv1alpha1.ClusterResourcePlacement{
+			invalidCRP := fleetv1alpha1.ClusterResourcePlacement{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ClusterResourcePlacement",
 					APIVersion: "v1alpha1",
@@ -245,9 +227,10 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			err = HubCluster.KubeClient.Create(ctx, &invalidCRP)
+			err := HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			Expect(err).Should(HaveOccurred())
-			ok = errors.As(err, &statusErr)
+			var statusErr *k8sErrors.StatusError
+			ok := errors.As(err, &statusErr)
 			Expect(ok).To(BeTrue())
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the labelSelector and name fields are mutually exclusive"))
@@ -409,7 +392,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %s", invalidGVK))))
 
 			By("attempting to update an existing CRP with an invalid spec")
-			validCRP = fleetv1alpha1.ClusterResourcePlacement{
+			validCRP := fleetv1alpha1.ClusterResourcePlacement{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ClusterResourcePlacement",
 					APIVersion: "v1alpha1",
@@ -438,9 +421,9 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				},
 			}
-			err = HubCluster.KubeClient.Create(ctx, &validCRP)
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(HubCluster.KubeClient.Create(ctx, &validCRP)).Should(Succeed())
 
+			var createdCRP fleetv1alpha1.ClusterResourcePlacement
 			Eventually(func() bool {
 				err = HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP)
 				return len(createdCRP.Status.Conditions) > 0

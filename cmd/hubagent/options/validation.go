@@ -30,9 +30,8 @@ func (o *Options) Validate() field.ErrorList {
 	}
 
 	connectionType := o.WebhookClientConnectionType
-	_, ok := parseWebhookClientConnectionString(connectionType)
-	if !ok {
-		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.WebhookClientConnectionType, "must be \"service\" or \"url\""))
+	if _, err := parseWebhookClientConnectionString(connectionType); err != nil {
+		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.EnableWebhook, err.Error()))
 	}
 
 	return errs

@@ -1,4 +1,4 @@
-# We use a headless service for webhook assuming the apiserver's dns can resolve it.
+# The webhook will normally use a service reference with a cluster assigned IP.
 apiVersion: v1
 kind: Service
 metadata:

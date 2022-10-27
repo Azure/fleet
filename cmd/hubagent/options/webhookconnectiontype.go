@@ -5,7 +5,10 @@ Licensed under the MIT license.
 
 package options
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 type WebhookClientConnectionType string
 
@@ -21,7 +24,10 @@ var (
 	}
 )
 
-func parseWebhookClientConnectionString(str string) (WebhookClientConnectionType, bool) {
+func parseWebhookClientConnectionString(str string) (WebhookClientConnectionType, error) {
 	t, ok := capabilitiesMap[strings.ToLower(str)]
-	return t, ok
+	if !ok {
+		return "", errors.New("must be \"service\" or \"url\"")
+	}
+	return t, nil
 }
