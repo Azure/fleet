@@ -5,10 +5,10 @@ Licensed under the MIT license.
 package authtoken
 
 import (
+	"fmt"
 	"io"
 	"os"
 
-	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
 	"go.goms.io/fleet/pkg/interfaces"
@@ -53,7 +53,7 @@ func (w *Writer) WriteToken(token interfaces.AuthToken) error {
 	}()
 	_, err = io.WriteString(writer, token.Token)
 	if err != nil {
-		return errors.Wrap(err, "cannot write the refresh token")
+		return fmt.Errorf("cannot write the refresh token: %w", err)
 	}
 	klog.V(2).InfoS("token has been saved to the file successfully")
 	return nil
