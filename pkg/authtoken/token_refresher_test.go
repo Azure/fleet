@@ -103,7 +103,6 @@ func TestRefresherCancelContext(t *testing.T) {
 		},
 	}
 	testChan := make(chan error)
-	chanOpen := true
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	bufferWriter := NewWriter(NewBufferWriterFactory().Create)
@@ -115,15 +114,12 @@ func TestRefresherCancelContext(t *testing.T) {
 
 	cancel()
 
-	for chanOpen {
-		select {
-		case err := <-testChan:
-			if err.Error() == "context canceled" {
-				return
-			}
-		case <-time.Tick(5 * time.Second):
-			chanOpen = false
-			assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
+	select {
+	case err := <-testChan:
+		if err.Error() == "context canceled" {
+			return
 		}
+	case <-time.Tick(1 * time.Second):
+		assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 	}
 }
