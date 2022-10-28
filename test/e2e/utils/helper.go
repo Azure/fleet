@@ -11,10 +11,9 @@ import (
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
-	"github.com/onsi/ginkgo/v2"
+	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -26,7 +25,7 @@ import (
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 )
@@ -39,69 +38,39 @@ var (
 )
 
 // DeleteMemberCluster deletes MemberCluster in the hub cluster.
-func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *v1alpha1.MemberCluster) {
+func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *fleetv1alpha1.MemberCluster) {
 	gomega.Expect(cluster.KubeClient.Delete(ctx, mc)).Should(gomega.Succeed(), "Failed to delete member cluster %s in %s cluster", mc.Name, cluster.ClusterName)
 	gomega.Eventually(func() bool {
 		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for member cluster %s to be deleted in %s cluster", mc.Name, cluster.ClusterName)
 }
 
-// CreateClusterRole create cluster role in the hub cluster.
-func CreateClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	ginkgo.By(fmt.Sprintf("Creating ClusterRole (%s)", cr.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), cr)
-		gomega.Expect(err).Should(gomega.Succeed())
-	})
-}
-
-// WaitClusterRole waits for cluster roles to be created.
-func WaitClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	klog.Infof("Waiting for ClusterRole(%s) to be synced", cr.Name)
+// CheckMemberClusterStatus is used to check member cluster status.
+func CheckMemberClusterStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantMCStatus fleetv1alpha1.MemberClusterStatus, mcStatusCmpOptions []cmp.Option) {
+	gotMC := &fleetv1alpha1.MemberCluster{}
 	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: ""}, cr)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: objectKey.Name}, gotMC); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantMCStatus, gotMC.Status, mcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", gotMC.Name, statusDiff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait member cluster %s to have status %s", gotMC.Name, wantMCStatus)
 }
 
-// DeleteClusterRole deletes cluster role on cluster.
-func DeleteClusterRole(cluster framework.Cluster, cr *rbacv1.ClusterRole) {
-	ginkgo.By(fmt.Sprintf("Deleting ClusterRole(%s)", cr.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), cr)
-		gomega.Expect(err).Should(gomega.Succeed())
-	})
-}
-
-// CreateClusterResourcePlacement created ClusterResourcePlacement and waits for ClusterResourcePlacement to exist in hub cluster.
-func CreateClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	ginkgo.By(fmt.Sprintf("Creating ClusterResourcePlacement(%s)", crp.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), crp)
-		gomega.Expect(err).Should(gomega.Succeed())
-	})
-	klog.Infof("Waiting for ClusterResourcePlacement(%s) to be synced", crp.Name)
+// CheckInternalMemberClusterStatus is used to check internal member cluster status.
+func CheckInternalMemberClusterStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantIMCStatus fleetv1alpha1.InternalMemberClusterStatus, imcStatusCmpOptions []cmp.Option) {
+	gotIMC := &fleetv1alpha1.InternalMemberCluster{}
 	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
-		return err
-	}, PollTimeout, PollInterval).ShouldNot(gomega.HaveOccurred())
-}
-
-// WaitConditionClusterResourcePlacement waits for ClusterResourcePlacement to present on th hub cluster with a specific condition.
-func WaitConditionClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement,
-	conditionName string, status metav1.ConditionStatus, customTimeout time.Duration) {
-	klog.Infof("Waiting for ClusterResourcePlacement(%s) condition(%s) status(%s) to be synced", crp.Name, conditionName, status)
-	gomega.Eventually(func() bool {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: crp.Name, Namespace: ""}, crp)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		cond := crp.GetCondition(conditionName)
-		return cond != nil && cond.Status == status
-	}, customTimeout, PollInterval).Should(gomega.Equal(true))
-}
-
-// DeleteClusterResourcePlacement is used delete ClusterResourcePlacement on the hub cluster.
-func DeleteClusterResourcePlacement(cluster framework.Cluster, crp *v1alpha1.ClusterResourcePlacement) {
-	ginkgo.By(fmt.Sprintf("Deleting ClusterResourcePlacement(%s)", crp.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), crp)
-		gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
-	})
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: objectKey.Name, Namespace: objectKey.Namespace}, gotIMC); err != nil {
+			return err
+		}
+		if statusDiff := cmp.Diff(wantIMCStatus, gotIMC.Status, imcStatusCmpOptions...); statusDiff != "" {
+			return fmt.Errorf("member cluster(%s) status mismatch (-want +got):\n%s", gotIMC.Name, statusDiff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for internal member cluster %s to have status %s", gotIMC.Name, wantIMCStatus)
 }
 
 // WaitWork waits for Work to be present on the hub cluster.
@@ -116,28 +85,12 @@ func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workName
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Work %s not synced", name)
 }
 
-// CreateNamespace create namespace and waits for namespace to exist.
-func CreateNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
-	ginkgo.By(fmt.Sprintf("Creating Namespace(%s)", ns.Name), func() {
-		err := cluster.KubeClient.Create(context.TODO(), ns)
-		gomega.Expect(err).Should(gomega.Succeed(), "Failed to create namespace %s", ns.Name)
-	})
-	klog.Infof("Waiting for Namespace(%s) to be synced", ns.Name)
-	gomega.Eventually(func() error {
-		err := cluster.KubeClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name, Namespace: ""}, ns)
-
-		return err
-	}, PollTimeout, PollInterval).Should(gomega.Succeed())
-}
-
 // DeleteNamespace delete namespace.
-func DeleteNamespace(cluster framework.Cluster, ns *corev1.Namespace) {
-	ginkgo.By(fmt.Sprintf("Deleting Namespace(%s)", ns.Name), func() {
-		err := cluster.KubeClient.Delete(context.TODO(), ns)
-		if err != nil && !apierrors.IsNotFound(err) {
-			gomega.Expect(err).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}))
-		}
-	})
+func DeleteNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
+	gomega.Expect(cluster.KubeClient.Delete(context.TODO(), ns)).Should(gomega.Succeed(), "Failed to delete namespace %s in %s cluster", ns.Name, cluster.ClusterName)
+	gomega.Eventually(func() bool {
+		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns))
+	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for namespace %s to be deleted in %s cluster", ns.Name, cluster.ClusterName)
 }
 
 // CreateWork creates Work object based on manifest given.
@@ -159,12 +112,36 @@ func CreateWork(ctx context.Context, hubCluster framework.Cluster, workName, wor
 	return work
 }
 
-// DeleteWork deletes all works used in the current test.
-func DeleteWork(ctx context.Context, hubCluster framework.Cluster, works []workapi.Work) {
-	// Using index instead of work object itself due to lint check "Implicit memory aliasing in for loop."
-	for i := range works {
-		gomega.Expect(hubCluster.KubeClient.Delete(ctx, &works[i])).Should(gomega.SatisfyAny(gomega.Succeed(), &utils.NotFoundMatcher{}), "Deletion of work %s failed", works[i].Name)
+// UpdateWork updates an existing Work Object by replacing the Spec.Manifest with a new objects given from parameter.
+func UpdateWork(ctx context.Context, hubCluster *framework.Cluster, work *workapi.Work, objects []runtime.Object) *workapi.Work {
+	manifests := make([]workapi.Manifest, len(objects))
+	for index, obj := range objects {
+		rawObj, err := json.Marshal(obj)
+		gomega.Expect(err).Should(gomega.Succeed(), "Failed to marshal object %+v", obj)
+
+		manifests[index] = workapi.Manifest{
+			RawExtension: runtime.RawExtension{Object: obj, Raw: rawObj},
+		}
 	}
+	work.Spec.Workload.Manifests = manifests
+
+	err := hubCluster.KubeClient.Update(ctx, work)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to update work %s in namespace %v", work.Name, work.Namespace)
+
+	return work
+}
+
+// DeleteWork deletes the given Work object and waits until work becomes not found.
+func DeleteWork(ctx context.Context, hubCluster framework.Cluster, work workapi.Work) {
+	// Deleting Work
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &work)).Should(gomega.Succeed(), "Deletion of work %s failed", work.Name)
+
+	// Waiting for the Work to be deleted and not found.
+	gomega.Eventually(func() error {
+		namespaceType := types.NamespacedName{Name: work.Name, Namespace: work.Namespace}
+		return hubCluster.KubeClient.Get(ctx, namespaceType, &work)
+	}).Should(&utils.NotFoundMatcher{},
+		"The Work resource %s was not deleted", work.Name, hubCluster.ClusterName)
 }
 
 // AddManifests adds manifests to be included within a Work.

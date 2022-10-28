@@ -8,7 +8,6 @@ package validator
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 
@@ -26,7 +25,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1alpha1.Cl
 				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
 			}
 			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
-				allErr = append(allErr, errors.Wrap(err, fmt.Sprintf("the labelSelector in resource selector %+v is invalid", selector)))
+				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
 			}
 		}
 	}
@@ -35,7 +34,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1alpha1.Cl
 		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
 		for _, selector := range clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms {
 			if _, err := metav1.LabelSelectorAsSelector(&selector.LabelSelector); err != nil {
-				allErr = append(allErr, errors.Wrap(err, fmt.Sprintf("the labelSelector in cluster selector %+v is invalid", selector)))
+				allErr = append(allErr, fmt.Errorf("the labelSelector in cluster selector %+v is invalid: %w", selector, err))
 			}
 		}
 	}

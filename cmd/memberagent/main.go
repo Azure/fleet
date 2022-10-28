@@ -9,12 +9,12 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -79,7 +79,7 @@ func main() {
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
-		klog.ErrorS(errors.New("Member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
+		klog.ErrorS(errors.New("member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
 		os.Exit(1)
 	}
 
@@ -163,12 +163,12 @@ func main() {
 func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memberOpts ctrl.Options) error {
 	hubMgr, err := ctrl.NewManager(hubCfg, hubOpts)
 	if err != nil {
-		return errors.Wrap(err, "unable to start hub manager")
+		return fmt.Errorf("unable to start hub manager: %w", err)
 	}
 
 	memberMgr, err := ctrl.NewManager(memberConfig, memberOpts)
 	if err != nil {
-		return errors.Wrap(err, "unable to start member manager")
+		return fmt.Errorf("unable to start member manager: %w", err)
 	}
 
 	if err := hubMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -214,7 +214,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-		return errors.Wrap(err, "unable to create controller hub_member")
+		return fmt.Errorf("unable to create controller hub_member: %w", err)
 	}
 
 	klog.V(3).InfoS("starting hub manager")
@@ -223,7 +223,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		defer klog.V(3).InfoS("shutting down hub manager")
 		err := hubMgr.Start(ctx)
 		if err != nil {
-			startErr <- errors.Wrap(err, "problem starting hub manager")
+			startErr <- fmt.Errorf("problem starting hub manager: %w", err)
 			return
 		}
 	}()
@@ -231,7 +231,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	klog.V(3).InfoS("starting member manager")
 	defer klog.V(3).InfoS("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
-		return errors.Wrap(err, "problem starting member manager")
+		return fmt.Errorf("problem starting member manager: %w", err)
 	}
 
 	return nil

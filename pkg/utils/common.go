@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -214,8 +213,8 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 		var secret corev1.Secret
 		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &secret)
 		if err != nil {
-			return false, errors.Wrap(err, fmt.Sprintf(
-				"failed to convert a secret object %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+			return false, fmt.Errorf(
+				"failed to convert a secret object %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err)
 		}
 		if secret.Type == corev1.SecretTypeServiceAccountToken {
 			return false, nil
@@ -229,7 +228,7 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 				// we assume that this endpoint is created by the user
 				return true, nil
 			}
-			return false, errors.Wrap(err, fmt.Sprintf("failed to get the service %s in namespace %s", uObj.GetName(), uObj.GetNamespace()))
+			return false, fmt.Errorf("failed to get the service %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err)
 		}
 		// we find a service of the same name as the endpoint, we assume it's created by the service
 		return false, nil

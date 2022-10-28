@@ -588,17 +588,7 @@ var _ = Describe("Work Controller", func() {
 			for i := 0; i < numWork; i++ {
 				var resultWork workv1alpha1.Work
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)).Should(Succeed())
-				Expect(controllerutil.ContainsFinalizer(work, workFinalizer)).Should(BeFalse())
-				applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, ConditionTypeApplied)
-				if applyCond != nil && applyCond.Status == metav1.ConditionTrue && applyCond.ObservedGeneration == resultWork.Generation {
-					By("the work is applied, check if the applied config map is still there")
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)).Should(Succeed())
-					Expect(cmp.Diff(configMap.Data, data)).Should(BeEmpty())
-				} else {
-					By("the work is not applied, verify that the applied config map is not there")
-					err := k8sClient.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)
-					Expect(apierrors.IsNotFound(err)).Should(BeTrue())
-				}
+				Expect(controllerutil.ContainsFinalizer(&resultWork, workFinalizer)).Should(BeFalse())
 				// make sure that leave can be called as many times as possible
 				Expect(workController.Leave(ctx)).Should(Succeed())
 				By(fmt.Sprintf("change the work = %s", work.GetName()))
