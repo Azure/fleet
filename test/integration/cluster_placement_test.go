@@ -1747,14 +1747,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				TargetClusters:    []string{clusterA.Name},
 				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
 					{
-						ResourceIdentifier: fleetv1alpha1.ResourceIdentifier{
-							Group:     kruisev1alpha1.GroupVersion.Group,
-							Version:   kruisev1alpha1.GroupVersion.Version,
-							Kind:      "CloneSet",
-							Name:      cs.Name,
-							Namespace: cs.Namespace,
-						},
-						ClusterName: clusterA.Name,
+						ResourceIdentifier: fleetResourceIdentifier1,
+						ClusterName:        clusterA.Name,
 						Condition: metav1.Condition{
 							Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 							Status:             metav1.ConditionFalse,
