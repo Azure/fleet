@@ -122,7 +122,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
-							admv1.OperationAll,
+							admv1.Create,
 						},
 						Rule: admv1.Rule{
 							APIGroups:   []string{""},
@@ -143,7 +143,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
-							admv1.OperationAll,
+							admv1.Create,
+							admv1.Update,
 						},
 						Rule: admv1.Rule{
 							APIGroups:   []string{"fleet.azure.com"},
