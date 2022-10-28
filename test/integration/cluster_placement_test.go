@@ -1495,7 +1495,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
-			}, &clusterWork)).Should(Succeed(), "Failed to retireve %s work", clusterWork.Name)
+			}, &clusterWork)).Should(Succeed(), "Failed to retrieve %s work", clusterWork.Name)
 
 			appliedCondition := metav1.Condition{
 				Type:               workapi.ConditionTypeApplied,
