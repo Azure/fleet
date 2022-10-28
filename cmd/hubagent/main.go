@@ -129,7 +129,7 @@ func main() {
 	}
 }
 
-// SetupWebhook generate the webhook cert and then set up the webhook configurator.
+// SetupWebhook generates the webhook cert and then set up the webhook configurator.
 func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType) error {
 	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start.
 	w, err := webhook.NewWebhookConfig(mgr, FleetWebhookPort, &webhookClientConnectionType, FleetWebhookCertDir)
