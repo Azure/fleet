@@ -1643,7 +1643,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 							Group:   corev1.GroupName,
 							Version: "v1",
 							Kind:    "Namespace",
-							Name:    "test-namespace",
+							Name:    ns.Name,
 						},
 					},
 					Policy: &fleetv1alpha1.PlacementPolicy{
@@ -1655,17 +1655,18 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
-				Group:    kruisev1alpha1.GroupVersion.Group,
-				Kind:     "CloneSet",
-				Name:     "test-cloneset",
-				Ordinal:  0,
-				Resource: "clonesets",
-				Version:  kruisev1alpha1.GroupVersion.Version,
+				Group:     kruisev1alpha1.GroupVersion.Group,
+				Kind:      "CloneSet",
+				Name:      cs.Name,
+				Namespace: cs.Namespace,
+				Ordinal:   0,
+				Resource:  "clonesets",
+				Version:   kruisev1alpha1.GroupVersion.Version,
 			}
 			workResourceIdentifier2 := workv1alpha1.ResourceIdentifier{
 				Group:    corev1.GroupName,
 				Kind:     "Namespace",
-				Name:     "test-namespace",
+				Name:     ns.Name,
 				Ordinal:  1,
 				Resource: "namespaces",
 				Version:  "v1",
@@ -1718,14 +1719,14 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Group:     kruisev1alpha1.GroupVersion.Group,
 				Version:   kruisev1alpha1.GroupVersion.Version,
 				Kind:      "CloneSet",
-				Name:      "test-cloneset",
-				Namespace: "test-namespace",
+				Name:      cs.Name,
+				Namespace: cs.Namespace,
 			}
 			fleetResourceIdentifier2 := fleetv1alpha1.ResourceIdentifier{
 				Group:   corev1.GroupName,
 				Version: "v1",
 				Kind:    "Namespace",
-				Name:    "test-namespace",
+				Name:    ns.Name,
 			}
 			wantCRPStatus := fleetv1alpha1.ClusterResourcePlacementStatus{
 				Conditions: []metav1.Condition{
@@ -1747,11 +1748,11 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
 					{
 						ResourceIdentifier: fleetv1alpha1.ResourceIdentifier{
-							Group:   kruisev1alpha1.GroupVersion.Group,
-							Version: kruisev1alpha1.GroupVersion.Version,
-							Kind:    "CloneSet",
-							Name:    "test-cloneset",
-							// Namespace for clone set is not being picked up
+							Group:     kruisev1alpha1.GroupVersion.Group,
+							Version:   kruisev1alpha1.GroupVersion.Version,
+							Kind:      "CloneSet",
+							Name:      cs.Name,
+							Namespace: cs.Namespace,
 						},
 						ClusterName: clusterA.Name,
 						Condition: metav1.Condition{
@@ -1792,7 +1793,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Group:   corev1.GroupName,
 					Version: "v1",
 					Kind:    "Namespace",
-					Name:    "test-namespace",
+					Name:    ns.Name,
 				},
 			}
 			Expect(k8sClient.Update(ctx, crp)).Should(Succeed(), "Failed to update %s cluster resource placement", crp.Name)
