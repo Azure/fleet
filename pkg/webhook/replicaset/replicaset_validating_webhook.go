@@ -30,7 +30,7 @@ type replicaSetValidator struct {
 	decoder *admission.Decoder
 }
 
-// Handle podValidator denies a pod if it is not created in the system namespaces.
+// Handle replicaSetValidator denies all creation requests.
 func (v *replicaSetValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Create {
 		rs := &v1.ReplicaSet{}
