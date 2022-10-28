@@ -1040,7 +1040,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Name:     "test-cluster-role",
 				},
 			}
-			Expect(k8sClient.Create(ctx, crb)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, crb)).Should(Succeed(), "Failed to create %s cluster role binding", crb.Name)
 
 			By("create cluster resource placement")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
@@ -1062,7 +1062,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create %s cluster resource placement", crp.Name)
 			By("Select resource by label clusterResourcePlacement created")
 
 			// verify that we have created the work object
@@ -1121,7 +1121,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			crb.ObjectMeta.Labels = map[string]string{
 				"fleet.azure.com/env": "prod",
 			}
-			Expect(k8sClient.Update(ctx, crb)).Should(Succeed())
+			Expect(k8sClient.Update(ctx, crb)).Should(Succeed(), "Failed to update %s cluster role binding", crb.Name)
 
 			// verify that the work object created is not present anymore since we are not picking the cluster role binding
 			nsName := fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)
@@ -1131,7 +1131,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Name:      crp.Name,
 					Namespace: nsName,
 				}, &clusterWork))
-			}, timeout, interval).Should(BeTrue())
+			}, timeout, interval).Should(BeTrue(), "Failed to verify %s work doesn't exist")
 			By("Verified the work object is removed")
 
 			wantCRPStatus = fleetv1alpha1.ClusterResourcePlacementStatus{
@@ -1162,7 +1162,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 
 			By("Delete cluster role binding")
-			Expect(k8sClient.Delete(ctx, crb)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, crb)).Should(Succeed(), "Failed to delete %s cluster role binding", crb.Name)
 		})
 
 		It("Test a cluster scoped resource selected by multiple placements", func() {
@@ -1495,7 +1495,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
-			}, &clusterWork)).Should(Succeed(), "Failed to get %s work", clusterWork.Name)
+			}, &clusterWork)).Should(Succeed(), "Failed to retireve %s work", clusterWork.Name)
 
 			appliedCondition := metav1.Condition{
 				Type:               workapi.ConditionTypeApplied,
@@ -1525,7 +1525,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
-			}, &clusterWork)).Should(Succeed(), "Failed to get %s work", clusterWork.Name)
+			}, &clusterWork)).Should(Succeed(), "Failed to retrieve %s work", clusterWork.Name)
 
 			appliedCondition = metav1.Condition{
 				Type:               workapi.ConditionTypeApplied,
@@ -1652,7 +1652,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create %s cluster resource placement", crp.Name)
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed(), "Failed to get %s cluster resource placement", crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed(), "Failed to retrieve %s cluster resource placement", crp.Name)
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
@@ -1798,7 +1798,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}
 			Expect(k8sClient.Update(ctx, crp)).Should(Succeed(), "Failed to update %s cluster resource placement", crp.Name)
 
-			// Update work status to reflect selecting CRD
+			// update work status to reflect selecting CRD
 			appliedCondition.Status = metav1.ConditionTrue
 			appliedCondition.Reason = "appliedWorkComplete"
 			appliedCondition.ObservedGeneration = 2
