@@ -1652,7 +1652,6 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create %s cluster resource placement", crp.Name)
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed(), "Failed to retrieve %s cluster resource placement", crp.Name)
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
