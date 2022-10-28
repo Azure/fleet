@@ -1798,9 +1798,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}
 			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
 
-			// Update work status
+			// Update work status to reflect selecting CRD
 			appliedCondition.Status = metav1.ConditionTrue
 			appliedCondition.Reason = "appliedWorkComplete"
+			appliedCondition.ObservedGeneration = 2
 			workResourceIdentifier2.Ordinal = 2
 			workResourceIdentifier3 := workResourceIdentifier2
 			workResourceIdentifier2 = workv1alpha1.ResourceIdentifier{
@@ -1829,6 +1830,43 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
 			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition1, manifestCondition2, manifestCondition3}
 			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+
+			fleetResourceIdentifier3 := fleetResourceIdentifier2
+			fleetResourceIdentifier2 = fleetv1alpha1.ResourceIdentifier{
+				Group:   apiextensionsv1.GroupName,
+				Version: "v1",
+				Kind:    "CustomResourceDefinition",
+				Name:    "clonesets.apps.kruise.io",
+			}
+
+			wantCRPStatus = fleetv1alpha1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementConditionTypeScheduled),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 2,
+						Reason:             "ScheduleSucceeded",
+					},
+					{
+						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: 2,
+						Reason:             "ApplySucceeded",
+					},
+				},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2, fleetResourceIdentifier3},
+				TargetClusters:    []string{clusterA.Name},
+			}
+
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp); err != nil {
+					return err
+				}
+				if diff := cmp.Diff(wantCRPStatus, crp.Status, crpStatusCmpOptions...); diff != "" {
+					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
+				}
+				return nil
+			}, time.Second*60, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 		})
 	})
 })
