@@ -1476,7 +1476,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create %s cluster resource placement", crp.Name)
 
 			By("verify that we have created work objects that contain the resource selected")
 			verifyWorkObjects(crp, []string{ClusterRoleKind}, []*fleetv1alpha1.MemberCluster{&clusterA, &clusterB})
@@ -1495,7 +1495,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name),
-			}, &clusterWork)).Should(Succeed())
+			}, &clusterWork)).Should(Succeed(), "Failed to get %s work", clusterWork.Name)
 
 			appliedCondition := metav1.Condition{
 				Type:               workapi.ConditionTypeApplied,
@@ -1519,13 +1519,13 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
 			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
-			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed(), "Failed to update %s work status", clusterWork.Name)
 
 			// update work for clusterB to have applied condition as false for manifest and work
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
 				Name:      crp.Name,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterB.Name),
-			}, &clusterWork)).Should(Succeed())
+			}, &clusterWork)).Should(Succeed(), "Failed to get %s work", clusterWork.Name)
 
 			appliedCondition = metav1.Condition{
 				Type:               workapi.ConditionTypeApplied,
@@ -1549,7 +1549,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
 			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition}
-			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed(), "Failed to update %s work status", clusterWork.Name)
 
 			fleetResourceIdentifier := fleetv1alpha1.ResourceIdentifier{
 				Group:   rbacv1.GroupName,
@@ -1612,7 +1612,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Name: "test-namespace",
 				},
 			}
-			Expect(k8sClient.Create(ctx, ns)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, ns)).Should(Succeed(), "Failed to create %s namespace", ns.Name)
 			By("create clone set")
 			cs := &kruisev1alpha1.CloneSet{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1631,7 +1631,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, cs)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, cs)).Should(Succeed(), "Failed to create %s clone set", cs.Name)
 			By("create clusterResourcePlacement CR")
 			crp = &fleetv1alpha1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1651,8 +1651,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					},
 				},
 			}
-			Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp))
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create %s cluster resource placement", crp.Name)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name}, crp)).Should(Succeed(), "Failed to get %s cluster resource placement", crp.Name)
 
 			var clusterWork workv1alpha1.Work
 			workResourceIdentifier1 := workv1alpha1.ResourceIdentifier{
@@ -1713,7 +1713,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
 			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition1, manifestCondition2}
-			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed(), "Failed to update %s work status", clusterWork.Name)
 
 			fleetResourceIdentifier1 := fleetv1alpha1.ResourceIdentifier{
 				Group:     kruisev1alpha1.GroupVersion.Group,
@@ -1796,7 +1796,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Name:    "test-namespace",
 				},
 			}
-			Expect(k8sClient.Update(ctx, crp)).Should(Succeed())
+			Expect(k8sClient.Update(ctx, crp)).Should(Succeed(), "Failed to update %s cluster resource placement", crp.Name)
 
 			// Update work status to reflect selecting CRD
 			appliedCondition.Status = metav1.ConditionTrue
@@ -1829,7 +1829,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			clusterWork.Status.Conditions = []metav1.Condition{appliedCondition}
 			clusterWork.Status.ManifestConditions = []workv1alpha1.ManifestCondition{manifestCondition1, manifestCondition2, manifestCondition3}
-			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed())
+			Expect(k8sClient.Status().Update(ctx, &clusterWork)).Should(Succeed(), "Failed to update %s work status", clusterWork.Name)
 
 			fleetResourceIdentifier3 := fleetResourceIdentifier2
 			fleetResourceIdentifier2 = fleetv1alpha1.ResourceIdentifier{
@@ -1866,7 +1866,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					return fmt.Errorf("CRP status(%s) mismatch (-want +got):\n%s", crp.Name, diff)
 				}
 				return nil
-			}, time.Second*60, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
+			}, timeout, interval).Should(Succeed(), "Failed to compare actual and expected CRP status in hub cluster")
 		})
 	})
 })
