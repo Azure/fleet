@@ -6,6 +6,8 @@ package authtoken
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,7 +57,7 @@ func TestRefreshTokenOnce(t *testing.T) {
 	}
 }
 
-//TestRefreshToken test to refresh/rewrite token multiple times
+// TestRefreshToken test to refresh/rewrite token multiple times
 func TestRefreshToken(t *testing.T) {
 	provider := MockAuthTokenProvider{
 		Token: interfaces.AuthToken{
@@ -94,30 +96,33 @@ func TestRefreshToken(t *testing.T) {
 	}
 }
 
-//TestRefresherCancelContext test if the func will be canceled/returned once the ctx is canceled
+// TestRefresherCancelContext test if the func will be canceled/returned once the ctx is canceled
 func TestRefresherCancelContext(t *testing.T) {
 	provider := MockAuthTokenProvider{
 		Token: interfaces.AuthToken{
 			Token:     "test token",
-			ExpiresOn: time.Now(),
+			ExpiresOn: time.Now().Add(100 * time.Millisecond),
 		},
 	}
-	testChan := make(chan bool)
+	testChan := make(chan error)
 	ctx, cancel := context.WithCancel(context.TODO())
 
 	bufferWriter := NewWriter(NewBufferWriterFactory().Create)
 
 	refresher := NewAuthTokenRefresher(provider, bufferWriter, DefaultRefreshDurationFunc, DefaultCreateTicker)
 	go func() {
-		_ = refresher.RefreshToken(ctx)
-		testChan <- true
+		testChan <- refresher.RefreshToken(ctx)
 	}()
 
 	cancel()
 
+	expectedErr := context.Canceled
 	select {
-	case <-testChan:
-		return
+	case err := <-testChan:
+		if errors.Is(err, expectedErr) {
+			return
+		}
+		assert.Fail(t, fmt.Sprintf("got error: \"%s\", expected error: \"%s\"", err.Error(), expectedErr))
 	case <-time.Tick(1 * time.Second):
 		assert.Fail(t, "Test timeout", "TestRefresherCancelContext")
 	}
