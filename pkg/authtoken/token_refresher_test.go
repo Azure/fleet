@@ -6,6 +6,7 @@ package authtoken
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -118,7 +119,7 @@ func TestRefresherCancelContext(t *testing.T) {
 	expectedErr := context.Canceled
 	select {
 	case err := <-testChan:
-		if err == expectedErr {
+		if errors.Is(err, expectedErr) {
 			return
 		}
 		assert.Fail(t, fmt.Sprintf("got error: \"%s\", expected error: \"%s\"", err.Error(), expectedErr))
