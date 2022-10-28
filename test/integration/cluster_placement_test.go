@@ -1617,7 +1617,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			cs := &kruisev1alpha1.CloneSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cloneset",
-					Namespace: "test-namespace",
+					Namespace: ns.Name,
 				},
 				Spec: kruisev1alpha1.CloneSetSpec{
 					Replicas: to.Int32Ptr(20),
