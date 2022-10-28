@@ -13,6 +13,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -25,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -41,20 +41,6 @@ const (
 	FleetWebhookSvcName      = "fleetwebhook"
 )
 
-var (
-	fleetWebhookServiceNamespace string
-	fleetWebhookServicePort      int
-	fleetWebhookServiceURL       string
-)
-
-func init() {
-	// We assume the Pod namespace should be passed to env through downward API in the Pod spec
-	fleetWebhookServiceNamespace = os.Getenv("POD_NAMESPACE")
-	if fleetWebhookServiceNamespace == "" {
-		panic("Fail to obtain Pod namespace from env")
-	}
-}
-
 var AddToManagerFuncs []func(manager.Manager) error
 
 // AddToManager adds all Controllers to the Manager
@@ -67,10 +53,52 @@ func AddToManager(m manager.Manager) error {
 	return nil
 }
 
-// CreateFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook
-func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, caPEM []byte, port int, clientConnectionType *options.WebhookClientConnectionType) error {
-	fleetWebhookServicePort = port
-	fleetWebhookServiceURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", FleetWebhookSvcName, fleetWebhookServiceNamespace, fleetWebhookServicePort)
+type Config struct {
+	mgr manager.Manager
+
+	// webhook server info
+	serviceNamespace string
+	servicePort      int32
+	serviceURL       string
+
+	// caPEM is a PEM encoded CA bundle which will be used to validate the webhook's server certificate.
+	caPEM []byte
+
+	clientConnectionType *options.WebhookClientConnectionType
+}
+
+func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string) (*Config, error) {
+	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
+	namespace := os.Getenv("POD_NAMESPACE")
+	if namespace == "" {
+		return nil, errors.New("fail to obtain Pod namespace from POD_NAMESPACE")
+	}
+	w := Config{
+		mgr:                  mgr,
+		servicePort:          int32(port),
+		serviceNamespace:     namespace,
+		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", FleetWebhookSvcName, namespace, port),
+		clientConnectionType: clientConnectionType,
+	}
+	caPEM, err := w.genCertificate(certDir)
+	if err != nil {
+		return nil, err // TODO
+	}
+	w.caPEM = caPEM
+	return &w, err
+}
+
+func (w *Config) Start(ctx context.Context) error {
+	klog.V(2).InfoS("setting up webhooks in apiserver from the leader")
+	if err := w.createFleetWebhookConfiguration(ctx); err != nil {
+		klog.ErrorS(err, "unable to setup webhook configurations in apiserver")
+		return err
+	}
+	return nil
+}
+
+// createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook
+func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 	failPolicy := admv1.Fail // reject request if the webhook doesn't work
 	sideEffortsNone := admv1.SideEffectClassNone
 	namespacedScope := admv1.NamespacedScope
@@ -86,7 +114,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 		Webhooks: []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.pod.validating",
-				ClientConfig:            createWebhookClientConfig(corev1.Pod{}, caPEM, clientConnectionType),
+				ClientConfig:            w.createClientConfig(corev1.Pod{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -107,7 +135,7 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 			},
 			{
 				Name:                    "fleet.clusterresourceplacement.validating",
-				ClientConfig:            createWebhookClientConfig(fleetv1alpha1.ClusterResourcePlacement{}, caPEM, clientConnectionType),
+				ClientConfig:            w.createClientConfig(fleetv1alpha1.ClusterResourcePlacement{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -129,17 +157,17 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 		},
 	}
 
-	if err := client.Create(ctx, &whCfg); err != nil {
+	if err := w.mgr.GetClient().Create(ctx, &whCfg); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return err
 		}
 		klog.V(2).InfoS("validatingwebhookconfiguration exists, need to update", "name", FleetWebhookCfgName)
 		// Here we simply use delete/create pattern to implement full overwrite
-		err := client.Delete(ctx, &whCfg)
+		err := w.mgr.GetClient().Delete(ctx, &whCfg)
 		if err != nil {
 			return err
 		}
-		err = client.Create(ctx, &whCfg)
+		err = w.mgr.GetClient().Create(ctx, &whCfg)
 		if err != nil {
 			return err
 		}
@@ -149,40 +177,37 @@ func CreateFleetWebhookConfiguration(ctx context.Context, client client.Client, 
 	return nil
 }
 
-func createWebhookClientConfig(webhookInterface interface{}, caBundle []byte, clientConnectionType *options.WebhookClientConnectionType) admv1.WebhookClientConfig {
-	config := &admv1.WebhookClientConfig{
-		CABundle: caBundle,
+func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookClientConfig {
+	serviceRef := admv1.ServiceReference{
+		Namespace: w.serviceNamespace,
+		Name:      FleetWebhookSvcName,
+		Port:      pointer.Int32(w.servicePort),
 	}
 	var serviceEndpoint string
-
-	serviceRef := admv1.ServiceReference{
-		Namespace: fleetWebhookServiceNamespace,
-		Name:      FleetWebhookSvcName,
-		Port:      pointer.Int32(int32(fleetWebhookServicePort)),
-	}
-
 	switch webhookInterface.(type) {
 	case corev1.Pod:
-		serviceEndpoint = fleetWebhookServiceURL + pod.ValidationPath
+		serviceEndpoint = w.serviceURL + pod.ValidationPath
 		serviceRef.Path = pointer.String(pod.ValidationPath)
 	case fleetv1alpha1.ClusterResourcePlacement:
-		serviceEndpoint = fleetWebhookServiceURL + clusterresourceplacement.ValidationPath
+		serviceEndpoint = w.serviceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
 	}
 
-	switch *clientConnectionType {
+	config := admv1.WebhookClientConfig{
+		CABundle: w.caPEM,
+	}
+	switch *w.clientConnectionType {
 	case options.Service:
 		config.Service = &serviceRef
 	case options.URL:
 		config.URL = pointer.String(serviceEndpoint)
 	}
-
-	return *config
+	return config
 }
 
-// GenCertificate generates the serving cerficiate for the webhook server
-func GenCertificate(certDir string) ([]byte, error) {
-	caPEM, certPEM, keyPEM, err := genSelfSignedCert()
+// genCertificate generates the serving cerficiate for the webhook server
+func (w *Config) genCertificate(certDir string) ([]byte, error) {
+	caPEM, certPEM, keyPEM, err := w.genSelfSignedCert()
 	if err != nil {
 		klog.ErrorS(err, "fail to generate self-signed cert")
 		return nil, err
@@ -197,7 +222,7 @@ func GenCertificate(certDir string) ([]byte, error) {
 }
 
 // genSelfSignedCert generates the self signed Certificate/Key pair
-func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) {
+func (w *Config) genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) {
 	// CA config
 	ca := &x509.Certificate{
 		SerialNumber: big.NewInt(2022),
@@ -240,8 +265,8 @@ func genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte, err error) 
 	caPEMByte = caPEM.Bytes()
 
 	dnsNames := []string{
-		fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, fleetWebhookServiceNamespace),
-		fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, fleetWebhookServiceNamespace),
+		fmt.Sprintf("%s.%s.svc", FleetWebhookSvcName, w.serviceNamespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", FleetWebhookSvcName, w.serviceNamespace),
 	}
 	// server cert config
 	cert := &x509.Certificate{
