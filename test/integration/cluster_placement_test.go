@@ -1094,7 +1094,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionUnknown,
 						ObservedGeneration: 1,
-						Reason:             "ApplyPending",
+						Reason:             clusterresourceplacement.ApplyPendingReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier},
@@ -1146,7 +1146,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionUnknown,
 						ObservedGeneration: 1,
-						Reason:             "ApplyPending",
+						Reason:             clusterresourceplacement.ApplyPendingReason,
 					},
 				},
 			}
@@ -1511,7 +1511,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					{
 						Type:               workapi.ConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             "ManifestCreated",
+						Reason:             string(workapi.ManifestCreatedAction),
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1569,7 +1569,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionFalse,
 						ObservedGeneration: 1,
-						Reason:             "ApplyFailed",
+						Reason:             clusterresourceplacement.ApplyFailedReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier},
@@ -1705,7 +1705,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					{
 						Type:               workapi.ConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             "ManifestNoChange",
+						Reason:             string(workapi.ManifestNoChangeAction),
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1740,7 +1740,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionFalse,
 						ObservedGeneration: 1,
-						Reason:             "ApplyFailed",
+						Reason:             clusterresourceplacement.ApplyFailedReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2},
@@ -1807,7 +1807,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Version:  "v1",
 			}
 			manifestCondition1.Conditions[0].Status = metav1.ConditionTrue
-			manifestCondition1.Conditions[0].Reason = "ManifestCreated"
+			manifestCondition1.Conditions[0].Reason = string(workapi.ManifestCreatedAction)
 			manifestCondition2.Identifier = workResourceIdentifier2
 			manifestCondition3 := workv1alpha1.ManifestCondition{
 				Identifier: workResourceIdentifier3,
@@ -1815,7 +1815,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					{
 						Type:               workapi.ConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             "ManifestNoChange",
+						Reason:             string(workapi.ManifestNoChangeAction),
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1845,7 +1845,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Type:               string(fleetv1alpha1.ResourcePlacementStatusConditionTypeApplied),
 						Status:             metav1.ConditionTrue,
 						ObservedGeneration: 2,
-						Reason:             "ApplySucceeded",
+						Reason:             clusterresourceplacement.ApplySucceededReason,
 					},
 				},
 				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2, fleetResourceIdentifier3},
