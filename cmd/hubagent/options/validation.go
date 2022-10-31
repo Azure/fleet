@@ -29,5 +29,10 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "must be greater than 0"))
 	}
 
+	connectionType := o.WebhookClientConnectionType
+	if _, err := parseWebhookClientConnectionString(connectionType); err != nil {
+		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.EnableWebhook, err.Error()))
+	}
+
 	return errs
 }

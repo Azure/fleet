@@ -140,7 +140,9 @@ install-hub-agent-helm:
     --set image.repository=$(REGISTRY)/$(HUB_AGENT_IMAGE_NAME) \
     --set image.tag=$(HUB_AGENT_IMAGE_VERSION) \
     --set logVerbosity=5 \
-    --set namespace=fleet-system
+    --set namespace=fleet-system \
+    --set enableWebhook=true \
+    --set webhookClientConnectionType=service
 
 .PHONY: e2e-hub-kubeconfig-secret
 e2e-hub-kubeconfig-secret:

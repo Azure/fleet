@@ -12,7 +12,8 @@ image:
 
 logVerbosity: 5
 
-enableWebhook: false
+enableWebhook: true
+webhookClientConnectionType: service
 
 namespace:
   fleet-system

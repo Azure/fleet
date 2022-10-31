@@ -164,7 +164,7 @@ var _ = BeforeSuite(func() {
 	// hub setup
 	HubCluster.HubURL = hubURL
 	framework.GetClusterClient(HubCluster)
-	//member setup
+	// member setup
 	MemberCluster.HubURL = hubURL
 	framework.GetClusterClient(MemberCluster)
 

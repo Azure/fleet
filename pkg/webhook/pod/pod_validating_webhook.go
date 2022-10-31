@@ -18,10 +18,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+const (
+	// ValidationPath is the webhook service path which admission requests are routed to for validating Pod resources.
+	ValidationPath = "/validate-v1-pod"
+)
+
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register("/validate-v1-pod", &webhook.Admission{Handler: &podValidator{Client: mgr.GetClient()}})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &podValidator{Client: mgr.GetClient()}})
 	return nil
 }
 

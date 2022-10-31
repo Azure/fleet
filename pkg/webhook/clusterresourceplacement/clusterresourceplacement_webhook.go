@@ -11,6 +11,11 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
+const (
+	// ValidationPath is the webhook service path which admission requests are routed to for validating ClusterResourcePlacement resources.
+	ValidationPath = "/validate-fleet-azure-com-v1alpha1-clusterresourceplacement"
+)
+
 func Add(mgr manager.Manager) error {
 	return (&fleetv1alpha1.ClusterResourcePlacement{}).SetupWebhookWithManager(mgr)
 }
