@@ -39,8 +39,7 @@ func Add(mgr manager.Manager) error {
 func (v *replicaSetValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Create {
 		rs := &v1.ReplicaSet{}
-		err := v.decoder.Decode(req, rs)
-		if err != nil {
+		if err := v.decoder.Decode(req, rs); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 		return admission.Denied(fmt.Sprintf("ReplicaSet %s/%s creation is disallowed in the fleet hub cluster", rs.Namespace, rs.Name))
