@@ -163,7 +163,6 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
-
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
@@ -172,7 +171,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 						Rule: admv1.Rule{
 							APIGroups:   []string{"apps"},
 							APIVersions: []string{"v1"},
-							Resources:   []string{"replicaset"},
+							Resources:   []string{"replicasets"},
 							Scope:       &namespacedScope,
 						},
 					},
