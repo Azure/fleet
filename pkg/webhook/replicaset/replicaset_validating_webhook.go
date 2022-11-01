@@ -23,16 +23,16 @@ const (
 	ValidationPath = "/validate-apps-v1-replicaset"
 )
 
+type replicaSetValidator struct {
+	Client  client.Client
+	decoder *admission.Decoder
+}
+
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &replicaSetValidator{Client: mgr.GetClient()}})
 	return nil
-}
-
-type replicaSetValidator struct {
-	Client  client.Client
-	decoder *admission.Decoder
 }
 
 // Handle replicaSetValidator denies all creation requests.
