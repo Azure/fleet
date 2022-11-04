@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -43,7 +45,7 @@ func (v *podValidator) Handle(ctx context.Context, req admission.Request) admiss
 		if err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if pod.Namespace != "kube-system" && pod.Namespace != "fleet-system" {
+		if pod.Namespace != utils.K8sSysNamespace && pod.Namespace != utils.FleetSysNamespace {
 			return admission.Denied(fmt.Sprintf("Pod %s/%s creation is disallowed in the fleet hub cluster", pod.Namespace, pod.Name))
 		}
 	}

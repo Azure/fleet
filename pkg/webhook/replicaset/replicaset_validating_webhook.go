@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -42,7 +44,9 @@ func (v *replicaSetValidator) Handle(ctx context.Context, req admission.Request)
 		if err := v.decoder.Decode(req, rs); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return admission.Denied(fmt.Sprintf("ReplicaSet %s/%s creation is disallowed in the fleet hub cluster", rs.Namespace, rs.Name))
+		if rs.Namespace != utils.FleetSysNamespace && rs.Namespace != utils.K8sSysNamespace {
+			return admission.Denied(fmt.Sprintf("ReplicaSet %s/%s creation is disallowed in the fleet hub cluster. Namespace must either be %s or %s", rs.Namespace, rs.Name, utils.FleetSysNamespace, utils.K8sSysNamespace))
+		}
 	}
 	return admission.Allowed("")
 }

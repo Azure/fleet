@@ -63,6 +63,12 @@ const (
 	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
 )
 
+// System reserved namespaces.
+const (
+	FleetSysNamespace = "fleet-system"
+	K8sSysNamespace   = "kube-system"
+)
+
 var (
 	FleetRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},

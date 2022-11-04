@@ -26,22 +26,17 @@ import (
 	testUtils "go.goms.io/fleet/test/e2e/utils"
 )
 
-const (
-	kubeSystemNs  = "kube-system"
-	fleetSystemNs = "fleet-system"
-)
-
 var (
-	whitelistedNamespaces = []corev1.Namespace{
-		{ObjectMeta: metav1.ObjectMeta{Name: kubeSystemNs}},
-		{ObjectMeta: metav1.ObjectMeta{Name: fleetSystemNs}},
+	reservedSystemNamespaces = []corev1.Namespace{
+		{ObjectMeta: metav1.ObjectMeta{Name: utils.K8sSysNamespace}},
+		{ObjectMeta: metav1.ObjectMeta{Name: utils.FleetSysNamespace}},
 	}
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	Context("Pod validation webhook", func() {
 		It("should admit operations on Pods within whitelisted namespaces", func() {
-			for _, ns := range whitelistedNamespaces {
+			for _, ns := range reservedSystemNamespaces {
 				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: ns.ObjectMeta.Name}
 				nginxPod := &corev1.Pod{
 					TypeMeta: metav1.TypeMeta{
@@ -499,7 +494,58 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 		})
 	})
 	Context("ReplicaSet validation webhook", func() {
-		It("should deny create operations on ReplicaSets", func() {
+		It("should admit operation CREATE on ReplicaSets in system reserved namespaces", func() {
+			for _, ns := range reservedSystemNamespaces {
+				rs := &appsv1.ReplicaSet{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ReplicaSet",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      utils.RandStr(),
+						Namespace: ns.Name,
+					},
+					Spec: appsv1.ReplicaSetSpec{
+						Replicas:        pointer.Int32(1),
+						MinReadySeconds: 1,
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{},
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "app",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"web"},
+								},
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{"app": "web"},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "nginx",
+										Image: "nginx",
+										Ports: []corev1.ContainerPort{
+											{
+												Name:          "http",
+												Protocol:      corev1.ProtocolTCP,
+												ContainerPort: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				By(fmt.Sprintf("expecting admission of operation CREATE in system reserved namespace %s", ns.ObjectMeta.Name))
+				Expect(HubCluster.KubeClient.Create(ctx, rs)).Should(Succeed())
+			}
+		})
+		It("should deny CREATE operation on ReplicaSets in a non-system reserved namespace", func() {
 			rs := &appsv1.ReplicaSet{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ReplicaSet",
@@ -545,7 +591,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			By("attempting to create a ReplicaSet")
+			By("expecting denial of operation CREATE")
 			err := HubCluster.KubeClient.Create(ctx, rs)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ReplicaSet call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
