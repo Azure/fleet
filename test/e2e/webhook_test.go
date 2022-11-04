@@ -131,11 +131,42 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	Context("ClusterResourcePlacement validation webhook", func() {
 		var createdCRP fleetv1alpha1.ClusterResourcePlacement
 		BeforeEach(func() {
-			createdCRP = createAndGetCRP()
+			validCRP := fleetv1alpha1.ClusterResourcePlacement{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ClusterResourcePlacement",
+					APIVersion: "v1alpha1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: utils.RandStr(),
+				},
+				Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    utils.RandStr(),
+						},
+					},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &validCRP)).Should(Succeed())
+
+			// Get the created CRP
+			Eventually(func() error {
+				if err := HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP); err != nil {
+					return err
+				}
+				// check conditions to infer we have latest
+				if len(createdCRP.Status.Conditions) == 0 {
+					return fmt.Errorf("failed to get crp condition, want not empty")
+				}
+				return nil
+			}, testUtils.PollTimeout, testUtils.PollInterval).Should(Succeed())
 		})
 		It("should admit write operations for valid ClusterResourcePlacement resources", func() {
 			By("expecting admission of operation CREATE")
-			createAndGetCRP()
+			// Handled for free via BeforeEach()
 
 			By("expecting admission of operation UPDATE")
 			createdCRP.Spec.ResourceSelectors[0].Name = utils.RandStr()
@@ -329,41 +360,3 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 		})
 	})
 })
-
-func createAndGetCRP() fleetv1alpha1.ClusterResourcePlacement {
-	validCRP := fleetv1alpha1.ClusterResourcePlacement{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterResourcePlacement",
-			APIVersion: "v1alpha1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: utils.RandStr(),
-		},
-		Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
-			ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
-				{
-					Group:   "",
-					Version: "v1",
-					Kind:    "Namespace",
-					Name:    utils.RandStr(),
-				},
-			},
-		},
-	}
-	Expect(HubCluster.KubeClient.Create(ctx, &validCRP)).Should(Succeed())
-
-	// Get the created CRP
-	var createdCRP fleetv1alpha1.ClusterResourcePlacement
-	Eventually(func() error {
-		if err := HubCluster.KubeClient.Get(ctx, client.ObjectKey{Name: validCRP.Name}, &createdCRP); err != nil {
-			return err
-		}
-		// check conditions to infer we have latest
-		if len(createdCRP.Status.Conditions) == 0 {
-			return fmt.Errorf("failed to get crp condition, want not empty")
-		}
-		return nil
-	}, testUtils.PollTimeout, testUtils.PollInterval).Should(Succeed())
-
-	return createdCRP
-}
