@@ -29,12 +29,12 @@ import (
 )
 
 const (
-	kubePrefix            = "kube-"
-	fleetPrefix           = "fleet-"
-	FleetSystemNamespace  = fleetPrefix + "system"
-	NamespaceNameFormat   = fleetPrefix + "member-%s"
-	RoleNameFormat        = fleetPrefix + "role-%s"
-	RoleBindingNameFormat = fleetPrefix + "rolebinding-%s"
+	KubePrefix            = "kube-"
+	FleetPrefix           = "fleet-"
+	FleetSystemNamespace  = FleetPrefix + "system"
+	NamespaceNameFormat   = FleetPrefix + "member-%s"
+	RoleNameFormat        = FleetPrefix + "role-%s"
+	RoleBindingNameFormat = FleetPrefix + "rolebinding-%s"
 )
 
 const (
@@ -61,12 +61,6 @@ const (
 
 	// LastWorkUpdateTimeAnnotationKey is used to mark the last update time on a work object.
 	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
-)
-
-// System reserved namespaces.
-const (
-	FleetSysNamespace = "fleet-system"
-	K8sSysNamespace   = "kube-system"
 )
 
 var (
@@ -248,10 +242,14 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 	return true, nil
 }
 
-// ShouldPropagateNamespace decides if we should propagate the resources in the namespace
+// IsReservedNamespace indicates if an argued namespace is reserved.
+func IsReservedNamespace(namespace string) bool {
+	return strings.HasPrefix(namespace, FleetPrefix) || strings.HasPrefix(namespace, KubePrefix)
+}
+
+// ShouldPropagateNamespace decides if we should propagate the resources in the namespace.
 func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]bool) bool {
-	// special case for namespace have the reserved prefix
-	if strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix) {
+	if IsReservedNamespace(namespace) {
 		return false
 	}
 

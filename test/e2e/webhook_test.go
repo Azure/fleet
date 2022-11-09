@@ -27,17 +27,17 @@ import (
 )
 
 var (
-	reservedSystemNamespaces = []corev1.Namespace{
-		{ObjectMeta: metav1.ObjectMeta{Name: utils.K8sSysNamespace}},
-		{ObjectMeta: metav1.ObjectMeta{Name: utils.FleetSysNamespace}},
+	reservedNamespaces = []corev1.Namespace{
+		{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: utils.FleetSystemNamespace}},
 	}
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	Context("Pod validation webhook", func() {
-		It("should admit operations on Pods within whitelisted namespaces", func() {
-			for _, ns := range reservedSystemNamespaces {
-				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: ns.ObjectMeta.Name}
+		It("should admit operations on Pods within reserved namespaces", func() {
+			for _, reservedNamespace := range reservedNamespaces {
+				objKey := client.ObjectKey{Name: utils.RandStr(), Namespace: reservedNamespace.Name}
 				nginxPod := &corev1.Pod{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "Pod",
@@ -64,10 +64,10 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				}
 
-				By(fmt.Sprintf("expecting admission of operation CREATE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
+				By(fmt.Sprintf("expecting admission of operation CREATE of Pod in reserved namespace %s", reservedNamespace.Name))
 				Expect(HubCluster.KubeClient.Create(ctx, nginxPod)).Should(Succeed())
 
-				By(fmt.Sprintf("expecting admission of operation UPDATE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
+				By(fmt.Sprintf("expecting admission of operation UPDATE of Pod in reserved namespace %s", reservedNamespace.Name))
 				var podV2 *corev1.Pod
 				Eventually(func() error {
 					var currentPod corev1.Pod
@@ -77,11 +77,11 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					return HubCluster.KubeClient.Update(ctx, podV2)
 				}, testUtils.PollTimeout, testUtils.PollInterval).Should(Succeed())
 
-				By(fmt.Sprintf("expecting admission of operation DELETE of Pod in whitelisted namespace %s", ns.ObjectMeta.Name))
+				By(fmt.Sprintf("expecting admission of operation DELETE of Pod in reserved namespace %s", reservedNamespace.Name))
 				Expect(HubCluster.KubeClient.Delete(ctx, nginxPod)).Should(Succeed())
 			}
 		})
-		It("should deny create operation on Pods within any non-whitelisted namespaces", func() {
+		It("should deny create operation on Pods within any non-reserved namespace", func() {
 			rndNs := corev1.Namespace{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "namespace",
@@ -119,7 +119,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			By(fmt.Sprintf("expecting denial of operation %s of Pod in non-whitelisted namespace %s", admv1.Create, rndNs.Name))
+			By(fmt.Sprintf("expecting denial of operation %s of Pod in non-reserved namespace %s", admv1.Create, rndNs.Name))
 			err := HubCluster.KubeClient.Create(ctx, nginxPod)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create Pod call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -495,7 +495,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	})
 	Context("ReplicaSet validation webhook", func() {
 		It("should admit operation CREATE on ReplicaSets in system reserved namespaces", func() {
-			for _, ns := range reservedSystemNamespaces {
+			for _, ns := range reservedNamespaces {
 				rs := &appsv1.ReplicaSet{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "ReplicaSet",
@@ -541,7 +541,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				}
 
-				By(fmt.Sprintf("expecting admission of operation CREATE in system reserved namespace %s", ns.ObjectMeta.Name))
+				By(fmt.Sprintf("expecting admission of operation CREATE in system reserved namespace %s", ns.Name))
 				Expect(HubCluster.KubeClient.Create(ctx, rs)).Should(Succeed())
 			}
 		})

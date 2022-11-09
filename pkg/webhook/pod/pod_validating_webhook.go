@@ -45,7 +45,7 @@ func (v *podValidator) Handle(ctx context.Context, req admission.Request) admiss
 		if err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		if pod.Namespace != utils.K8sSysNamespace && pod.Namespace != utils.FleetSysNamespace {
+		if !utils.IsReservedNamespace(pod.Namespace) {
 			return admission.Denied(fmt.Sprintf("Pod %s/%s creation is disallowed in the fleet hub cluster", pod.Namespace, pod.Name))
 		}
 	}

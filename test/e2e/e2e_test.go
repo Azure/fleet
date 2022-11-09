@@ -174,7 +174,7 @@ var _ = BeforeSuite(func() {
 	identity := rbacv1.Subject{
 		Name:      "member-agent-sa",
 		Kind:      "ServiceAccount",
-		Namespace: utils.FleetSysNamespace,
+		Namespace: utils.FleetSystemNamespace,
 	}
 	mc = &v1alpha1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
