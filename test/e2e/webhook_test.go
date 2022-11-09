@@ -164,6 +164,9 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				return nil
 			}, testUtils.PollTimeout, testUtils.PollInterval).Should(Succeed())
 		})
+		AfterEach(func() {
+			_ = HubCluster.KubeClient.Delete(ctx, &createdCRP)
+		})
 		It("should admit write operations for valid ClusterResourcePlacement resources", func() {
 			By("expecting admission of operation CREATE")
 			// Handled for free via BeforeEach()
