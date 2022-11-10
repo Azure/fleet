@@ -147,7 +147,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				},
 			}
-			By("expecting admission of operation CREATE of a valid CRP")
+			By("expecting admission of operation CREATE of a valid ClusterResourcePlacement")
 			Expect(HubCluster.KubeClient.Create(ctx, &validCRP)).Should(Succeed())
 
 			// Get the created CRP
@@ -163,12 +163,12 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			}, testUtils.PollTimeout, testUtils.PollInterval).Should(Succeed())
 		})
 		AfterEach(func() {
-			By("expecting admission of operation DELETE")
+			By("expecting admission of operation DELETE of ClusterResourcePlacement")
 			Expect(HubCluster.KubeClient.Delete(ctx, &createdCRP)).Should(Succeed())
 		})
 		It("should admit write operations for valid ClusterResourcePlacement resources", func() {
 			// create & delete write operations are handled within the BeforeEach & AfterEach functions.
-			By("expecting admission of operation UPDATE with a valid CRP")
+			By("expecting admission of operation UPDATE with a valid ClusterResourcePlacement")
 			createdCRP.Spec.ResourceSelectors[0].Name = utils.RandStr()
 			Expect(HubCluster.KubeClient.Update(ctx, &createdCRP)).Should(Succeed())
 		})
@@ -196,7 +196,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			By("expecting denial of operation CREATE with the invalid CRP")
+			By("expecting denial of operation CREATE with the invalid ClusterResourcePlacement")
 			err := HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			Expect(err).Should(HaveOccurred())
 			var statusErr *k8sErrors.StatusError
@@ -204,7 +204,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("the labelSelector and name fields are mutually exclusive"))
 
-			By("expecting denial of operation UPDATE with the invalid CRP")
+			By("expecting denial of operation UPDATE with the invalid ClusterResourcePlacement")
 			createdCRP.Spec = invalidCRP.Spec
 			err = HubCluster.KubeClient.Update(ctx, &createdCRP)
 			Expect(err).Should(HaveOccurred())
@@ -247,14 +247,14 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			By("expecting denial of operation CREATE")
+			By("expecting denial of operation CREATE of ClusterResourcePlacement")
 			err := HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ClusterResourcePlacement call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in cluster selector %+v is invalid:", invalidCRP.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms[0]))))
 
-			By("expecting denial of operation UPDATE")
+			By("expecting denial of operation UPDATE of ClusterResourcePlacement")
 			createdCRP.Spec = invalidCRP.Spec
 			err = HubCluster.KubeClient.Update(ctx, &createdCRP)
 			Expect(err).Should(HaveOccurred())
@@ -293,14 +293,14 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			By("expecting denial of operation CREATE with the invalid CRP")
+			By("expecting denial of operation CREATE with the invalid ClusterResourcePlacement")
 			err := HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ClusterResourcePlacement call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in resource selector %+v is invalid:", invalidCRP.Spec.ResourceSelectors[0]))))
 
-			By("expecting denial of operation UPDATE with the invalid CRP")
+			By("expecting denial of operation UPDATE with the invalid ClusterResourcePlacement")
 			createdCRP.Spec = invalidCRP.Spec
 			err = HubCluster.KubeClient.Update(ctx, &createdCRP)
 			Expect(err).Should(HaveOccurred())
@@ -336,14 +336,14 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				Kind:    invalidCRP.Spec.ResourceSelectors[0].Kind,
 			}
 
-			By("expecting denial of operation CREATE with the invalid CRP")
+			By("expecting denial of operation CREATE with the invalid ClusterResourcePlacement")
 			err := HubCluster.KubeClient.Create(ctx, &invalidCRP)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ClusterResourcePlacement call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.clusterresourceplacement.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %s", invalidGVK))))
 
-			By("expecting denial of operation UPDATE with the invalid CRP")
+			By("expecting denial of operation UPDATE with the invalid ClusterResourcePlacement")
 			createdCRP.Spec = invalidCRP.Spec
 			err = HubCluster.KubeClient.Update(ctx, &createdCRP)
 			Expect(err).Should(HaveOccurred())
@@ -353,7 +353,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 		})
 	})
 	Context("ReplicaSet validation webhook", func() {
-		It("should admit operation CREATE on ReplicaSets in system reserved namespaces", func() {
+		It("should admit operation CREATE on ReplicaSets in reserved namespaces", func() {
 			for _, ns := range reservedNamespaces {
 				rs := &appsv1.ReplicaSet{
 					TypeMeta: metav1.TypeMeta{
@@ -400,11 +400,11 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					},
 				}
 
-				By(fmt.Sprintf("expecting admission of operation CREATE in system reserved namespace %s", ns.Name))
+				By(fmt.Sprintf("expecting admission of operation CREATE of ReplicaSet in reserved namespace %s", ns.Name))
 				Expect(HubCluster.KubeClient.Create(ctx, rs)).Should(Succeed())
 			}
 		})
-		It("should deny CREATE operation on ReplicaSets in a non-system reserved namespace", func() {
+		It("should deny CREATE operation on ReplicaSets in a non-reserved namespace", func() {
 			rs := &appsv1.ReplicaSet{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ReplicaSet",
@@ -450,7 +450,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 				},
 			}
 
-			By("expecting denial of operation CREATE")
+			By("expecting denial of operation CREATE of ReplicaSet")
 			err := HubCluster.KubeClient.Create(ctx, rs)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ReplicaSet call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
