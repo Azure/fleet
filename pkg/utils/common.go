@@ -29,12 +29,12 @@ import (
 )
 
 const (
-	KubePrefix            = "kube-"
-	FleetPrefix           = "fleet-"
-	FleetSystemNamespace  = FleetPrefix + "system"
-	NamespaceNameFormat   = FleetPrefix + "member-%s"
-	RoleNameFormat        = FleetPrefix + "role-%s"
-	RoleBindingNameFormat = FleetPrefix + "rolebinding-%s"
+	kubePrefix            = "kube-"
+	fleetPrefix           = "fleet-"
+	FleetSystemNamespace  = fleetPrefix + "system"
+	NamespaceNameFormat   = fleetPrefix + "member-%s"
+	RoleNameFormat        = fleetPrefix + "role-%s"
+	RoleBindingNameFormat = fleetPrefix + "rolebinding-%s"
 )
 
 const (
@@ -244,7 +244,7 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 
 // IsReservedNamespace indicates if an argued namespace is reserved.
 func IsReservedNamespace(namespace string) bool {
-	return strings.HasPrefix(namespace, FleetPrefix) || strings.HasPrefix(namespace, KubePrefix)
+	return strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix)
 }
 
 // ShouldPropagateNamespace decides if we should propagate the resources in the namespace.
