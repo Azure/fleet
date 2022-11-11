@@ -43,17 +43,31 @@ var (
 	imc               *v1alpha1.InternalMemberCluster
 	ctx               context.Context
 
-	// This namespace will store Member cluster-related CRs, such as v1alpha1.MemberCluster
+	// The fleet-system namespace.
+	fleetSystemNamespace = &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fleet-system",
+		},
+	}
+
+	// The kube-system namespace
+	kubeSystemNamespace = &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kube-system",
+		},
+	}
+
+	// This namespace will store Member cluster-related CRs, such as v1alpha1.MemberCluster.
 	memberNamespace = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName),
+			Name: fmt.Sprintf("fleet-member-%s", MemberCluster.ClusterName),
 		},
 	}
 
 	// This namespace in HubCluster will store v1alpha1.Work to simulate Work-related features in Hub Cluster.
 	workNamespace = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(utils.NamespaceNameFormat, MemberCluster.ClusterName),
+			Name: fmt.Sprintf("fleet-member-%s", MemberCluster.ClusterName),
 		},
 	}
 
@@ -174,7 +188,7 @@ var _ = BeforeSuite(func() {
 	identity := rbacv1.Subject{
 		Name:      "member-agent-sa",
 		Kind:      "ServiceAccount",
-		Namespace: "fleet-system",
+		Namespace: utils.FleetSystemNamespace,
 	}
 	mc = &v1alpha1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{

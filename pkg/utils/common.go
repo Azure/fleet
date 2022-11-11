@@ -242,10 +242,14 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 	return true, nil
 }
 
-// ShouldPropagateNamespace decides if we should propagate the resources in the namespace
+// IsReservedNamespace indicates if an argued namespace is reserved.
+func IsReservedNamespace(namespace string) bool {
+	return strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix)
+}
+
+// ShouldPropagateNamespace decides if we should propagate the resources in the namespace.
 func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]bool) bool {
-	// special case for namespace have the reserved prefix
-	if strings.HasPrefix(namespace, fleetPrefix) || strings.HasPrefix(namespace, kubePrefix) {
+	if IsReservedNamespace(namespace) {
 		return false
 	}
 

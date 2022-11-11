@@ -21,6 +21,7 @@ import (
 	"time"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +33,7 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/pod"
+	"go.goms.io/fleet/pkg/webhook/replicaset"
 )
 
 const (
@@ -82,7 +84,7 @@ func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *optio
 	}
 	caPEM, err := w.genCertificate(certDir)
 	if err != nil {
-		return nil, err // TODO
+		return nil, err
 	}
 	w.caPEM = caPEM
 	return &w, err
@@ -97,9 +99,9 @@ func (w *Config) Start(ctx context.Context) error {
 	return nil
 }
 
-// createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook
+// createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook.
 func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
-	failPolicy := admv1.Fail // reject request if the webhook doesn't work
+	failPolicy := admv1.Fail
 	sideEffortsNone := admv1.SideEffectClassNone
 	namespacedScope := admv1.NamespacedScope
 	clusterScope := admv1.ClusterScope
@@ -155,6 +157,26 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 					},
 				},
 			},
+			{
+				Name:                    "fleet.replicaset.validating",
+				ClientConfig:            w.createClientConfig(appsv1.ReplicaSet{}),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.Create,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{"apps"},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"replicasets"},
+							Scope:       &namespacedScope,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -178,6 +200,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 	return nil
 }
 
+// createClientConfig generates the client configuration with either service ref or URL for the argued interface.
 func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookClientConfig {
 	serviceRef := admv1.ServiceReference{
 		Namespace: w.serviceNamespace,
@@ -192,6 +215,9 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 	case fleetv1alpha1.ClusterResourcePlacement:
 		serviceEndpoint = w.serviceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
+	case appsv1.ReplicaSet:
+		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
+		serviceRef.Path = pointer.String(replicaset.ValidationPath)
 	}
 
 	config := admv1.WebhookClientConfig{
@@ -206,7 +232,7 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 	return config
 }
 
-// genCertificate generates the serving cerficiate for the webhook server
+// genCertificate generates the serving cerficiate for the webhook server.
 func (w *Config) genCertificate(certDir string) ([]byte, error) {
 	caPEM, certPEM, keyPEM, err := w.genSelfSignedCert()
 	if err != nil {
