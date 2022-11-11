@@ -46,14 +46,14 @@ var (
 	// The fleet-system namespace.
 	fleetSystemNamespace = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("fleet-system"),
+			Name: "fleet-system",
 		},
 	}
 
 	// The kube-system namespace
 	kubeSystemNamespace = &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("kube-system"),
+			Name: "kube-system",
 		},
 	}
 
