@@ -391,7 +391,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	// get Config map for curObj
 	var configMap v1.ConfigMap
 	configMapName := getConfigMapName(curObj, gvr)
-	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: "default"}, &configMap); err != nil {
+	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: "fleet-system"}, &configMap); err != nil {
 		klog.ErrorS(err, "cannot retrieve config map", "configMap", configMapName)
 	}
 
@@ -442,17 +442,9 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		klog.ErrorS(err, "failed to compute last modified configuration", "manifest", manifestObj.GetName())
 		return nil, ManifestNoChangeAction, err
 	}
-	//updatedConfigMap := &v1.ConfigMap{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      configMap.Name,
-	//		Namespace: "default",
-	//	},
-	//	Data: map[string]string{},
-	//}
-	//updatedConfigMap.Data[manifestHashAnnotation] = manifestHash
 	configMap.Data[lastAppliedConfigAnnotation] = lastModifiedConfig
 	// TODO Failing:  Operation cannot be fulfilled on configmaps "v1-clusterroles-test-cluster-role": StorageError: invalid object, Code: 4, Key: /registry/configmaps/default/v1-clusterroles-test-cluster-role, ResourceVersion: 0, AdditionalErrorMsg: Precondition failed: UID in precondition: 4aec6193-45df-478e-aa4e-75cba10aeac0, UID in object meta:
-	if err := r.client.Update(ctx, configMap); err != nil {
+	if err := r.spokeClient.Update(ctx, configMap); err != nil {
 		klog.ErrorS(err, "failed to update config map", "configMap", configMap.Name)
 		return nil, ManifestNoChangeAction, err
 	}
@@ -664,7 +656,7 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, manifestObj *
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configMapName,
-			Namespace: "default",
+			Namespace: "fleet-system",
 		},
 		Data: map[string]string{},
 	}
