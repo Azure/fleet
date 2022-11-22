@@ -33,8 +33,10 @@ const (
 	workFinalizer = "fleet.azure.com/work-cleanup"
 
 	manifestHashAnnotation = "fleet-spec-hash"
+	manifestHashKey        = "fleet-spec-hash"
 
 	lastAppliedConfigAnnotation = "fleet-last-applied-configuration"
+	lastAppliedConfigKey        = "fleet-last-applied-configuration"
 
 	ConditionTypeApplied   = "Applied"
 	ConditionTypeAvailable = "Available"

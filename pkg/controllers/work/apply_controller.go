@@ -356,7 +356,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err := r.createConfigMap(ctx, manifestObj, gvr, manifestHash, lastModifiedConfig); err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
-		// another possible case where configmap gets created but manifest doesn't get created.
+		// possible case where configmap gets created but manifest doesn't get created.
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
@@ -389,15 +389,16 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// get Config map for curObj
-	var configMap v1.ConfigMap
+	var curObjConfigMap v1.ConfigMap
 	configMapName := getConfigMapName(curObj, gvr)
-	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: "fleet-system"}, &configMap); err != nil {
+	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: "fleet-system"}, &curObjConfigMap); err != nil {
 		klog.ErrorS(err, "cannot retrieve config map", "configMap", configMapName)
+		return nil, ManifestNoChangeAction, err
 	}
 
 	// We only try to update the object if its spec hash value has changed.
-	if manifestHash != configMap.Data[manifestHashAnnotation] {
-		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj, manifestHash, &configMap)
+	if manifestHash != curObjConfigMap.Data[manifestHashAnnotation] {
+		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj, manifestHash, &curObjConfigMap)
 	}
 
 	return curObj, ManifestNoChangeAction, nil
@@ -405,20 +406,20 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 // patchCurrentResource uses three way merge to patch the current resource with the new manifest we get from the work.
 func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr schema.GroupVersionResource,
-	manifestObj, curObj *unstructured.Unstructured, manifestHash string, configMap *v1.ConfigMap) (*unstructured.Unstructured, applyAction, error) {
+	manifestObj, curObj *unstructured.Unstructured, manifestHash string, curObjConfigMap *v1.ConfigMap) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
 	}
 	klog.V(2).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
 		"new hash", manifestHash,
-		"existing hash", configMap.Data[manifestHashAnnotation])
+		"existing hash", curObjConfigMap.Data[manifestHashKey])
 
 	// we need to merge the owner reference between the current and the manifest since we support one manifest
 	// belong to multiple work so it contains the union of all the appliedWork
 	manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
-	patch, err := threeWayMergePatch(curObj, manifestObj, configMap)
+	patch, err := threeWayMergePatch(curObj, manifestObj, curObjConfigMap)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
 		return nil, ManifestNoChangeAction, err
@@ -435,17 +436,24 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		klog.ErrorS(patchErr, "failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
 		return nil, ManifestNoChangeAction, patchErr
 	}
-	// calculate last modified config. possibility where manifest gets patched, but we don't set the last modified config below
-	lastModifiedConfig, err := computeModifiedConfiguration(manifestObj)
+	// calculate manifest hash & last modified config again to set the new manifest hash & last applied config after patch gets applied
+	// possibility where manifest gets patched, but we don't set the last modified config.
+	updatedManifestHash, err := computeManifestHash(manifestObj)
 	if err != nil {
-		// error message for manifest with namespace ?
-		klog.ErrorS(err, "failed to compute last modified configuration", "manifest", manifestObj.GetName())
+		// namespace for manifest can be empty
+		klog.ErrorS(err, "failed to compute new manifest hash", "manifest", manifestObj.GetName(), "namespace", manifestObj.GetNamespace())
 		return nil, ManifestNoChangeAction, err
 	}
-	configMap.Data[lastAppliedConfigAnnotation] = lastModifiedConfig
-	// TODO Failing:  Operation cannot be fulfilled on configmaps "v1-clusterroles-test-cluster-role": StorageError: invalid object, Code: 4, Key: /registry/configmaps/default/v1-clusterroles-test-cluster-role, ResourceVersion: 0, AdditionalErrorMsg: Precondition failed: UID in precondition: 4aec6193-45df-478e-aa4e-75cba10aeac0, UID in object meta:
-	if err := r.spokeClient.Update(ctx, configMap); err != nil {
-		klog.ErrorS(err, "failed to update config map", "configMap", configMap.Name)
+	updatedLastModifiedConfig, err := computeModifiedConfiguration(manifestObj)
+	if err != nil {
+		// namespace for manifest can be empty
+		klog.ErrorS(err, "failed to compute new last modified configuration", "manifest", manifestObj.GetName(), "namespace", manifestObj.GetNamespace())
+		return nil, ManifestNoChangeAction, err
+	}
+	curObjConfigMap.Data[manifestHashKey] = updatedManifestHash
+	curObjConfigMap.Data[lastAppliedConfigKey] = updatedLastModifiedConfig
+	if err := r.spokeClient.Update(ctx, curObjConfigMap); err != nil {
+		klog.ErrorS(err, "failed to update config map", "configMap", curObjConfigMap.Name)
 		return nil, ManifestNoChangeAction, err
 	}
 	klog.V(2).InfoS("manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
@@ -538,8 +546,6 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	// remove the last applied Annotation to avoid unlimited recursion
 	annotation := manifest.GetAnnotations()
 	if annotation != nil {
-		//delete(annotation, manifestHashAnnotation)
-		//delete(annotation, lastAppliedConfigAnnotation)
 		if len(annotation) == 0 {
 			manifest.SetAnnotations(nil)
 		} else {
@@ -660,8 +666,8 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, manifestObj *
 		},
 		Data: map[string]string{},
 	}
-	configMap.Data[manifestHashAnnotation] = manifestHash
-	configMap.Data[lastAppliedConfigAnnotation] = lastModifiedConfig
+	configMap.Data[manifestHashKey] = manifestHash
+	configMap.Data[lastAppliedConfigKey] = lastModifiedConfig
 	err := r.spokeClient.Create(ctx, configMap)
 	if err != nil {
 		klog.ErrorS(err, "config map create failed", "configMap", configMapName)
@@ -674,6 +680,7 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, manifestObj *
 func getConfigMapName(manifestObj *unstructured.Unstructured, gvr schema.GroupVersionResource) string {
 	var configMapName string
 	isNamespaced := len(manifestObj.GetNamespace()) > 0
+	// Need to ensure if configName won't exceed length limit
 	if isNamespaced {
 		configMapName = gvr.Version + "-" + gvr.Resource + "-" + manifestObj.GetName() + "-" + manifestObj.GetNamespace()
 	} else {

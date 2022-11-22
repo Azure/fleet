@@ -26,14 +26,14 @@ func init() {
 
 // threeWayMergePatch creates a patch by computing a three-way diff based on
 // an object's current state, modified state, and last-applied-state recorded in its annotation.
-func threeWayMergePatch(currentObj, manifestObj client.Object, configMap *v1.ConfigMap) (client.Patch, error) {
+func threeWayMergePatch(currentObj, manifestObj client.Object, currentObjConfigMap *v1.ConfigMap) (client.Patch, error) {
 	//TODO: see if we should use something like json.ConfigCompatibleWithStandardLibrary.Marshal to make sure that
 	// the json we created is compatible with the format that json merge patch requires.
 	current, err := json.Marshal(currentObj)
 	if err != nil {
 		return nil, err
 	}
-	original := []byte(configMap.Data[lastAppliedConfigAnnotation])
+	original := []byte(currentObjConfigMap.Data[lastAppliedConfigKey])
 	manifest, err := json.Marshal(manifestObj)
 	if err != nil {
 		return nil, err
@@ -107,6 +107,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	return metadataAccessor.SetAnnotations(obj, annotations)
 }
 
+// setModifiedConfigurationAnnotation serializes the object into byte stream and returns it.
 func computeModifiedConfiguration(obj runtime.Object) (string, error) {
 	modified, err := json.Marshal(obj)
 	if err != nil {
