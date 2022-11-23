@@ -352,16 +352,16 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
-		// add owner reference of applied work for config map.
-		if err := r.createConfigMap(ctx, manifestObj, gvr, manifestHash, lastModifiedConfig); err != nil {
-			return nil, ManifestNoChangeAction, err
-		}
 		// possible case where configmap gets created but manifest doesn't get created.
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
 			klog.V(2).InfoS("successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
 			return actual, ManifestCreatedAction, nil
+		}
+		// add owner reference of applied work for config map.
+		if err := r.createConfigMap(ctx, manifestObj, gvr, manifestHash, lastModifiedConfig); err != nil {
+			return nil, ManifestNoChangeAction, err
 		}
 		return nil, ManifestNoChangeAction, err
 	}
@@ -393,6 +393,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	configMapName := getConfigMapName(curObj, gvr)
 	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: "fleet-system"}, &curObjConfigMap); err != nil {
 		klog.ErrorS(err, "cannot retrieve config map", "configMap", configMapName)
+		// recreate configmap
 		return nil, ManifestNoChangeAction, err
 	}
 
@@ -436,8 +437,11 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		klog.ErrorS(patchErr, "failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
 		return nil, ManifestNoChangeAction, patchErr
 	}
+	// Use manifest generation to check if configmap is outdated
+	// transition annotation to configmaps for older manifests
 	// calculate manifest hash & last modified config again to set the new manifest hash & last applied config after patch gets applied
 	// possibility where manifest gets patched, but we don't set the last modified config.
+	// ensure line 451 is needed, and modularize code to make it readable.
 	updatedManifestHash, err := computeManifestHash(manifestObj)
 	if err != nil {
 		// namespace for manifest can be empty
