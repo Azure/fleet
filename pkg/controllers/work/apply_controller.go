@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -381,6 +382,9 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return nil, ManifestNoChangeAction, err
 	}
 
+	// Migrate old objects with annotations to use configmap instead, will be removed after migration is complete.
+	r.migrateToConfigMap(ctx, curObj, gvr)
+
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
 		err = fmt.Errorf("resource is not managed by the work controller")
@@ -393,8 +397,22 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	configMapName := getConfigMapName(curObj, gvr)
 	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: "fleet-system"}, &curObjConfigMap); err != nil {
 		klog.ErrorS(err, "cannot retrieve config map", "configMap", configMapName)
-		// recreate configmap
-		return nil, ManifestNoChangeAction, err
+		// recreated configmap if it doesn't exist, what potential issues can it cause ?.
+		lastModifiedConfig, err := computeModifiedConfiguration(manifestObj)
+		if err != nil {
+			return nil, ManifestNoChangeAction, err
+		}
+		// add owner reference of applied work for config map.
+		if err := r.createConfigMap(ctx, manifestObj, gvr, manifestHash, lastModifiedConfig); err != nil {
+			return nil, ManifestNoChangeAction, err
+		}
+	}
+
+	// Use manifest generation to check if configmap is outdated
+	if curObj.GetGeneration() != curObjConfigMap.GetGeneration() {
+		if err := r.updateConfigMap(ctx, &curObjConfigMap, curObj); err != nil {
+			return nil, ManifestNoChangeAction, err
+		}
 	}
 
 	// We only try to update the object if its spec hash value has changed.
@@ -437,27 +455,11 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		klog.ErrorS(patchErr, "failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
 		return nil, ManifestNoChangeAction, patchErr
 	}
-	// Use manifest generation to check if configmap is outdated
-	// transition annotation to configmaps for older manifests
+
 	// calculate manifest hash & last modified config again to set the new manifest hash & last applied config after patch gets applied
 	// possibility where manifest gets patched, but we don't set the last modified config.
 	// ensure line 451 is needed, and modularize code to make it readable.
-	updatedManifestHash, err := computeManifestHash(manifestObj)
-	if err != nil {
-		// namespace for manifest can be empty
-		klog.ErrorS(err, "failed to compute new manifest hash", "manifest", manifestObj.GetName(), "namespace", manifestObj.GetNamespace())
-		return nil, ManifestNoChangeAction, err
-	}
-	updatedLastModifiedConfig, err := computeModifiedConfiguration(manifestObj)
-	if err != nil {
-		// namespace for manifest can be empty
-		klog.ErrorS(err, "failed to compute new last modified configuration", "manifest", manifestObj.GetName(), "namespace", manifestObj.GetNamespace())
-		return nil, ManifestNoChangeAction, err
-	}
-	curObjConfigMap.Data[manifestHashKey] = updatedManifestHash
-	curObjConfigMap.Data[lastAppliedConfigKey] = updatedLastModifiedConfig
-	if err := r.spokeClient.Update(ctx, curObjConfigMap); err != nil {
-		klog.ErrorS(err, "failed to update config map", "configMap", curObjConfigMap.Name)
+	if err := r.updateConfigMap(ctx, curObjConfigMap, manifestObj); err != nil {
 		return nil, ManifestNoChangeAction, err
 	}
 	klog.V(2).InfoS("manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
@@ -678,6 +680,56 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, manifestObj *
 		return err
 	}
 	klog.V(2).InfoS("config map was created", "configMap", configMapName)
+	return nil
+}
+
+func (r *ApplyWorkReconciler) updateConfigMap(ctx context.Context, configMap *v1.ConfigMap, obj *unstructured.Unstructured) error {
+	updatedManifestHash, err := computeManifestHash(obj)
+	if err != nil {
+		// namespace for manifest can be empty
+		klog.ErrorS(err, "failed to compute new manifest hash", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
+		return err
+	}
+	updatedLastModifiedConfig, err := computeModifiedConfiguration(obj)
+	if err != nil {
+		// namespace for manifest can be empty
+		klog.ErrorS(err, "failed to compute new last modified configuration", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
+		return err
+	}
+	configMap.Data[manifestHashKey] = updatedManifestHash
+	configMap.Data[lastAppliedConfigKey] = updatedLastModifiedConfig
+	if err := r.spokeClient.Update(ctx, configMap); err != nil {
+		klog.ErrorS(err, "failed to update config map", "configMap", configMap.Name)
+		return err
+	}
+	return nil
+}
+
+// We can calculate the manifestHash & lastAppliedConfig again wiping out previous state or make sure the annotations in the last applied config doesn't cause issue in patch.
+func (r *ApplyWorkReconciler) migrateToConfigMap(ctx context.Context, obj *unstructured.Unstructured, gvr schema.GroupVersionResource) error {
+	annots, err := metadataAccessor.Annotations(obj)
+	if err != nil {
+		return fmt.Errorf("cannot access metadata.annotations: %w", err)
+	}
+	if annots == nil {
+		return errors.New("object does not have manifestHash/lastAppliedConfiguration")
+	}
+	if annots[manifestHashAnnotation] == nil && annots[lastAppliedConfigAnnotation] == nil {
+
+	}
+	manifestHash, ok := annots[manifestHashAnnotation]
+	if !ok {
+		return errors.New("object does not have manifestHash")
+	}
+	lastModifiedConfig, ok := annots[lastAppliedConfigAnnotation]
+	if !ok {
+		return errors.New("object does not have lastAppliedConfigAnnotation")
+	}
+	delete(annots, manifestHashAnnotation)
+	delete(annots, lastAppliedConfigAnnotation)
+	if err := r.createConfigMap(ctx, obj, gvr, manifestHash, lastModifiedConfig); err != nil {
+		return err
+	}
 	return nil
 }
 
