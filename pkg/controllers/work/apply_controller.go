@@ -354,7 +354,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
-		// possible case where configmap gets created but manifest doesn't get created.
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
@@ -451,7 +450,6 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 
 	// calculate manifest hash & last modified config again to set the new manifest hash & last applied config after patch gets applied
 	// possibility where manifest gets patched, but we don't set the last modified config.
-	// ensure line 451 is needed, and modularize code to make it readable.
 	if err := r.updateConfigMap(ctx, curObjConfigMap, manifestObj); err != nil {
 		return nil, ManifestNoChangeAction, err
 	}
