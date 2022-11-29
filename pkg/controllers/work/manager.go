@@ -32,10 +32,10 @@ import (
 const (
 	workFinalizer = "fleet.azure.com/work-cleanup"
 
-	manifestHashAnnotation = "fleet-spec-hash"
+	manifestHashAnnotation = "fleet.azure.com/spec-hash"
 	manifestHashKey        = "fleet-spec-hash"
 
-	lastAppliedConfigAnnotation = "fleet-last-applied-configuration"
+	lastAppliedConfigAnnotation = "fleet.azure.com/last-applied-configuration"
 	lastAppliedConfigKey        = "fleet-last-applied-configuration"
 
 	ConditionTypeApplied   = "Applied"
