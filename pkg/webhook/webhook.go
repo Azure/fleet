@@ -181,7 +181,10 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 		},
 	}
 
-	bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &whCfg)
+	if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &whCfg); err != nil {
+		return err
+	}
+
 	if err := w.mgr.GetClient().Create(ctx, &whCfg); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return err
@@ -390,11 +393,10 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 }
 
 // bindWebhookConfigToFleetSystem sets the OwnerReference of the webhook config to a cluster scoped Fleet resource.
-func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client, validatingWebhookConfig *admv1.ValidatingWebhookConfiguration) {
+func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client, validatingWebhookConfig *admv1.ValidatingWebhookConfiguration) error {
 	var fleetNs corev1.Namespace
-	err := k8Client.Get(ctx, client.ObjectKey{Name: "fleet-system"}, &fleetNs)
-	if err != nil {
-		klog.ErrorS(err, "error while binding ValidatingWebhookConfig to fleet-system namespace")
+	if err := k8Client.Get(ctx, client.ObjectKey{Name: "fleet-system"}, &fleetNs); err != nil {
+		return err
 	}
 
 	ownerRef := metav1.OwnerReference{
@@ -406,4 +408,5 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 	}
 
 	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}
+	return nil
 }
