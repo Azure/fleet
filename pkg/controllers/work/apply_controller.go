@@ -665,7 +665,7 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.Gr
 	}
 	configMap.Data[manifestHashKey] = manifestHash
 	configMap.Data[lastAppliedConfigKey] = lastModifiedConfig
-	// add applied work owner reference.
+	// add applied work owner reference. let's check if it works
 	addOwnerRef(owner, configMap)
 	err := r.spokeClient.Create(ctx, configMap)
 	if err != nil {
@@ -750,6 +750,7 @@ func getConfigMapName(obj *unstructured.Unstructured, gvr schema.GroupVersionRes
 	isNamespaced := len(obj.GetNamespace()) > 0
 	// Need to ensure if configName won't exceed length limit
 	if isNamespaced {
+		// This can exceed 253 characters.
 		configMapName = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName() + "-" + obj.GetNamespace()
 	} else {
 		configMapName = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName()
