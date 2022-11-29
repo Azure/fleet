@@ -383,7 +383,10 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// Migrate old objects with annotations to use configmap instead, will be removed after migration is complete.
-	r.migrateToConfigMap(ctx, curObj, gvr)
+	if err := r.migrateToConfigMap(ctx, curObj, gvr); err != nil {
+		klog.ErrorS(err, "cannot migrate manifest to use config map", "manifest", manifestObj.GetName())
+		return nil, ManifestNoChangeAction, err
+	}
 
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
@@ -714,21 +717,15 @@ func (r *ApplyWorkReconciler) migrateToConfigMap(ctx context.Context, obj *unstr
 	if annots == nil {
 		return errors.New("object does not have manifestHash/lastAppliedConfiguration")
 	}
-	if annots[manifestHashAnnotation] == nil && annots[lastAppliedConfigAnnotation] == nil {
-
-	}
-	manifestHash, ok := annots[manifestHashAnnotation]
-	if !ok {
-		return errors.New("object does not have manifestHash")
-	}
-	lastModifiedConfig, ok := annots[lastAppliedConfigAnnotation]
-	if !ok {
-		return errors.New("object does not have lastAppliedConfigAnnotation")
-	}
-	delete(annots, manifestHashAnnotation)
-	delete(annots, lastAppliedConfigAnnotation)
-	if err := r.createConfigMap(ctx, obj, gvr, manifestHash, lastModifiedConfig); err != nil {
-		return err
+	// Assuming that manifest has both annotations on it
+	manifestHash, ok1 := annots[manifestHashAnnotation]
+	lastModifiedConfig, ok2 := annots[lastAppliedConfigAnnotation]
+	if ok1 || ok2 {
+		delete(annots, manifestHashAnnotation)
+		delete(annots, lastAppliedConfigAnnotation)
+		if err := r.createConfigMap(ctx, obj, gvr, manifestHash, lastModifiedConfig); err != nil {
+			return err
+		}
 	}
 	return nil
 }
