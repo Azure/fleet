@@ -554,7 +554,7 @@ func (r *ApplyWorkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // we have modified.
 func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	manifest := obj.DeepCopy()
-	// remove the last applied Annotation to avoid unlimited recursion
+	// remove the config map annotation to avoid unlimited recursion, need to think ?
 	annotation := manifest.GetAnnotations()
 	if annotation != nil {
 		delete(annotation, configMapNameAnnotation)
@@ -713,7 +713,7 @@ func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, obj *unstructure
 				klog.ErrorS(err, "cannot create config map for object", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
 				return nil, err
 			}
-			// get newly created config map recursively.
+			// get newly created config map recursively, doesn't look clean
 			newConfigMap, err := r.getConfigMap(ctx, obj, owner)
 			if err != nil {
 				return nil, err
