@@ -426,7 +426,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// We only try to update the object if its spec hash value has changed.
-	if manifestHash != curObjConfigMap.Data[manifestHashAnnotation] {
+	if manifestHash != curObjConfigMap.Data[manifestHashKey] {
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj, manifestHash, curObjConfigMap)
 	}
 
