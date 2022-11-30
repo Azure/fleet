@@ -32,6 +32,8 @@ import (
 const (
 	workFinalizer = "fleet.azure.com/work-cleanup"
 
+	configMapNameAnnotation = "fleet.azure.com/config-map-name"
+
 	manifestHashAnnotation = "fleet.azure.com/spec-hash"
 	manifestHashKey        = "fleet-spec-hash"
 

@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"time"
 
 	"go.uber.org/atomic"
@@ -34,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -53,6 +53,7 @@ import (
 const (
 	workFieldManagerName = "work-api-agent"
 	fleetSystemNamespace = "fleet-system"
+	configMapNamePrefix  = "configmap-"
 )
 
 // ApplyWorkReconciler reconciles a Work object
@@ -355,12 +356,14 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
+		configMapName := r.getRandomConfigMapName(ctx)
+		setConfigMapNameAnnotation(configMapName, manifestObj)
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
 			klog.V(2).InfoS("successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
 			// create configmap
-			if err := r.createConfigMap(ctx, gvr, manifestObj, owner, manifestHash, lastModifiedConfig); err != nil {
+			if err := r.createConfigMap(ctx, configMapName, owner, manifestHash, lastModifiedConfig); err != nil {
 				return nil, ManifestNoChangeAction, err
 			}
 			return actual, ManifestCreatedAction, nil
@@ -397,7 +400,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// get config map or create it if it doesn't exist.
-	curObjConfigMap, err := r.getConfigMap(ctx, gvr, curObj, owner)
+	curObjConfigMap, err := r.getConfigMap(ctx, curObj, owner)
 	if err != nil {
 		return nil, ManifestNoChangeAction, err
 	}
@@ -656,8 +659,7 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 	}
 }
 
-func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.GroupVersionResource, obj *unstructured.Unstructured, owner metav1.OwnerReference, manifestHash, lastModifiedConfig string) error {
-	configMapName := "configmap-"
+func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, configMapName string, owner metav1.OwnerReference, manifestHash, lastModifiedConfig string) error {
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: configMapName,
@@ -669,38 +671,24 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.Gr
 	configMap.Data[lastAppliedConfigKey] = lastModifiedConfig
 	// add applied work owner reference. let's check if it works
 	addOwnerRef(owner, configMap)
-	unstructuredCM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
-	if err != nil {
-		return err
-	}
-	unstructuredConfigMap := &unstructured.Unstructured{
-		Object: unstructuredCM,
-	}
-
-	gvr = schema.GroupVersionResource{
-		Group:    "",
-		Version:  "v1",
-		Resource: "configmaps",
-	}
-
-	actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(fleetSystemNamespace).Create(
-		ctx, unstructuredConfigMap, metav1.CreateOptions{FieldManager: workFieldManagerName})
-
-	//err := r.spokeClient.Create(ctx, configMap)
-	if err != nil {
+	if err := r.spokeClient.Create(ctx, configMap); err != nil {
 		klog.ErrorS(err, "config map create failed", "configMap")
 		return err
 	}
-	klog.V(2).InfoS("config map was created", "configMap", actual.GetName())
+	klog.V(2).InfoS("config map was created", "configMap", configMap.GetName())
 	return nil
 }
 
-func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.GroupVersionResource, obj *unstructured.Unstructured, owner metav1.OwnerReference) (*v1.ConfigMap, error) {
-	var configMap v1.ConfigMap
-	configMapName := getConfigMapName(obj, gvr)
-	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, &configMap); err != nil {
-		klog.ErrorS(err, "cannot retrieve config map", "configMap", configMapName)
-		// recreated configmap if it doesn't exist, what potential issues can it cause ?.
+func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, obj *unstructured.Unstructured, owner metav1.OwnerReference) (*v1.ConfigMap, error) {
+	var configMap *v1.ConfigMap
+	annotations := obj.GetAnnotations()
+	configMapName, ok := annotations[configMapNameAnnotation]
+	if !ok {
+		return nil, errors.New("manifest doesn't have a config map")
+	}
+	err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, configMap)
+	if apierrors.IsNotFound(err) {
+		// create config map since it's not found
 		manifestHash, err := computeManifestHash(obj)
 		if err != nil {
 			klog.ErrorS(err, "failed to compute manifest hash", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
@@ -711,12 +699,16 @@ func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.Group
 			klog.ErrorS(err, "failed compute last applied config", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
 			return nil, err
 		}
-		if err := r.createConfigMap(ctx, gvr, obj, owner, manifestHash, lastModifiedConfig); err != nil {
+		if err := r.createConfigMap(ctx, configMapName, owner, manifestHash, lastModifiedConfig); err != nil {
 			klog.ErrorS(err, "cannot create config map for object", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
 			return nil, err
 		}
+		// get newly created config map recursively.
+		if configMap, err = r.getConfigMap(ctx, obj, owner); err != nil {
+			return nil, err
+		}
 	}
-	return &configMap, nil
+	return configMap, nil
 }
 
 func (r *ApplyWorkReconciler) updateConfigMap(ctx context.Context, configMap *v1.ConfigMap, obj *unstructured.Unstructured) error {
@@ -749,7 +741,7 @@ func (r *ApplyWorkReconciler) migrateToConfigMap(ctx context.Context, gvr schema
 		return fmt.Errorf("cannot access metadata.annotations: %w", err)
 	}
 	if annots == nil {
-		return errors.New("object does not have manifestHash/lastAppliedConfiguration")
+		return errors.New("manifest does not have any annotations")
 	}
 	// Assuming that manifest has both annotations on it
 	manifestHash, ok1 := annots[manifestHashAnnotation]
@@ -757,24 +749,42 @@ func (r *ApplyWorkReconciler) migrateToConfigMap(ctx context.Context, gvr schema
 	if ok1 || ok2 {
 		delete(annots, manifestHashAnnotation)
 		delete(annots, lastAppliedConfigAnnotation)
-		if err := r.createConfigMap(ctx, gvr, obj, owner, manifestHash, lastModifiedConfig); err != nil {
+		configMapName := r.getRandomConfigMapName(ctx)
+		setConfigMapNameAnnotation(configMapName, obj)
+		// update manifest
+		if _, err := r.spokeDynamicClient.Resource(gvr).Namespace(obj.GetNamespace()).Update(ctx, obj, metav1.UpdateOptions{}); err != nil {
+			klog.ErrorS(err, "failed to update manifest with config map name annotation")
+			return err
+		}
+		if err := r.createConfigMap(ctx, configMapName, owner, manifestHash, lastModifiedConfig); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func getConfigMapName(obj *unstructured.Unstructured, gvr schema.GroupVersionResource) string {
+func (r *ApplyWorkReconciler) getRandomConfigMapName(ctx context.Context) string {
+	generator := names.SimpleNameGenerator
 	var configMapName string
-	isNamespaced := len(obj.GetNamespace()) > 0
-	// Need to ensure if configName won't exceed length limit
-	if isNamespaced {
-		// This can exceed 253 characters.
-		configMapName = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName() + "-" + obj.GetNamespace()
-	} else {
-		configMapName = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName()
+	var configMap v1.ConfigMap
+	for {
+		configMapName := generator.GenerateName(configMapNamePrefix)
+		if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, &configMap); err != nil {
+			if apierrors.IsNotFound(err) {
+				break
+			}
+		}
 	}
 	return configMapName
+}
+
+func setConfigMapNameAnnotation(configMapName string, obj *unstructured.Unstructured) {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[configMapNameAnnotation] = configMapName
+	obj.SetAnnotations(annotations)
 }
 
 // generateWorkAppliedCondition generate applied status condition for work.
