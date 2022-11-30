@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"time"
 
 	"go.uber.org/atomic"
@@ -358,10 +359,11 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
 			klog.V(2).InfoS("successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
+			// create configmap
+			if err := r.createConfigMap(ctx, gvr, manifestObj, owner, manifestHash, lastModifiedConfig); err != nil {
+				return nil, ManifestNoChangeAction, err
+			}
 			return actual, ManifestCreatedAction, nil
-		}
-		if err := r.createConfigMap(ctx, gvr, manifestObj, owner, manifestHash, lastModifiedConfig); err != nil {
-			return nil, ManifestNoChangeAction, err
 		}
 		return nil, ManifestNoChangeAction, err
 	}
@@ -655,11 +657,11 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 }
 
 func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.GroupVersionResource, obj *unstructured.Unstructured, owner metav1.OwnerReference, manifestHash, lastModifiedConfig string) error {
-	configMapName := getConfigMapName(obj, gvr)
+	configMapName := "configmap-"
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      configMapName,
-			Namespace: fleetSystemNamespace,
+			GenerateName: configMapName,
+			Namespace:    fleetSystemNamespace,
 		},
 		Data: map[string]string{},
 	}
@@ -667,12 +669,29 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.Gr
 	configMap.Data[lastAppliedConfigKey] = lastModifiedConfig
 	// add applied work owner reference. let's check if it works
 	addOwnerRef(owner, configMap)
-	err := r.spokeClient.Create(ctx, configMap)
+	unstructuredCM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(configMap)
 	if err != nil {
-		klog.ErrorS(err, "config map create failed", "configMap", configMapName)
 		return err
 	}
-	klog.V(2).InfoS("config map was created", "configMap", configMapName)
+	unstructuredConfigMap := &unstructured.Unstructured{
+		Object: unstructuredCM,
+	}
+
+	gvr = schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "configmaps",
+	}
+
+	actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(fleetSystemNamespace).Create(
+		ctx, unstructuredConfigMap, metav1.CreateOptions{FieldManager: workFieldManagerName})
+
+	//err := r.spokeClient.Create(ctx, configMap)
+	if err != nil {
+		klog.ErrorS(err, "config map create failed", "configMap")
+		return err
+	}
+	klog.V(2).InfoS("config map was created", "configMap", actual.GetName())
 	return nil
 }
 
