@@ -352,7 +352,11 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
 		// set config map name annotation on manifest
-		configMapName := r.getRandomConfigMapName(ctx)
+		configMapName, err := r.getRandomConfigMapName(ctx)
+		if err != nil {
+			klog.ErrorS(err, "failed to get random config map name for manifest", "manifest", manifestObj.GetName(), "namespace", manifestObj.GetNamespace())
+			return nil, ManifestNoChangeAction, err
+		}
 		setConfigMapNameAnnotation(configMapName, manifestObj)
 		// record the raw manifest with config map name annotation
 		lastModifiedConfig, err := computeModifiedConfiguration(manifestObj)
@@ -396,7 +400,14 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return nil, ManifestNoChangeAction, err
 	}
 
-	// get config map or create it if it doesn't exist.
+	klog.InfoS("Before trying to migrate")
+	// Migrate old objects with annotations mnifest hash and last modified annotation to use configmap instead, will be removed after migration is complete.
+	if err := r.migrateToConfigMap(ctx, gvr, curObj, owner); err != nil {
+		klog.ErrorS(err, "cannot migrate manifest to use config map", "manifest", manifestObj.GetName(), "namespace", manifestObj.GetNamespace())
+		return nil, ManifestNoChangeAction, err
+	}
+
+	// get config map or create it if it doesn't exist, need to set curObj generation to config map when creating it again
 	curObjConfigMap, err := r.getConfigMap(ctx, curObj, owner)
 	if err != nil {
 		return nil, ManifestNoChangeAction, err
@@ -406,13 +417,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// set config map name annotation on manifest object to prevent deletion during patch.
 	setConfigMapNameAnnotation(curObjConfigMap.GetName(), manifestObj)
-
-	klog.InfoS("Before trying to migrate")
-	// Migrate old objects with annotations to use configmap instead, will be removed after migration is complete.
-	if err := r.migrateToConfigMap(ctx, gvr, curObj, owner); err != nil {
-		klog.ErrorS(err, "cannot migrate manifest to use config map", "manifest", manifestObj.GetName())
-		return nil, ManifestNoChangeAction, err
-	}
 
 	// Use manifest generation to check if configmap is outdated
 	if curObj.GetGeneration() != curObjConfigMap.GetGeneration() {
@@ -463,7 +467,6 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 	}
 
 	// calculate manifest hash & last modified config again to set the new manifest hash & last applied config after patch gets applied
-	// possibility where manifest gets patched, but we don't set the last modified config.
 	if err := r.updateConfigMap(ctx, curObjConfigMap, manifestObj); err != nil {
 		return nil, ManifestNoChangeAction, err
 	}
@@ -765,7 +768,10 @@ func (r *ApplyWorkReconciler) migrateToConfigMap(ctx context.Context, gvr schema
 	if ok1 || ok2 {
 		delete(annots, manifestHashAnnotation)
 		delete(annots, lastAppliedConfigAnnotation)
-		configMapName := r.getRandomConfigMapName(ctx)
+		configMapName, err := r.getRandomConfigMapName(ctx)
+		if err != nil {
+			return err
+		}
 		setConfigMapNameAnnotation(configMapName, obj)
 		// update manifest
 		if _, err := r.spokeDynamicClient.Resource(gvr).Namespace(obj.GetNamespace()).Update(ctx, obj, metav1.UpdateOptions{}); err != nil {
@@ -779,7 +785,7 @@ func (r *ApplyWorkReconciler) migrateToConfigMap(ctx context.Context, gvr schema
 	return nil
 }
 
-func (r *ApplyWorkReconciler) getRandomConfigMapName(ctx context.Context) string {
+func (r *ApplyWorkReconciler) getRandomConfigMapName(ctx context.Context) (string, error) {
 	generator := names.SimpleNameGenerator
 	var configMapName string
 	var configMap v1.ConfigMap
@@ -789,9 +795,10 @@ func (r *ApplyWorkReconciler) getRandomConfigMapName(ctx context.Context) string
 			if apierrors.IsNotFound(err) {
 				break
 			}
+			return "", err
 		}
 	}
-	return configMapName
+	return configMapName, nil
 }
 
 func setConfigMapNameAnnotation(configMapName string, obj *unstructured.Unstructured) {
