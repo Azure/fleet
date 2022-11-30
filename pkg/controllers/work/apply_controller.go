@@ -351,13 +351,14 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
-		// record the raw manifest
+		// set config map name annotation on manifest
+		configMapName := r.getRandomConfigMapName(ctx)
+		setConfigMapNameAnnotation(configMapName, manifestObj)
+		// record the raw manifest with config map name annotation
 		lastModifiedConfig, err := computeModifiedConfiguration(manifestObj)
 		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
-		configMapName := r.getRandomConfigMapName(ctx)
-		setConfigMapNameAnnotation(configMapName, manifestObj)
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
@@ -386,6 +387,8 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return nil, ManifestNoChangeAction, err
 	}
 
+	klog.InfoS("generation for curObj", "generation", curObj.GetGeneration())
+
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
 		err = fmt.Errorf("resource is not managed by the work controller")
@@ -393,15 +396,21 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return nil, ManifestNoChangeAction, err
 	}
 
-	// Migrate old objects with annotations to use configmap instead, will be removed after migration is complete.
-	if err := r.migrateToConfigMap(ctx, gvr, curObj, owner); err != nil {
-		klog.ErrorS(err, "cannot migrate manifest to use config map", "manifest", manifestObj.GetName())
-		return nil, ManifestNoChangeAction, err
-	}
-
 	// get config map or create it if it doesn't exist.
 	curObjConfigMap, err := r.getConfigMap(ctx, curObj, owner)
 	if err != nil {
+		return nil, ManifestNoChangeAction, err
+	}
+
+	klog.InfoS("generation for configmap", "generation", curObjConfigMap.GetGeneration())
+
+	// set config map name annotation on manifest object to prevent deletion during patch.
+	setConfigMapNameAnnotation(curObjConfigMap.GetName(), manifestObj)
+
+	klog.InfoS("Before trying to migrate")
+	// Migrate old objects with annotations to use configmap instead, will be removed after migration is complete.
+	if err := r.migrateToConfigMap(ctx, gvr, curObj, owner); err != nil {
+		klog.ErrorS(err, "cannot migrate manifest to use config map", "manifest", manifestObj.GetName())
 		return nil, ManifestNoChangeAction, err
 	}
 
@@ -548,6 +557,7 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	// remove the last applied Annotation to avoid unlimited recursion
 	annotation := manifest.GetAnnotations()
 	if annotation != nil {
+		delete(annotation, configMapNameAnnotation)
 		if len(annotation) == 0 {
 			manifest.SetAnnotations(nil)
 		} else {
@@ -662,8 +672,8 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, configMapName string, owner metav1.OwnerReference, manifestHash, lastModifiedConfig string) error {
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: configMapName,
-			Namespace:    fleetSystemNamespace,
+			Name:      configMapName,
+			Namespace: fleetSystemNamespace,
 		},
 		Data: map[string]string{},
 	}
@@ -680,35 +690,41 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, configMapName
 }
 
 func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, obj *unstructured.Unstructured, owner metav1.OwnerReference) (*v1.ConfigMap, error) {
-	var configMap *v1.ConfigMap
+	var configMap v1.ConfigMap
 	annotations := obj.GetAnnotations()
 	configMapName, ok := annotations[configMapNameAnnotation]
 	if !ok {
 		return nil, errors.New("manifest doesn't have a config map")
 	}
-	err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, configMap)
-	if apierrors.IsNotFound(err) {
-		// create config map since it's not found
-		manifestHash, err := computeManifestHash(obj)
-		if err != nil {
-			klog.ErrorS(err, "failed to compute manifest hash", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
-			return nil, err
-		}
-		lastModifiedConfig, err := computeModifiedConfiguration(obj)
-		if err != nil {
-			klog.ErrorS(err, "failed compute last applied config", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
-			return nil, err
-		}
-		if err := r.createConfigMap(ctx, configMapName, owner, manifestHash, lastModifiedConfig); err != nil {
-			klog.ErrorS(err, "cannot create config map for object", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
-			return nil, err
-		}
-		// get newly created config map recursively.
-		if configMap, err = r.getConfigMap(ctx, obj, owner); err != nil {
+	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, &configMap); err != nil {
+		if apierrors.IsNotFound(err) {
+			// create config map since it's not found
+			manifestHash, err := computeManifestHash(obj)
+			if err != nil {
+				klog.ErrorS(err, "failed to compute manifest hash", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
+				return nil, err
+			}
+			lastModifiedConfig, err := computeModifiedConfiguration(obj)
+			if err != nil {
+				klog.ErrorS(err, "failed compute last applied config", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
+				return nil, err
+			}
+			if err := r.createConfigMap(ctx, configMapName, owner, manifestHash, lastModifiedConfig); err != nil {
+				klog.ErrorS(err, "cannot create config map for object", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
+				return nil, err
+			}
+			// get newly created config map recursively.
+			newConfigMap, err := r.getConfigMap(ctx, obj, owner)
+			if err != nil {
+				return nil, err
+			}
+			return newConfigMap, nil
+		} else {
+			klog.ErrorS(err, "failed to retrieve config map for object", "manifest", obj.GetName(), "config map", configMapName)
 			return nil, err
 		}
 	}
-	return configMap, nil
+	return &configMap, nil
 }
 
 func (r *ApplyWorkReconciler) updateConfigMap(ctx context.Context, configMap *v1.ConfigMap, obj *unstructured.Unstructured) error {
@@ -768,7 +784,7 @@ func (r *ApplyWorkReconciler) getRandomConfigMapName(ctx context.Context) string
 	var configMapName string
 	var configMap v1.ConfigMap
 	for {
-		configMapName := generator.GenerateName(configMapNamePrefix)
+		configMapName = generator.GenerateName(configMapNamePrefix)
 		if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, &configMap); err != nil {
 			if apierrors.IsNotFound(err) {
 				break
