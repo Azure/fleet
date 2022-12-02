@@ -697,8 +697,8 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.Gr
 func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.GroupVersionResource, manifestObj, currentObj *unstructured.Unstructured, owner metav1.OwnerReference) (*v1.ConfigMap, bool, error) {
 	var configMap v1.ConfigMap
 	objAnnotations := currentObj.GetAnnotations()
-	// add check to see if objAnnotations is not nil
-	if objAnnotations != nil {
+	if objAnnotations == nil {
+		klog.InfoS("manifest's annotation is empty")
 		objAnnotations = map[string]string{}
 	}
 	configMapName, ok := objAnnotations[configMapNameAnnotation]
@@ -777,6 +777,7 @@ func migrateCheck(annotations map[string]string, obj *unstructured.Unstructured)
 	manifestHash, ok1 := annotations[manifestHashAnnotation]
 	lastModifiedConfig, ok2 := annotations[lastAppliedConfigAnnotation]
 	if ok1 && ok2 {
+		klog.InfoS("manifest needs to be migrated", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
 		delete(annotations, manifestHashAnnotation)
 		delete(annotations, lastAppliedConfigAnnotation)
 		obj.SetAnnotations(annotations)
@@ -784,6 +785,7 @@ func migrateCheck(annotations map[string]string, obj *unstructured.Unstructured)
 	} else if !ok1 && ok2 || ok1 && !ok2 {
 		return "", "", errors.New(fmt.Sprintf("manifest (%s/%s)cannot be migrated because it doesn't have manifestHash/lastModified Annotation", obj.GetName(), obj.GetNamespace()))
 	}
+	klog.InfoS("manifest doesn't need to be migrated", "manifest", obj.GetName(), "namespace", obj.GetNamespace())
 	return "", "", nil
 }
 
