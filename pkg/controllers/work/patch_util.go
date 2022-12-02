@@ -107,7 +107,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	return metadataAccessor.SetAnnotations(obj, annotations)
 }
 
-// setModifiedConfigurationAnnotation serializes the object into byte stream and returns it.
+// computeModifiedConfiguration computes the json marshal and returns it.
 func computeModifiedConfiguration(obj runtime.Object) (string, error) {
 	modified, err := json.Marshal(obj)
 	if err != nil {
