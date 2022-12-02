@@ -650,10 +650,6 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 	}
 }
 
-//func (r *ApplyWorkReconciler) migrateCreateConfigMap(ctx context.Context, gvr schema.GroupVersionResource, manifestObj *unstructured.Unstructured, owner metav1.OwnerReference, configMapName, manifestHash, lastModifiedConfig string) (*v1.ConfigMap, error) {
-//
-//}
-
 func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.GroupVersionResource, manifestObj *unstructured.Unstructured, owner metav1.OwnerReference, configMapName, manifestHash, lastModifiedConfig string) (*v1.ConfigMap, error) {
 	configMap := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -702,6 +698,9 @@ func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.Group
 	var configMap v1.ConfigMap
 	objAnnotations := currentObj.GetAnnotations()
 	// add check to see if objAnnotations is not nil
+	if objAnnotations != nil {
+		objAnnotations = map[string]string{}
+	}
 	configMapName, ok := objAnnotations[configMapNameAnnotation]
 	// migrate check
 	existingManifestHash, existingLastModifiedConfig, err := migrateCheck(objAnnotations, currentObj)
