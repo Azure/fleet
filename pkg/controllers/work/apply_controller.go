@@ -714,14 +714,14 @@ func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.Group
 		manifestHash = existingManifestHash
 		lastModifiedConfig = existingLastModifiedConfig
 	}
-	// This will only evaluate to true if object doesn't need to be migrated, it doesn't have config name annotation
-	if !ok && (manifestHash == "" && lastModifiedConfig == "") {
+	// if obj doesn't have config name annotation
+	if !ok {
 		// Need to handle case where manifest has config map annotation removed due to conflict, it needs a new configmap name
 		objAnnotations[configMapNameAnnotation] = getRandomConfigMapName()
 		if err := r.spokeClient.Update(ctx, currentObj); err != nil {
 			return nil, false, err
 		}
-		newConfigMap, err := r.createConfigMap(ctx, gvr, manifestObj, owner, configMapName, "", "")
+		newConfigMap, err := r.createConfigMap(ctx, gvr, manifestObj, owner, configMapName, manifestHash, lastModifiedConfig)
 		if err != nil {
 			klog.ErrorS(err, "cannot create config map for object", "manifest", currentObj.GetName(), "namespace", currentObj.GetNamespace())
 			return nil, false, err
@@ -730,7 +730,7 @@ func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.Group
 	}
 	if err := r.spokeClient.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: fleetSystemNamespace}, &configMap); err != nil {
 		if apierrors.IsNotFound(err) {
-			objAnnotations[configMapNameAnnotation] = getRandomConfigMapName()
+			//objAnnotations[configMapNameAnnotation] = getRandomConfigMapName()
 			if err := r.spokeClient.Update(ctx, currentObj); err != nil {
 				return nil, false, err
 			}
