@@ -181,6 +181,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 		},
 	}
 
+	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
+	// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
 	if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &whCfg); err != nil {
 		return err
 	}
@@ -392,7 +394,7 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 	return nil
 }
 
-// bindWebhookConfigToFleetSystem sets the OwnerReference of the webhook config to a cluster scoped Fleet resource.
+// bindWebhookConfigToFleetSystem sets the OwnerReference of the argued ValidatingWebhookConfiguration to the cluster scoped fleet-system namespace.
 func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client, validatingWebhookConfig *admv1.ValidatingWebhookConfiguration) error {
 	var fleetNs corev1.Namespace
 	if err := k8Client.Get(ctx, client.ObjectKey{Name: "fleet-system"}, &fleetNs); err != nil {
