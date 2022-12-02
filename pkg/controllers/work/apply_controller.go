@@ -675,7 +675,7 @@ func (r *ApplyWorkReconciler) createConfigMap(ctx context.Context, gvr schema.Gr
 	configMap.Data[lastAppliedConfigKey] = lastModifiedConfig
 	// add applied work owner reference
 	addOwnerRef(owner, configMap)
-	setManifestIdentifierAnnotation(manifestObj, configMap)
+	setManifestIdentifierAnnotation(gvr, manifestObj, configMap)
 	if err := r.spokeClient.Create(ctx, configMap); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			// delete config map annotation from manifest
@@ -732,7 +732,7 @@ func (r *ApplyWorkReconciler) getConfigMap(ctx context.Context, gvr schema.Group
 	// need to handle special case where manifest was created with config map name but controller failed, turns out config map belonged to another manifest.
 	configMapAnnotations := configMap.GetAnnotations()
 	annotatedManifestIdentifier, ok := configMapAnnotations[manifestIdentifierAnnotation]
-	manifestIdentifier := getManifestIdentifier(manifestObj)
+	manifestIdentifier := getManifestIdentifier(gvr, manifestObj)
 	if annotatedManifestIdentifier != manifestIdentifier {
 		setConfigMapNameAnnotation(getRandomConfigMapName(), currentObj)
 		if configMap, err := r.updateCurrentObjectAndCreateConfigMap(ctx, gvr, manifestObj, currentObj, owner, objAnnotations, manifestHash, lastModifiedConfig); err != nil {
@@ -801,8 +801,8 @@ func setConfigMapNameAnnotation(configMapName string, obj *unstructured.Unstruct
 	obj.SetAnnotations(annotations)
 }
 
-func setManifestIdentifierAnnotation(obj *unstructured.Unstructured, configMap *v1.ConfigMap) {
-	manifestId := getManifestIdentifier(obj)
+func setManifestIdentifierAnnotation(gvr schema.GroupVersionResource, obj *unstructured.Unstructured, configMap *v1.ConfigMap) {
+	manifestId := getManifestIdentifier(gvr, obj)
 	annotations := configMap.GetAnnotations()
 	if annotations == nil {
 		annotations = map[string]string{}
@@ -811,13 +811,13 @@ func setManifestIdentifierAnnotation(obj *unstructured.Unstructured, configMap *
 	configMap.SetAnnotations(annotations)
 }
 
-func getManifestIdentifier(obj *unstructured.Unstructured) string {
+func getManifestIdentifier(gvr schema.GroupVersionResource, obj *unstructured.Unstructured) string {
 	var manifestId string
 	isNamespaced := len(obj.GetNamespace()) > 0
 	if isNamespaced {
-		manifestId = obj.GetName() + "-" + obj.GetNamespace()
+		manifestId = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName() + "-" + obj.GetNamespace()
 	} else {
-		manifestId = obj.GetName()
+		manifestId = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName()
 	}
 	return manifestId
 }
