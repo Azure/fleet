@@ -377,8 +377,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		return nil, ManifestNoChangeAction, err
 	}
 
-	klog.InfoS("generation for curObj", "generation", curObj.GetGeneration())
-
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
 		err = fmt.Errorf("resource is not managed by the work controller")
@@ -391,8 +389,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	if err != nil {
 		return nil, ManifestNoChangeAction, err
 	}
-
-	klog.InfoS("generation for configmap", "generation", curObjConfigMap.GetGeneration())
 
 	// set config map name annotation on manifest object to prevent deletion during patch.
 	setConfigMapNameAnnotation(curObjConfigMap.GetName(), manifestObj)
@@ -825,12 +821,17 @@ func setManifestIdentifierAnnotation(gvr schema.GroupVersionResource, obj *unstr
 }
 
 func getManifestIdentifier(gvr schema.GroupVersionResource, obj *unstructured.Unstructured) string {
-	var manifestId string
+	var manifestId, groupVersion string
 	isNamespaced := len(obj.GetNamespace()) > 0
-	if isNamespaced {
-		manifestId = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName() + "-" + obj.GetNamespace()
+	if gvr.Group != "" {
+		groupVersion = gvr.Group + "-" + gvr.Version
 	} else {
-		manifestId = gvr.Version + "-" + gvr.Resource + "-" + obj.GetName()
+		groupVersion = gvr.Version
+	}
+	if isNamespaced {
+		manifestId = groupVersion + "-" + gvr.Resource + "-" + obj.GetName() + "-" + obj.GetNamespace()
+	} else {
+		manifestId = groupVersion + "-" + gvr.Resource + "-" + obj.GetName()
 	}
 	return manifestId
 }
