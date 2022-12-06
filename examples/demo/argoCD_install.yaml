@@ -1,0 +1,28 @@
+apiVersion: fleet.azure.com/v1alpha1
+kind: ClusterResourcePlacement
+metadata:
+  name: argocd-installer
+spec:
+  resourceSelectors:
+    - group: ""
+      version: v1
+      kind: Namespace
+      name: argocd-system
+    - group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRole
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: argocd
+    - group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRoleBinding
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: argocd
+    - group: apiextensions.k8s.io
+      version: v1
+      kind: CustomResourceDefinition
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: argocd

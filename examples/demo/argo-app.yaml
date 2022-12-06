@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: in-cluster-guestbook
+  namespace: argocd-system
+spec:
+  destination:
+    namespace: guestbook
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: guestbook
+    repoURL: https://github.com/ryanzhang-oss/argocd-example-apps/
+    targetRevision: argo-test
+  syncPolicy:
+    automated: {}
+    syncOptions:
+      - CreateNamespace=true
