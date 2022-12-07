@@ -20,22 +20,26 @@ helm install --create-namespace -n argocd-system aks-demo argo/argo-cd
 4. Verify on one member cluster that the argoCD is installed
 ```shell
 kubectl get crds -l app.kubernetes.io/part-of=argocd
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+kubectl -n argocd-system get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
 kubectl port-forward svc/aks-demo-argocd-server -n argocd-system 8080:443
 ```
 Check the argoCD web on cluster1
 
 5.  Apply the Argo application on the hub
 ```shell
-kubectl  apply -f argo-app.yaml
+kubectl apply -f argo-app.yaml
 ```
 
-Use a local prometheus to draw graphs. Download prometheus binary for your local machine. Start the prometheus.
+6. Check the member cluster1 and cluster2 web
+
+7. Change the Git Repo
+
+8. Delete the argo application
 ```shell
-prometheus --config.file=test/e2e/prometheus.yml 
+kubectl delete -f argo-app.yaml
 ```
 
-6.uninstall the resources
+9.uninstall the resources
 ```shell
 helm delete aks-demo -n argocd-system
 kubectl delete crds -l app.kubernetes.io/part-of=argocd

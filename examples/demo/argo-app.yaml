@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: in-cluster-guestbook
   namespace: argocd-system
+  #finalizers:
+  #  - resources-finalizer.argocd.argoproj.io
 spec:
   destination:
     namespace: guestbook
@@ -13,6 +15,7 @@ spec:
     repoURL: https://github.com/ryanzhang-oss/argocd-example-apps/
     targetRevision: argo-test
   syncPolicy:
-    automated: {}
+    automated:
+      prune: true
     syncOptions:
       - CreateNamespace=true
