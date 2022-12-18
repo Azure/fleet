@@ -17,14 +17,14 @@ require (
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
 	k8s.io/api v0.25.2
 	k8s.io/apiextensions-apiserver v0.24.2
 	k8s.io/apimachinery v0.25.2
 	k8s.io/apiserver v0.24.2
 	k8s.io/client-go v0.25.2
-	k8s.io/component-base v0.24.2
+	k8s.io/component-base v0.25.2
 	k8s.io/klog/v2 v2.70.1
 	k8s.io/metrics v0.25.2
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
@@ -43,7 +43,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/go-logr/zapr v1.2.0 // indirect
+	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect
