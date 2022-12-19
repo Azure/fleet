@@ -39,6 +39,7 @@ const (
 
 	manifestHashKey      = "fleet-spec-hash"
 	lastAppliedConfigKey = "fleet-last-applied-configuration"
+	versionKey           = "fleet-version-key"
 
 	ConditionTypeApplied   = "Applied"
 	ConditionTypeAvailable = "Available"
