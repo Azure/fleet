@@ -391,7 +391,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// set config map name annotation on manifest object to prevent deletion during patch.
-	// setConfigMapNameAnnotation(curObjConfigMap.GetName(), manifestObj)
+	setConfigMapNameAnnotation(curObjConfigMap.GetName(), manifestObj)
 
 	if curObj.GetResourceVersion() != curObjConfigMap.Data[versionKey] {
 		// Need to update the config map, with current Object because the controller failed to update config map after patch
