@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -178,6 +179,12 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				},
 			},
 		},
+	}
+
+	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
+	// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
+	if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &whCfg); err != nil {
+		return err
 	}
 
 	if err := w.mgr.GetClient().Create(ctx, &whCfg); err != nil {
@@ -384,5 +391,24 @@ func genCertAndKeyFile(certData, keyData []byte, certDir string) error {
 		return err
 	}
 	klog.V(2).InfoS("successfully generate certificate and key files")
+	return nil
+}
+
+// bindWebhookConfigToFleetSystem sets the OwnerReference of the argued ValidatingWebhookConfiguration to the cluster scoped fleet-system namespace.
+func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client, validatingWebhookConfig *admv1.ValidatingWebhookConfiguration) error {
+	var fleetNs corev1.Namespace
+	if err := k8Client.Get(ctx, client.ObjectKey{Name: "fleet-system"}, &fleetNs); err != nil {
+		return err
+	}
+
+	ownerRef := metav1.OwnerReference{
+		APIVersion:         fleetNs.GroupVersionKind().GroupVersion().String(),
+		Kind:               fleetNs.Kind,
+		Name:               fleetNs.GetName(),
+		UID:                fleetNs.GetUID(),
+		BlockOwnerDeletion: pointer.Bool(false),
+	}
+
+	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}
 	return nil
 }
