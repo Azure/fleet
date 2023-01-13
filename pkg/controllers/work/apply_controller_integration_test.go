@@ -475,6 +475,7 @@ var _ = Describe("Work Controller", func() {
 		})
 
 		It("Check that the apply still works if the last applied annotation does not exist", func() {
+			ctx = context.Background()
 			cmName := "test-merge-without-lastapply"
 			cmNamespace := defaultNS
 			cm = &corev1.ConfigMap{
@@ -498,8 +499,8 @@ var _ = Describe("Work Controller", func() {
 
 			By("create the work")
 			work = createWorkWithManifest(workNamespace, cm)
-			err := k8sClient.Create(context.Background(), work)
-			Expect(err).ToNot(HaveOccurred())
+			err := k8sClient.Create(ctx, work)
+			Expect(err).Should(Succeed())
 
 			By("wait for the work to be applied")
 			waitForWorkToApply(work.GetName(), work.GetNamespace())
@@ -509,11 +510,11 @@ var _ = Describe("Work Controller", func() {
 
 			By("Delete the last applied annotation from the current resource")
 			delete(appliedCM.Annotations, lastAppliedConfigAnnotation)
-			Expect(k8sClient.Update(context.Background(), appliedCM)).Should(Succeed())
+			Expect(k8sClient.Update(ctx, appliedCM)).Should(Succeed())
 
 			By("Get the last applied config map and verify it does not have the last applied annotation")
 			var modifiedCM corev1.ConfigMap
-			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
 			Expect(modifiedCM.Annotations[lastAppliedConfigAnnotation]).Should(BeEmpty())
 
 			By("Modify the manifest")
@@ -529,13 +530,13 @@ var _ = Describe("Work Controller", func() {
 			rawCM, err := json.Marshal(cm)
 			Expect(err).Should(Succeed())
 			resultWork.Spec.Workload.Manifests[0].Raw = rawCM
-			Expect(k8sClient.Update(context.Background(), resultWork)).Should(Succeed())
+			Expect(k8sClient.Update(ctx, resultWork)).Should(Succeed())
 
 			By("wait for the change of the work to be applied")
 			waitForWorkToApply(work.GetName(), work.GetNamespace())
 
 			By("Check applied configMap is modified even without the last applied annotation")
-			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
 			verifyAppliedConfigMap(cm)
 		})
 
