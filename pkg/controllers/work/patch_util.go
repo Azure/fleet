@@ -114,11 +114,11 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 	annots, err := metadataAccessor.Annotations(obj)
 	if err != nil {
-		klog.Warning("cannot access metadata.annotations", "error", err)
-		return nil, nil
+		klog.ErrorS(err, "cannot access metadata.annotations", "gvk", obj.GetObjectKind().GroupVersionKind())
+		return nil, err
 	}
 	if annots == nil {
-		klog.Warning("object does not have lastAppliedConfigAnnotation", "obj", obj)
+		klog.Warning("object does not have annotation", "obj", obj)
 		return nil, nil
 	}
 	original, ok := annots[lastAppliedConfigAnnotation]
