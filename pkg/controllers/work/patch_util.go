@@ -117,7 +117,7 @@ func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 		klog.ErrorS(err, "cannot access metadata.annotations", "gvk", obj.GetObjectKind().GroupVersionKind())
 		return nil, err
 	}
-	// the threeWayMergePatch lib can handle the case that the original is empty
+	// The func threeWayMergePatch can handle the case that the original is empty.
 	if annots == nil {
 		klog.Warning("object does not have annotation", "obj", obj)
 		return nil, nil
