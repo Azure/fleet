@@ -3,11 +3,9 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
-      - release-*
-    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
+  create:
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
 
 permissions:
   contents: read
@@ -32,7 +30,7 @@ jobs:
           # registry must be in lowercase
           # store the images under dev
           # TODO: need to cleanup dev images periodically 
-          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}/dev" | tr [:upper:] [:lower:])"
+          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
   scan-images:
     needs: export-registry
     env:
