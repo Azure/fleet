@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -12,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/mergepatch"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -114,14 +114,18 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 	annots, err := metadataAccessor.Annotations(obj)
 	if err != nil {
-		return nil, fmt.Errorf("cannot access metadata.annotations: %w", err)
+		klog.ErrorS(err, "cannot access metadata.annotations", "gvk", obj.GetObjectKind().GroupVersionKind())
+		return nil, err
 	}
+	// The func threeWayMergePatch can handle the case that the original is empty.
 	if annots == nil {
-		return nil, errors.New("object does not have lastAppliedConfigAnnotation")
+		klog.Warning("object does not have annotation", "obj", obj)
+		return nil, nil
 	}
 	original, ok := annots[lastAppliedConfigAnnotation]
 	if !ok {
-		return nil, errors.New("object does not have lastAppliedConfigAnnotation")
+		klog.Warning("object does not have lastAppliedConfigAnnotation", "obj", obj)
+		return nil, nil
 	}
 	return []byte(original), nil
 }

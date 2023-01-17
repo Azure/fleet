@@ -474,6 +474,72 @@ var _ = Describe("Work Controller", func() {
 			Expect(appliedCM.OwnerReferences[1].Name).Should(SatisfyAny(Equal(work.GetName()), Equal(work2.GetName())))
 		})
 
+		It("Check that the apply still works if the last applied annotation does not exist", func() {
+			ctx = context.Background()
+			cmName := "test-merge-without-lastapply"
+			cmNamespace := defaultNS
+			cm = &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cmName,
+					Namespace: cmNamespace,
+					Labels: map[string]string{
+						"labelKey1": "value1",
+						"labelKey2": "value2",
+						"labelKey3": "value3",
+					},
+				},
+				Data: map[string]string{
+					"data1": "test1",
+				},
+			}
+
+			By("create the work")
+			work = createWorkWithManifest(workNamespace, cm)
+			err := k8sClient.Create(ctx, work)
+			Expect(err).Should(Succeed())
+
+			By("wait for the work to be applied")
+			waitForWorkToApply(work.GetName(), work.GetNamespace())
+
+			By("Check applied configMap")
+			appliedCM := verifyAppliedConfigMap(cm)
+
+			By("Delete the last applied annotation from the current resource")
+			delete(appliedCM.Annotations, lastAppliedConfigAnnotation)
+			Expect(k8sClient.Update(ctx, appliedCM)).Should(Succeed())
+
+			By("Get the last applied config map and verify it does not have the last applied annotation")
+			var modifiedCM corev1.ConfigMap
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
+			Expect(modifiedCM.Annotations[lastAppliedConfigAnnotation]).Should(BeEmpty())
+
+			By("Modify the manifest")
+			// modify one data
+			cm.Data["data1"] = "modifiedValue"
+			// add a conflict data
+			cm.Data["data2"] = "added by manifest"
+			// change label key3 with a new value
+			cm.Labels["labelKey3"] = "added-back-by-manifest"
+
+			By("update the work")
+			resultWork := waitForWorkToApply(work.GetName(), work.GetNamespace())
+			rawCM, err := json.Marshal(cm)
+			Expect(err).Should(Succeed())
+			resultWork.Spec.Workload.Manifests[0].Raw = rawCM
+			Expect(k8sClient.Update(ctx, resultWork)).Should(Succeed())
+
+			By("wait for the change of the work to be applied")
+			waitForWorkToApply(work.GetName(), work.GetNamespace())
+
+			By("Check applied configMap is modified even without the last applied annotation")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cmName, Namespace: cmNamespace}, appliedCM)).Should(Succeed())
+			verifyAppliedConfigMap(cm)
+		})
+
 		It("Check that failed to apply manifest has the proper identification", func() {
 			broadcastName := "testfail"
 			namespace := defaultNS
