@@ -49,7 +49,10 @@ import (
 )
 
 const (
-	workFieldManagerName = "work-api-agent"
+	workFieldManagerName          = "work-api-agent"
+	TotalAnnotationSizeLimitB int = 256 * (1 << 10) // 256 kB
+	// The manifest hash of 32 bytes when converted a string becomes 64 characters in length
+	manifestHashLength int = 64
 )
 
 // ApplyWorkReconciler reconciles a Work object
@@ -88,6 +91,9 @@ const (
 
 	// ManifestUpdatedAction indicates that we updated the manifest.
 	ManifestUpdatedAction applyAction = "ManifestUpdated"
+
+	// ManifestAppliedAction indicates that we applied the manifest.
+	ManifestAppliedAction applyAction = "ManifestApplied"
 
 	// ManifestNoChangeAction indicates that we don't need to change the manifest.
 	ManifestNoChangeAction applyAction = "ManifestNoChange"
@@ -340,6 +346,16 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
 	}
+	// Marshaling adds about 100-200 bytes to the object's actual size
+	marshaledObj, marshalErr := json.Marshal(manifestObj)
+	if marshalErr != nil {
+		return nil, ManifestNoChangeAction, marshalErr
+	}
+	if len(marshaledObj) > (TotalAnnotationSizeLimitB - len(manifestHashAnnotation) - len(lastAppliedConfigAnnotation) - manifestHashLength) {
+		klog.V(2).InfoS("Size of manifest object is greater than 262,013 bytes", "Name", manifestObj.GetName(), "size of marshaled object", len(marshaledObj), "kind", manifestObj.GetKind())
+		return r.applyObject(ctx, gvr, manifestObj)
+	}
+
 	// compute the hash without taking into consider the last applied annotation
 	if err := setManifestHashAnnotation(manifestObj); err != nil {
 		return nil, ManifestNoChangeAction, err
@@ -388,6 +404,20 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	return curObj, ManifestNoChangeAction, nil
+}
+
+func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupVersionResource,
+	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
+	manifestRef := klog.ObjectRef{
+		Name:      manifestObj.GetName(),
+		Namespace: manifestObj.GetNamespace(),
+	}
+	manifestObj, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Apply(ctx, manifestObj.GetName(), manifestObj, metav1.ApplyOptions{FieldManager: workFieldManagerName})
+	if err != nil {
+		klog.ErrorS(err, "failed to apply object", "gvr", gvr, "manifest", manifestRef)
+		return nil, ManifestNoChangeAction, err
+	}
+	return manifestObj, ManifestAppliedAction, nil
 }
 
 // patchCurrentResource uses three way merge to patch the current resource with the new manifest we get from the work.
