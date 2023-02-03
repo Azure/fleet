@@ -349,13 +349,18 @@ func TestApplyUnstructured(t *testing.T) {
 	specHashFailObj.Object["test"] = math.Inf(1)
 
 	utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret)
+	largeSecret.ObjectMeta = metav1.ObjectMeta{
+		OwnerReferences: []metav1.OwnerReference{
+			ownerRef,
+		},
+	}
 	rawSecret, _ := json.Marshal(largeSecret)
 	var largeObj unstructured.Unstructured
 	largeObj.UnmarshalJSON(rawSecret)
 
 	// add check to see if we cannot retrieve object
 	applyDynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
-	applyDynamicClient.PrependReactor("apply", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+	applyDynamicClient.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
 		return true, largeObj.DeepCopy(), nil
 	})
 
