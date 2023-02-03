@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -81,7 +80,7 @@ var (
 	testManifest         = workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawTestDeployment,
 	}}
-	largeSecret corev1.Secret
+	largeSecret v1.Secret
 )
 
 // This interface is needed for testMapper abstract class.
@@ -356,7 +355,7 @@ func TestApplyUnstructured(t *testing.T) {
 	}
 	rawSecret, _ := json.Marshal(largeSecret)
 	var largeObj unstructured.Unstructured
-	largeObj.UnmarshalJSON(rawSecret)
+	_ = largeObj.UnmarshalJSON(rawSecret)
 
 	// add check to see if we cannot retrieve object
 	applyDynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
