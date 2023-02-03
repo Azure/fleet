@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -80,6 +81,7 @@ var (
 	testManifest         = workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawTestDeployment,
 	}}
+	largeSecret corev1.Secret
 )
 
 // This interface is needed for testMapper abstract class.
@@ -346,6 +348,17 @@ func TestApplyUnstructured(t *testing.T) {
 	specHashFailObj := correctObj.DeepCopy()
 	specHashFailObj.Object["test"] = math.Inf(1)
 
+	utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret)
+	rawSecret, _ := json.Marshal(largeSecret)
+	var largeObj unstructured.Unstructured
+	largeObj.UnmarshalJSON(rawSecret)
+
+	// add check to see if we cannot retrieve object
+	applyDynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	applyDynamicClient.PrependReactor("apply", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, largeObj.DeepCopy(), nil
+	})
+
 	testCases := map[string]struct {
 		reconciler     ApplyWorkReconciler
 		workObj        *unstructured.Unstructured
@@ -431,6 +444,17 @@ func TestApplyUnstructured(t *testing.T) {
 			workObj:        correctObj,
 			resultSpecHash: diffSpecHash,
 			resultAction:   ManifestUpdatedAction,
+			resultErr:      nil,
+		},
+		"apply large manifest": {
+			reconciler: ApplyWorkReconciler{
+				spokeDynamicClient: applyDynamicClient,
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			workObj:        &largeObj,
+			resultSpecHash: "",
+			resultAction:   ManifestAppliedAction,
 			resultErr:      nil,
 		},
 	}

@@ -7,6 +7,10 @@ package utils
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
+	"os"
 	"strings"
 
 	"github.com/onsi/gomega/format"
@@ -16,6 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+)
+
+var (
+	genericCodecs = serializer.NewCodecFactory(scheme.Scheme)
+	genericCodec  = genericCodecs.UniversalDeserializer()
 )
 
 const (
@@ -35,6 +44,29 @@ func GetEventString(object runtime.Object, eventtype, reason, messageFmt string,
 	return fmt.Sprintf(eventtype+" "+reason+" "+messageFmt, args...) +
 		fmt.Sprintf(" involvedObject{kind=%s,apiVersion=%s}",
 			object.GetObjectKind().GroupVersionKind().Kind, object.GetObjectKind().GroupVersionKind().GroupVersion())
+}
+
+// GetObjectFromRawExtension returns an object decoded from the raw byte array
+func GetObjectFromRawExtension(rawByte []byte, obj runtime.Object) {
+	json, err := yaml.ToJSON(rawByte)
+	if err != nil {
+		return
+	}
+	err = runtime.DecodeInto(genericCodec, json, obj)
+	if err != nil {
+		return
+	}
+}
+
+// GetObjectFromManifest returns a runtime object decoded from the file
+func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) {
+	// Read files, create manifest
+	fileRaw, err := os.ReadFile(relativeFilePath)
+	if err != nil {
+		return
+	}
+
+	GetObjectFromRawExtension(fileRaw, obj)
 }
 
 // NewResourceList returns a resource list for test purpose.
