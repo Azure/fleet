@@ -339,7 +339,7 @@ func (r *ApplyWorkReconciler) decodeManifest(manifest workv1alpha1.Manifest) (sc
 	return mapping.Resource, unstructuredObj, nil
 }
 
-// Determines if an unstructured manifest object can & should be applied. If so, it applies (creates) the resource on the cluster.
+// applyUnstructured determines if an unstructured manifest object can & should be applied. If so, it applies/creates the resource on the cluster based on it's size.
 func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
@@ -354,14 +354,15 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
-		lastAppliedConfig, err := getModifiedConfigurationAnnotation(manifestObj)
+		lastAppliedConfig, err := computeModifiedConfigurationAnnotation(manifestObj)
 		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
 		// length of lastAppliedConfiguration accounts for the length of manifest hash and the length of the manifest hash annotation key
 		// since we added the annotation to the object.
 		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
-			// Add log stating the object doesn't have the last applied configuration.
+			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence it doesn't have the last applied configuration annotation",
+				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
 			return r.applyObject(ctx, gvr, manifestObj)
 		} else {
 			// record the raw manifest with the hash annotation in the manifest
@@ -405,12 +406,13 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		// we need to merge the owner reference between the current and the manifest since we support one manifest
 		// belong to multiple work so it contains the union of all the appliedWork
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
-		lastAppliedConfig, err := getModifiedConfigurationAnnotation(manifestObj)
-		if err == nil {
+		lastAppliedConfig, err := computeModifiedConfigurationAnnotation(manifestObj)
+		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
 		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
-			// Add log stating the object doesn't have the last applied configuration.
+			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence it doesn't have the last applied configuration annotation",
+				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
 			return r.applyObject(ctx, gvr, manifestObj)
 		} else {
 			// record the raw manifest with the hash annotation in the manifest
@@ -424,6 +426,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	return curObj, ManifestNoChangeAction, nil
 }
 
+// applyObject uses dynamic client's apply to apply the manifest.
 func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
@@ -435,6 +438,7 @@ func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupV
 		klog.ErrorS(err, "failed to apply object", "gvr", gvr, "manifest", manifestRef)
 		return nil, ManifestNoChangeAction, err
 	}
+	klog.V(2).InfoS("manifest apply succeeded", "gvr", gvr, "manifest", manifestRef)
 	return manifestObj, ManifestAppliedAction, nil
 }
 

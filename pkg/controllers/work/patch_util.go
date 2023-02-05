@@ -76,7 +76,8 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 	return client.RawPatch(patchType, patchData), nil
 }
 
-func getModifiedConfigurationAnnotation(obj runtime.Object) (string, error) {
+// computeModifiedConfigurationAnnotation is used to serialize the object into a byte stream.
+func computeModifiedConfigurationAnnotation(obj runtime.Object) (string, error) {
 	//TODO: see if we should use something like json.ConfigCompatibleWithStandardLibrary.Marshal to make sure that
 	// the produced json format is more three way merge friendly
 
@@ -88,8 +89,8 @@ func getModifiedConfigurationAnnotation(obj runtime.Object) (string, error) {
 	return string(lastAppliedConfiguration), nil
 }
 
-// setModifiedConfigurationAnnotation serializes the object into byte stream.
-// If `updateAnnotation` is true, it embeds the result as an annotation in the
+// setModifiedConfigurationAnnotation is used to set the serialized object as a byte stream as the last applied
+//configuration annotation. If `updateAnnotation` is true, it embeds the result as an annotation in the
 // modified configuration.
 func setModifiedConfigurationAnnotation(obj runtime.Object, lastAppliedConfig string) error {
 	annotations, err := metadataAccessor.Annotations(obj)

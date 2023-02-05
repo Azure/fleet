@@ -928,7 +928,7 @@ func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, 
 	_ = uObj.UnmarshalJSON(rawManifest)
 	validSpecHash, _ := computeManifestHash(&uObj)
 	uObj.SetAnnotations(map[string]string{manifestHashAnnotation: validSpecHash})
-	lastAppliedConfig, _ := getModifiedConfigurationAnnotation(&uObj)
+	lastAppliedConfig, _ := computeModifiedConfigurationAnnotation(&uObj)
 	_ = setModifiedConfigurationAnnotation(&uObj, lastAppliedConfig)
 	dynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	dynamicClient.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
