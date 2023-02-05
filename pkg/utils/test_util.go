@@ -7,11 +7,12 @@ package utils
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
-	"os"
-	"strings"
 
 	"github.com/onsi/gomega/format"
 	v1 "k8s.io/api/core/v1"

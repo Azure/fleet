@@ -90,7 +90,7 @@ func computeModifiedConfigurationAnnotation(obj runtime.Object) (string, error) 
 }
 
 // setModifiedConfigurationAnnotation is used to set the serialized object as a byte stream as the last applied
-//configuration annotation. If `updateAnnotation` is true, it embeds the result as an annotation in the
+// configuration annotation. If `updateAnnotation` is true, it embeds the result as an annotation in the
 // modified configuration.
 func setModifiedConfigurationAnnotation(obj runtime.Object, lastAppliedConfig string) error {
 	annotations, err := metadataAccessor.Annotations(obj)
