@@ -346,15 +346,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
 	}
-	// Marshaling adds about 100-200 bytes to the object's actual size
-	marshaledObj, marshalErr := json.Marshal(manifestObj)
-	if marshalErr != nil {
-		return nil, ManifestNoChangeAction, marshalErr
-	}
-	if len(marshaledObj) > (TotalAnnotationSizeLimitB - len(manifestHashAnnotation) - len(lastAppliedConfigAnnotation) - manifestHashLength) {
-		klog.V(2).InfoS("Size of manifest object is greater than 262,013 bytes", "Name", manifestObj.GetName(), "size of marshaled object", len(marshaledObj), "kind", manifestObj.GetKind())
-		return r.applyObject(ctx, gvr, manifestObj)
-	}
 
 	// compute the hash without taking into consider the last applied annotation
 	if err := setManifestHashAnnotation(manifestObj); err != nil {
@@ -363,9 +354,20 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
-		// record the raw manifest with the hash annotation in the manifest
-		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
+		lastAppliedConfig, err := getModifiedConfigurationAnnotation(manifestObj)
+		if err != nil {
 			return nil, ManifestNoChangeAction, err
+		}
+		// length of lastAppliedConfiguration accounts for the length of manifest hash and the length of the manifest hash annotation key
+		// since we added the annotation to the object.
+		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
+			// Add log stating the object doesn't have the last applied configuration.
+			return r.applyObject(ctx, gvr, manifestObj)
+		} else {
+			// record the raw manifest with the hash annotation in the manifest
+			if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
+				return nil, ManifestNoChangeAction, err
+			}
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
@@ -400,7 +402,23 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// We only try to update the object if its spec hash value has changed.
 	if manifestObj.GetAnnotations()[manifestHashAnnotation] != curObj.GetAnnotations()[manifestHashAnnotation] {
-		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
+		// we need to merge the owner reference between the current and the manifest since we support one manifest
+		// belong to multiple work so it contains the union of all the appliedWork
+		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
+		lastAppliedConfig, err := getModifiedConfigurationAnnotation(manifestObj)
+		if err == nil {
+			return nil, ManifestNoChangeAction, err
+		}
+		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
+			// Add log stating the object doesn't have the last applied configuration.
+			return r.applyObject(ctx, gvr, manifestObj)
+		} else {
+			// record the raw manifest with the hash annotation in the manifest
+			if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
+				return nil, ManifestNoChangeAction, err
+			}
+			return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
+		}
 	}
 
 	return curObj, ManifestNoChangeAction, nil
@@ -430,14 +448,6 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 	klog.V(2).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
 		"new hash", manifestObj.GetAnnotations()[manifestHashAnnotation],
 		"existing hash", curObj.GetAnnotations()[manifestHashAnnotation])
-
-	// we need to merge the owner reference between the current and the manifest since we support one manifest
-	// belong to multiple work so it contains the union of all the appliedWork
-	manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
-	// record the raw manifest with the hash annotation in the manifest
-	if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-		return nil, ManifestNoChangeAction, err
-	}
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {

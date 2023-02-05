@@ -357,6 +357,9 @@ func TestApplyUnstructured(t *testing.T) {
 	var largeObj unstructured.Unstructured
 	_ = largeObj.UnmarshalJSON(rawSecret)
 
+	largeObjSpecHash, _ := computeManifestHash(&largeObj)
+	largeObj.SetAnnotations(map[string]string{manifestHashAnnotation: largeObjSpecHash})
+
 	// add check to see if we cannot retrieve object
 	applyDynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	applyDynamicClient.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
@@ -457,7 +460,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        &largeObj,
-			resultSpecHash: "",
+			resultSpecHash: largeObjSpecHash,
 			resultAction:   ManifestAppliedAction,
 			resultErr:      nil,
 		},
@@ -925,7 +928,8 @@ func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, 
 	_ = uObj.UnmarshalJSON(rawManifest)
 	validSpecHash, _ := computeManifestHash(&uObj)
 	uObj.SetAnnotations(map[string]string{manifestHashAnnotation: validSpecHash})
-	_ = setModifiedConfigurationAnnotation(&uObj)
+	lastAppliedConfig, _ := getModifiedConfigurationAnnotation(&uObj)
+	_ = setModifiedConfigurationAnnotation(&uObj, lastAppliedConfig)
 	dynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	dynamicClient.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
 		return true, uObj.DeepCopy(), nil

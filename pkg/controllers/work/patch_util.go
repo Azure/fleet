@@ -76,11 +76,22 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 	return client.RawPatch(patchType, patchData), nil
 }
 
+func getModifiedConfigurationAnnotation(obj runtime.Object) (string, error) {
+	//TODO: see if we should use something like json.ConfigCompatibleWithStandardLibrary.Marshal to make sure that
+	// the produced json format is more three way merge friendly
+
+	// Marshaling adds about 100-200 bytes to the object's actual size
+	lastAppliedConfiguration, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	return string(lastAppliedConfiguration), nil
+}
+
 // setModifiedConfigurationAnnotation serializes the object into byte stream.
 // If `updateAnnotation` is true, it embeds the result as an annotation in the
 // modified configuration.
-func setModifiedConfigurationAnnotation(obj runtime.Object) error {
-	var modified []byte
+func setModifiedConfigurationAnnotation(obj runtime.Object, lastAppliedConfig string) error {
 	annotations, err := metadataAccessor.Annotations(obj)
 	if err != nil {
 		return fmt.Errorf("cannot access metadata.annotations: %w", err)
@@ -97,15 +108,8 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	} else {
 		_ = metadataAccessor.SetAnnotations(obj, annotations)
 	}
-
-	//TODO: see if we should use something like json.ConfigCompatibleWithStandardLibrary.Marshal to make sure that
-	// the produced json format is more three way merge friendly
-	modified, err = json.Marshal(obj)
-	if err != nil {
-		return err
-	}
 	// set the last applied annotation back
-	annotations[lastAppliedConfigAnnotation] = string(modified)
+	annotations[lastAppliedConfigAnnotation] = lastAppliedConfig
 	return metadataAccessor.SetAnnotations(obj, annotations)
 }
 
