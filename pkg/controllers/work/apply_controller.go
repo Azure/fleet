@@ -51,8 +51,6 @@ import (
 const (
 	workFieldManagerName          = "work-api-agent"
 	TotalAnnotationSizeLimitB int = 256 * (1 << 10) // 256 kB
-	// The manifest hash of 32 bytes when converted a string becomes 64 characters in length
-	manifestHashLength int = 64
 )
 
 // ApplyWorkReconciler reconciles a Work object
@@ -364,11 +362,10 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence it doesn't have the last applied configuration annotation",
 				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
 			return r.applyObject(ctx, gvr, manifestObj)
-		} else {
-			// record the raw manifest with the hash annotation in the manifest
-			if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
-				return nil, ManifestNoChangeAction, err
-			}
+		}
+		// record the raw manifest with the hash annotation in the manifest
+		if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
+			return nil, ManifestNoChangeAction, err
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
@@ -414,13 +411,12 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence it doesn't have the last applied configuration annotation",
 				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
 			return r.applyObject(ctx, gvr, manifestObj)
-		} else {
-			// record the raw manifest with the hash annotation in the manifest
-			if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
-				return nil, ManifestNoChangeAction, err
-			}
-			return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 		}
+		// record the raw manifest with the hash annotation in the manifest
+		if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
+			return nil, ManifestNoChangeAction, err
+		}
+		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 	}
 
 	return curObj, ManifestNoChangeAction, nil
