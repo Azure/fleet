@@ -356,14 +356,35 @@ func TestApplyUnstructured(t *testing.T) {
 	rawSecret, _ := json.Marshal(largeSecret)
 	var largeObj unstructured.Unstructured
 	_ = largeObj.UnmarshalJSON(rawSecret)
+	updatedLargeObj := largeObj.DeepCopy()
 
 	largeObjSpecHash, _ := computeManifestHash(&largeObj)
 	largeObj.SetAnnotations(map[string]string{manifestHashAnnotation: largeObjSpecHash})
 
-	// add check to see if we cannot retrieve object
-	applyDynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
-	applyDynamicClient.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+	applyDynamicClientNotFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	applyDynamicClientNotFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return false,
+			nil,
+			&apierrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Reason: metav1.StatusReasonNotFound,
+				}}
+	})
+	applyDynamicClientNotFound.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
 		return true, largeObj.DeepCopy(), nil
+	})
+
+	updatedLargeObj.SetLabels(map[string]string{"test-label-key": "test-label"})
+	updatedLargeObjSpecHash, _ := computeManifestHash(updatedLargeObj)
+	updatedLargeObj.SetAnnotations(map[string]string{manifestHashAnnotation: updatedLargeObjSpecHash})
+
+	applyDynamicClientFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	applyDynamicClientFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, largeObj.DeepCopy(), nil
+	})
+	applyDynamicClientFound.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, updatedLargeObj.DeepCopy(), nil
 	})
 
 	testCases := map[string]struct {
@@ -453,14 +474,25 @@ func TestApplyUnstructured(t *testing.T) {
 			resultAction:   ManifestUpdatedAction,
 			resultErr:      nil,
 		},
-		"apply large manifest": {
+		"test apply succeeds for large manifest when object does not exist": {
 			reconciler: ApplyWorkReconciler{
-				spokeDynamicClient: applyDynamicClient,
+				spokeDynamicClient: applyDynamicClientNotFound,
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        &largeObj,
 			resultSpecHash: largeObjSpecHash,
+			resultAction:   ManifestAppliedAction,
+			resultErr:      nil,
+		},
+		"test apply succeeds on update for large manifest when object exists": {
+			reconciler: ApplyWorkReconciler{
+				spokeDynamicClient: applyDynamicClientFound,
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			workObj:        updatedLargeObj,
+			resultSpecHash: updatedLargeObjSpecHash,
 			resultAction:   ManifestAppliedAction,
 			resultErr:      nil,
 		},
