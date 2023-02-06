@@ -359,7 +359,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		// length of lastAppliedConfiguration accounts for the length of manifest hash and the length of the manifest hash annotation key
 		// since we added the annotation to the object.
 		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
-			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence it doesn't have the last applied configuration annotation",
+			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence we don't add the last applied configuration annotation to do the three way merge",
 				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
 			return r.applyObject(ctx, gvr, manifestObj)
 		}
@@ -408,7 +408,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			return nil, ManifestNoChangeAction, err
 		}
 		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
-			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence it doesn't have the last applied configuration annotation",
+			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence we don't add the last applied configuration annotation to do the three way merge",
 				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
 			return r.applyObject(ctx, gvr, manifestObj)
 		}
