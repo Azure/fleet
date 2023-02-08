@@ -7,4 +7,6 @@ spec:
     - group: ""
       version: v1
       kind: Namespace
-      name: test-redis
+      labelSelector:
+        matchLabels:
+          fleet.azure.com/name: test
