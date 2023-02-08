@@ -8,7 +8,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -24,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -59,24 +57,6 @@ var (
 	testPdb         policyv1.PodDisruptionBudget
 )
 
-// GetObjectFromRawExtension returns an object decoded from the raw byte array
-func GetObjectFromRawExtension(rawByte []byte, obj runtime.Object) {
-	json, err := yaml.ToJSON(rawByte)
-	Expect(err).ToNot(HaveOccurred())
-
-	err = runtime.DecodeInto(genericCodec, json, obj)
-	Expect(err).ToNot(HaveOccurred())
-}
-
-// GetObjectFromManifest returns a runtime object decoded from the file
-func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) {
-	// Read files, create manifest
-	fileRaw, err := os.ReadFile(relativeFilePath)
-	Expect(err).ToNot(HaveOccurred())
-
-	GetObjectFromRawExtension(fileRaw, obj)
-}
-
 // applyTestManifests creates the test manifests in the hub cluster.
 // Here is the list, please do NOT change this list unless you know what you are doing.
 // ClusterScoped resource:
@@ -85,36 +65,36 @@ func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) {
 // Cloneset CR, Pdb, Configmap, Secret, Service.
 func applyTestManifests() {
 	By("Create testCloneset CRD")
-	GetObjectFromManifest("manifests/resources/test_clonesets_crd.yaml", &testClonesetCRD)
+	utils.GetObjectFromManifest("manifests/resources/test_clonesets_crd.yaml", &testClonesetCRD)
 	Expect(k8sClient.Create(ctx, &testClonesetCRD)).Should(Succeed())
 
 	// TODO: replace the rest objects with programmatic definition
 	By("Create testClusterRole resource")
-	GetObjectFromManifest("manifests/resources/test_clusterrole.yaml", &testClusterRole)
+	utils.GetObjectFromManifest("manifests/resources/test_clusterrole.yaml", &testClusterRole)
 	Expect(k8sClient.Create(ctx, &testClusterRole)).Should(Succeed())
 
 	By("Create namespace")
-	GetObjectFromManifest("manifests/resources/test_namespace.yaml", &testNameSpace)
+	utils.GetObjectFromManifest("manifests/resources/test_namespace.yaml", &testNameSpace)
 	Expect(k8sClient.Create(ctx, &testNameSpace)).Should(Succeed())
 
 	By("Create PodDisruptionBudget")
-	GetObjectFromManifest("manifests/resources/test_pdb.yaml", &testPdb)
+	utils.GetObjectFromManifest("manifests/resources/test_pdb.yaml", &testPdb)
 	Expect(k8sClient.Create(ctx, &testPdb)).Should(Succeed())
 
 	By("Create the testConfigMap resources")
-	GetObjectFromManifest("manifests/resources/test-configmap.yaml", &testConfigMap)
+	utils.GetObjectFromManifest("manifests/resources/test-configmap.yaml", &testConfigMap)
 	Expect(k8sClient.Create(ctx, &testConfigMap)).Should(Succeed())
 
 	By("Create testSecret resource")
-	GetObjectFromManifest("manifests/resources/test-secret.yaml", &testSecret)
+	utils.GetObjectFromManifest("manifests/resources/test-secret.yaml", &testSecret)
 	Expect(k8sClient.Create(ctx, &testSecret)).Should(Succeed())
 
 	By("Create testService resource")
-	GetObjectFromManifest("manifests/resources/test-service.yaml", &testService)
+	utils.GetObjectFromManifest("manifests/resources/test-service.yaml", &testService)
 	Expect(k8sClient.Create(ctx, &testService)).Should(Succeed())
 
 	By("Create testCloneset resource")
-	GetObjectFromManifest("manifests/resources/test-cloneset.yaml", &testCloneset)
+	utils.GetObjectFromManifest("manifests/resources/test-cloneset.yaml", &testCloneset)
 	Expect(k8sClient.Create(ctx, &testCloneset)).Should(Succeed())
 }
 
@@ -272,7 +252,7 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 		for i, manifest := range clusterWork.Spec.Workload.Manifests {
 			By(fmt.Sprintf("validate the %d uObj in the work resource in cluster %s", i, cluster.Name))
 			var uObj unstructured.Unstructured
-			GetObjectFromRawExtension(manifest.Raw, &uObj)
+			utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 			kind := uObj.GroupVersionKind().Kind
 			if preciseMatch {
 				Expect(kind).Should(SatisfyAny(expectedKindMatchers...))

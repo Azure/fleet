@@ -490,10 +490,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			for i, manifest := range clusterWork.Spec.Workload.Manifests {
 				By(fmt.Sprintf("validate the %d uObj in the work resource in cluster A", i))
 				var uObj unstructured.Unstructured
-				GetObjectFromRawExtension(manifest.Raw, &uObj)
+				utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 				if uObj.GroupVersionKind().Kind == "Role" && uObj.GroupVersionKind().Group == rbacv1.GroupName {
 					var selectedRole rbacv1.Role
-					GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+					utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 					Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(1))
 					if reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) {
 						findRole = true
@@ -523,10 +523,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			for i, manifest := range clusterWork.Spec.Workload.Manifests {
 				By(fmt.Sprintf("validate the %d uObj in the work resource in cluster A", i))
 				var uObj unstructured.Unstructured
-				GetObjectFromRawExtension(manifest.Raw, &uObj)
+				utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 				if uObj.GroupVersionKind().Kind == "Role" && uObj.GroupVersionKind().Group == rbacv1.GroupName {
 					var selectedRole rbacv1.Role
-					GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+					utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 					Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(2))
 					if reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) &&
 						reflect.DeepEqual(selectedRole.Rules[1], utils.WorkRule) {
@@ -667,10 +667,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			for i, manifest := range clusterWork.Spec.Workload.Manifests {
 				By(fmt.Sprintf("validate the %d uObj in the work resource in cluster A", i))
 				var uObj unstructured.Unstructured
-				GetObjectFromRawExtension(manifest.Raw, &uObj)
+				utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 				if uObj.GroupVersionKind().Kind == ClusterRoleKind && uObj.GroupVersionKind().Group == rbacv1.GroupName {
 					var selectedRole rbacv1.ClusterRole
-					GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+					utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 					Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(1))
 					if reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) {
 						findClusterRole = true
@@ -697,10 +697,10 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			for i, manifest := range clusterWork.Spec.Workload.Manifests {
 				By(fmt.Sprintf("validate the %d uObj in the work resource in cluster A", i))
 				var uObj unstructured.Unstructured
-				GetObjectFromRawExtension(manifest.Raw, &uObj)
+				utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
 				if uObj.GroupVersionKind().Kind == ClusterRoleKind && uObj.GroupVersionKind().Group == rbacv1.GroupName {
 					var selectedRole rbacv1.ClusterRole
-					GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+					utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 					Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(2))
 					if reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) &&
 						reflect.DeepEqual(selectedRole.Rules[1], utils.WorkRule) {
@@ -1234,7 +1234,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(1))
 			manifest := clusterWork.Spec.Workload.Manifests[0]
 			var selectedRole rbacv1.ClusterRole
-			GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+			utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 			Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(2))
 			Expect(reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) &&
 				reflect.DeepEqual(selectedRole.Rules[1], utils.WorkRule)).Should(BeTrue())
@@ -1247,7 +1247,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed())
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(BeIdenticalTo(1))
 			manifest = clusterWork.Spec.Workload.Manifests[0]
-			GetObjectFromRawExtension(manifest.Raw, &selectedRole)
+			utils.GetObjectFromRawExtension(manifest.Raw, &selectedRole)
 			Expect(len(selectedRole.Rules)).Should(BeEquivalentTo(2))
 			Expect(reflect.DeepEqual(selectedRole.Rules[0], utils.FleetRule) &&
 				reflect.DeepEqual(selectedRole.Rules[1], utils.WorkRule)).Should(BeTrue())
@@ -1373,7 +1373,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed())
 			Expect(len(clusterWork.Spec.Workload.Manifests)).Should(Equal(1))
 			var uObj unstructured.Unstructured
-			GetObjectFromRawExtension(clusterWork.Spec.Workload.Manifests[0].Raw, &uObj)
+			utils.GetObjectFromRawExtension(clusterWork.Spec.Workload.Manifests[0].Raw, &uObj)
 			Expect(uObj.GroupVersionKind().Kind).Should(Equal("MutatingWebhookConfiguration"))
 
 			By("Delete the webhook resources")
