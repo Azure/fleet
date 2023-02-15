@@ -352,20 +352,15 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
-		lastAppliedConfig, err := computeModifiedConfigurationAnnotation(manifestObj)
-		if err != nil {
-			return nil, ManifestNoChangeAction, err
-		}
-		// length of lastAppliedConfiguration accounts for the length of manifest hash and the length of the manifest hash annotation key
-		// since we added the annotation to the object.
-		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
-			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence we don't add the last applied configuration annotation to do the three way merge",
-				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
-			return r.applyObject(ctx, gvr, manifestObj)
-		}
 		// record the raw manifest with the hash annotation in the manifest
-		if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
+		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
 			return nil, ManifestNoChangeAction, err
+		}
+		annotations := manifestObj.GetAnnotations()
+		if !isAnnotationsSizeValid(gvr, manifestRef, annotations) {
+			delete(annotations, lastAppliedConfigAnnotation)
+			manifestObj.SetAnnotations(annotations)
+			return r.applyObject(ctx, gvr, manifestObj)
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
@@ -403,23 +398,34 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		// we need to merge the owner reference between the current and the manifest since we support one manifest
 		// belong to multiple work so it contains the union of all the appliedWork
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
-		lastAppliedConfig, err := computeModifiedConfigurationAnnotation(manifestObj)
-		if err != nil {
-			return nil, ManifestNoChangeAction, err
-		}
-		if len(lastAppliedConfig) > (TotalAnnotationSizeLimitB - len(lastAppliedConfigAnnotation)) {
-			klog.V(2).InfoS("Size of last applied configuration is greater than 262,102 bytes hence we don't add the last applied configuration annotation to do the three way merge",
-				"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", len(lastAppliedConfig))
-			return r.applyObject(ctx, gvr, manifestObj)
-		}
 		// record the raw manifest with the hash annotation in the manifest
-		if err := setModifiedConfigurationAnnotation(manifestObj, lastAppliedConfig); err != nil {
+		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
 			return nil, ManifestNoChangeAction, err
+		}
+		annotations := manifestObj.GetAnnotations()
+		if !isAnnotationsSizeValid(gvr, manifestRef, annotations) {
+			delete(annotations, lastAppliedConfigAnnotation)
+			manifestObj.SetAnnotations(annotations)
+			return r.applyObject(ctx, gvr, manifestObj)
 		}
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 	}
 
 	return curObj, ManifestNoChangeAction, nil
+}
+
+// isAnnotationSizeValid returns true if the total size of the annotations for a manifest is less than 256KB.
+func isAnnotationsSizeValid(gvr schema.GroupVersionResource, manifestRef klog.ObjectRef, annotations map[string]string) bool {
+	var totalSize int64
+	for k, v := range annotations {
+		totalSize += (int64)(len(k)) + (int64)(len(v))
+	}
+	if totalSize > (int64)(TotalAnnotationSizeLimitB) {
+		klog.V(2).InfoS("Size of annotations is greater than 262,144 bytes hence we don't add the last applied configuration annotation to do the three way merge",
+			"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", totalSize)
+		return false
+	}
+	return true
 }
 
 // applyObject uses dynamic client's apply to apply the manifest.

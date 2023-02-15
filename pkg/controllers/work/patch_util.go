@@ -75,24 +75,12 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 	}
 	return client.RawPatch(patchType, patchData), nil
 }
-
-// computeModifiedConfigurationAnnotation is used to serialize the object into a byte stream.
-func computeModifiedConfigurationAnnotation(obj runtime.Object) (string, error) {
-	//TODO: see if we should use something like json.ConfigCompatibleWithStandardLibrary.Marshal to make sure that
-	// the produced json format is more three way merge friendly
-
-	// Marshaling adds about 100-200 bytes to the object's actual size
-	lastAppliedConfiguration, err := json.Marshal(obj)
-	if err != nil {
-		return "", err
-	}
-	return string(lastAppliedConfiguration), nil
-}
-
-// setModifiedConfigurationAnnotation is used to set the serialized object as a byte stream as the last applied
-// configuration annotation. If `updateAnnotation` is true, it embeds the result as an annotation in the
+q
+// setModifiedConfigurationAnnotation serializes the object into byte stream.
+// If `updateAnnotation` is true, it embeds the result as an annotation in the
 // modified configuration.
-func setModifiedConfigurationAnnotation(obj runtime.Object, lastAppliedConfig string) error {
+func setModifiedConfigurationAnnotation(obj runtime.Object) error {
+	var modified []byte
 	annotations, err := metadataAccessor.Annotations(obj)
 	if err != nil {
 		return fmt.Errorf("cannot access metadata.annotations: %w", err)
@@ -109,8 +97,15 @@ func setModifiedConfigurationAnnotation(obj runtime.Object, lastAppliedConfig st
 	} else {
 		_ = metadataAccessor.SetAnnotations(obj, annotations)
 	}
+
+	//TODO: see if we should use something like json.ConfigCompatibleWithStandardLibrary.Marshal to make sure that
+	// the produced json format is more three way merge friendly
+	modified, err = json.Marshal(obj)
+	if err != nil {
+		return err
+	}
 	// set the last applied annotation back
-	annotations[lastAppliedConfigAnnotation] = lastAppliedConfig
+	annotations[lastAppliedConfigAnnotation] = string(modified)
 	return metadataAccessor.SetAnnotations(obj, annotations)
 }
 
