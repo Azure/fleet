@@ -75,7 +75,7 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 	}
 	return client.RawPatch(patchType, patchData), nil
 }
-q
+
 // setModifiedConfigurationAnnotation serializes the object into byte stream.
 // If `updateAnnotation` is true, it embeds the result as an annotation in the
 // modified configuration.
