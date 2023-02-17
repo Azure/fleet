@@ -482,7 +482,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        &largeObj,
 			resultSpecHash: largeObjSpecHash,
-			resultAction:   ManifestAppliedAction,
+			resultAction:   ManifestCreatedAction,
 			resultErr:      nil,
 		},
 		"test apply succeeds on update for large manifest when object exists": {

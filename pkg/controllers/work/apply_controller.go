@@ -360,7 +360,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if !isAnnotationsSizeValid(gvr, manifestRef, annotations) {
 			delete(annotations, lastAppliedConfigAnnotation)
 			manifestObj.SetAnnotations(annotations)
-			return r.applyObject(ctx, gvr, manifestObj)
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
@@ -422,7 +421,7 @@ func isAnnotationsSizeValid(gvr schema.GroupVersionResource, manifestRef klog.Ob
 	}
 	if totalSize > (int64)(TotalAnnotationSizeLimitB) {
 		klog.V(2).InfoS("Size of annotations is greater than 262,144 bytes hence we don't add the last applied configuration annotation to do the three way merge",
-			"gvr", gvr, "manifest", manifestRef, "length of last applied configuration", totalSize)
+			"gvr", gvr, "manifest", manifestRef, "size of annotations", totalSize)
 		return false
 	}
 	return true
