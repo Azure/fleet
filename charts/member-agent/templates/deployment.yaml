@@ -25,8 +25,8 @@ spec:
               containerPort: 80
           args:
             - --leader-elect=true
-            {{- if .Values.useCaAuth }}
-            - --use-ca-auth={{ .Values.useCaAuth }}
+            {{- if .Values.useCAAuth }}
+            - --use-ca-auth={{ .Values.useCAAuth }}
             {{- else }}
             - --tls-insecure={{ .Values.tlsClientInsecure }}
             {{- end }}
@@ -41,7 +41,7 @@ spec:
             value: "{{ .Values.config.memberClusterName }}"
           - name: HUB_CERTIFICATE_AUTHORITY
             value: "{{ .Values.config.hubCA }}"
-          {{- if .Values.useCaAuth }}
+          {{- if .Values.useCAAuth }}
           - name: IDENTITY_KEY
             value:  "{{ .Values.config.identityKey }}"
           - name: IDENTITY_CERT
@@ -75,7 +75,7 @@ spec:
           volumeMounts:
           - name: provider-token 
             mountPath: /config
-        {{- if not .Values.useCaAuth }}
+        {{- if not .Values.useCAAuth }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}

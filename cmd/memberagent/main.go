@@ -39,7 +39,7 @@ import (
 
 var (
 	scheme               = runtime.NewScheme()
-	useCaAuth            = flag.Bool("use-ca-auth", false, "Use identity and CA bundle to authenticate the member agent.")
+	useCAAuth            = flag.Bool("use-ca-auth", false, "Use identity and CA bundle to authenticate the member agent.")
 	tlsClientInsecure    = flag.Bool("tls-insecure", false, "Enable TLSClientConfig.Insecure property. Enabling this will make the connection inSecure (should be 'true' for testing purpose only.)")
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -73,8 +73,8 @@ func main() {
 	}
 	tokenFilePath := os.Getenv("CONFIG_PATH")
 
-	if !*useCaAuth && tokenFilePath == "" {
-		klog.ErrorS(errors.New("hub token file path cannot be empty"), "error has occurred retrieving CONFIG_PATH")
+	if !*useCAAuth && tokenFilePath == "" {
+		klog.ErrorS(errors.New("hub token file path cannot be empty if CA auth not used"), "error has occurred retrieving CONFIG_PATH")
 		os.Exit(1)
 	}
 
@@ -90,7 +90,7 @@ func main() {
 	identityCertFile := os.Getenv("IDENTITY_CERT")
 	cABundleFile := os.Getenv("CA_BUNDLE")
 
-	if *useCaAuth {
+	if *useCAAuth {
 		if identityKeyFile == "" {
 			klog.ErrorS(errors.New("identity key file path cannot be empty"), "error has occurred retrieving IDENTITY_KEY")
 			os.Exit(1)
@@ -121,7 +121,7 @@ func main() {
 	}
 
 	var hubConfig rest.Config
-	if *useCaAuth {
+	if *useCAAuth {
 		hubConfig = rest.Config{
 			Host: hubURL,
 			TLSClientConfig: rest.TLSClientConfig{
