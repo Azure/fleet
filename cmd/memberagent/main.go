@@ -88,7 +88,7 @@ func main() {
 
 	identityKeyFile := os.Getenv("IDENTITY_KEY")
 	identityCertFile := os.Getenv("IDENTITY_CERT")
-	cABundleFile := os.Getenv("CA_BUNDLE")
+	caBundleFile := os.Getenv("CA_BUNDLE")
 
 	if *useCAAuth {
 		if identityKeyFile == "" {
@@ -101,7 +101,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if cABundleFile == "" {
+		if caBundleFile == "" {
 			klog.ErrorS(errors.New("CA bundle file path cannot be empty"), "error has occurred retrieving CA_BUNDLE")
 			os.Exit(1)
 		}
@@ -127,7 +127,7 @@ func main() {
 			TLSClientConfig: rest.TLSClientConfig{
 				CertFile: identityCertFile,
 				KeyFile:  identityKeyFile,
-				CAFile:   cABundleFile,
+				CAFile:   caBundleFile,
 			},
 		}
 	} else if *tlsClientInsecure {
