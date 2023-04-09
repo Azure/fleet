@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -49,8 +50,7 @@ import (
 )
 
 const (
-	workFieldManagerName          = "work-api-agent"
-	TotalAnnotationSizeLimitB int = 256 * (1 << 10) // 256 kB
+	workFieldManagerName = "work-api-agent"
 )
 
 // ApplyWorkReconciler reconciles a Work object
@@ -357,7 +357,12 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			return nil, ManifestNoChangeAction, err
 		}
 		annotations := manifestObj.GetAnnotations()
-		if !isAnnotationsSizeValid(gvr, manifestRef, annotations) {
+		klog.V(2).InfoS("validating annotation size for manifest",
+			"gvr", gvr, "manifest", manifestRef)
+		err := validation.ValidateAnnotationsSize(annotations)
+		if err != nil {
+			klog.ErrorS(err, "not using three way merge for manifest removing last applied config annotation",
+				"gvr", gvr, "obj", manifestRef)
 			delete(annotations, lastAppliedConfigAnnotation)
 			manifestObj.SetAnnotations(annotations)
 		}
@@ -402,7 +407,12 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			return nil, ManifestNoChangeAction, err
 		}
 		annotations := manifestObj.GetAnnotations()
-		if !isAnnotationsSizeValid(gvr, manifestRef, annotations) {
+		klog.V(2).InfoS("validating annotation size for manifest",
+			"gvr", gvr, "manifest", manifestRef)
+		err := validation.ValidateAnnotationsSize(annotations)
+		if err != nil {
+			klog.ErrorS(err, "not using three way merge for manifest removing last applied config annotation",
+				"gvr", gvr, "obj", manifestRef)
 			delete(annotations, lastAppliedConfigAnnotation)
 			manifestObj.SetAnnotations(annotations)
 			return r.applyObject(ctx, gvr, manifestObj)
@@ -411,20 +421,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	return curObj, ManifestNoChangeAction, nil
-}
-
-// isAnnotationSizeValid returns true if the total size of the annotations for a manifest is less than 256KB.
-func isAnnotationsSizeValid(gvr schema.GroupVersionResource, manifestRef klog.ObjectRef, annotations map[string]string) bool {
-	var totalSize int64
-	for k, v := range annotations {
-		totalSize += (int64)(len(k)) + (int64)(len(v))
-	}
-	if totalSize > (int64)(TotalAnnotationSizeLimitB) {
-		klog.V(2).InfoS("Size of annotations is greater than 262,144 bytes hence we don't add the last applied configuration annotation to do the three way merge",
-			"gvr", gvr, "manifest", manifestRef, "size of annotations", totalSize)
-		return false
-	}
-	return true
 }
 
 // applyObject uses dynamic client's apply to apply the manifest.
