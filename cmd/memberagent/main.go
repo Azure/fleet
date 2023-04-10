@@ -39,6 +39,7 @@ import (
 
 var (
 	scheme               = runtime.NewScheme()
+	useCAAuth            = flag.Bool("use-ca-auth", false, "Use identity and CA bundle to authenticate the member agent.")
 	tlsClientInsecure    = flag.Bool("tls-insecure", false, "Enable TLSClientConfig.Insecure property. Enabling this will make the connection inSecure (should be 'true' for testing purpose only.)")
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -72,8 +73,8 @@ func main() {
 	}
 	tokenFilePath := os.Getenv("CONFIG_PATH")
 
-	if tokenFilePath == "" {
-		klog.ErrorS(errors.New("hub token file path cannot be empty"), "error has occurred retrieving CONFIG_PATH")
+	if !*useCAAuth && tokenFilePath == "" {
+		klog.ErrorS(errors.New("hub token file path cannot be empty if CA auth not used"), "error has occurred retrieving CONFIG_PATH")
 		os.Exit(1)
 	}
 
@@ -85,21 +86,51 @@ func main() {
 
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
-	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
-		return true
-	}, func() error {
-		// Stat returns file info. It will return
-		// an error if there is no file.
-		_, err := os.Stat(tokenFilePath)
-		return err
-	})
-	if err != nil {
-		klog.ErrorS(err, " cannot retrieve token file from the path %s", tokenFilePath)
-		os.Exit(1)
+	identityKeyFile := os.Getenv("IDENTITY_KEY")
+	identityCertFile := os.Getenv("IDENTITY_CERT")
+	caBundleFile := os.Getenv("CA_BUNDLE")
+
+	if *useCAAuth {
+		if identityKeyFile == "" {
+			klog.ErrorS(errors.New("identity key file path cannot be empty"), "error has occurred retrieving IDENTITY_KEY")
+			os.Exit(1)
+		}
+
+		if identityCertFile == "" {
+			klog.ErrorS(errors.New("identity cert file path cannot be empty"), "error has occurred retrieving IDENTITY_CERT")
+			os.Exit(1)
+		}
+
+		if caBundleFile == "" {
+			klog.ErrorS(errors.New("CA bundle file path cannot be empty"), "error has occurred retrieving CA_BUNDLE")
+			os.Exit(1)
+		}
+	} else {
+		err := retry.OnError(retry.DefaultRetry, func(e error) bool {
+			return true
+		}, func() error {
+			// Stat returns file info. It will return
+			// an error if there is no file.
+			_, err := os.Stat(tokenFilePath)
+			return err
+		})
+		if err != nil {
+			klog.ErrorS(err, " cannot retrieve token file from the path %s", tokenFilePath)
+			os.Exit(1)
+		}
 	}
 
 	var hubConfig rest.Config
-	if *tlsClientInsecure {
+	if *useCAAuth {
+		hubConfig = rest.Config{
+			Host: hubURL,
+			TLSClientConfig: rest.TLSClientConfig{
+				CertFile: identityCertFile,
+				KeyFile:  identityKeyFile,
+				CAFile:   caBundleFile,
+			},
+		}
+	} else if *tlsClientInsecure {
 		hubConfig = rest.Config{
 			BearerTokenFile: tokenFilePath,
 			Host:            hubURL,
