@@ -72,10 +72,10 @@ spec:
             httpGet:
               path: /readyz
               port: hubhealthz
+      {{- if not .Values.useCAAuth }}
           volumeMounts:
           - name: provider-token 
             mountPath: /config
-        {{- if not .Values.useCAAuth }}
         - name: refresh-token
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
@@ -94,10 +94,10 @@ spec:
           volumeMounts:
           - name: provider-token
             mountPath: /config
-        {{- end }}      
       volumes:
       - name: provider-token
         emptyDir: {}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
