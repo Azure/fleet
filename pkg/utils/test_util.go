@@ -47,27 +47,28 @@ func GetEventString(object runtime.Object, eventtype, reason, messageFmt string,
 			object.GetObjectKind().GroupVersionKind().Kind, object.GetObjectKind().GroupVersionKind().GroupVersion())
 }
 
-// GetObjectFromRawExtension returns an object decoded from the raw byte array
-func GetObjectFromRawExtension(rawByte []byte, obj runtime.Object) {
+// GetObjectFromRawExtension returns an object decoded from the raw byte array.
+func GetObjectFromRawExtension(rawByte []byte, obj runtime.Object) error {
 	json, err := yaml.ToJSON(rawByte)
 	if err != nil {
-		return
+		return err
 	}
 	err = runtime.DecodeInto(genericCodec, json, obj)
 	if err != nil {
-		return
+		return err
 	}
+	return nil
 }
 
-// GetObjectFromManifest returns a runtime object decoded from the file
-func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) {
+// GetObjectFromManifest returns a runtime object decoded from the file.
+func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) error {
 	// Read files, create manifest
 	fileRaw, err := os.ReadFile(relativeFilePath)
 	if err != nil {
-		return
+		return err
 	}
 
-	GetObjectFromRawExtension(fileRaw, obj)
+	return GetObjectFromRawExtension(fileRaw, obj)
 }
 
 // NewResourceList returns a resource list for test purpose.

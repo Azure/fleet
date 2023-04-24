@@ -80,7 +80,6 @@ var (
 	testManifest         = workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawTestDeployment,
 	}}
-	largeSecret v1.Secret
 )
 
 // This interface is needed for testMapper abstract class.
@@ -347,15 +346,25 @@ func TestApplyUnstructured(t *testing.T) {
 	specHashFailObj := correctObj.DeepCopy()
 	specHashFailObj.Object["test"] = math.Inf(1)
 
-	utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret)
+	var largeSecret v1.Secret
+	err := utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret)
+	if err != nil {
+		t.Errorf("failed to get object from manifest: %s", err)
+	}
 	largeSecret.ObjectMeta = metav1.ObjectMeta{
 		OwnerReferences: []metav1.OwnerReference{
 			ownerRef,
 		},
 	}
-	rawSecret, _ := json.Marshal(largeSecret)
+	rawSecret, err := json.Marshal(largeSecret)
+	if err != nil {
+		t.Errorf("failed to marshal secret: %s", err)
+	}
 	var largeObj unstructured.Unstructured
-	_ = largeObj.UnmarshalJSON(rawSecret)
+	err = largeObj.UnmarshalJSON(rawSecret)
+	if err != nil {
+		t.Errorf("failed to unmarshal JSON: %s", err)
+	}
 	updatedLargeObj := largeObj.DeepCopy()
 
 	largeObjSpecHash, _ := computeManifestHash(&largeObj)

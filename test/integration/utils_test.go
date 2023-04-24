@@ -65,36 +65,44 @@ var (
 // Cloneset CR, Pdb, Configmap, Secret, Service.
 func applyTestManifests() {
 	By("Create testCloneset CRD")
-	utils.GetObjectFromManifest("manifests/resources/test_clonesets_crd.yaml", &testClonesetCRD)
+	err := utils.GetObjectFromManifest("manifests/resources/test_clonesets_crd.yaml", &testClonesetCRD)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testClonesetCRD)).Should(Succeed())
 
 	// TODO: replace the rest objects with programmatic definition
 	By("Create testClusterRole resource")
-	utils.GetObjectFromManifest("manifests/resources/test_clusterrole.yaml", &testClusterRole)
+	err = utils.GetObjectFromManifest("manifests/resources/test_clusterrole.yaml", &testClusterRole)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testClusterRole)).Should(Succeed())
 
 	By("Create namespace")
-	utils.GetObjectFromManifest("manifests/resources/test_namespace.yaml", &testNameSpace)
+	err = utils.GetObjectFromManifest("manifests/resources/test_namespace.yaml", &testNameSpace)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testNameSpace)).Should(Succeed())
 
 	By("Create PodDisruptionBudget")
-	utils.GetObjectFromManifest("manifests/resources/test_pdb.yaml", &testPdb)
+	err = utils.GetObjectFromManifest("manifests/resources/test_pdb.yaml", &testPdb)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testPdb)).Should(Succeed())
 
 	By("Create the testConfigMap resources")
-	utils.GetObjectFromManifest("manifests/resources/test-configmap.yaml", &testConfigMap)
+	err = utils.GetObjectFromManifest("manifests/resources/test-configmap.yaml", &testConfigMap)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testConfigMap)).Should(Succeed())
 
 	By("Create testSecret resource")
-	utils.GetObjectFromManifest("manifests/resources/test-secret.yaml", &testSecret)
+	err = utils.GetObjectFromManifest("manifests/resources/test-secret.yaml", &testSecret)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testSecret)).Should(Succeed())
 
 	By("Create testService resource")
-	utils.GetObjectFromManifest("manifests/resources/test-service.yaml", &testService)
+	err = utils.GetObjectFromManifest("manifests/resources/test-service.yaml", &testService)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testService)).Should(Succeed())
 
 	By("Create testCloneset resource")
-	utils.GetObjectFromManifest("manifests/resources/test-cloneset.yaml", &testCloneset)
+	err = utils.GetObjectFromManifest("manifests/resources/test-cloneset.yaml", &testCloneset)
+	Expect(err).Should(Succeed())
 	Expect(k8sClient.Create(ctx, &testCloneset)).Should(Succeed())
 }
 
@@ -252,7 +260,8 @@ func verifyPartialWorkObjects(crp *fleetv1alpha1.ClusterResourcePlacement, expec
 		for i, manifest := range clusterWork.Spec.Workload.Manifests {
 			By(fmt.Sprintf("validate the %d uObj in the work resource in cluster %s", i, cluster.Name))
 			var uObj unstructured.Unstructured
-			utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
+			err := utils.GetObjectFromRawExtension(manifest.Raw, &uObj)
+			Expect(err).Should(Succeed())
 			kind := uObj.GroupVersionKind().Kind
 			if preciseMatch {
 				Expect(kind).Should(SatisfyAny(expectedKindMatchers...))
