@@ -337,8 +337,9 @@ func (r *ApplyWorkReconciler) decodeManifest(manifest workv1alpha1.Manifest) (sc
 	return mapping.Resource, unstructuredObj, nil
 }
 
-// applyUnstructured determines if an unstructured manifest object can & should be applied. If so, it either uses server side apply or
-// creates the resource on the cluster based on the object's annotation size.
+// applyUnstructured determines if an unstructured manifest object can & should be applied. It first validates
+// the size of the last modified annotation of the manifest, it removes the annotation if the size crosses the annotation size threshold
+// and then creates/updates the resource on the cluster
 func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
