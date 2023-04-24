@@ -360,8 +360,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		annotations := manifestObj.GetAnnotations()
 		klog.V(2).InfoS("validating annotation size for manifest",
 			"gvr", gvr, "manifest", manifestRef)
-		err := validation.ValidateAnnotationsSize(annotations)
-		if err != nil {
+		if err := validation.ValidateAnnotationsSize(annotations); err != nil {
 			klog.InfoS(fmt.Sprintf("not using three way merge for manifest removing last applied config annotation, %s", err),
 				"gvr", gvr, "obj", manifestRef)
 			delete(annotations, lastAppliedConfigAnnotation)
