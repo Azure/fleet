@@ -423,7 +423,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	return curObj, ManifestNoChangeAction, nil
 }
 
-// applyObject uses dynamic client's apply to apply the manifest.
+// applyObject uses server side apply to apply the manifest.
 func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
