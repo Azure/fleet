@@ -347,8 +347,7 @@ func TestApplyUnstructured(t *testing.T) {
 	specHashFailObj.Object["test"] = math.Inf(1)
 
 	var largeSecret v1.Secret
-	err := utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret)
-	if err != nil {
+	if err := utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret); err != nil {
 		t.Errorf("failed to get object from manifest: %s", err)
 	}
 	largeSecret.ObjectMeta = metav1.ObjectMeta{
@@ -361,8 +360,7 @@ func TestApplyUnstructured(t *testing.T) {
 		t.Errorf("failed to marshal secret: %s", err)
 	}
 	var largeObj unstructured.Unstructured
-	err = largeObj.UnmarshalJSON(rawSecret)
-	if err != nil {
+	if err = largeObj.UnmarshalJSON(rawSecret); err != nil {
 		t.Errorf("failed to unmarshal JSON: %s", err)
 	}
 	updatedLargeObj := largeObj.DeepCopy()
