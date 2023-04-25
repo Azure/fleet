@@ -430,7 +430,11 @@ func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupV
 		Name:      manifestObj.GetName(),
 		Namespace: manifestObj.GetNamespace(),
 	}
-	manifestObj, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Apply(ctx, manifestObj.GetName(), manifestObj, metav1.ApplyOptions{FieldManager: workFieldManagerName})
+	options := metav1.ApplyOptions{
+		FieldManager: workFieldManagerName,
+		Force:        true,
+	}
+	manifestObj, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Apply(ctx, manifestObj.GetName(), manifestObj, options)
 	if err != nil {
 		klog.ErrorS(err, "failed to apply object", "gvr", gvr, "manifest", manifestRef)
 		return nil, ManifestNoChangeAction, err
