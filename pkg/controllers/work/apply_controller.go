@@ -364,7 +364,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err := validation.ValidateAnnotationsSize(annotations); err != nil {
 			klog.InfoS(fmt.Sprintf("not using three way merge for manifest removing last applied config annotation, %s", err),
 				"gvr", gvr, "obj", manifestRef)
-			delete(annotations, lastAppliedConfigAnnotation)
+			annotations[lastAppliedConfigAnnotation] = ""
 			manifestObj.SetAnnotations(annotations)
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
@@ -413,7 +413,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err = validation.ValidateAnnotationsSize(annotations); err != nil {
 			klog.ErrorS(err, "not using three way merge for manifest removing last applied config annotation",
 				"gvr", gvr, "obj", manifestRef)
-			delete(annotations, lastAppliedConfigAnnotation)
+			annotations[lastAppliedConfigAnnotation] = ""
 			manifestObj.SetAnnotations(annotations)
 			return r.applyObject(ctx, gvr, manifestObj)
 		}
