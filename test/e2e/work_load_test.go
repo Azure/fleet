@@ -29,7 +29,7 @@ var _ = Describe("workload orchestration testing", func() {
 		crp        *v1alpha1.ClusterResourcePlacement
 		labelKey   = "fleet.azure.com/name"
 		labelValue = "test"
-		// Ignoring typeMeta to get the tests to pass, not sure why.
+		// Ignoring typeMeta to get the tests to pass, it because on Create and Get Type Meta is not populated but it gets populated on Update.
 		resourceIgnoreOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID"), cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")}
 	)
