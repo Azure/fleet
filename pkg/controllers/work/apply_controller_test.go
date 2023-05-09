@@ -155,7 +155,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 		"manifest's has hashAnnotation, same": {
 			manifestObj: func() *appsv1.Deployment {
 				alterObj := manifestObj.DeepCopy()
-				alterObj.Annotations[manifestHashAnnotation] = utilrand.String(10)
+				alterObj.Annotations[ManifestHashAnnotation] = utilrand.String(10)
 				return alterObj
 			}(),
 			isSame: true,
@@ -222,7 +222,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 			if err != nil {
 				t.Error("failed to marshall the manifest", err.Error())
 			}
-			manifestHash := uManifestObj.GetAnnotations()[manifestHashAnnotation]
+			manifestHash := uManifestObj.GetAnnotations()[ManifestHashAnnotation]
 			if tt.isSame != (manifestHash == preHash) {
 				t.Errorf("testcase %s failed: manifestObj = (%+v)", name, tt.manifestObj)
 			}
@@ -366,7 +366,7 @@ func TestApplyUnstructured(t *testing.T) {
 	updatedLargeObj := largeObj.DeepCopy()
 
 	largeObjSpecHash, _ := computeManifestHash(&largeObj)
-	largeObj.SetAnnotations(map[string]string{manifestHashAnnotation: largeObjSpecHash})
+	largeObj.SetAnnotations(map[string]string{ManifestHashAnnotation: largeObjSpecHash})
 
 	applyDynamicClientNotFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	applyDynamicClientNotFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
@@ -384,7 +384,7 @@ func TestApplyUnstructured(t *testing.T) {
 
 	updatedLargeObj.SetLabels(map[string]string{"test-label-key": "test-label"})
 	updatedLargeObjSpecHash, _ := computeManifestHash(updatedLargeObj)
-	updatedLargeObj.SetAnnotations(map[string]string{manifestHashAnnotation: updatedLargeObjSpecHash})
+	updatedLargeObj.SetAnnotations(map[string]string{ManifestHashAnnotation: updatedLargeObjSpecHash})
 
 	applyDynamicClientFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	applyDynamicClientFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
@@ -514,7 +514,7 @@ func TestApplyUnstructured(t *testing.T) {
 			} else {
 				assert.Truef(t, err == nil, "err is not nil for Testcase %s", testName)
 				assert.Truef(t, applyResult != nil, "applyResult is not nil for Testcase %s", testName)
-				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[manifestHashAnnotation],
+				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[ManifestHashAnnotation],
 					"specHash not matching for Testcase %s", testName)
 				assert.Equalf(t, ownerRef, applyResult.GetOwnerReferences()[0], "ownerRef not matching for Testcase %s", testName)
 			}
@@ -966,7 +966,7 @@ func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, 
 	uObj := unstructured.Unstructured{}
 	_ = uObj.UnmarshalJSON(rawManifest)
 	validSpecHash, _ := computeManifestHash(&uObj)
-	uObj.SetAnnotations(map[string]string{manifestHashAnnotation: validSpecHash})
+	uObj.SetAnnotations(map[string]string{ManifestHashAnnotation: validSpecHash})
 	_ = setModifiedConfigurationAnnotation(&uObj)
 	dynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	dynamicClient.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
