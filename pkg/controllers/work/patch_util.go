@@ -90,7 +90,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	}
 
 	// remove the annotation to avoid recursion
-	delete(annotations, lastAppliedConfigAnnotation)
+	delete(annotations, LastAppliedConfigAnnotation)
 	// do not include an empty map
 	if len(annotations) == 0 {
 		_ = metadataAccessor.SetAnnotations(obj, nil)
@@ -105,7 +105,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 		return err
 	}
 	// set the last applied annotation back
-	annotations[lastAppliedConfigAnnotation] = string(modified)
+	annotations[LastAppliedConfigAnnotation] = string(modified)
 	return metadataAccessor.SetAnnotations(obj, annotations)
 }
 
@@ -122,7 +122,7 @@ func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 		klog.Warning("object does not have annotation", "obj", obj)
 		return nil, nil
 	}
-	original, ok := annots[lastAppliedConfigAnnotation]
+	original, ok := annots[LastAppliedConfigAnnotation]
 	if !ok {
 		klog.Warning("object does not have lastAppliedConfigAnnotation", "obj", obj)
 		return nil, nil

@@ -364,7 +364,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err := validation.ValidateAnnotationsSize(annotations); err != nil {
 			klog.InfoS(fmt.Sprintf("not using three way merge for manifest removing last applied config annotation, %s", err),
 				"gvr", gvr, "obj", manifestRef)
-			annotations[lastAppliedConfigAnnotation] = ""
+			annotations[LastAppliedConfigAnnotation] = ""
 			manifestObj.SetAnnotations(annotations)
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
@@ -399,7 +399,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// We only try to update the object if its spec hash value has changed.
-	if manifestObj.GetAnnotations()[manifestHashAnnotation] != curObj.GetAnnotations()[manifestHashAnnotation] {
+	if manifestObj.GetAnnotations()[ManifestHashAnnotation] != curObj.GetAnnotations()[ManifestHashAnnotation] {
 		// we need to merge the owner reference between the current and the manifest since we support one manifest
 		// belong to multiple work so it contains the union of all the appliedWork
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
@@ -413,7 +413,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err = validation.ValidateAnnotationsSize(annotations); err != nil {
 			klog.ErrorS(err, "not using three way merge for manifest removing last applied config annotation",
 				"gvr", gvr, "obj", manifestRef)
-			annotations[lastAppliedConfigAnnotation] = ""
+			annotations[LastAppliedConfigAnnotation] = ""
 			manifestObj.SetAnnotations(annotations)
 			return r.applyObject(ctx, gvr, manifestObj)
 		}
@@ -451,8 +451,8 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		Namespace: manifestObj.GetNamespace(),
 	}
 	klog.V(2).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
-		"new hash", manifestObj.GetAnnotations()[manifestHashAnnotation],
-		"existing hash", curObj.GetAnnotations()[manifestHashAnnotation])
+		"new hash", manifestObj.GetAnnotations()[ManifestHashAnnotation],
+		"existing hash", curObj.GetAnnotations()[ManifestHashAnnotation])
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {
@@ -561,8 +561,8 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	// remove the last applied Annotation to avoid unlimited recursion
 	annotation := manifest.GetAnnotations()
 	if annotation != nil {
-		delete(annotation, manifestHashAnnotation)
-		delete(annotation, lastAppliedConfigAnnotation)
+		delete(annotation, ManifestHashAnnotation)
+		delete(annotation, LastAppliedConfigAnnotation)
 		if len(annotation) == 0 {
 			manifest.SetAnnotations(nil)
 		} else {
@@ -634,7 +634,7 @@ func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
 	if annotation == nil {
 		annotation = map[string]string{}
 	}
-	annotation[manifestHashAnnotation] = manifestHash
+	annotation[ManifestHashAnnotation] = manifestHash
 	manifestObj.SetAnnotations(annotation)
 	return nil
 }
