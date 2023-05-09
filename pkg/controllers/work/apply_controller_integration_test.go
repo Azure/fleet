@@ -509,13 +509,13 @@ var _ = Describe("Work Controller", func() {
 			appliedCM := verifyAppliedConfigMap(cm)
 
 			By("Delete the last applied annotation from the current resource")
-			delete(appliedCM.Annotations, lastAppliedConfigAnnotation)
+			delete(appliedCM.Annotations, LastAppliedConfigAnnotation)
 			Expect(k8sClient.Update(ctx, appliedCM)).Should(Succeed())
 
 			By("Get the last applied config map and verify it does not have the last applied annotation")
 			var modifiedCM corev1.ConfigMap
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
-			Expect(modifiedCM.Annotations[lastAppliedConfigAnnotation]).Should(BeEmpty())
+			Expect(modifiedCM.Annotations[LastAppliedConfigAnnotation]).Should(BeEmpty())
 
 			By("Modify the manifest")
 			// modify one data
