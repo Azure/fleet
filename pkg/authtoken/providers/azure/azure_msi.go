@@ -17,15 +17,13 @@ import (
 	"go.goms.io/fleet/pkg/interfaces"
 )
 
-const (
-	aksScope = "6dae42f8-4368-4678-94ff-3960e28e3630"
-)
 
 type azureAuthTokenProvider struct {
 	clientID string
+	scope string
 }
 
-func New(clientID string) interfaces.AuthTokenProvider {
+func New(clientID, scope string) interfaces.AuthTokenProvider {
 	return &azureAuthTokenProvider{
 		clientID: clientID,
 	}
@@ -48,7 +46,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 		}, func() error {
 			klog.V(2).InfoS("GetToken start", "credential", credential)
 			azToken, err = credential.GetToken(ctx, policy.TokenRequestOptions{
-				Scopes: []string{aksScope},
+				Scopes: []string{a.scope},
 			})
 			if err != nil {
 				klog.ErrorS(err, "Failed to GetToken")
