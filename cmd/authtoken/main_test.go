@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.goms.io/fleet/pkg/authtoken/providers/azure"
 )
 
 func TestParseArgs(t *testing.T) {
@@ -16,6 +17,10 @@ func TestParseArgs(t *testing.T) {
 		tokenProvider, err := parseArgs()
 		assert.NotNil(t, tokenProvider)
 		assert.Nil(t, err)
+
+		azTokenProvider, ok := tokenProvider.(*azure.AzureAuthTokenProvider)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, azTokenProvider.Scope, "test-scope")
 	})
 	t.Run("no optional arguments", func(t *testing.T) {
 		os.Args = []string{"refreshtoken", "azure", "--clientid=test-client-id"}
@@ -25,5 +30,9 @@ func TestParseArgs(t *testing.T) {
 		tokenProvider, err := parseArgs()
 		assert.NotNil(t, tokenProvider)
 		assert.Nil(t, err)
+
+		azTokenProvider, ok := tokenProvider.(*azure.AzureAuthTokenProvider)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, azTokenProvider.Scope, "6dae42f8-4368-4678-94ff-3960e28e3630")
 	})
 }

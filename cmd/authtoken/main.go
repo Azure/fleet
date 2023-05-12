@@ -23,10 +23,6 @@ var (
 	configPath string
 )
 
-const (
-	aksAADApplicationID = "6dae42f8-4368-4678-94ff-3960e28e3630"
-)
-
 func parseArgs() (interfaces.AuthTokenProvider, error) {
 	var tokenProvider interfaces.AuthTokenProvider
 	rootCmd := &cobra.Command{Use: "refreshtoken", Args: cobra.NoArgs}
@@ -64,7 +60,7 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 	}
 
 	azureCmd.Flags().StringVar(&clientID, "clientid", "", "Azure AAD client ID (required)")
-	azureCmd.Flags().StringVar(&scope, "scope", aksAADApplicationID, "Azure AAD token scope (optinal)")
+	azureCmd.Flags().StringVar(&scope, "scope", "", "Azure AAD token scope (optinal)")
 	_ = azureCmd.MarkFlagRequired("clientid")
 
 	rootCmd.AddCommand(secretCmd, azureCmd)

@@ -17,23 +17,31 @@ import (
 	"go.goms.io/fleet/pkg/interfaces"
 )
 
-type azureAuthTokenProvider struct {
-	clientID string
-	scope    string
+const (
+	aksScope = "6dae42f8-4368-4678-94ff-3960e28e3630"
+)
+
+type AzureAuthTokenProvider struct {
+	ClientID string
+	Scope    string
 }
 
 func New(clientID, scope string) interfaces.AuthTokenProvider {
-	return &azureAuthTokenProvider{
-		clientID: clientID,
+	if scope == "" {
+		scope = aksScope
+	}
+	return &AzureAuthTokenProvider{
+		ClientID: clientID,
+		Scope:    scope,
 	}
 }
 
 // FetchToken gets a new token to make request to the associated fleet' hub cluster.
-func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+func (a *AzureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
 	token := interfaces.AuthToken{}
-	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(a.clientID)}
+	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(a.ClientID)}
 
-	klog.V(2).InfoS("FetchToken", "client ID", a.clientID)
+	klog.V(2).InfoS("FetchToken", "client ID", a.ClientID)
 	credential, err := azidentity.NewManagedIdentityCredential(opts)
 	if err != nil {
 		return token, fmt.Errorf("failed to create managed identity cred: %w", err)
@@ -45,7 +53,7 @@ func (a *azureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.Aut
 		}, func() error {
 			klog.V(2).InfoS("GetToken start", "credential", credential)
 			azToken, err = credential.GetToken(ctx, policy.TokenRequestOptions{
-				Scopes: []string{a.scope},
+				Scopes: []string{a.Scope},
 			})
 			if err != nil {
 				klog.ErrorS(err, "Failed to GetToken")
