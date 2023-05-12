@@ -24,7 +24,7 @@ var (
 )
 
 const (
-	aksAADApplicationId = "6dae42f8-4368-4678-94ff-3960e28e3630"
+	aksAADApplicationID = "6dae42f8-4368-4678-94ff-3960e28e3630"
 )
 
 func parseArgs() (interfaces.AuthTokenProvider, error) {
@@ -64,7 +64,7 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 	}
 
 	azureCmd.Flags().StringVar(&clientID, "clientid", "", "Azure AAD client ID (required)")
-	azureCmd.Flags().StringVar(&scope, "scope", aksAADApplicationId, "Azure AAD token scope (optinal)")
+	azureCmd.Flags().StringVar(&scope, "scope", aksAADApplicationID, "Azure AAD token scope (optinal)")
 	_ = azureCmd.MarkFlagRequired("clientid")
 
 	rootCmd.AddCommand(secretCmd, azureCmd)

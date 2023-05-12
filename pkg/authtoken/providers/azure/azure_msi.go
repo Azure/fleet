@@ -17,10 +17,9 @@ import (
 	"go.goms.io/fleet/pkg/interfaces"
 )
 
-
 type azureAuthTokenProvider struct {
 	clientID string
-	scope string
+	scope    string
 }
 
 func New(clientID, scope string) interfaces.AuthTokenProvider {

@@ -16,7 +16,6 @@ func TestParseArgs(t *testing.T) {
 		tokenProvider, err := parseArgs()
 		assert.NotNil(t, tokenProvider)
 		assert.Nil(t, err)
-
 	})
 	t.Run("no optional arguments", func(t *testing.T) {
 		os.Args = []string{"refreshtoken", "azure", "--clientid=test-client-id"}
@@ -26,6 +25,5 @@ func TestParseArgs(t *testing.T) {
 		tokenProvider, err := parseArgs()
 		assert.NotNil(t, tokenProvider)
 		assert.Nil(t, err)
-
 	})
 }
