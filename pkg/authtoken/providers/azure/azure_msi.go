@@ -21,7 +21,7 @@ const (
 	aksScope = "6dae42f8-4368-4678-94ff-3960e28e3630"
 )
 
-type AzureAuthTokenProvider struct {
+type AuthTokenProvider struct {
 	ClientID string
 	Scope    string
 }
@@ -30,14 +30,14 @@ func New(clientID, scope string) interfaces.AuthTokenProvider {
 	if scope == "" {
 		scope = aksScope
 	}
-	return &AzureAuthTokenProvider{
+	return &AuthTokenProvider{
 		ClientID: clientID,
 		Scope:    scope,
 	}
 }
 
 // FetchToken gets a new token to make request to the associated fleet' hub cluster.
-func (a *AzureAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+func (a *AuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
 	token := interfaces.AuthToken{}
 	opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(a.ClientID)}
 
