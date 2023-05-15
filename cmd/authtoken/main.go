@@ -50,15 +50,19 @@ func parseArgs() (interfaces.AuthTokenProvider, error) {
 	_ = secretCmd.MarkFlagRequired("namespace")
 
 	var clientID string
+	var scope string
 	azureCmd := &cobra.Command{
 		Use:  "azure",
 		Args: cobra.NoArgs,
 		Run: func(_ *cobra.Command, args []string) {
-			tokenProvider = azure.New(clientID)
+			tokenProvider = azure.New(clientID, scope)
 		},
 	}
 
 	azureCmd.Flags().StringVar(&clientID, "clientid", "", "Azure AAD client ID (required)")
+	// TODO: this scope argument is specific for Azure provider. We should allow registering and parsing provider specific argument
+	// in provider level, instead of global level.
+	azureCmd.Flags().StringVar(&scope, "scope", "", "Azure AAD token scope (optional)")
 	_ = azureCmd.MarkFlagRequired("clientid")
 
 	rootCmd.AddCommand(secretCmd, azureCmd)
