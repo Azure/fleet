@@ -29,7 +29,7 @@ var _ = Describe("workload orchestration testing", func() {
 		crp        *v1alpha1.ClusterResourcePlacement
 		labelKey   = "fleet.azure.com/name"
 		labelValue = "test"
-		// Ignoring typeMeta to get the tests to pass, it because on Create and Get Type Meta is not populated but it gets populated on Update.
+		// Ignoring typeMeta to get the tests to pass, because on Create and Get Type Meta is not populated but it gets populated on Update. Known issue: https://github.com/kubernetes-sigs/controller-runtime/issues/1735
 		resourceIgnoreOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID"), cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")}
 	)
@@ -425,20 +425,20 @@ var _ = Describe("workload orchestration testing", func() {
 
 			By("update secret so that it's small again")
 			// Using a new variable to prevent failure, leads to 409 if not.
-			var smallSecret corev1.Secret
-			err = pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-small-secret.yaml", &smallSecret)
+			var initialSmallSecret corev1.Secret
+			err = pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-small-secret.yaml", &initialSmallSecret)
 			Expect(err).Should(Succeed())
 			Eventually(func() error {
-				if err := HubCluster.KubeClient.Update(ctx, &smallSecret); err != nil {
+				if err := HubCluster.KubeClient.Update(ctx, &initialSmallSecret); err != nil {
 					return err
 				}
 				return nil
 			}, utils.PollTimeout, utils.PollInterval).Should(Succeed(), "Failed to update secret to be small in %s cluster", HubCluster.ClusterName)
-			expectedSecret = &smallSecret
+			expectedSecret = &initialSmallSecret
 			expectedSecret.OwnerReferences = ownerReferences
 
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: smallSecret.Name, Namespace: smallSecret.Namespace}, expectedSecret, resourceIgnoreOptions)
+			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, expectedSecret, resourceIgnoreOptions)
 			Expect(gotSecret.Annotations[workcontroller.LastAppliedConfigAnnotation]).ToNot(BeEmpty())
 			Expect(gotSecret.Annotations[workcontroller.ManifestHashAnnotation]).To(Equal(testSmallSecretSpecHash))
 
