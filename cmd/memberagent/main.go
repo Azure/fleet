@@ -39,7 +39,7 @@ import (
 
 var (
 	scheme               = runtime.NewScheme()
-	useCAAuth            = flag.Bool("use-ca-auth", false, "Use identity and CA bundle to authenticate the member agent.")
+	useCertificateAuth   = flag.Bool("use-ca-auth", false, "Use key and certificate to authenticate the member agent.")
 	tlsClientInsecure    = flag.Bool("tls-insecure", false, "Enable TLSClientConfig.Insecure property. Enabling this will make the connection inSecure (should be 'true' for testing purpose only.)")
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -71,7 +71,7 @@ func main() {
 		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
 		os.Exit(1)
 	}
-	hubConfig, err := buildHubConfig(hubURL, *useCAAuth, *tlsClientInsecure)
+	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
 	if err != nil {
 		klog.ErrorS(err, "error has occurred building kubernetes client configuration for hub")
 		os.Exit(1)
