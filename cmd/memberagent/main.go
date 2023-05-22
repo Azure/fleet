@@ -116,11 +116,11 @@ func main() {
 	}
 }
 
-func buildHubConfig(hubURL string, useCAAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
+func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
 	var hubConfig = &rest.Config{
 		Host: hubURL,
 	}
-	if useCAAuth {
+	if useCertificateAuth {
 		keyFilePath := os.Getenv("IDENTITY_KEY")
 		certFilePath := os.Getenv("IDENTITY_CERT")
 		if keyFilePath == "" {
