@@ -160,10 +160,7 @@ func buildHubConfig(hubURL string, useCAAuth bool, tlsClientInsecure bool) (*res
 
 	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
 	if !tlsClientInsecure {
-		caBundleFile := os.Getenv("CA_BUNDLE")
-		if caBundleFile != "" {
-			hubConfig.TLSClientConfig.CAFile = caBundleFile
-		}
+		hubConfig.TLSClientConfig.CAFile = os.Getenv("CA_BUNDLE")
 		hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
 		if hubCA != "" {
 			caData, err := base64.StdEncoding.DecodeString(hubCA)
