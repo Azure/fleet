@@ -121,21 +121,21 @@ func buildHubConfig(hubURL string, useCAAuth bool, tlsClientInsecure bool) (*res
 		Host: hubURL,
 	}
 	if useCAAuth {
-		identityKeyFile := os.Getenv("IDENTITY_KEY")
-		identityCertFile := os.Getenv("IDENTITY_CERT")
-		if identityKeyFile == "" {
+		keyFilePath := os.Getenv("IDENTITY_KEY")
+		certFilePath := os.Getenv("IDENTITY_CERT")
+		if keyFilePath == "" {
 			err := errors.New("identity key file path cannot be empty")
 			klog.ErrorS(err, "error has occurred retrieving IDENTITY_KEY")
 			return nil, err
 		}
 
-		if identityCertFile == "" {
-			err := errors.New("identity cert file path cannot be empty")
+		if certFilePath == "" {
+			err := errors.New("identity certificate file path cannot be empty")
 			klog.ErrorS(err, "error has occurred retrieving IDENTITY_CERT")
 			return nil, err
 		}
-		hubConfig.TLSClientConfig.CertFile = identityCertFile
-		hubConfig.TLSClientConfig.KeyFile = identityKeyFile
+		hubConfig.TLSClientConfig.CertFile = certFilePath
+		hubConfig.TLSClientConfig.KeyFile = keyFilePath
 	} else {
 		tokenFilePath := os.Getenv("CONFIG_PATH")
 		if tokenFilePath == "" {
