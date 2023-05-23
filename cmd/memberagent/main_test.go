@@ -52,6 +52,28 @@ func Test_buildHubConfig(t *testing.T) {
 			},
 		}, *config)
 	})
+	t.Run("use CA data - success", func(t *testing.T) {
+		t.Setenv("CONFIG_PATH", "./testdata/token")
+		t.Setenv("HUB_CERTIFICATE_AUTHORITY", "dGhpcyBpcyBhIGZha2UgY2E=")
+		config, err := buildHubConfig("https://hub.domain.com", false, false)
+		assert.NotNil(t, config)
+		assert.Nil(t, err)
+		assert.Equal(t, rest.Config{
+			Host:            "https://hub.domain.com",
+			BearerTokenFile: "./testdata/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CAData: []byte("this is a fake ca"),
+			},
+		}, *config)
+	})
+	t.Run("both of CA bundle and CA data present - error", func(t *testing.T) {
+		t.Setenv("CONFIG_PATH", "./testdata/token")
+		t.Setenv("HUB_CERTIFICATE_AUTHORITY", "dGhpcyBpcyBhIGZha2UgY2E=")
+		t.Setenv("CA_BUNDLE", "/path/to/ca/bundle")
+		config, err := buildHubConfig("https://hub.domain.com", false, false)
+		assert.Nil(t, config)
+		assert.NotNil(t, err)
+	})
 	t.Run("use token auth, no toke path - error", func(t *testing.T) {
 		t.Setenv("CONFIG_PATH", "")
 		config, err := buildHubConfig("https://hub.domain.com", false, false)
@@ -72,20 +94,6 @@ func Test_buildHubConfig(t *testing.T) {
 		assert.Equal(t, rest.Config{
 			Host:            "https://hub.domain.com",
 			BearerTokenFile: "./testdata/token",
-		}, *config)
-	})
-	t.Run("use hub ca data - success", func(t *testing.T) {
-		t.Setenv("CONFIG_PATH", "./testdata/token")
-		t.Setenv("HUB_CERTIFICATE_AUTHORITY", "dGhpcyBpcyBhIGZha2UgY2E=")
-		config, err := buildHubConfig("https://hub.domain.com", false, false)
-		assert.NotNil(t, config)
-		assert.Nil(t, err)
-		assert.Equal(t, rest.Config{
-			Host:            "https://hub.domain.com",
-			BearerTokenFile: "./testdata/token",
-			TLSClientConfig: rest.TLSClientConfig{
-				CAData: []byte("this is a fake ca"),
-			},
 		}, *config)
 	})
 	t.Run("No CA bundle, no Hub CA, not insecure - success", func(t *testing.T) {

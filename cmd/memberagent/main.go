@@ -160,8 +160,15 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 
 	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
 	if !tlsClientInsecure {
-		hubConfig.TLSClientConfig.CAFile = os.Getenv("CA_BUNDLE")
+		caBundle := os.Getenv("CA_BUNDLE")
 		hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
+		if caBundle != "" && hubCA != "" {
+			err := errors.New("environment variables CA_BUNDLE and HUB_CERTIFICATE_AUTHORITY should not be set at same time")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+
+		hubConfig.TLSClientConfig.CAFile = os.Getenv("CA_BUNDLE")
 		if hubCA != "" {
 			caData, err := base64.StdEncoding.DecodeString(hubCA)
 			if err != nil {
