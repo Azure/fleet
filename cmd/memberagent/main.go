@@ -164,11 +164,13 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		if ok && caBundle == "" {
 			err := errors.New("environment variable CA_BUNDLE should not be empty")
 			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
 		}
 		hubCA, ok := os.LookupEnv("HUB_CERTIFICATE_AUTHORITY")
 		if ok && hubCA == "" {
 			err := errors.New("environment variable HUB_CERTIFICATE_AUTHORITY should not be empty")
 			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
 		}
 		if caBundle != "" && hubCA != "" {
 			err := errors.New("environment variables CA_BUNDLE and HUB_CERTIFICATE_AUTHORITY should not be set at same time")

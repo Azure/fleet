@@ -36,6 +36,14 @@ func Test_buildHubConfig(t *testing.T) {
 			},
 		}, *config)
 	})
+	t.Run("empty CA bundle - error", func(t *testing.T) {
+		t.Setenv("IDENTITY_KEY", "/path/to/key")
+		t.Setenv("IDENTITY_CERT", "/path/to/cert")
+		t.Setenv("CA_BUNDLE", "")
+		config, err := buildHubConfig("https://hub.domain.com", true, false)
+		assert.Nil(t, config)
+		assert.NotNil(t, err)
+	})
 	t.Run("use CA bundle - success", func(t *testing.T) {
 		t.Setenv("IDENTITY_KEY", "/path/to/key")
 		t.Setenv("IDENTITY_CERT", "/path/to/cert")
@@ -65,6 +73,13 @@ func Test_buildHubConfig(t *testing.T) {
 				CAData: []byte("this is a fake ca"),
 			},
 		}, *config)
+	})
+	t.Run("empty CA data - error", func(t *testing.T) {
+		t.Setenv("CONFIG_PATH", "./testdata/token")
+		t.Setenv("HUB_CERTIFICATE_AUTHORITY", "")
+		config, err := buildHubConfig("https://hub.domain.com", false, false)
+		assert.Nil(t, config)
+		assert.NotNil(t, err)
 	})
 	t.Run("both of CA bundle and CA data present - error", func(t *testing.T) {
 		t.Setenv("CONFIG_PATH", "./testdata/token")
