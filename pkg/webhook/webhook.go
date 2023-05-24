@@ -23,6 +23,7 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -33,6 +34,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/webhook/customresourcedefinition"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
 )
@@ -178,6 +180,28 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 					},
 				},
 			},
+			{
+				Name:                    "fleet.customresourcedefinition.validating",
+				ClientConfig:            w.createClientConfig(v1.CustomResourceDefinition{}),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.Create,
+							admv1.Update,
+							admv1.Delete,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{"apiextensions.k8s.io"},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"customresourcedefinitions"},
+							Scope:       &clusterScope,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -225,6 +249,9 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 	case appsv1.ReplicaSet:
 		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
 		serviceRef.Path = pointer.String(replicaset.ValidationPath)
+	case v1.CustomResourceDefinition:
+		serviceEndpoint = w.serviceURL + customresourcedefinition.ValidationPath
+		serviceRef.Path = pointer.String(customresourcedefinition.ValidationPath)
 	}
 
 	config := admv1.WebhookClientConfig{
