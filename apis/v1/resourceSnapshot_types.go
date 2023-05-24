@@ -26,7 +26,7 @@ import (
 // Each snapshot must have a label "fleet.azure.com/snapshotGroup" with value as the snapshot index.
 // Each must have an annotation "fleet.azure.com/resource-hash" with value as the sha-256 hash
 // value of all the snapshots belong to the same snapshot index.
-type ResourceSnapShot struct {
+type ResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -56,7 +56,7 @@ type ResourceSnapShotSpec struct {
 	IsLatest bool `json:"isLatest"`
 
 	// PolicySnapShotName is the name of the policy snapshot that this resource snapshot is pointing to.
-	PolicySnapShotName int32 `json:"policySnapShotName"`
+	PolicySnapShotName string `json:"policySnapShotName"`
 }
 
 // ResourceContent contains the content of a resource

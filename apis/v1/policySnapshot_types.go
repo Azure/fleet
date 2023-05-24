@@ -21,7 +21,7 @@ import (
 
 // PolicySnapShot is used to store a snapshot of placement policy
 // It is immutable.
-type PolicySnapShot struct {
+type PolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -77,7 +77,7 @@ const (
 	// - "True" means the corresponding policySnapShot is fully scheduled.
 	// - "False" means the corresponding policySnapShot is not scheduled yet.
 	// - "Unknown" means this policy does not have a full schedule yet.
-	Scheduled PolicySnapShotConditionType = "Scheduled"
+	PolicySnapshotScheduled PolicySnapShotConditionType = "Scheduled"
 )
 
 // ClusterDecision represents a decision from a placement

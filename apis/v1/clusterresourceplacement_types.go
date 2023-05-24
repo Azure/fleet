@@ -96,8 +96,8 @@ type ClusterResourceSelector struct {
 type PlacementPolicy struct {
 	// +kubebuilder:validation:MaxItems=100
 	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
-	// If the list is not empty, `PlacementType`, `NumberOfClusters`, `Affinity`, `TopologySpreadConstraints`
-	// and `PrioritizePolicy` fields are ignored.
+	// If the list is not empty, `PlacementType`, `NumberOfClusters`, `Affinity`, and `TopologySpreadConstraints`
+	//  are ignored.
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
 
@@ -233,7 +233,7 @@ type ClusterResourcePlacementStatus struct {
 
 	// Conditions is an array of current observed conditions for ClusterResourcePlacement.
 	// +optional
-	Conditions []metav1.Condition `json:"conditions"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +optional
@@ -260,7 +260,7 @@ type ResourceIdentifier struct {
 
 	// Version is the version of the selected resource.
 	// +required
-	Version string `json:"version,omitempty"`
+	Version string `json:"version"`
 
 	// Kind represents the Kind of the selected resources.
 	// +required
@@ -310,15 +310,15 @@ const (
 	ResourcePlacementStatusConditionTypeApplied ResourcePlacementConditionType = "Applied"
 )
 
-// PlacementType identifies the type of placement
+// PlacementType identifies the type of placement.
 // +enum
 type PlacementType string
 
 const (
-	// PickAllPlacementType Pick all clusters that satisfy the rules
+	// PickAllPlacementType picks all clusters that satisfy the rules.
 	PickAllPlacementType PlacementType = "PickAll"
 
-	// PickNPlacementType Pick N clusters
+	// PickNPlacementType picks N clusters that satisfy the rules.
 	PickNPlacementType PlacementType = "PickN"
 )
 

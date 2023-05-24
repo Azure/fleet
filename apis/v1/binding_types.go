@@ -10,7 +10,7 @@ import (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=mc
+// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=rb
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
@@ -31,8 +31,8 @@ type ResourceBinding struct {
 
 // ResourceBindingSpec defines the desired state of ResourceBinding.
 type ResourceBindingSpec struct {
-	// ResourceSnapshotNames is the names of the resource snapshot to which
-	// that this resource binding points.
+	// ResourceSnapshotName is the name of the resource snapshot to which
+	// that this resource binding points to within the same namespace.
 	ResourceSnapshotIndex int32 `json:"resourceSnapshotIndex"`
 
 	// TargetCluster is the name of the cluster that the scheduler assigns the resources to.
@@ -60,14 +60,14 @@ const (
 	// - "True" means the corresponding work CR is created in the target cluster's namespace.
 	// - "False" means the corresponding work CR is not created yet.
 	// - "Unknown" means it is unknown.
-	Bound ResourceBindingConditionType = "Bound"
+	ResourceBindingBound ResourceBindingConditionType = "Bound"
 
 	// Applied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
 	// - "True" means all the resources are created in the target cluster.
 	// - "False" means not all the resources are created in the target cluster yet.
 	// - "Unknown" means it is unknown.
-	Applied ResourceBindingConditionType = "Applied"
+	ResourceBindingApplied ResourceBindingConditionType = "Applied"
 )
 
 // ResourceBindingList is a collection of ResourceBinding.
