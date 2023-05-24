@@ -43,11 +43,11 @@ func (v *customResourceDefintionValidator) Handle(ctx context.Context, req admis
 		}
 		// Need to check to see if the user is authorized to do the operation.
 		if !validation.ValidateUserGroups(req.UserInfo.Groups) {
-			return admission.Denied(fmt.Sprintf("failed to validate user %s to modify CRD", req.UserInfo.Username))
+			return admission.Denied(fmt.Sprintf("failed to authorize user %s in groups: %v to modify CRD", req.UserInfo.Username, req.UserInfo.Groups))
 		}
 		group := regexp.MustCompile(groupMatch).FindStringSubmatch(crd.Name)[1]
 		if validation.CheckCRDGroup(group) {
-			return admission.Denied(fmt.Sprintf("cannot modify fleet CRDs %s", crd.Name))
+			return admission.Denied(fmt.Sprintf("user: %s in groups: %v cannot modify fleet CRD %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 		}
 	}
 	return admission.Allowed("")
