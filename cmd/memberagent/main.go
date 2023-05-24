@@ -178,8 +178,9 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 			return nil, err
 		}
 
-		hubConfig.TLSClientConfig.CAFile = caBundle
-		if hubCA != "" {
+		if caBundle != "" {
+			hubConfig.TLSClientConfig.CAFile = caBundle
+		} else if hubCA != "" {
 			caData, err := base64.StdEncoding.DecodeString(hubCA)
 			if err != nil {
 				klog.ErrorS(err, "cannot decode hub cluster certificate authority data")
@@ -188,7 +189,6 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 			hubConfig.TLSClientConfig.CAData = caData
 		}
 	}
-
 	return hubConfig, nil
 }
 
