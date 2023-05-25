@@ -115,6 +115,7 @@ func (w *controller) Run(ctx context.Context, workerNumber int) error {
 			defer wg.Done()
 			defer utilruntime.HandleCrash()
 			// Run a worker thread that just dequeues items, processes them, and marks them done.
+			//revive:disable:empty-block
 			for w.processNextWorkItem(ctx) {
 			}
 		}()

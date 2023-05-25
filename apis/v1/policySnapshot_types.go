@@ -116,19 +116,19 @@ type ClusterDecision struct {
 type PolicySnapShotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []PolicySnapShot `json:"items"`
+	Items           []PolicySnapshot `json:"items"`
 }
 
-func (m *PolicySnapShot) SetConditions(conditions ...metav1.Condition) {
+func (m *PolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
-func (m *PolicySnapShot) GetCondition(conditionType string) *metav1.Condition {
+func (m *PolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&PolicySnapShot{}, &PolicySnapShot{})
+	SchemeBuilder.Register(&PolicySnapshot{}, &PolicySnapshot{})
 }

@@ -83,19 +83,19 @@ type ResourceSnapShotStatus struct {
 type ResourceSnapShotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ResourceSnapShot `json:"items"`
+	Items           []ResourceSnapshot `json:"items"`
 }
 
-func (m *ResourceSnapShot) SetConditions(conditions ...metav1.Condition) {
+func (m *ResourceSnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
-func (m *ResourceSnapShot) GetCondition(conditionType string) *metav1.Condition {
+func (m *ResourceSnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&ResourceSnapShot{}, &ResourceSnapShot{})
+	SchemeBuilder.Register(&ResourceSnapshot{}, &ResourceSnapshot{})
 }
