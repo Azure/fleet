@@ -6,7 +6,7 @@ Licensed under the MIT license.
 package e2e
 
 import (
-	errors "errors"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -15,13 +15,16 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	pkgutils "go.goms.io/fleet/pkg/utils"
 	testUtils "go.goms.io/fleet/test/e2e/utils"
 )
 
@@ -457,6 +460,61 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ReplicaSet call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.replicaset.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("ReplicaSet %s/%s creation is disallowed in the fleet hub cluster", rs.Namespace, rs.Name)))
+		})
+	})
+
+	Context("CRD validation webhook", func() {
+		It("should deny CREATE operation on Fleet CRD", func() {
+			var crd v1.CustomResourceDefinition
+			err := pkgutils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)
+			Expect(err).Should(Succeed())
+
+			By("expecting denial of operation CREATE of CRD")
+			err = HubCluster.KubeClient.Create(ctx, &crd)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			fmt.Println(statusErr.ErrStatus.Message)
+			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(
+				`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name)))
+		})
+
+		It("should deny UPDATE operation on Fleet CRD", func() {
+			var crd v1.CustomResourceDefinition
+			err := HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)
+			Expect(err).Should(Succeed())
+			crd.Labels["new-key"] = "new-value"
+			By("expecting denial of operation UPDATE of CRD")
+			err = HubCluster.KubeClient.Update(ctx, &crd)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(
+				`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name)))
+		})
+
+		It("should deny DELETE operation on Fleet CRD", func() {
+			crd := v1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "works.multicluster.x-k8s.io",
+				},
+			}
+			err := HubCluster.KubeClient.Delete(ctx, &crd)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			fmt.Println(statusErr.ErrStatus.Message)
+			fmt.Println(fmt.Sprintf(`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name))
+			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name)))
+		})
+
+		It("should allow CREATE OPERATION on Other CRDs", func() {
+			var crd v1.CustomResourceDefinition
+			err := pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test_clonesets_crd.yaml", &crd)
+			Expect(err).Should(Succeed())
+			By("expecting error to be nil")
+			err = HubCluster.KubeClient.Create(ctx, &crd)
+			Expect(err).To(BeNil())
+			By("delete clone set CRD")
+			err = HubCluster.KubeClient.Delete(ctx, &crd)
+			Expect(err).To(BeNil())
 		})
 	})
 })

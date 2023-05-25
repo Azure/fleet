@@ -37,9 +37,15 @@ type customResourceDefintionValidator struct {
 func (v *customResourceDefintionValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		crd := &v1.CustomResourceDefinition{}
-		err := v.decoder.Decode(req, crd)
-		if err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
+		if req.Operation == admissionv1.Delete {
+			// req.Object is not populated for delete: https://github.com/kubernetes-sigs/controller-runtime/issues/1762
+			if err := v.decoder.DecodeRaw(req.OldObject, crd); err != nil {
+				return admission.Errored(http.StatusBadRequest, err)
+			}
+		} else {
+			if err := v.decoder.Decode(req, crd); err != nil {
+				return admission.Errored(http.StatusBadRequest, err)
+			}
 		}
 		// Need to check to see if the user is authorized to do the operation.
 		if !validation.ValidateUserGroups(req.UserInfo.Groups) {
