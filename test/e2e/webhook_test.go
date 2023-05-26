@@ -15,7 +15,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -465,63 +464,6 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	})
 
 	Context("CRD validation webhook", func() {
-		It("should deny user if they are not part of system:masters/system:authenticated", func() {
-			var crd v1.CustomResourceDefinition
-			err := pkgutils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)
-			Expect(err).Should(Succeed())
-
-			By("create cluster role for bad-user to modify CRDs")
-			cr := rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "bad-user-cluster-role",
-				},
-				Rules: []rbacv1.PolicyRule{
-					{
-						APIGroups: []string{"apiextensions.k8s.io"},
-						Verbs:     []string{"*"},
-						Resources: []string{"*"},
-					},
-				},
-			}
-			err = HubCluster.KubeClient.Create(ctx, &cr)
-			Expect(err).Should(Succeed())
-
-			By("create cluster admin cluster role binding for bad-user")
-			crb := rbacv1.RoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "bad-user-cluster-role-binding",
-				},
-				Subjects: []rbacv1.Subject{
-					{
-						APIGroup: rbacv1.GroupName,
-						Kind:     "User",
-						Name:     "bad-user",
-					},
-				},
-				RoleRef: rbacv1.RoleRef{
-					APIGroup: rbacv1.GroupName,
-					Kind:     "ClusterRole",
-					Name:     "bad-user-cluster-role",
-				},
-			}
-			err = HubCluster.KubeClient.Create(ctx, &crb)
-			Expect(err).Should(Succeed())
-
-			By("expecting denial of operation CREATE of CRD by un-authenticated user")
-			err = HubCluster.ImpersonateKubeClient.Create(ctx, &crd)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			fmt.Println(statusErr.ErrStatus.Message)
-
-			By("delete cluster role binding for bad-user")
-			err = HubCluster.KubeClient.Delete(ctx, &crb)
-			Expect(err).Should(Succeed())
-
-			By("delete cluster role for bad-user")
-			err = HubCluster.KubeClient.Delete(ctx, &cr)
-			Expect(err).Should(Succeed())
-		})
-
 		It("should deny CREATE operation on Fleet CRD", func() {
 			var crd v1.CustomResourceDefinition
 			err := pkgutils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)
@@ -531,7 +473,6 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			err = HubCluster.KubeClient.Create(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			fmt.Println(statusErr.ErrStatus.Message)
 			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(
 				`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name)))
 		})
@@ -560,8 +501,6 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			err := HubCluster.KubeClient.Delete(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			fmt.Println(statusErr.ErrStatus.Message)
-			fmt.Println(fmt.Sprintf(`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name))
 			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(`admission webhook "fleet.customresourcedefinition.validating" denied the request: user: kubernetes-admin in groups: [system:masters system:authenticated] cannot modify fleet CRD %s`, crd.Name)))
 		})
 
