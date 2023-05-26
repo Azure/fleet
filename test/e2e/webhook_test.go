@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,7 +24,6 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
-	pkgutils "go.goms.io/fleet/pkg/utils"
 	testUtils "go.goms.io/fleet/test/e2e/utils"
 )
 
@@ -466,7 +465,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 	Context("CRD validation webhook", func() {
 		It("should deny CREATE operation on Fleet CRD", func() {
 			var crd v1.CustomResourceDefinition
-			err := pkgutils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)
+			err := utils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)
 			Expect(err).Should(Succeed())
 
 			By("expecting denial of operation CREATE of CRD")
@@ -506,7 +505,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 
 		It("should allow CREATE OPERATION on Other CRDs", func() {
 			var crd v1.CustomResourceDefinition
-			err := pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test_clonesets_crd.yaml", &crd)
+			err := utils.GetObjectFromManifest("./test/integration/manifests/resources/test_clonesets_crd.yaml", &crd)
 			Expect(err).Should(Succeed())
 
 			By("expecting error to be nil")
