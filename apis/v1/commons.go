@@ -13,6 +13,13 @@ import (
 type ClusterState string
 
 const (
+	// Unprefixed labels are reserved for end-users
+	// we will add a fleet.azure.com to designate these labels as official fleet labels.
+	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
+	labelPrefix = "fleet.azure.com/"
+)
+
+const (
 	ClusterStateJoin  ClusterState = "Join"
 	ClusterStateLeave ClusterState = "Leave"
 )

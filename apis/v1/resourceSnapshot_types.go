@@ -11,6 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+const (
+	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster policy.
+	ResourceIndexLabel = labelPrefix + "policyIndex"
+
+	// ResourceGroupHashAnnotation is the label that contains the value of the sha-256 hash
+	// value of all the snapshots belong to the same snapshot index.
+	ResourceGroupHashAnnotation = labelPrefix + "resourceHash"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
@@ -20,13 +29,12 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ResourceSnapShot is used to store a snapshot of selected resources by a resource placement policy.
+// ClusterResourceSnapshot is used to store a snapshot of selected resources by a resource placement policy.
 // It is immutable. We may need to produce more than one resourceSnapshot for one ResourcePlacement to
 // get around the 1MB size limit of k8s objects.
-// Each snapshot must have a label "fleet.azure.com/snapshotGroup" with value as the snapshot index.
-// Each must have an annotation "fleet.azure.com/resource-hash" with value as the sha-256 hash
-// value of all the snapshots belong to the same snapshot index.
-type ResourceSnapshot struct {
+// Each snapshot must have `CRPTrackingLabel`, `ResourceIndexLabel` and `IsLatestSnapshotLabel`
+// Each snapshot must have an annotation "fleet.azure.com/" with value as the s
+type ClusterResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -51,10 +59,6 @@ type ResourceSnapShotSpec struct {
 	// +required
 	SelectedResources []ResourceContent `json:"selectedResources"`
 
-	// IsLatest indicates if the resourceSnapshot is the latest or not.
-	// +required
-	IsLatest bool `json:"isLatest"`
-
 	// PolicySnapShotName is the name of the policy snapshot that this resource snapshot is pointing to.
 	PolicySnapShotName string `json:"policySnapShotName"`
 }
@@ -77,25 +81,25 @@ type ResourceSnapShotStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 }
 
-// ClusterResourcePlacementList contains a list of ClusterResourcePlacement.
+// ClusterResourceSnapShotList contains a list of ClusterResourceSnapshot.
 // +kubebuilder:resource:scope="Cluster"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ResourceSnapShotList struct {
+type ClusterResourceSnapShotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ResourceSnapshot `json:"items"`
+	Items           []ClusterResourceSnapshot `json:"items"`
 }
 
-func (m *ResourceSnapshot) SetConditions(conditions ...metav1.Condition) {
+func (m *ClusterResourceSnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
-func (m *ResourceSnapshot) GetCondition(conditionType string) *metav1.Condition {
+func (m *ClusterResourceSnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&ResourceSnapshot{}, &ResourceSnapshot{})
+	SchemeBuilder.Register(&ClusterResourceSnapshot{}, &ClusterResourceSnapshot{})
 }

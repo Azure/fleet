@@ -10,6 +10,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// PolicyIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
+	PolicyIndexLabel = labelPrefix + "policyIndex"
+
+	// IsLatestSnapshotLabel tells if the policy snapshot is the latest one.
+	IsLatestSnapshotLabel = labelPrefix + "isLatestSnapshot"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
@@ -19,9 +27,10 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// PolicySnapShot is used to store a snapshot of placement policy
+// ClusterPolicySnapshot is used to store a snapshot of cluster placement policy.
 // It is immutable.
-type PolicySnapshot struct {
+// It must have `CRPTrackingLabel`, `PolicyIndexLabel` and `IsLatestSnapshotLabel` labels.
+type ClusterPolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -41,10 +50,6 @@ type PolicySnapShotSpec struct {
 	// +optional
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 
-	// IsLatest indicates if the policy is the latest or not.
-	// +required
-	IsLatest bool `json:"isLatest"`
-
 	// PolicyHash is the sha-256 hash value of the Policy field
 	// +required
 	PolicyHash []byte `json:"policyHash"`
@@ -61,6 +66,7 @@ type PolicySnapShotStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
+	// +kubebuilder:validation:MaxItems=100
 	// ClusterDecisions contains a list of names of member clusters considered by the scheduler.
 	// Note that all the selected clusters must present in the list while not all the
 	// member clusters are guaranteed to be listed.
@@ -93,42 +99,49 @@ type ClusterDecision struct {
 	// +required
 	Selected bool `json:"selected"`
 
-	// AffinityScore represents the affinity score of the cluster calculated by the last
-	// scheduling decision based on the preferred affinity selector.
-	// An affinity score may not present if the cluster does not meet the required affinity.
+	// ClusterScore represents the score of the cluster calculated by the scheduler.
 	// +optional
-	AffinityScore int32 `json:"affinityScore,omitempty"`
-
-	// TopologySpreadScore represents the priority score of the cluster calculated by the last
-	// scheduling decision based on the topology spread applied to the cluster.
-	// A priority score may not present if the cluster does not meet the topology spread.
-	// +optional
-	TopologySpreadScore int32 `json:"priorityScore,omitempty"`
+	ClusterScore *ClusterScore `json:"clusterScore"`
 
 	// Reason represents the reason why the cluster is selected or not.
 	// +required
 	Reason string `json:"reason"`
 }
 
-// PolicySnapShotList contains a list of PolicySnapShot.
-// +kubebuilder:resource:scope="Cluster"
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type PolicySnapShotList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []PolicySnapshot `json:"items"`
+// ClusterScore represents the score of the cluster calculated by the scheduler.
+type ClusterScore struct {
+	// AffinityScore represents the affinity score of the cluster calculated by the last
+	// scheduling decision based on the preferred affinity selector.
+	// An affinity score may not present if the cluster does not meet the required affinity.
+	// +optional
+	AffinityScore *int32 `json:"affinityScore,omitempty"`
+
+	// TopologySpreadScore represents the priority score of the cluster calculated by the last
+	// scheduling decision based on the topology spread applied to the cluster.
+	// A priority score may not present if the cluster does not meet the topology spread.
+	// +optional
+	TopologySpreadScore *int32 `json:"priorityScore,omitempty"`
 }
 
-func (m *PolicySnapshot) SetConditions(conditions ...metav1.Condition) {
+// ClusterPolicySnapShotList contains a list of ClusterPolicySnapShot.
+// +kubebuilder:resource:scope="Cluster"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type ClusterPolicySnapShotList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterPolicySnapshot `json:"items"`
+}
+
+func (m *ClusterPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
-func (m *PolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
+func (m *ClusterPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&PolicySnapshot{}, &PolicySnapshot{})
+	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapshot{})
 }
