@@ -132,16 +132,18 @@ type ClusterPolicySnapShotList struct {
 	Items           []ClusterPolicySnapshot `json:"items"`
 }
 
+// SetConditions set the given conditions on the ClusterPolicySnapshot.
 func (m *ClusterPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
+// GetCondition returns the condition of the given type if exists.
 func (m *ClusterPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapshot{})
+	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapShotList{})
 }

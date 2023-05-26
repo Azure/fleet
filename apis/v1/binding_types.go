@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1
 
 import (
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -78,10 +79,28 @@ const (
 )
 
 // ClusterResourceBindingList is a collection of ClusterResourceBinding.
+// +kubebuilder:resource:scope="Cluster"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ClusterResourceBindingList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	// items is the list of ClusterResourceBindings.
 	Items []ClusterResourceBinding `json:"items"`
+}
+
+// SetConditions set the given conditions on the ClusterResourceBinding.
+func (m *ClusterResourceBinding) SetConditions(conditions ...metav1.Condition) {
+	for _, c := range conditions {
+		meta.SetStatusCondition(&m.Status.Conditions, c)
+	}
+}
+
+// GetCondition returns the condition of the given ClusterResourceBinding.
+func (m *ClusterResourceBinding) GetCondition(conditionType string) *metav1.Condition {
+	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
+}
+
+func init() {
+	SchemeBuilder.Register(&ClusterResourceBinding{}, &ClusterResourceBindingList{})
 }

@@ -67,7 +67,7 @@ type ResourceSnapShotSpec struct {
 type ResourceContent struct {
 	// +kubebuilder:validation:EmbeddedResource
 	// +kubebuilder:pruning:PreserveUnknownFields
-	runtime.Unknown `json:",inline"`
+	runtime.RawExtension `json:"-,inline"`
 }
 
 type ResourceSnapShotStatus struct {
@@ -90,16 +90,18 @@ type ClusterResourceSnapShotList struct {
 	Items           []ClusterResourceSnapshot `json:"items"`
 }
 
+// SetConditions set the conditions for a ClusterResourceSnapshot.
 func (m *ClusterResourceSnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
+// GetCondition gets the condition for a ClusterResourceSnapshot.
 func (m *ClusterResourceSnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterResourceSnapshot{}, &ClusterResourceSnapshot{})
+	SchemeBuilder.Register(&ClusterResourceSnapshot{}, &ClusterResourceSnapShotList{})
 }

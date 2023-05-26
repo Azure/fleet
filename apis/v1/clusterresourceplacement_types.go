@@ -13,6 +13,7 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-workload}
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
@@ -255,7 +256,7 @@ type ClusterResourcePlacementStatus struct {
 // ResourceIdentifier identifies one Kubernetes resource.
 type ResourceIdentifier struct {
 	// Group is the group name of the selected resource.
-	// +required
+	// +optional
 	Group string `json:"group,omitempty"`
 
 	// Version is the version of the selected resource.
@@ -323,23 +324,22 @@ const (
 )
 
 // RolloutStrategy describes how to replace existing application with new ones.
-// +enum
 type RolloutStrategy struct {
 	// Type of rollout strategy. Can be "Recreate" or "OnDelete". Default is "Recreate".
 	// +optional
 	Type RolloutStrategyType `json:"type,omitempty"`
 }
 
-// RolloutStrategyType identifies the type of rollout strategy
+// RolloutStrategyType identifies the type of strategy we use to roll out new resources.
 // +enum
 type RolloutStrategyType string
 
 const (
-	// RecreateDeploymentStrategyType Remove all existing resources from the clusters before creating new ones.
-	RecreateDeploymentStrategyType RolloutStrategyType = "Recreate"
+	// RecreateRolloutStrategyType remove all existing resources from the clusters before creating new ones.
+	RecreateRolloutStrategyType RolloutStrategyType = "Recreate"
 
-	// RollingUpdateDeploymentStrategyType Create a new application only after an old instance is deleted.
-	RollingUpdateDeploymentStrategyType RolloutStrategyType = "OnDelete"
+	// OnDeleteRolloutStrategy schedule a new resource binding only after an old binding is deleted.
+	OnDeleteRolloutStrategy RolloutStrategyType = "OnDelete"
 )
 
 // ClusterResourcePlacementList contains a list of ClusterResourcePlacement.
@@ -351,12 +351,14 @@ type ClusterResourcePlacementList struct {
 	Items           []ClusterResourcePlacement `json:"items"`
 }
 
+// SetConditions sets the conditions of the ClusterResourcePlacement.
 func (m *ClusterResourcePlacement) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
+// GetCondition returns the condition of the ClusterResourcePlacement objects.
 func (m *ClusterResourcePlacement) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
