@@ -38,7 +38,7 @@ func (v *customResourceDefintionValidator) Handle(ctx context.Context, req admis
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		crd := &v1.CustomResourceDefinition{}
 		if req.Operation == admissionv1.Delete {
-			// req.Object is not populated for delete: https://github.com/kubernetes-sigs/controller-runtime/issues/1762
+			// req.Object is not populated for delete: https://github.com/kubernetes-sigs/controller-runtime/issues/1762.
 			if err := v.decoder.DecodeRaw(req.OldObject, crd); err != nil {
 				return admission.Errored(http.StatusBadRequest, err)
 			}
