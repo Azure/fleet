@@ -13,7 +13,6 @@ import (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-workload}
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
