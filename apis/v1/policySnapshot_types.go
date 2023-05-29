@@ -50,7 +50,7 @@ type PolicySnapShotSpec struct {
 	// +optional
 	Policy *PlacementPolicy `json:"policy,omitempty"`
 
-	// PolicyHash is the sha-256 hash value of the Policy field
+	// PolicyHash is the sha-256 hash value of the Policy field.
 	// +required
 	PolicyHash []byte `json:"policyHash"`
 }
@@ -132,7 +132,7 @@ type ClusterPolicySnapShotList struct {
 	Items           []ClusterPolicySnapshot `json:"items"`
 }
 
-// SetConditions set the given conditions on the ClusterPolicySnapshot.
+// SetConditions sets the given conditions on the ClusterPolicySnapshot.
 func (m *ClusterPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)

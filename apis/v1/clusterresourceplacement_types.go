@@ -334,10 +334,10 @@ type RolloutStrategy struct {
 type RolloutStrategyType string
 
 const (
-	// RecreateRolloutStrategyType remove all existing resources from the clusters before creating new ones.
+	// RecreateRolloutStrategyType removes all existing resources from the clusters before creating new ones.
 	RecreateRolloutStrategyType RolloutStrategyType = "Recreate"
 
-	// OnDeleteRolloutStrategy schedule a new resource binding only after an old binding is deleted.
+	// OnDeleteRolloutStrategy schedules a new resource binding only after an old binding is deleted.
 	OnDeleteRolloutStrategy RolloutStrategyType = "OnDelete"
 )
 

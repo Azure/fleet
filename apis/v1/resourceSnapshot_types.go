@@ -13,7 +13,7 @@ import (
 
 const (
 	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster policy.
-	ResourceIndexLabel = labelPrefix + "policyIndex"
+	ResourceIndexLabel = labelPrefix + "resourceIndex"
 
 	// ResourceGroupHashAnnotation is the label that contains the value of the sha-256 hash
 	// value of all the snapshots belong to the same snapshot index.
@@ -32,8 +32,8 @@ const (
 // ClusterResourceSnapshot is used to store a snapshot of selected resources by a resource placement policy.
 // It is immutable. We may need to produce more than one resourceSnapshot for one ResourcePlacement to
 // get around the 1MB size limit of k8s objects.
-// Each snapshot must have `CRPTrackingLabel`, `ResourceIndexLabel` and `IsLatestSnapshotLabel`
-// Each snapshot must have an annotation "fleet.azure.com/" with value as the s
+// Each snapshot must have `CRPTrackingLabel`, `ResourceIndexLabel` and `IsLatestSnapshotLabel`. If there are multiple resource snapshots for a resourcePlacement, the parent one whose name is {CRPName}-{resourceIndex} will have a label "NumberOfResourceSnapshots" to store the total number of resource snapshots.
+// Each snapshot must have an annotation "fleet.azure.com/resourceHash" with value as the the sha-256 hash value of all the snapshots belong to the same snapshot index.
 type ClusterResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -53,7 +53,6 @@ type ResourceSnapShotSpec struct {
 	// All the snapshots with the same index have the same label "fleet.azure.com/snapshotGroup" that
 	// points to the index.
 	// +required
-	Index int32 `json:"index"`
 
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +required
@@ -90,7 +89,7 @@ type ClusterResourceSnapShotList struct {
 	Items           []ClusterResourceSnapshot `json:"items"`
 }
 
-// SetConditions set the conditions for a ClusterResourceSnapshot.
+// SetConditions sets the conditions for a ClusterResourceSnapshot.
 func (m *ClusterResourceSnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
