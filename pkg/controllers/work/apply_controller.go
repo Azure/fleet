@@ -27,7 +27,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -358,15 +357,6 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
-		annotations := manifestObj.GetAnnotations()
-		klog.V(2).InfoS("validating annotation size for manifest",
-			"gvr", gvr, "manifest", manifestRef)
-		if err := validation.ValidateAnnotationsSize(annotations); err != nil {
-			klog.InfoS(fmt.Sprintf("not using three way merge for manifest removing last applied config annotation, %s", err),
-				"gvr", gvr, "obj", manifestRef)
-			annotations[LastAppliedConfigAnnotation] = ""
-			manifestObj.SetAnnotations(annotations)
-		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
@@ -408,15 +398,11 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 			return nil, ManifestNoChangeAction, err
 		}
 		annotations := manifestObj.GetAnnotations()
-		klog.V(2).InfoS("validating annotation size for manifest",
-			"gvr", gvr, "manifest", manifestRef)
-		if err = validation.ValidateAnnotationsSize(annotations); err != nil {
-			klog.ErrorS(err, "not using three way merge for manifest removing last applied config annotation",
-				"gvr", gvr, "obj", manifestRef)
-			annotations[LastAppliedConfigAnnotation] = ""
-			manifestObj.SetAnnotations(annotations)
-			return r.applyObject(ctx, gvr, manifestObj)
+		if annotations[LastAppliedConfigAnnotation] == "" {
+			klog.V(2).InfoS("using server side apply for manifest", "gvr", gvr, "manifest", manifestRef)
+			r.applyObject(ctx, gvr, manifestObj)
 		}
+		klog.V(2).InfoS("using three way merge for manifest", "gvr", gvr, "manifest", manifestRef)
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 	}
 
@@ -576,6 +562,7 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	manifest.SetSelfLink("")
 	manifest.SetDeletionTimestamp(nil)
 	manifest.SetManagedFields(nil)
+	manifest.SetOwnerReferences(nil)
 	unstructured.RemoveNestedField(manifest.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(manifest.Object, "status")
 	// compute the sha256 hash of the remaining data

@@ -19,7 +19,7 @@ import (
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	workcontroller "go.goms.io/fleet/pkg/controllers/work"
+	pkgwork "go.goms.io/fleet/pkg/controllers/work"
 	pkgutils "go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/utils"
 )
@@ -32,6 +32,11 @@ var _ = Describe("workload orchestration testing", func() {
 		// Ignoring typeMeta to get the tests to pass, because on Create and Get Type Meta is not populated but it gets populated on Update. Known issue: https://github.com/kubernetes-sigs/controller-runtime/issues/1735
 		resourceIgnoreOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID"), cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")}
+	)
+
+	const (
+		smallSecretSpecHash = "16b6e8df987984815959a61a429a20de6c5271cf3d8cf0e5450bc621768be4cf"
+		largeSecretSpecHash = "c984ffbb45374f70ae42d74aa12ce9667b5284feda69378350cea64d1fd4c5ab"
 	)
 
 	Context("Test Workload Orchestration", func() {
@@ -108,9 +113,9 @@ var _ = Describe("workload orchestration testing", func() {
 					Name:               crp.Name,
 				},
 			}
-			expectedClusterRole := clusterRole
-			expectedClusterRole.OwnerReferences = ownerReferences
-			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
+			wantClusterRole := clusterRole
+			wantClusterRole.OwnerReferences = ownerReferences
+			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, wantClusterRole, resourceIgnoreOptions)
 
 			By("update cluster role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -130,7 +135,7 @@ var _ = Describe("workload orchestration testing", func() {
 			Expect(HubCluster.KubeClient.Update(ctx, updatedClusterRole)).Should(Succeed(), "Failed to update cluster role %s in %s cluster", updatedClusterRole.Name, HubCluster.ClusterName)
 
 			By("check if cluster role got updated in member cluster")
-			expectedClusterRole = &rbacv1.ClusterRole{
+			wantClusterRole = &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "test-cluster-role",
 					Labels:          updatedClusterRole.Labels,
@@ -138,7 +143,7 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				Rules: rules,
 			}
-			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
+			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, wantClusterRole, resourceIgnoreOptions)
 
 			By("delete cluster role on hub cluster")
 			Expect(HubCluster.KubeClient.Delete(ctx, clusterRole)).Should(Succeed(), "Failed to delete cluster role %s in %s cluster", clusterRole.Name, HubCluster.ClusterName)
@@ -275,15 +280,15 @@ var _ = Describe("workload orchestration testing", func() {
 					Name:               crp.Name,
 				},
 			}
-			expectedNamespace := namespace1
-			expectedRole := role
-			expectedRoleBinding := roleBinding
-			expectedNamespace.OwnerReferences = ownerReferences
-			expectedRole.OwnerReferences = ownerReferences
-			expectedRoleBinding.OwnerReferences = ownerReferences
-			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, expectedNamespace, resourceIgnoreOptions)
-			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
-			utils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, expectedRoleBinding, resourceIgnoreOptions)
+			wantNamespace := namespace1
+			wantRole := role
+			wantRoleBinding := roleBinding
+			wantNamespace.OwnerReferences = ownerReferences
+			wantRole.OwnerReferences = ownerReferences
+			wantRoleBinding.OwnerReferences = ownerReferences
+			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, wantNamespace, resourceIgnoreOptions)
+			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, wantRole, resourceIgnoreOptions)
+			utils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, wantRoleBinding, resourceIgnoreOptions)
 
 			By("check if namespace not selected by CRP doesn't exist on member cluster")
 			Consistently(func() bool {
@@ -306,10 +311,10 @@ var _ = Describe("workload orchestration testing", func() {
 				Rules: rules,
 			}
 			Expect(HubCluster.KubeClient.Update(ctx, updatedRole)).Should(Succeed(), "Failed to update role %s in %s cluster", updatedRole.Name, HubCluster.ClusterName)
-			expectedRole.Rules = rules
+			wantRole.Rules = rules
 
 			By("check if role got updated in member cluster")
-			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
+			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, wantRole, resourceIgnoreOptions)
 
 			By("delete namespaces")
 			utils.DeleteNamespace(ctx, *HubCluster, namespace1)
@@ -398,16 +403,16 @@ var _ = Describe("workload orchestration testing", func() {
 					Name:               crp.Name,
 				},
 			}
-			expectedNamespace := namespace
-			expectedSecret := &testSmallSecret
-			expectedNamespace.OwnerReferences = ownerReferences
-			expectedSecret.OwnerReferences = ownerReferences
+			wantNamespace := namespace
+			wantSecret := &testSmallSecret
+			wantNamespace.OwnerReferences = ownerReferences
+			wantSecret.OwnerReferences = ownerReferences
 
-			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace.Name}, expectedNamespace, resourceIgnoreOptions)
+			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace.Name}, wantNamespace, resourceIgnoreOptions)
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testSmallSecret.Name, Namespace: testSmallSecret.Namespace}, expectedSecret, resourceIgnoreOptions)
-			Expect(gotSecret.Annotations[workcontroller.LastAppliedConfigAnnotation]).To(Not(BeEmpty()))
-			testSmallSecretSpecHash := gotSecret.Annotations[workcontroller.ManifestHashAnnotation]
+			gotSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testSmallSecret.Name, Namespace: testSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).To(Not(BeEmpty()))
+			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(smallSecretSpecHash))
 
 			By("update secret so that annotation limit crosses threshold of 256KB")
 			var testLargeSecret corev1.Secret
@@ -415,13 +420,13 @@ var _ = Describe("workload orchestration testing", func() {
 			Expect(err).Should(Succeed())
 			// testLargeSecret has the same name as testSmallSecret
 			Expect(HubCluster.KubeClient.Update(ctx, &testLargeSecret)).Should(Succeed(), "Failed to update secret %s to be large in %s cluster", testLargeSecret.Name, HubCluster.ClusterName)
-			expectedSecret = &testLargeSecret
-			expectedSecret.OwnerReferences = ownerReferences
+			wantSecret = &testLargeSecret
+			wantSecret.OwnerReferences = ownerReferences
 
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testLargeSecret.Name, Namespace: testLargeSecret.Namespace}, expectedSecret, resourceIgnoreOptions)
-			Expect(gotSecret.Annotations[workcontroller.LastAppliedConfigAnnotation]).To(BeEmpty())
-			Expect(gotSecret.Annotations[workcontroller.ManifestHashAnnotation]).ToNot(Equal(testSmallSecretSpecHash))
+			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testLargeSecret.Name, Namespace: testLargeSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).To(BeEmpty())
+			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(largeSecretSpecHash))
 
 			By("update secret so that it's small again")
 			// Using a new variable to prevent failure, leads to 409 if not.
@@ -434,13 +439,13 @@ var _ = Describe("workload orchestration testing", func() {
 				}
 				return nil
 			}, utils.PollTimeout, utils.PollInterval).Should(Succeed(), "Failed to update secret to be small in %s cluster", HubCluster.ClusterName)
-			expectedSecret = &initialSmallSecret
-			expectedSecret.OwnerReferences = ownerReferences
+			wantSecret = &initialSmallSecret
+			wantSecret.OwnerReferences = ownerReferences
 
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, expectedSecret, resourceIgnoreOptions)
-			Expect(gotSecret.Annotations[workcontroller.LastAppliedConfigAnnotation]).ToNot(BeEmpty())
-			Expect(gotSecret.Annotations[workcontroller.ManifestHashAnnotation]).To(Equal(testSmallSecretSpecHash))
+			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).ToNot(BeEmpty())
+			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(smallSecretSpecHash))
 
 			By("delete namespaces")
 			utils.DeleteNamespace(ctx, *HubCluster, namespace)

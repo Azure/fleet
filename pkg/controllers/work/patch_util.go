@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/jsonmergepatch"
@@ -106,7 +107,21 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	}
 	// set the last applied annotation back
 	annotations[LastAppliedConfigAnnotation] = string(modified)
-	return metadataAccessor.SetAnnotations(obj, annotations)
+	if err = metadataAccessor.SetAnnotations(obj, annotations); err != nil {
+		return err
+	}
+	annotations, err = metadataAccessor.Annotations(obj)
+	if err != nil {
+		return err
+	}
+	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
+		klog.InfoS(fmt.Sprintf("setting last applied config annotation to empty, %s", err))
+		annotations[LastAppliedConfigAnnotation] = ""
+		if err = metadataAccessor.SetAnnotations(obj, annotations); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // getOriginalConfiguration gets original configuration of the object
