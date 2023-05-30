@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	pkgwork "go.goms.io/fleet/pkg/controllers/work"
@@ -32,11 +32,6 @@ var _ = Describe("workload orchestration testing", func() {
 		// Ignoring typeMeta to get the tests to pass, because on Create and Get Type Meta is not populated but it gets populated on Update. Known issue: https://github.com/kubernetes-sigs/controller-runtime/issues/1735
 		resourceIgnoreOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
 			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID"), cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")}
-	)
-
-	const (
-		smallSecretSpecHash = "16b6e8df987984815959a61a429a20de6c5271cf3d8cf0e5450bc621768be4cf"
-		largeSecretSpecHash = "c984ffbb45374f70ae42d74aa12ce9667b5284feda69378350cea64d1fd4c5ab"
 	)
 
 	Context("Test Workload Orchestration", func() {
@@ -107,7 +102,7 @@ var _ = Describe("workload orchestration testing", func() {
 			By("check if cluster role is propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
 				{
-					APIVersion:         workapi.GroupVersion.String(),
+					APIVersion:         workapiv1alpha1.GroupVersion.String(),
 					BlockOwnerDeletion: pointer.Bool(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
@@ -274,7 +269,7 @@ var _ = Describe("workload orchestration testing", func() {
 			By("check if resources in namespace are propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
 				{
-					APIVersion:         workapi.GroupVersion.String(),
+					APIVersion:         workapiv1alpha1.GroupVersion.String(),
 					BlockOwnerDeletion: pointer.Bool(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
@@ -397,7 +392,7 @@ var _ = Describe("workload orchestration testing", func() {
 			By("check if resources in namespace are propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
 				{
-					APIVersion:         workapi.GroupVersion.String(),
+					APIVersion:         workapiv1alpha1.GroupVersion.String(),
 					BlockOwnerDeletion: pointer.Bool(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
@@ -412,7 +407,8 @@ var _ = Describe("workload orchestration testing", func() {
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
 			gotSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testSmallSecret.Name, Namespace: testSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
 			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).To(Not(BeEmpty()))
-			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(smallSecretSpecHash))
+			// Not checking spec hash equals some value because ObjectMeta.OwnerReferences has some live fields.
+			testSmallSecretSpecHash := gotSecret.Annotations[pkgwork.ManifestHashAnnotation]
 
 			By("update secret so that annotation limit crosses threshold of 256KB")
 			var testLargeSecret corev1.Secret
@@ -426,7 +422,7 @@ var _ = Describe("workload orchestration testing", func() {
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
 			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testLargeSecret.Name, Namespace: testLargeSecret.Namespace}, wantSecret, resourceIgnoreOptions)
 			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).To(BeEmpty())
-			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(largeSecretSpecHash))
+			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).ToNot(Equal(testSmallSecretSpecHash))
 
 			By("update secret so that it's small again")
 			// Using a new variable to prevent failure, leads to 409 if not.
@@ -445,7 +441,7 @@ var _ = Describe("workload orchestration testing", func() {
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
 			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
 			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).ToNot(BeEmpty())
-			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(smallSecretSpecHash))
+			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(testSmallSecretSpecHash))
 
 			By("delete namespaces")
 			utils.DeleteNamespace(ctx, *HubCluster, namespace)

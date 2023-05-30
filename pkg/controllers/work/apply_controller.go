@@ -400,7 +400,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		annotations := manifestObj.GetAnnotations()
 		if annotations[LastAppliedConfigAnnotation] == "" {
 			klog.V(2).InfoS("using server side apply for manifest", "gvr", gvr, "manifest", manifestRef)
-			r.applyObject(ctx, gvr, manifestObj)
+			return r.applyObject(ctx, gvr, manifestObj)
 		}
 		klog.V(2).InfoS("using three way merge for manifest", "gvr", gvr, "manifest", manifestRef)
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
@@ -562,7 +562,6 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	manifest.SetSelfLink("")
 	manifest.SetDeletionTimestamp(nil)
 	manifest.SetManagedFields(nil)
-	manifest.SetOwnerReferences(nil)
 	unstructured.RemoveNestedField(manifest.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(manifest.Object, "status")
 	// compute the sha256 hash of the remaining data

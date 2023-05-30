@@ -514,6 +514,7 @@ func TestApplyUnstructured(t *testing.T) {
 			} else {
 				assert.Truef(t, err == nil, "err is not nil for Testcase %s", testName)
 				assert.Truef(t, applyResult != nil, "applyResult is not nil for Testcase %s", testName)
+				// Not checking last applied config because it has live fields.
 				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[ManifestHashAnnotation],
 					"specHash not matching for Testcase %s", testName)
 				assert.Equalf(t, ownerRef, applyResult.GetOwnerReferences()[0], "ownerRef not matching for Testcase %s", testName)
