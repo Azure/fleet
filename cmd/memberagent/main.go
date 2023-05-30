@@ -116,11 +116,11 @@ func main() {
 	}
 }
 
-func buildHubConfig(hubURL string, useCAAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
+func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
 	var hubConfig = &rest.Config{
 		Host: hubURL,
 	}
-	if useCAAuth {
+	if useCertificateAuth {
 		keyFilePath := os.Getenv("IDENTITY_KEY")
 		certFilePath := os.Getenv("IDENTITY_CERT")
 		if keyFilePath == "" {
@@ -160,9 +160,27 @@ func buildHubConfig(hubURL string, useCAAuth bool, tlsClientInsecure bool) (*res
 
 	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
 	if !tlsClientInsecure {
-		hubConfig.TLSClientConfig.CAFile = os.Getenv("CA_BUNDLE")
-		hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
-		if hubCA != "" {
+		caBundle, ok := os.LookupEnv("CA_BUNDLE")
+		if ok && caBundle == "" {
+			err := errors.New("environment variable CA_BUNDLE should not be empty")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+		hubCA, ok := os.LookupEnv("HUB_CERTIFICATE_AUTHORITY")
+		if ok && hubCA == "" {
+			err := errors.New("environment variable HUB_CERTIFICATE_AUTHORITY should not be empty")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+		if caBundle != "" && hubCA != "" {
+			err := errors.New("environment variables CA_BUNDLE and HUB_CERTIFICATE_AUTHORITY should not be set at same time")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+
+		if caBundle != "" {
+			hubConfig.TLSClientConfig.CAFile = caBundle
+		} else if hubCA != "" {
 			caData, err := base64.StdEncoding.DecodeString(hubCA)
 			if err != nil {
 				klog.ErrorS(err, "cannot decode hub cluster certificate authority data")
@@ -171,7 +189,6 @@ func buildHubConfig(hubURL string, useCAAuth bool, tlsClientInsecure bool) (*res
 			hubConfig.TLSClientConfig.CAData = caData
 		}
 	}
-
 	return hubConfig, nil
 }
 
