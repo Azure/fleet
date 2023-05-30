@@ -414,7 +414,7 @@ var _ = Describe("workload orchestration testing", func() {
 			var testLargeSecret corev1.Secret
 			err = pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-large-secret.yaml", &testLargeSecret)
 			Expect(err).Should(Succeed())
-			// testLargeSecret has the same name as testSmallSecret
+			// testLargeSecret has the same name as testSmallSecret.
 			Expect(HubCluster.KubeClient.Update(ctx, &testLargeSecret)).Should(Succeed(), "Failed to update secret %s to be large in %s cluster", testLargeSecret.Name, HubCluster.ClusterName)
 			wantSecret = &testLargeSecret
 			wantSecret.OwnerReferences = ownerReferences
