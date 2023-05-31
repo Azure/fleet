@@ -79,7 +79,8 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 
 // setModifiedConfigurationAnnotation serializes the object into byte stream.
 // If `updateAnnotation` is true, it embeds the result as an annotation in the
-// modified configuration.
+// modified configuration. If the annotation size is greater than 256 kB it sets
+// to empty string.
 func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	var modified []byte
 	annotations, err := metadataAccessor.Annotations(obj)
