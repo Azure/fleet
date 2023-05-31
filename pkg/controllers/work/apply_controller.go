@@ -394,7 +394,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		// belong to multiple work so it contains the union of all the appliedWork.
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
 		// record the raw manifest with the hash annotation in the manifest.
-		if err = setModifiedConfigurationAnnotation(manifestObj); err != nil {
+		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
 		annotations := manifestObj.GetAnnotations()

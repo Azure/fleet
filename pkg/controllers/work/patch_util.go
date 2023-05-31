@@ -107,19 +107,12 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	}
 	// set the last applied annotation back
 	annotations[LastAppliedConfigAnnotation] = string(modified)
+	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
+		klog.V(2).InfoS(fmt.Sprintf("setting last applied config annotation to empty, %s", err))
+		annotations[LastAppliedConfigAnnotation] = ""
+	}
 	if err = metadataAccessor.SetAnnotations(obj, annotations); err != nil {
 		return err
-	}
-	annotations, err = metadataAccessor.Annotations(obj)
-	if err != nil {
-		return err
-	}
-	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
-		klog.InfoS(fmt.Sprintf("setting last applied config annotation to empty, %s", err))
-		annotations[LastAppliedConfigAnnotation] = ""
-		if err = metadataAccessor.SetAnnotations(obj, annotations); err != nil {
-			return err
-		}
 	}
 	return nil
 }

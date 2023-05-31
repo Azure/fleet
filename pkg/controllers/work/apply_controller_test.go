@@ -360,12 +360,15 @@ func TestApplyUnstructured(t *testing.T) {
 		t.Errorf("failed to marshal secret: %s", err)
 	}
 	var largeObj unstructured.Unstructured
-	if err = largeObj.UnmarshalJSON(rawSecret); err != nil {
+	if err := largeObj.UnmarshalJSON(rawSecret); err != nil {
 		t.Errorf("failed to unmarshal JSON: %s", err)
 	}
 	updatedLargeObj := largeObj.DeepCopy()
 
-	largeObjSpecHash, _ := computeManifestHash(&largeObj)
+	largeObjSpecHash, err := computeManifestHash(&largeObj)
+	if err != nil {
+		t.Errorf("failed to compute manifest hash: %s", err)
+	}
 	largeObj.SetAnnotations(map[string]string{ManifestHashAnnotation: largeObjSpecHash})
 
 	dynamicClientLargeObjNotFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
@@ -383,7 +386,10 @@ func TestApplyUnstructured(t *testing.T) {
 	})
 
 	updatedLargeObj.SetLabels(map[string]string{"test-label-key": "test-label"})
-	updatedLargeObjSpecHash, _ := computeManifestHash(updatedLargeObj)
+	updatedLargeObjSpecHash, err := computeManifestHash(updatedLargeObj)
+	if err != nil {
+		t.Errorf("failed to compute manifest hash: %s", err)
+	}
 	updatedLargeObj.SetAnnotations(map[string]string{ManifestHashAnnotation: updatedLargeObjSpecHash})
 
 	dynamicClientLargeObjFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
