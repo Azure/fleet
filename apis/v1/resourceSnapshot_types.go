@@ -12,12 +12,15 @@ import (
 )
 
 const (
-	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster policy.
-	ResourceIndexLabel = labelPrefix + "resourceIndex"
+	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster resource snapshot.
+	ResourceIndexLabel = fleetPrefix + "resourceIndex"
 
-	// ResourceGroupHashAnnotation is the label that contains the value of the sha-256 hash
+	// ResourceGroupHashAnnotation is the annotation that contains the value of the sha-256 hash
 	// value of all the snapshots belong to the same snapshot index.
-	ResourceGroupHashAnnotation = labelPrefix + "resourceHash"
+	ResourceGroupHashAnnotation = fleetPrefix + "resourceHash"
+
+	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
+	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
 )
 
 // +genclient
@@ -30,10 +33,21 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterResourceSnapshot is used to store a snapshot of selected resources by a resource placement policy.
-// It is immutable. We may need to produce more than one resourceSnapshot for one ResourcePlacement to
-// get around the 1MB size limit of k8s objects.
-// Each snapshot must have `CRPTrackingLabel`, `ResourceIndexLabel` and `IsLatestSnapshotLabel`. If there are multiple resource snapshots for a resourcePlacement, the parent one whose name is {CRPName}-{resourceIndex} will have a label "NumberOfResourceSnapshots" to store the total number of resource snapshots.
-// Each snapshot must have an annotation "fleet.azure.com/resourceHash" with value as the the sha-256 hash value of all the snapshots belong to the same snapshot index.
+// Its spec is immutable.
+// We may need to produce more than one resourceSnapshot for all the resources a ResourcePlacement selected to get around the 1MB size limit of k8s objects.
+// We assign an ever-increasing index for each such group of resourceSnapshots.
+// The name convention of a clusterResourceSnapshot is {CRPName}-{resourceIndex}(-{subindex})*
+// where the name of the first snapshot of a group has no subindex part so its name is {CRPName}-{resourceIndex}..
+// Each snapshot MUST have the following labels:
+//   - `CRPTrackingLabel` which points to its owner CRP.
+//   - `ResourceIndexLabel` which is the index  of the snapshot group.
+//   - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
+//
+// All the snapshots within the same index group must have the same ResourceIndexLabel.
+//
+// The first snapshot of the index group MUST have the following annotations:
+//   - "NumberOfResourceSnapshots" to store the total number of resource snapshots in the index group.
+//   - `ResourceGroupHashAnnotation` whose value is the sha-256 hash of all the snapshots belong to the same snapshot index.
 type ClusterResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -49,11 +63,6 @@ type ClusterResourceSnapshot struct {
 
 // ResourceSnapShotSpec	defines the desired state of ResourceSnapShot.
 type ResourceSnapShotSpec struct {
-	// Index is the parent index of this resource snapshot. Each index can have multiple snapshots.
-	// All the snapshots with the same index have the same label "fleet.azure.com/snapshotGroup" that
-	// points to the index.
-	// +required
-
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +required
 	SelectedResources []ResourceContent `json:"selectedResources"`

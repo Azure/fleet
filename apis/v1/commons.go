@@ -13,10 +13,16 @@ import (
 type ClusterState string
 
 const (
-	// Unprefixed labels are reserved for end-users
-	// we will add a fleet.azure.com to designate these labels as official fleet labels.
+	// Unprefixed labels/annotations are reserved for end-users
+	// we will add a fleet.azure.com to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
-	labelPrefix = "fleet.azure.com/"
+	fleetPrefix = "fleet.azure.com/"
+
+	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
+	CRPTrackingLabel = fleetPrefix + "parentCRP"
+
+	// IsLatestSnapshotLabel tells if the snapshot is the latest one.
+	IsLatestSnapshotLabel = fleetPrefix + "isLatestSnapshot"
 )
 
 const (
