@@ -115,10 +115,7 @@ func applyTestManifests(ctx context.Context, hubClient client.Client, namespaceN
 	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-role.yaml"); err != nil {
 		return err
 	}
-	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-rolebinding.yaml"); err != nil {
-		return err
-	}
-	return nil
+	return applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-rolebinding.yaml")
 }
 
 // deleteTestManifests deletes the test manifests in the hub cluster under a namespace
@@ -144,10 +141,7 @@ func deleteTestManifests(ctx context.Context, hubClient client.Client, namespace
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-role.yaml"); err != nil {
 		return err
 	}
-	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-rolebinding.yaml"); err != nil {
-		return err
-	}
-	return nil
+	return deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-rolebinding.yaml")
 }
 
 func deleteNamespace(ctx context.Context, hubClient client.Client, namespaceName string) error {

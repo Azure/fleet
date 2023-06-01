@@ -39,6 +39,7 @@ import (
 
 var (
 	scheme               = runtime.NewScheme()
+	useCertificateAuth   = flag.Bool("use-ca-auth", false, "Use key and certificate to authenticate the member agent.")
 	tlsClientInsecure    = flag.Bool("tls-insecure", false, "Enable TLSClientConfig.Insecure property. Enabling this will make the connection inSecure (should be 'true' for testing purpose only.)")
 	hubProbeAddr         = flag.String("hub-health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	hubMetricsAddr       = flag.String("hub-metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
@@ -70,10 +71,9 @@ func main() {
 		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
 		os.Exit(1)
 	}
-	tokenFilePath := os.Getenv("CONFIG_PATH")
-
-	if tokenFilePath == "" {
-		klog.ErrorS(errors.New("hub token file path cannot be empty"), "error has occurred retrieving CONFIG_PATH")
+	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
+	if err != nil {
+		klog.ErrorS(err, "error has occurred building kubernetes client configuration for hub")
 		os.Exit(1)
 	}
 
@@ -84,49 +84,6 @@ func main() {
 	}
 
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-
-	err := retry.OnError(retry.DefaultRetry, func(e error) bool {
-		return true
-	}, func() error {
-		// Stat returns file info. It will return
-		// an error if there is no file.
-		_, err := os.Stat(tokenFilePath)
-		return err
-	})
-	if err != nil {
-		klog.ErrorS(err, " cannot retrieve token file from the path %s", tokenFilePath)
-		os.Exit(1)
-	}
-
-	var hubConfig rest.Config
-	if *tlsClientInsecure {
-		hubConfig = rest.Config{
-			BearerTokenFile: tokenFilePath,
-			Host:            hubURL,
-			TLSClientConfig: rest.TLSClientConfig{
-				Insecure: *tlsClientInsecure,
-			},
-		}
-	} else {
-		hubCA := os.Getenv("HUB_CERTIFICATE_AUTHORITY")
-		if hubCA == "" {
-			klog.ErrorS(errors.New("hub certificate authority cannot be empty"), "error has occurred retrieving HUB_CERTIFICATE_AUTHORITY")
-			os.Exit(1)
-		}
-		decodedClusterCaCertificate, err := base64.StdEncoding.DecodeString(hubCA)
-		if err != nil {
-			klog.ErrorS(err, "cannot decode hub cluster certificate authority data")
-			os.Exit(1)
-		}
-		hubConfig = rest.Config{
-			BearerTokenFile: tokenFilePath,
-			Host:            hubURL,
-			TLSClientConfig: rest.TLSClientConfig{
-				Insecure: *tlsClientInsecure,
-				CAData:   decodedClusterCaCertificate,
-			},
-		}
-	}
 
 	memberConfig := ctrl.GetConfigOrDie()
 	// we place the leader election lease on the member cluster to avoid adding load to the hub
@@ -153,10 +110,86 @@ func main() {
 	}
 	//+kubebuilder:scaffold:builder
 
-	if err := Start(ctrl.SetupSignalHandler(), &hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
+	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
 		klog.ErrorS(err, "problem running controllers")
 		os.Exit(1)
 	}
+}
+
+func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bool) (*rest.Config, error) {
+	var hubConfig = &rest.Config{
+		Host: hubURL,
+	}
+	if useCertificateAuth {
+		keyFilePath := os.Getenv("IDENTITY_KEY")
+		certFilePath := os.Getenv("IDENTITY_CERT")
+		if keyFilePath == "" {
+			err := errors.New("identity key file path cannot be empty")
+			klog.ErrorS(err, "error has occurred retrieving IDENTITY_KEY")
+			return nil, err
+		}
+
+		if certFilePath == "" {
+			err := errors.New("identity certificate file path cannot be empty")
+			klog.ErrorS(err, "error has occurred retrieving IDENTITY_CERT")
+			return nil, err
+		}
+		hubConfig.TLSClientConfig.CertFile = certFilePath
+		hubConfig.TLSClientConfig.KeyFile = keyFilePath
+	} else {
+		tokenFilePath := os.Getenv("CONFIG_PATH")
+		if tokenFilePath == "" {
+			err := errors.New("hub token file path cannot be empty if CA auth not used")
+			klog.ErrorS(err, "error has occurred retrieving CONFIG_PATH")
+			return nil, err
+		}
+		err := retry.OnError(retry.DefaultRetry, func(e error) bool {
+			return true
+		}, func() error {
+			// Stat returns file info. It will return
+			// an error if there is no file.
+			_, err := os.Stat(tokenFilePath)
+			return err
+		})
+		if err != nil {
+			klog.ErrorS(err, "cannot retrieve token file from the path %s", tokenFilePath)
+			return nil, err
+		}
+		hubConfig.BearerTokenFile = tokenFilePath
+	}
+
+	hubConfig.TLSClientConfig.Insecure = tlsClientInsecure
+	if !tlsClientInsecure {
+		caBundle, ok := os.LookupEnv("CA_BUNDLE")
+		if ok && caBundle == "" {
+			err := errors.New("environment variable CA_BUNDLE should not be empty")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+		hubCA, ok := os.LookupEnv("HUB_CERTIFICATE_AUTHORITY")
+		if ok && hubCA == "" {
+			err := errors.New("environment variable HUB_CERTIFICATE_AUTHORITY should not be empty")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+		if caBundle != "" && hubCA != "" {
+			err := errors.New("environment variables CA_BUNDLE and HUB_CERTIFICATE_AUTHORITY should not be set at same time")
+			klog.ErrorS(err, "failed to validate system variables")
+			return nil, err
+		}
+
+		if caBundle != "" {
+			hubConfig.TLSClientConfig.CAFile = caBundle
+		} else if hubCA != "" {
+			caData, err := base64.StdEncoding.DecodeString(hubCA)
+			if err != nil {
+				klog.ErrorS(err, "cannot decode hub cluster certificate authority data")
+				return nil, err
+			}
+			hubConfig.TLSClientConfig.CAData = caData
+		}
+	}
+	return hubConfig, nil
 }
 
 // Start the member controllers with the supplied config

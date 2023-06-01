@@ -49,7 +49,7 @@ type Reconciler struct {
 	Recorder record.EventRecorder
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	startTime := time.Now()
 	clusterWideKey, ok := key.(keys.ClusterWideKey)
 	if !ok {

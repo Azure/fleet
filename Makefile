@@ -26,11 +26,11 @@ CLUSTER_CONFIG := $(abspath test/e2e/kind-config.yaml)
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
 
-CONTROLLER_GEN_VER := v0.8.0
+CONTROLLER_GEN_VER := v0.11.4
 CONTROLLER_GEN_BIN := controller-gen
 CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
 
-STATICCHECK_VER := 2022.1.2
+STATICCHECK_VER := 2023.1.2
 STATICCHECK_BIN := staticcheck
 STATICCHECK := $(abspath $(TOOLS_BIN_DIR)/$(STATICCHECK_BIN)-$(STATICCHECK_VER))
 
@@ -38,12 +38,12 @@ GOIMPORTS_VER := latest
 GOIMPORTS_BIN := goimports
 GOIMPORTS := $(abspath $(TOOLS_BIN_DIR)/$(GOIMPORTS_BIN)-$(GOIMPORTS_VER))
 
-GOLANGCI_LINT_VER := v1.47.2
+GOLANGCI_LINT_VER := v1.52.2
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
 # ENVTEST_K8S_VERSION refers to the version of k8s binary assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.23.x
+ENVTEST_K8S_VERSION = 1.26.x
 # ENVTEST_VER is the version of the ENVTEST binary
 ENVTEST_VER = latest
 ENVTEST_BIN := setup-envtest

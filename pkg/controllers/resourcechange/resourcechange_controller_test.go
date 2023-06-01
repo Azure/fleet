@@ -30,7 +30,7 @@ type fakeController struct {
 	QueueObj []string
 }
 
-func (w *fakeController) Run(ctx context.Context, workerNumber int) error {
+func (w *fakeController) Run(_ context.Context, _ int) error {
 	//TODO implement me
 	panic("implement me")
 }
