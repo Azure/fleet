@@ -32,6 +32,9 @@ config:
   hubURL : https://<hub_cluster_api_server_ip>:<hub_cluster_port>
   memberClusterName: membercluster-sample
   hubCA: <certificate-authority-data>
+  identityKey: "identity-key-path"
+  identityCert: "identity-cert-path"
+  CABundle: "ca-bundle-path"
 
 secret:
   name: "hub-kubeconfig-secret"
@@ -41,3 +44,4 @@ azure:
   clientid: <member_cluster_clientID>
 
 tlsClientInsecure: true #TODO should be false in the production
+useCAAuth: false

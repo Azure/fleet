@@ -310,11 +310,11 @@ type fakeController struct {
 	Enqueued bool
 }
 
-func (t *fakeController) Enqueue(obj interface{}) {
+func (t *fakeController) Enqueue(_ interface{}) {
 	t.Enqueued = true
 }
 
-func (t *fakeController) Run(ctx context.Context, workerNumber int) error {
+func (t *fakeController) Run(_ context.Context, _ int) error {
 	//TODO implement me
 	panic("implement me")
 }

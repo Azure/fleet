@@ -87,7 +87,7 @@ type testMapper struct {
 	meta.RESTMapper
 }
 
-func (m testMapper) RESTMapping(gk schema.GroupKind, versions ...string) (*meta.RESTMapping, error) {
+func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
 	if gk.Kind == "Deployment" {
 		return &meta.RESTMapping{
 			Resource:         testGvr,

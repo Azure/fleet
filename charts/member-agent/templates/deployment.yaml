@@ -25,7 +25,11 @@ spec:
               containerPort: 80
           args:
             - --leader-elect=true
+            {{- if .Values.useCAAuth }}
+            - --use-ca-auth={{ .Values.useCAAuth }}
+            {{- else }}
             - --tls-insecure={{ .Values.tlsClientInsecure }}
+            {{- end }}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
           env:
@@ -37,6 +41,14 @@ spec:
             value: "{{ .Values.config.memberClusterName }}"
           - name: HUB_CERTIFICATE_AUTHORITY
             value: "{{ .Values.config.hubCA }}"
+          {{- if .Values.useCAAuth }}
+          - name: IDENTITY_KEY
+            value:  "{{ .Values.config.identityKey }}"
+          - name: IDENTITY_CERT
+            value:  "{{ .Values.config.identityCert }}"
+          - name: CA_BUNDLE
+            value:  "{{ .Values.config.CABundle }}"
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           ports:
@@ -60,6 +72,7 @@ spec:
             httpGet:
               path: /readyz
               port: hubhealthz
+      {{- if not .Values.useCAAuth }}
           volumeMounts:
           - name: provider-token 
             mountPath: /config
@@ -67,11 +80,11 @@ spec:
           image: "{{ .Values.refreshtoken.repository }}:{{ .Values.refreshtoken.tag }}"
           imagePullPolicy: {{ .Values.refreshtoken.pullPolicy }}
           args:
-            {{ $provider := .Values.config.provider }}
+            {{- $provider := .Values.config.provider }}
             - {{ $provider }}
-            {{ range $key, $value := (index .Values $provider) }}
+            {{- range $key, $value := (index .Values $provider) }}
             - --{{ $key }}={{ $value }}
-            {{ end }}
+            {{- end }}
             - --v={{ .Values.logVerbosity }}
           ports:
             - name: http
@@ -80,10 +93,11 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
           - name: provider-token
-            mountPath: /config    
+            mountPath: /config
       volumes:
       - name: provider-token
         emptyDir: {}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

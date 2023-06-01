@@ -1068,11 +1068,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			// verify that we have created the work object
 			var clusterWork workv1alpha1.Work
 			Eventually(func() error {
-				if err := k8sClient.Get(ctx, types.NamespacedName{
-					Name: crp.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)}, &clusterWork); err != nil {
-					return err
-				}
-				return nil
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name: crp.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)}, &clusterWork)
 			}, timeout, interval).Should(Succeed(), "Failed to retrieve %s work", crp.Name)
 
 			// Apply is Pending because work api controller is not being run for this test suite
@@ -1673,10 +1670,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}
 
 			Eventually(func() error {
-				if err := k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)}, &clusterWork); err != nil {
-					return err
-				}
-				return nil
+				return k8sClient.Get(ctx, types.NamespacedName{Name: crp.Name, Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterA.Name)}, &clusterWork)
 			}, timeout, interval).Should(Succeed(), "Failed to retrieve %s work", crp.Name)
 
 			// update work for clusterA to have applied condition as false, and have one manifest condition as false

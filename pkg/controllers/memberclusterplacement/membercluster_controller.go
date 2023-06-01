@@ -34,7 +34,7 @@ type Reconciler struct {
 	PlacementController controller.Controller
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	startTime := time.Now()
 	memberClusterName, ok := key.(string)
 	if !ok {

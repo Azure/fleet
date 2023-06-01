@@ -38,7 +38,7 @@ func Add(mgr manager.Manager) error {
 }
 
 // Handle replicaSetValidator denies all creation requests.
-func (v *replicaSetValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *replicaSetValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Create {
 		rs := &v1.ReplicaSet{}
 		if err := v.decoder.Decode(req, rs); err != nil {
