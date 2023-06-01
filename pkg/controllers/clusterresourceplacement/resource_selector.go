@@ -103,7 +103,7 @@ func (r *Reconciler) gatherSelectedResource(ctx context.Context, placement *flee
 }
 
 // fetchClusterScopedResources retrieve the objects based on the selector.
-func (r *Reconciler) fetchClusterScopedResources(ctx context.Context, selector fleetv1alpha1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
+func (r *Reconciler) fetchClusterScopedResources(_ context.Context, selector fleetv1alpha1.ClusterResourceSelector, placeName string) ([]runtime.Object, error) {
 	klog.V(2).InfoS("start to fetch the cluster scoped resources by the selector", "selector", selector)
 	gk := schema.GroupKind{
 		Group: selector.Group,
@@ -221,7 +221,7 @@ func (r *Reconciler) fetchNamespaceResources(ctx context.Context, selector fleet
 }
 
 // fetchAllResourcesInOneNamespace retrieve all the objects inside a single namespace which includes the namespace itself.
-func (r *Reconciler) fetchAllResourcesInOneNamespace(ctx context.Context, namespaceName string, placeName string) ([]runtime.Object, error) {
+func (r *Reconciler) fetchAllResourcesInOneNamespace(_ context.Context, namespaceName string, placeName string) ([]runtime.Object, error) {
 	var resources []runtime.Object
 
 	if !utils.ShouldPropagateNamespace(namespaceName, r.SkippedNamespaces) {

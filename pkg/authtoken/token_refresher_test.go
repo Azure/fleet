@@ -20,7 +20,7 @@ type MockAuthTokenProvider struct {
 	Token interfaces.AuthToken
 }
 
-func (m MockAuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToken, error) {
+func (m MockAuthTokenProvider) FetchToken(_ context.Context) (interfaces.AuthToken, error) {
 	return m.Token, nil
 }
 
