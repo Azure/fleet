@@ -32,7 +32,7 @@ func (c *ClusterResourcePlacement) ValidateCreate() error {
 	return ValidateClusterResourcePlacement(c)
 }
 
-func (c *ClusterResourcePlacement) ValidateUpdate(old runtime.Object) error {
+func (c *ClusterResourcePlacement) ValidateUpdate(_ runtime.Object) error {
 	// TODO: validate changes against old if needed
 	return ValidateClusterResourcePlacement(c)
 }

@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1alpha1
+package v1
 
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -14,7 +14,6 @@ import (
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-workload}
-// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Scheduled")].status`,name="Scheduled",type=string
@@ -96,15 +95,36 @@ type ClusterResourceSelector struct {
 // If none is specified, all the joined clusters are selected.
 type PlacementPolicy struct {
 	// +kubebuilder:validation:MaxItems=100
-
 	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
-	// If the list is not empty, Affinity is ignored.
+	// If the list is not empty, `PlacementType`, `NumberOfClusters`, `Affinity`, and `TopologySpreadConstraints`
+	//  are ignored.
 	// +optional
 	ClusterNames []string `json:"clusterNames,omitempty"`
+
+	// Type of placement. Can be "PickAll" or "PickN". Default is PickAll.
+	// +optional
+	PlacementType PlacementType `json:"placementType,omitempty"`
+
+	// NumberOfClusters of placement. Only valid if the placement type is "PickN".
+	// +optional
+	NumberOfClusters *int32 `json:"numberOfClusters,omitempty"`
+
+	// The rollout strategy to use to replace existing applications with new ones.
+	// +optional
+	// +patchStrategy=retainKeys
+	Strategy *RolloutStrategy `json:"strategy,omitempty" patchStrategy:"retainKeys" patchMergeKey:"type"`
 
 	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources.
 	// +optional
 	Affinity *Affinity `json:"affinity,omitempty"`
+
+	// TopologySpreadConstraints describes how a group of resources ought to spread across multiple topology
+	// domains. Scheduler will schedule resources in a way which abides by the constraints.
+	// All topologySpreadConstraints are ANDed.
+	// +optional
+	// +patchMergeKey=topologyKey
+	// +patchStrategy=merge
+	TopologySpreadConstraints []TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty" patchStrategy:"merge" patchMergeKey:"topologyKey"`
 }
 
 // Affinity is a group of cluster affinity scheduling rules. More to be added.
@@ -116,11 +136,41 @@ type Affinity struct {
 
 // ClusterAffinity contains cluster affinity scheduling rules for the selected resources.
 type ClusterAffinity struct {
-	// +kubebuilder:validation:MaxItems=10
-
-	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
+	// If the affinity requirements specified by this field are not met at
+	// scheduling time, the resource will not be scheduled onto the cluster.
+	// If the affinity requirements specified by this field cease to be met
+	// at some point after the placement (e.g. due to an update), the system
+	// may or may not try to eventually remove the resource from the cluster.
 	// +optional
-	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms,omitempty"`
+	RequiredDuringSchedulingIgnoredDuringExecution *ClusterSelector `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+
+	// The scheduler computes a score for each cluster at schedule time by iterating
+	// through the elements of this field and adding "weight" to the sum if the cluster
+	// matches the corresponding matchExpression. The scheduler then chooses the first
+	// `N` clusters with the highest sum to satisfy the placement.
+	// This field is ignored if the placement type is "PickAll".
+	// If the cluster score changes at some point after the placement (e.g. due to an update),
+	// the system may or may not try to eventually move the resource from a cluster with a lower score
+	// to a cluster with higher score.
+	// +optional
+	PreferredDuringSchedulingIgnoredDuringExecution []PreferredClusterSelector `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+type ClusterSelector struct {
+	// +kubebuilder:validation:MaxItems=10
+	// ClusterSelectorTerms is a list of cluster selector terms. The terms are `ORed`.
+	// +required
+	ClusterSelectorTerms []ClusterSelectorTerm `json:"clusterSelectorTerms"`
+}
+
+type PreferredClusterSelector struct {
+	// Weight associated with matching the corresponding clusterSelectorTerm, in the range [-100, 100].
+	// +required
+	Weight int32 `json:"weight"`
+
+	// A cluster selector term, associated with the corresponding weight.
+	// +required
+	Preference ClusterSelectorTerm `json:"preference"`
 }
 
 // ClusterSelectorTerm contains the requirements to select clusters.
@@ -129,6 +179,50 @@ type ClusterSelectorTerm struct {
 	// +required
 	LabelSelector metav1.LabelSelector `json:"labelSelector"`
 }
+
+// TopologySpreadConstraint specifies how to spread resources among the given cluster topology.
+type TopologySpreadConstraint struct {
+	// MaxSkew describes the degree to which resources may be unevenly distributed.
+	// When `whenUnsatisfiable=DoNotSchedule`, it is the maximum permitted difference
+	// between the number of resource copies in the target topology and the global minimum.
+	// The global minimum is the minimum number of resource copies in a domain.
+	// When `whenUnsatisfiable=ScheduleAnyway`, it is used to give higher precedence
+	// to topologies that satisfy it.
+	// It's an optional field. Default value is 1 and 0 is not allowed.
+	// +optional
+	MaxSkew *int32 `json:"maxSkew,omitempty"`
+
+	// TopologyKey is the key of cluster labels. Clusters that have a label with this key
+	// and identical values are considered to be in the same topology.
+	// We consider each <key, value> as a "bucket", and try to put balanced number
+	// of replicas of the resource into each bucket honor the `MaxSkew` value.
+	// It's a required field.
+	// +required
+	TopologyKey string `json:"topologyKey"`
+
+	// WhenUnsatisfiable indicates how to deal with the resource if it doesn't satisfy
+	// the spread constraint.
+	// - DoNotSchedule (default) tells the scheduler not to schedule it.
+	// - ScheduleAnyway tells the scheduler to schedule the resource in any cluster,
+	//   but giving higher precedence to topologies that would help reduce the skew.
+	// It's an optional field.
+	// +optional
+	WhenUnsatisfiable UnsatisfiableConstraintAction `json:"whenUnsatisfiable,omitempty"`
+}
+
+// UnsatisfiableConstraintAction defines the type of actions that can be taken if a constraint is not satisfied.
+// +enum
+type UnsatisfiableConstraintAction string
+
+const (
+	// DoNotSchedule instructs the scheduler not to schedule the resource
+	// onto the cluster when constraints are not satisfied.
+	DoNotSchedule UnsatisfiableConstraintAction = "DoNotSchedule"
+
+	// ScheduleAnyway instructs the scheduler to schedule the resource
+	// even if constraints are not satisfied.
+	ScheduleAnyway UnsatisfiableConstraintAction = "ScheduleAnyway"
+)
 
 // ClusterResourcePlacementStatus defines the observed state of resource.
 type ClusterResourcePlacementStatus struct {
@@ -139,7 +233,7 @@ type ClusterResourcePlacementStatus struct {
 
 	// Conditions is an array of current observed conditions for ClusterResourcePlacement.
 	// +optional
-	Conditions []metav1.Condition `json:"conditions"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +optional
@@ -161,12 +255,12 @@ type ClusterResourcePlacementStatus struct {
 // ResourceIdentifier identifies one Kubernetes resource.
 type ResourceIdentifier struct {
 	// Group is the group name of the selected resource.
-	// +required
+	// +optional
 	Group string `json:"group,omitempty"`
 
 	// Version is the version of the selected resource.
 	// +required
-	Version string `json:"version,omitempty"`
+	Version string `json:"version"`
 
 	// Kind represents the Kind of the selected resources.
 	// +required
@@ -197,6 +291,7 @@ type FailedResourcePlacement struct {
 }
 
 // ResourcePlacementConditionType defines a specific condition of a resource placement.
+// +enum
 type ResourcePlacementConditionType string
 
 const (
@@ -215,22 +310,54 @@ const (
 	ResourcePlacementStatusConditionTypeApplied ResourcePlacementConditionType = "Applied"
 )
 
-// +kubebuilder:resource:scope="Cluster"
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// PlacementType identifies the type of placement.
+// +enum
+type PlacementType string
+
+const (
+	// PickAllPlacementType picks all clusters that satisfy the rules.
+	PickAllPlacementType PlacementType = "PickAll"
+
+	// PickNPlacementType picks N clusters that satisfy the rules.
+	PickNPlacementType PlacementType = "PickN"
+)
+
+// RolloutStrategy describes how to replace existing application with new ones.
+type RolloutStrategy struct {
+	// Type of rollout strategy. Can be "Recreate" or "OnDelete". Default is "Recreate".
+	// +optional
+	Type RolloutStrategyType `json:"type,omitempty"`
+}
+
+// RolloutStrategyType identifies the type of strategy we use to roll out new resources.
+// +enum
+type RolloutStrategyType string
+
+const (
+	// RecreateRolloutStrategyType removes all existing resources from the clusters before creating new ones.
+	RecreateRolloutStrategyType RolloutStrategyType = "Recreate"
+
+	// OnDeleteRolloutStrategy schedules a new resource binding only after an old binding is deleted.
+	OnDeleteRolloutStrategy RolloutStrategyType = "OnDelete"
+)
 
 // ClusterResourcePlacementList contains a list of ClusterResourcePlacement.
+// +kubebuilder:resource:scope="Cluster"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ClusterResourcePlacementList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacement `json:"items"`
 }
 
+// SetConditions sets the conditions of the ClusterResourcePlacement.
 func (m *ClusterResourcePlacement) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
+// GetCondition returns the condition of the ClusterResourcePlacement objects.
 func (m *ClusterResourcePlacement) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }

@@ -459,7 +459,7 @@ func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work 
 }
 
 // Join starts to reconcile
-func (r *ApplyWorkReconciler) Join(ctx context.Context) error {
+func (r *ApplyWorkReconciler) Join(_ context.Context) error {
 	if !r.joined.Load() {
 		klog.InfoS("mark the apply work reconciler joined")
 	}

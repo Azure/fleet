@@ -38,7 +38,7 @@ type podValidator struct {
 }
 
 // Handle podValidator denies a pod if it is not created in the system namespaces.
-func (v *podValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *podValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Create {
 		pod := &corev1.Pod{}
 		err := v.decoder.Decode(req, pod)

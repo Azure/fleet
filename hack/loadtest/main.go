@@ -74,7 +74,8 @@ func main() {
 	go runLoadTest(loadTestCtx, config)
 	// setup prometheus server
 	http.Handle("/metrics", promhttp.Handler())
-	if err = http.ListenAndServe(":4848", nil); err != nil {
+	/* #nosec */
+	if err = http.ListenAndServe(":4848", http.TimeoutHandler(nil, 10*time.Second, "request time out")); err != nil {
 		panic(err)
 	}
 }
