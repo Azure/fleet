@@ -12,10 +12,7 @@ import (
 
 const (
 	// PolicyIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
-	PolicyIndexLabel = labelPrefix + "policyIndex"
-
-	// IsLatestSnapshotLabel tells if the policy snapshot is the latest one.
-	IsLatestSnapshotLabel = labelPrefix + "isLatestSnapshot"
+	PolicyIndexLabel = fleetPrefix + "policyIndex"
 )
 
 // +genclient
@@ -28,8 +25,12 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterPolicySnapshot is used to store a snapshot of cluster placement policy.
-// It is immutable.
-// It must have `CRPTrackingLabel`, `PolicyIndexLabel` and `IsLatestSnapshotLabel` labels.
+// Its spec is immutable.
+// The name convention of a ClusterPolicySnapshot is {CRPName}-{PolicySnapshotIndex}
+// Each snapshot must have the following labels:
+//   - `CRPTrackingLabel` which points to its owner CRP.
+//   - `PolicyIndexLabel` which is the index of the policy snapshot.
+//   - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
 type ClusterPolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

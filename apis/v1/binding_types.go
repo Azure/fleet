@@ -10,9 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
-const CRPTrackingLabel = labelPrefix + "parentCRP"
-
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=rb
 // +kubebuilder:subresource:status
@@ -20,7 +17,7 @@ const CRPTrackingLabel = labelPrefix + "parentCRP"
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // ClusterResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
-// It must have CRPTrackingLabel that points to the cluster resource policy that creates it.
+// It MUST have a label named `CRPTrackingLabel` that points to the cluster resource policy that creates it.
 type ClusterResourceBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -36,7 +33,9 @@ type ClusterResourceBinding struct {
 
 // ResourceBindingSpec defines the desired state of ClusterResourceBinding.
 type ResourceBindingSpec struct {
-	// ResourceSnapshotName is the name of the resource snapshot that this resource binding points to. If the resources are divided into multiple snapshots because of the resource size limit, it will point to the name of the parent snapshot.
+	// ResourceSnapshotName is the name of the resource snapshot that this resource binding points to.
+	// If the resources are divided into multiple snapshots because of the resource size limit,
+	// it points to the name of the leading snapshot of the index group.
 	ResourceSnapshotName string `json:"resourceSnapshotName"`
 
 	// TargetCluster is the name of the cluster that the scheduler assigns the resources to.
