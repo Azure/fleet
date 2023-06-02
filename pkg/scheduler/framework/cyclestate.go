@@ -8,8 +8,6 @@ package framework
 import (
 	"fmt"
 	"sync"
-
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // StateKey is the key for a state value stored in a CycleState.
@@ -31,10 +29,12 @@ type CycleStatePluginReadWriter interface {
 // state are only accessible to the scheduler itself, not to plugins.
 //
 // It uses a sync.Map for concurrency-safe storage.
-type cycleState struct {
+type CycleState struct {
 	// store is a concurrency-safe store (a map).
 	store sync.Map
 
+	/**
+	// TO-DO (chenyu1): uncomment when the fields are used.
 	// skippedFilterPlugins are a set of Filter plugins that will be skipped during the scheduling
 	// cycle.
 	skippedFilterPlugins sets.String
@@ -47,10 +47,11 @@ type cycleState struct {
 	// batchSizeLimit is the number of bindings that the scheduler can actually create for the
 	// scheduling cycle.
 	batchSizeLimit int
+	**/
 }
 
 // Read retrieves a value from CycleState by a key.
-func (c *cycleState) Read(key StateKey) (StateValue, error) {
+func (c *CycleState) Read(key StateKey) (StateValue, error) {
 	if v, ok := c.store.Load(key); ok {
 		return v, nil
 	}
@@ -58,16 +59,16 @@ func (c *cycleState) Read(key StateKey) (StateValue, error) {
 }
 
 // Write stores a value in CycleState under a key.
-func (c *cycleState) Write(key StateKey, val StateValue) {
+func (c *CycleState) Write(key StateKey, val StateValue) {
 	c.store.Store(key, val)
 }
 
 // Delete deletes a key from CycleState.
-func (c *cycleState) Delete(key StateKey) {
+func (c *CycleState) Delete(key StateKey) {
 	c.store.Delete(key)
 }
 
 // NewCycleState creates a CycleState.
-func NewCycleState() *cycleState {
-	return &cycleState{}
+func NewCycleState() *CycleState {
+	return &CycleState{}
 }
