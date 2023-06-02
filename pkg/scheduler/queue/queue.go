@@ -110,7 +110,7 @@ func (sq *simplePolicySnapshotKeySchedulingQueue) Add(cpsKey PolicySnapshotKey) 
 }
 
 // NewSimplePolicySnapshotKeySchedulingQueue returns a simplePolicySnapshotKeySchedulingQueue.
-func NewSimplePolicySnapshotKeySchedulingQueue(opts ...Option) *simplePolicySnapshotKeySchedulingQueue {
+func NewSimplePolicySnapshotKeySchedulingQueue(opts ...Option) PolicySnapshotKeySchedulingQueue {
 	options := defaultSimplePolicySnapshotKeySchedulingQueueOptions
 	for _, opt := range opts {
 		opt(&options)
