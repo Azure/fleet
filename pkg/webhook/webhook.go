@@ -34,7 +34,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
-	"go.goms.io/fleet/pkg/webhook/customresourcedefinition"
+	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
 )
@@ -250,8 +250,8 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
 		serviceRef.Path = pointer.String(replicaset.ValidationPath)
 	case v1.CustomResourceDefinition:
-		serviceEndpoint = w.serviceURL + customresourcedefinition.ValidationPath
-		serviceRef.Path = pointer.String(customresourcedefinition.ValidationPath)
+		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
+		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}
 
 	config := admv1.WebhookClientConfig{
