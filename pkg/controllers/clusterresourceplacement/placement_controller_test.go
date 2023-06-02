@@ -5,16 +5,18 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	fleetv1 "go.goms.io/fleet/apis/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"testing"
+
+	fleetv1 "go.goms.io/fleet/apis/v1"
 )
 
 const (
@@ -202,6 +204,27 @@ func TestHandleUpdate(t *testing.T) {
 						PolicyHash: unspecifiedPolicyHash,
 					},
 				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 3),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "3",
+							fleetv1.IsLatestSnapshotLabel: "false",
+							fleetv1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: fleetv1.PolicySnapShotSpec{
+						// Policy is not specified.
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
 			},
 			wantPolicySnapshots: []fleetv1.ClusterPolicySnapshot{
 				{
@@ -227,9 +250,30 @@ func TestHandleUpdate(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 1),
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 3),
 						Labels: map[string]string{
-							fleetv1.PolicyIndexLabel:      "1",
+							fleetv1.PolicyIndexLabel:      "3",
+							fleetv1.IsLatestSnapshotLabel: "false",
+							fleetv1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: fleetv1.PolicySnapShotSpec{
+						// Policy is not specified.
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 4),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "4",
 							fleetv1.IsLatestSnapshotLabel: "true",
 							fleetv1.CRPTrackingLabel:      testName,
 						},

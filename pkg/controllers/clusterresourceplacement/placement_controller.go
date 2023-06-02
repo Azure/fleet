@@ -10,10 +10,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/utils/pointer"
 	"strconv"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/utils/pointer"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -369,7 +370,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 	}
 	if latestPolicySnapshot == nil || string(latestPolicySnapshot.Spec.PolicyHash) != policyHash {
 		// create a new policy snapshot
-		latestPolicySnapshotIndex += 1
+		latestPolicySnapshotIndex++
 		latestPolicySnapshot = &fleetv1.ClusterPolicySnapshot{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, crp.Name, latestPolicySnapshotIndex),
@@ -418,7 +419,7 @@ func lookupLatestClusterPolicySnapshot(list *fleetv1.ClusterPolicySnapShotList) 
 	index := -1           // the index of the cluster policy snapshot array
 	lastPolicyIndex := -1 // the assigned policy index of the cluster policy snapshot
 	for i, snapshot := range list.Items {
-		policyIndex, err := parsePolicyIndexFromLabel(&snapshot)
+		policyIndex, err := parsePolicyIndexFromLabel(&list.Items[i])
 		if err != nil {
 			return nil, -1, err
 		}
