@@ -7,8 +7,12 @@ package clusterresourceplacement
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/utils/pointer"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +25,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	fleetv1 "go.goms.io/fleet/apis/v1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -332,4 +337,117 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 			r.Recorder.Event(placement, corev1.EventTypeWarning, "ResourceApplyFailed", "failed to apply some selected resources")
 		}
 	}
+}
+
+// handleUpdate handles the create/update clusterResourcePlacement event.
+// It creates corresponding clusterPolicySnapshot and clusterResourceSnapshot if needed and updates the status based on
+// clusterPolicySnapshot status and work status.
+func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResourcePlacement) (ctrl.Result, error) {
+	crpKObj := klog.KObj(crp)
+	policyHash, err := generatePolicyHash(crp.Spec.Policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to generate policy hash of crp", "clusterResourcePlacement", crpKObj)
+		return ctrl.Result{}, err
+	}
+
+	clusterPolicySnapshotList := &fleetv1.ClusterPolicySnapShotList{}
+	if err := r.Client.List(ctx, clusterPolicySnapshotList, client.MatchingLabels{fleetv1.CRPTrackingLabel: crp.Name}); err != nil {
+		klog.ErrorS(err, "Failed to list clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
+		return ctrl.Result{}, err
+	}
+	latestPolicySnapshot, latestPolicySnapshotIndex, err := lookupLatestClusterPolicySnapshot(clusterPolicySnapshotList)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if latestPolicySnapshot != nil && string(latestPolicySnapshot.Spec.PolicyHash) != policyHash {
+		// set the latest label to false first to make sure there is only one or none active policy snapshot
+		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
+		if err := r.Client.Update(ctx, latestPolicySnapshot); err != nil {
+			klog.ErrorS(err, "Failed to set the isLatestSnapshot label to false", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
+			return ctrl.Result{}, err
+		}
+	}
+	if latestPolicySnapshot == nil || string(latestPolicySnapshot.Spec.PolicyHash) != policyHash {
+		// create a new policy snapshot
+		latestPolicySnapshotIndex += 1
+		latestPolicySnapshot = &fleetv1.ClusterPolicySnapshot{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, crp.Name, latestPolicySnapshotIndex),
+				Labels: map[string]string{
+					fleetv1.CRPTrackingLabel:      crp.Name,
+					fleetv1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+					fleetv1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
+				},
+				OwnerReferences: []metav1.OwnerReference{ownerReference(crp)},
+			},
+			Spec: fleetv1.PolicySnapShotSpec{
+				Policy:     crp.Spec.Policy,
+				PolicyHash: []byte(policyHash),
+			},
+		}
+		if err := r.Client.Create(ctx, latestPolicySnapshot); err != nil {
+			klog.ErrorS(err, "Failed to create new clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
+			return ctrl.Result{}, err
+		}
+	}
+	// create clusterResourceSnapshot
+	// update the status based on the latestPolicySnapshot status
+	// update the status based on the work
+	return ctrl.Result{}, nil
+}
+
+func ownerReference(crp *fleetv1.ClusterResourcePlacement) metav1.OwnerReference {
+	return metav1.OwnerReference{
+		APIVersion:         crp.GroupVersionKind().GroupVersion().String(),
+		Kind:               crp.GroupVersionKind().Kind,
+		Name:               crp.GetName(),
+		UID:                crp.GetUID(),
+		BlockOwnerDeletion: pointer.Bool(true),
+		Controller:         pointer.Bool(true),
+	}
+}
+
+// lookupLatestClusterPolicySnapshot finds the index of the latest cluster policy snapshot in the array and its policyIndex.
+// There will be only one active policy snapshot.
+// If there are no active policy snapshots, find the one whose policyIndex label is the largest.
+// Return error when the policyIndex label is invalid.
+func lookupLatestClusterPolicySnapshot(list *fleetv1.ClusterPolicySnapShotList) (*fleetv1.ClusterPolicySnapshot, int, error) {
+	if len(list.Items) == 0 {
+		return nil, -1, nil
+	}
+	index := -1           // the index of the cluster policy snapshot array
+	lastPolicyIndex := -1 // the assigned policy index of the cluster policy snapshot
+	for i, snapshot := range list.Items {
+		policyIndex, err := parsePolicyIndexFromLabel(&snapshot)
+		if err != nil {
+			return nil, -1, err
+		}
+		if v := snapshot.Labels[fleetv1.IsLatestSnapshotLabel]; v == strconv.FormatBool(true) {
+			return &list.Items[i], policyIndex, nil
+		}
+		if lastPolicyIndex < policyIndex {
+			index = i
+			lastPolicyIndex = policyIndex
+		}
+	}
+	return &list.Items[index], lastPolicyIndex, nil
+}
+
+func parsePolicyIndexFromLabel(s *fleetv1.ClusterPolicySnapshot) (int, error) {
+	indexLabel := s.Labels[fleetv1.PolicyIndexLabel]
+	v, err := strconv.Atoi(indexLabel)
+	if err != nil {
+		klog.ErrorS(errors.New("invalid clusterPolicySnapshot policyIndex label"), "Failed to parse the policy index label", "clusterPolicySnapshot", klog.KObj(s), "policyIndexLabel", indexLabel)
+		// should never happen
+		return -1, err
+	}
+	return v, nil
+}
+
+func generatePolicyHash(policy *fleetv1.PlacementPolicy) (string, error) {
+	jsonBytes, err := json.Marshal(policy)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes)), nil
 }

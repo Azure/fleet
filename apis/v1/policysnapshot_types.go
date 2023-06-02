@@ -13,6 +13,9 @@ import (
 const (
 	// PolicyIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
 	PolicyIndexLabel = fleetPrefix + "policyIndex"
+
+	// PolicySnapshotNameFmt is clusterPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
+	PolicySnapshotNameFmt = "%s-%d"
 )
 
 // +genclient
@@ -26,7 +29,7 @@ const (
 
 // ClusterPolicySnapshot is used to store a snapshot of cluster placement policy.
 // Its spec is immutable.
-// The name convention of a ClusterPolicySnapshot is {CRPName}-{PolicySnapshotIndex}
+// The name convention of a ClusterPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
 // Each snapshot must have the following labels:
 //   - `CRPTrackingLabel` which points to its owner CRP.
 //   - `PolicyIndexLabel` which is the index of the policy snapshot.
