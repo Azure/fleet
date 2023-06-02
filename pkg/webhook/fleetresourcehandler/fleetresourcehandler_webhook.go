@@ -21,6 +21,7 @@ const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
 	ValidationPath = "/validate-v1-fleetresourcehandler"
 	groupMatch     = `^[^.]*\.(.*)`
+	crdGVK         = "apiextensions.k8s.io/v1, Kind=CustomResourceDefinition"
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -37,12 +38,14 @@ type fleetResourceValidator struct {
 
 func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
+	klog.V(2).InfoS("GVKs", "request GVK", req.Kind.String(), "crd GVK", crdGVK)
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind.String() {
-		case crdGroupVersionKind():
+		case crdGVK:
+			klog.V(2).InfoS("handling CRD resource", "crdGVK", crdGVK)
 			response = v.handleCRD(ctx, req)
 		default:
-			// we don't care about these resources.
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook")
 			response = admission.Allowed("")
 		}
 	}
@@ -76,12 +79,6 @@ func (v *fleetResourceValidator) handleCRD(ctx context.Context, req admission.Re
 	}
 	klog.V(2).InfoS("successfully validated the CRD group", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 	return admission.Allowed("")
-}
-
-func crdGroupVersionKind() string {
-	var crd v1.CustomResourceDefinition
-	crdObjectKind := crd.GetObjectKind()
-	return crdObjectKind.GroupVersionKind().String()
 }
 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
