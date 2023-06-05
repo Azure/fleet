@@ -20,14 +20,16 @@ type PolicySnapshotKeySchedulingQueueWriter interface {
 	Add(cpsKey PolicySnapshotKey)
 }
 
-// SchedulingQueue is an interface which queues PolicySnapshots for the scheduler to schedule.
+// PolicySnapshotSchedulingQueue is an interface which queues PolicySnapshots for the scheduler to schedule.
 type PolicySnapshotKeySchedulingQueue interface {
 	PolicySnapshotKeySchedulingQueueWriter
 
 	// Run starts the scheduling queue.
 	Run()
-	// Close closes the scheduling queue.
+	// Close closes the scheduling queue immediately.
 	Close()
+	// CloseWithDrain closes the scheduling queue after all items in the queue are processed.
+	CloseWithDrain()
 	// NextClusterPolicySnapshotKey returns the next-in-line PolicySnapshot key for the scheduler to schedule.
 	NextClusterPolicySnapshotKey() PolicySnapshotKey
 	// Done marks a PolicySnapshot key as done.
@@ -83,8 +85,13 @@ func WithWorkqueueName(name string) Option {
 // appropriate.
 func (sq *simplePolicySnapshotKeySchedulingQueue) Run() {}
 
-// Close shuts down the scheduling queue.
+// Close shuts down the scheduling queue immediately.
 func (sq *simplePolicySnapshotKeySchedulingQueue) Close() {
+	sq.policySanpshotWorkQueue.ShutDown()
+}
+
+// CloseWithDrain shuts down the scheduling queue and returns until all items are processed.
+func (sq *simplePolicySnapshotKeySchedulingQueue) CloseWithDrain() {
 	sq.policySanpshotWorkQueue.ShutDownWithDrain()
 }
 
