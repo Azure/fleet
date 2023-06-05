@@ -22,9 +22,12 @@ const (
 	// ClusterUnschedulable signals that a plugin has found that a placement should not be bound
 	// to a specific cluster.
 	ClusterUnschedulable
-	// PreSkip signals that a plugin should be skipped in the following stage. This is returned
-	// by plugins at PreFilture or PreScore stages only, to save some overhead.
-	PreSkip
+	// Skip signals that no action is needed for the plugin to take at the stage.
+	// If this is returned by a plugin at the Pre- stages (PreFilter or PreScore), the associated
+	// plugin will be skipped at the following stages (Filter or Score) as well. This helps
+	// reduce the overhead of having to repeatedly call a plugin that is not needed for every
+	// cluster in the Filter or Score stage.
+	Skip
 )
 
 var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "PreSkip"}
@@ -66,9 +69,9 @@ func (s *Status) IsInteralError() bool {
 	return s.code() == internalError
 }
 
-// IsPreSkip returns if a Status is of the status code PreSkip.
+// IsPreSkip returns if a Status is of the status code Skip.
 func (s *Status) IsPreSkip() bool {
-	return s.code() == PreSkip
+	return s.code() == Skip
 }
 
 // IsClusterUnschedulable returns if a Status is of the status code ClusterUnschedulable.

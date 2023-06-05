@@ -52,7 +52,7 @@ func TestNonNilStatusMethods(t *testing.T) {
 		},
 		{
 			name:         "status preskip",
-			statusCode:   PreSkip,
+			statusCode:   Skip,
 			reasons:      dummyReasons,
 			sourcePlugin: dummyPlugin,
 		},
