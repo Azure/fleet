@@ -351,16 +351,15 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 		return ctrl.Result{}, err
 	}
 
-	clusterPolicySnapshotList := &fleetv1.ClusterPolicySnapShotList{}
-	if err := r.Client.List(ctx, clusterPolicySnapshotList, client.MatchingLabels{fleetv1.CRPTrackingLabel: crp.Name}); err != nil {
-		klog.ErrorS(err, "Failed to list clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
-		return ctrl.Result{}, err
-	}
-	latestPolicySnapshot, latestPolicySnapshotIndex, err := lookupLatestClusterPolicySnapshot(clusterPolicySnapshotList)
+	latestPolicySnapshot, latestPolicySnapshotIndex, err := r.lookupLatestClusterPolicySnapshot(ctx, crp)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if latestPolicySnapshot != nil && string(latestPolicySnapshot.Spec.PolicyHash) != policyHash {
+
+	if latestPolicySnapshot != nil &&
+		string(latestPolicySnapshot.Spec.PolicyHash) != policyHash &&
+		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
+
 		// set the latest label to false first to make sure there is only one or none active policy snapshot
 		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
 		if err := r.Client.Update(ctx, latestPolicySnapshot); err != nil {
@@ -390,6 +389,18 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 			klog.ErrorS(err, "Failed to create new clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
 			return ctrl.Result{}, err
 		}
+	} else if latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] != strconv.FormatBool(true) {
+		// When latestPolicySnapshot.Spec.PolicyHash == policyHash,
+		// It could happen when the controller just sets the latest label to false for the old snapshot, and fails to
+		// create a new policy snapshot.
+		// And then the customers revert back their policy to the old one again.
+		// In this case, the "latest" snapshot without isLatest label has the same policy hash as the current policy.
+
+		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] = strconv.FormatBool(true)
+		if err := r.Client.Update(ctx, latestPolicySnapshot); err != nil {
+			klog.ErrorS(err, "Failed to set the isLatestSnapshot label to true", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
+			return ctrl.Result{}, err
+		}
 	}
 	// create clusterResourceSnapshot
 	// update the status based on the latestPolicySnapshot status
@@ -408,30 +419,57 @@ func ownerReference(crp *fleetv1.ClusterResourcePlacement) metav1.OwnerReference
 	}
 }
 
-// lookupLatestClusterPolicySnapshot finds the index of the latest cluster policy snapshot in the array and its policyIndex.
-// There will be only one active policy snapshot.
-// If there are no active policy snapshots, find the one whose policyIndex label is the largest.
-// Return error when the policyIndex label is invalid.
-func lookupLatestClusterPolicySnapshot(list *fleetv1.ClusterPolicySnapShotList) (*fleetv1.ClusterPolicySnapshot, int, error) {
-	if len(list.Items) == 0 {
+// lookupLatestClusterPolicySnapshot finds the latest snapshots and its policy index.
+// There will be only one active policy snapshot if exists.
+// It first checks whether there is an active policy snapshot.
+// If not, it finds the one whose policyIndex label is the largest.
+// Return error when 1) cannot list the snapshots 2) there are more than one active policy snapshots 3) snapshot has the
+// invalid label value.
+// 2 & 3 should never happen.
+func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1.ClusterResourcePlacement) (*fleetv1.ClusterPolicySnapshot, int, error) {
+	snapshotList := &fleetv1.ClusterPolicySnapShotList{}
+	latestSnapshotLabelMatcher := client.MatchingLabels{
+		fleetv1.CRPTrackingLabel:      crp.Name,
+		fleetv1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+	}
+	crpKObj := klog.KObj(crp)
+	if err := r.Client.List(ctx, snapshotList, latestSnapshotLabelMatcher); err != nil {
+		klog.ErrorS(err, "Failed to list active clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
+		return nil, -1, err
+	}
+	if len(snapshotList.Items) == 1 {
+		policyIndex, err := parsePolicyIndexFromLabel(&snapshotList.Items[0])
+		if err != nil {
+			return nil, -1, err
+		}
+		return &snapshotList.Items[0], policyIndex, nil
+	} else if len(snapshotList.Items) > 1 {
+		// It means there are multiple active snapshots and should never happen.
+		err := fmt.Errorf("there are %d active clusterPolicySnapshots owned by clusterResourcePlacement %v", len(snapshotList.Items), crp.Name)
+		klog.ErrorS(err, "It should never happen", "clusterResourcePlacement", crpKObj)
+		return nil, -1, err
+	}
+	// When there are no active snapshots, find the one who has the largest policy index.
+	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1.CRPTrackingLabel: crp.Name}); err != nil {
+		klog.ErrorS(err, "Failed to list all clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
+		return nil, -1, err
+	}
+	if len(snapshotList.Items) == 0 {
 		return nil, -1, nil
 	}
 	index := -1           // the index of the cluster policy snapshot array
 	lastPolicyIndex := -1 // the assigned policy index of the cluster policy snapshot
-	for i, snapshot := range list.Items {
-		policyIndex, err := parsePolicyIndexFromLabel(&list.Items[i])
+	for i := range snapshotList.Items {
+		policyIndex, err := parsePolicyIndexFromLabel(&snapshotList.Items[i])
 		if err != nil {
 			return nil, -1, err
-		}
-		if v := snapshot.Labels[fleetv1.IsLatestSnapshotLabel]; v == strconv.FormatBool(true) {
-			return &list.Items[i], policyIndex, nil
 		}
 		if lastPolicyIndex < policyIndex {
 			index = i
 			lastPolicyIndex = policyIndex
 		}
 	}
-	return &list.Items[index], lastPolicyIndex, nil
+	return &snapshotList.Items[index], lastPolicyIndex, nil
 }
 
 func parsePolicyIndexFromLabel(s *fleetv1.ClusterPolicySnapshot) (int, error) {

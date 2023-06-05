@@ -362,6 +362,96 @@ func TestHandleUpdate(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "crp policy has been changed and reverted back and there is no active snapshot",
+			policySnapshots: []fleetv1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "0",
+							fleetv1.IsLatestSnapshotLabel: "false",
+							fleetv1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: fleetv1.PolicySnapShotSpec{
+						// Policy is not specified.
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel: "1",
+							fleetv1.CRPTrackingLabel: testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: fleetv1.PolicySnapShotSpec{
+						Policy:     placementPolicyForTest(),
+						PolicyHash: policyHash,
+					},
+				},
+			},
+			wantPolicySnapshots: []fleetv1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "0",
+							fleetv1.IsLatestSnapshotLabel: "false",
+							fleetv1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: fleetv1.PolicySnapShotSpec{
+						// Policy is not specified.
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "1",
+							fleetv1.IsLatestSnapshotLabel: "true",
+							fleetv1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+					Spec: fleetv1.PolicySnapShotSpec{
+						Policy:     placementPolicyForTest(),
+						PolicyHash: policyHash,
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -405,7 +495,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 	}{
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
-			name: "existing active policy snapshot does not policyIndex label",
+			name: "existing active policy snapshot does not have policyIndex label",
 			policySnapshots: []fleetv1.ClusterPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -458,6 +548,46 @@ func TestHandleUpdate_failure(t *testing.T) {
 						Labels: map[string]string{
 							fleetv1.PolicyIndexLabel: "abc",
 							fleetv1.CRPTrackingLabel: testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
+			name: "multiple active policy snapshot exist",
+			policySnapshots: []fleetv1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "0",
+							fleetv1.CRPTrackingLabel:      testName,
+							fleetv1.IsLatestSnapshotLabel: "true",
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1.PolicyIndexLabel:      "1",
+							fleetv1.CRPTrackingLabel:      testName,
+							fleetv1.IsLatestSnapshotLabel: "true",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
