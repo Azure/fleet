@@ -32,22 +32,6 @@ type CycleStatePluginReadWriter interface {
 type CycleState struct {
 	// store is a concurrency-safe store (a map).
 	store sync.Map
-
-	/**
-	// TO-DO (chenyu1): uncomment when the fields are used.
-	// skippedFilterPlugins are a set of Filter plugins that will be skipped during the scheduling
-	// cycle.
-	skippedFilterPlugins sets.String
-	// skippedScorePlugins are a set of Score plugins that will be skipped during the scheduling
-	// cycle.
-	skippedScorePlugins sets.String
-
-	// expectedBatchSize is the number of bindings that the scheduler should create.
-	expectedBatchSize int
-	// batchSizeLimit is the number of bindings that the scheduler can actually create for the
-	// scheduling cycle.
-	batchSizeLimit int
-	**/
 }
 
 // Read retrieves a value from CycleState by a key.
