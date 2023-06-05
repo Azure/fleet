@@ -21,6 +21,10 @@ const (
 
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
 	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
+
+	// ClusterResourceSnapshotFinalizer will be added by the clusterResourceRollout controller to clean up the clusterResourceBindings
+	// before the resource snapshot is deleted.
+	ClusterResourceSnapshotFinalizer = fleetPrefix + "clusterresourcebinding-cleanup"
 )
 
 // +genclient
@@ -67,8 +71,9 @@ type ResourceSnapShotSpec struct {
 	// +required
 	SelectedResources []ResourceContent `json:"selectedResources"`
 
-	// PolicySnapShotName is the name of the policy snapshot that this resource snapshot is pointing to.
-	PolicySnapShotName string `json:"policySnapShotName"`
+	// PolicySnapshotName is the name of the policy snapshot that this resource snapshot is pointing to.
+	// +required
+	PolicySnapshotName string `json:"policySnapshotName"`
 }
 
 // ResourceContent contains the content of a resource

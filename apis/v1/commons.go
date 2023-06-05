@@ -14,7 +14,7 @@ type ClusterState string
 
 const (
 	// Unprefixed labels/annotations are reserved for end-users
-	// we will add a fleet.azure.com to designate these labels/annotations as official fleet labels/annotations.
+	// we will add a fleet.azure.com to designate these labels/annotations/finalizers as official fleet labels/annotations/finalizers.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
 	fleetPrefix = "fleet.azure.com/"
 
