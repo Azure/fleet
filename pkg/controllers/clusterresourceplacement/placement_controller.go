@@ -359,7 +359,6 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 	if latestPolicySnapshot != nil &&
 		string(latestPolicySnapshot.Spec.PolicyHash) != policyHash &&
 		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
-
 		// set the latest label to false first to make sure there is only one or none active policy snapshot
 		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
 		if err := r.Client.Update(ctx, latestPolicySnapshot); err != nil {
