@@ -33,7 +33,7 @@ func ValidateUser(ctx context.Context, client client.Client, userInfo authentica
 		return true
 	}
 	// this ensures all internal service accounts are validated.
-	if slices.Contains(userInfo.Groups, serviceAccountGroup) {
+	if slices.Contains(userInfo.Groups, serviceAccountGroup) && slices.Contains(userInfo.Groups, authenticatedGroup) {
 		match := regexp.MustCompile(serviceAccountUser).FindStringSubmatch(userInfo.Username)[1]
 		if match != "" {
 			return true
