@@ -13,18 +13,17 @@ import (
 	"strconv"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/utils/pointer"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1 "go.goms.io/fleet/apis/v1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -63,6 +62,8 @@ type Reconciler struct {
 	SkippedNamespaces map[string]bool
 
 	Recorder record.EventRecorder
+
+	Scheme *runtime.Scheme
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
@@ -356,6 +357,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 		return ctrl.Result{}, err
 	}
 
+	// mark the last policy snapshot as inactive if it is different from what we have now
 	if latestPolicySnapshot != nil &&
 		string(latestPolicySnapshot.Spec.PolicyHash) != policyHash &&
 		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
@@ -377,12 +379,17 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 					fleetv1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 					fleetv1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
 				},
-				OwnerReferences: []metav1.OwnerReference{ownerReference(crp)},
 			},
 			Spec: fleetv1.PolicySnapShotSpec{
 				Policy:     crp.Spec.Policy,
 				PolicyHash: []byte(policyHash),
 			},
+		}
+		if err := controllerutil.SetControllerReference(crp, latestPolicySnapshot, r.Scheme); err != nil {
+			klog.ErrorS(err, "Failed to create set owner reference", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
+			// should never happen
+			// TODO(zhiying) emit error metrics or well defined logs
+			return ctrl.Result{}, err
 		}
 		if err := r.Client.Create(ctx, latestPolicySnapshot); err != nil {
 			klog.ErrorS(err, "Failed to create new clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
@@ -407,21 +414,11 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 	return ctrl.Result{}, nil
 }
 
-func ownerReference(crp *fleetv1.ClusterResourcePlacement) metav1.OwnerReference {
-	return metav1.OwnerReference{
-		APIVersion:         crp.GroupVersionKind().GroupVersion().String(),
-		Kind:               crp.GroupVersionKind().Kind,
-		Name:               crp.GetName(),
-		UID:                crp.GetUID(),
-		BlockOwnerDeletion: pointer.Bool(true),
-		Controller:         pointer.Bool(true),
-	}
-}
-
 // lookupLatestClusterPolicySnapshot finds the latest snapshots and its policy index.
 // There will be only one active policy snapshot if exists.
 // It first checks whether there is an active policy snapshot.
 // If not, it finds the one whose policyIndex label is the largest.
+// The policy index will always start from 0.
 // Return error when 1) cannot list the snapshots 2) there are more than one active policy snapshots 3) snapshot has the
 // invalid label value.
 // 2 & 3 should never happen.
@@ -446,6 +443,7 @@ func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp 
 		// It means there are multiple active snapshots and should never happen.
 		err := fmt.Errorf("there are %d active clusterPolicySnapshots owned by clusterResourcePlacement %v", len(snapshotList.Items), crp.Name)
 		klog.ErrorS(err, "It should never happen", "clusterResourcePlacement", crpKObj)
+		// TODO(zhiying) emit error metrics or well defined logs
 		return nil, -1, err
 	}
 	// When there are no active snapshots, find the one who has the largest policy index.
@@ -454,6 +452,7 @@ func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp 
 		return nil, -1, err
 	}
 	if len(snapshotList.Items) == 0 {
+		// The policy index of the first snapshot will start from 0.
 		return nil, -1, nil
 	}
 	index := -1           // the index of the cluster policy snapshot array
@@ -475,8 +474,9 @@ func parsePolicyIndexFromLabel(s *fleetv1.ClusterPolicySnapshot) (int, error) {
 	indexLabel := s.Labels[fleetv1.PolicyIndexLabel]
 	v, err := strconv.Atoi(indexLabel)
 	if err != nil {
-		klog.ErrorS(errors.New("invalid clusterPolicySnapshot policyIndex label"), "Failed to parse the policy index label", "clusterPolicySnapshot", klog.KObj(s), "policyIndexLabel", indexLabel)
+		klog.ErrorS(err, "Failed to parse the policy index label", "clusterPolicySnapshot", klog.KObj(s), "policyIndexLabel", indexLabel)
 		// should never happen
+		// TODO(zhiying) emit error metrics or well defined logs
 		return -1, err
 	}
 	return v, nil

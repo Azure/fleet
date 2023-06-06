@@ -88,6 +88,7 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		InformerManager:        dynamicInformerManager,
 		DisabledResourceConfig: disabledResourceConfig,
 		SkippedNamespaces:      skippedNamespaces,
+		Scheme:                 mgr.GetScheme(),
 	}
 
 	ratelimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)

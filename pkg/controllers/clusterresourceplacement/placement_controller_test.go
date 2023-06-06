@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	testName = "my-crp"
+	testName        = "my-crp"
+	fleetAPIVersion = "fleet.azure.com/v1"
 )
 
 func serviceScheme(t *testing.T) *runtime.Scheme {
@@ -119,6 +120,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -145,6 +148,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -168,6 +173,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -196,6 +203,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -217,6 +226,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -240,6 +251,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -261,6 +274,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -282,6 +297,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -308,6 +325,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -331,6 +350,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -352,6 +373,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -378,6 +401,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -398,6 +423,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -421,6 +448,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -442,6 +471,8 @@ func TestHandleUpdate(t *testing.T) {
 								Name:               testName,
 								BlockOwnerDeletion: pointer.Bool(true),
 								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
 							},
 						},
 					},
@@ -461,11 +492,12 @@ func TestHandleUpdate(t *testing.T) {
 			for i := range tc.policySnapshots {
 				objects = append(objects, &tc.policySnapshots[i])
 			}
+			scheme := serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
-				WithScheme(serviceScheme(t)).
+				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{Client: fakeClient}
+			r := Reconciler{Client: fakeClient, Scheme: scheme}
 			got, err := r.handleUpdate(ctx, crp)
 			if err != nil {
 				t.Fatalf("failed to handle update: %v", err)
@@ -609,11 +641,12 @@ func TestHandleUpdate_failure(t *testing.T) {
 			for i := range tc.policySnapshots {
 				objects = append(objects, &tc.policySnapshots[i])
 			}
+			scheme := serviceScheme(t)
 			fakeClient := fake.NewClientBuilder().
-				WithScheme(serviceScheme(t)).
+				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{Client: fakeClient}
+			r := Reconciler{Client: fakeClient, Scheme: scheme}
 			got, err := r.handleUpdate(ctx, crp)
 			if err == nil { // if error is nil
 				t.Fatal("handleUpdate = nil, want err")
