@@ -17,16 +17,12 @@ type ClusterScore struct {
 	// AffinityScore determines how much a binding would satisfy the affinity terms
 	// specified by the user.
 	AffinityScore int
-	// PriorityScore determines how much a binding would satisfy the priority terms
-	// specified by the user.
-	PriorityScore int
 }
 
 // Add adds a ClusterScore to another ClusterScore.
 func (s1 *ClusterScore) Add(s2 ClusterScore) {
 	s1.TopologySpreadScore += s2.TopologySpreadScore
 	s1.AffinityScore += s2.AffinityScore
-	s1.PriorityScore += s2.PriorityScore
 }
 
 // Less returns true if a ClusterScore is less than another.
@@ -35,11 +31,7 @@ func (s1 *ClusterScore) Less(s2 *ClusterScore) bool {
 		return s1.TopologySpreadScore < s2.TopologySpreadScore
 	}
 
-	if s1.AffinityScore != s2.AffinityScore {
-		return s1.AffinityScore < s2.AffinityScore
-	}
-
-	return s1.PriorityScore < s2.PriorityScore
+	return s1.AffinityScore < s2.AffinityScore
 }
 
 // ScoredCluster is a cluster with a score.

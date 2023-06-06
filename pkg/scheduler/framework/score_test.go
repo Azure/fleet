@@ -18,20 +18,17 @@ func TestClusterScoreAdd(t *testing.T) {
 	s1 := &ClusterScore{
 		TopologySpreadScore: 0,
 		AffinityScore:       0,
-		PriorityScore:       0,
 	}
 
 	s2 := &ClusterScore{
 		TopologySpreadScore: 1,
 		AffinityScore:       5,
-		PriorityScore:       80,
 	}
 
 	s1.Add(*s2)
 	want := &ClusterScore{
 		TopologySpreadScore: 1,
 		AffinityScore:       5,
-		PriorityScore:       80,
 	}
 	if !cmp.Equal(s1, want) {
 		t.Fatalf("Add() = %v, want %v", s1, want)
@@ -50,12 +47,10 @@ func TestClusterScoreLess(t *testing.T) {
 			s1: &ClusterScore{
 				TopologySpreadScore: 0,
 				AffinityScore:       10,
-				PriorityScore:       20,
 			},
 			s2: &ClusterScore{
 				TopologySpreadScore: 1,
 				AffinityScore:       20,
-				PriorityScore:       30,
 			},
 			want: true,
 		},
@@ -64,26 +59,10 @@ func TestClusterScoreLess(t *testing.T) {
 			s1: &ClusterScore{
 				TopologySpreadScore: 1,
 				AffinityScore:       10,
-				PriorityScore:       20,
 			},
 			s2: &ClusterScore{
 				TopologySpreadScore: 1,
 				AffinityScore:       20,
-				PriorityScore:       30,
-			},
-			want: true,
-		},
-		{
-			name: "s1 is less than s2 in priority score",
-			s1: &ClusterScore{
-				TopologySpreadScore: 1,
-				AffinityScore:       10,
-				PriorityScore:       20,
-			},
-			s2: &ClusterScore{
-				TopologySpreadScore: 1,
-				AffinityScore:       10,
-				PriorityScore:       30,
 			},
 			want: true,
 		},
@@ -106,13 +85,11 @@ func TestClusterScoreEqual(t *testing.T) {
 	s1 := &ClusterScore{
 		TopologySpreadScore: 0,
 		AffinityScore:       0,
-		PriorityScore:       0,
 	}
 
 	s2 := &ClusterScore{
 		TopologySpreadScore: 0,
 		AffinityScore:       0,
-		PriorityScore:       0,
 	}
 
 	if s1.Less(s2) || s2.Less(s1) {
@@ -139,7 +116,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 0,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -147,7 +123,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -155,7 +130,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       20,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -163,7 +137,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 2,
 						AffinityScore:       30,
-						PriorityScore:       40,
 					},
 				},
 			},
@@ -173,7 +146,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 2,
 						AffinityScore:       30,
-						PriorityScore:       40,
 					},
 				},
 				{
@@ -181,7 +153,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       20,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -189,7 +160,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -197,7 +167,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 0,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 			},
@@ -210,7 +179,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 2,
 						AffinityScore:       30,
-						PriorityScore:       40,
 					},
 				},
 				{
@@ -218,7 +186,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       20,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -226,7 +193,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -234,7 +200,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 0,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 			},
@@ -244,7 +209,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 2,
 						AffinityScore:       30,
-						PriorityScore:       40,
 					},
 				},
 				{
@@ -252,7 +216,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       20,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -260,7 +223,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -268,7 +230,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 0,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 			},
@@ -281,7 +242,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       20,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -289,7 +249,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 2,
 						AffinityScore:       30,
-						PriorityScore:       40,
 					},
 				},
 				{
@@ -297,7 +256,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 0,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -305,7 +263,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 			},
@@ -315,7 +272,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 2,
 						AffinityScore:       30,
-						PriorityScore:       40,
 					},
 				},
 				{
@@ -323,7 +279,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       20,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -331,7 +286,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 1,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 				{
@@ -339,7 +293,6 @@ func TestScoredClustersSort(t *testing.T) {
 					Score: &ClusterScore{
 						TopologySpreadScore: 0,
 						AffinityScore:       10,
-						PriorityScore:       20,
 					},
 				},
 			},
