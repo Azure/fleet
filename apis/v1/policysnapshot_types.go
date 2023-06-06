@@ -30,6 +30,7 @@ const (
 // ClusterPolicySnapshot is used to store a snapshot of cluster placement policy.
 // Its spec is immutable.
 // The naming convention of a ClusterPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
+// PolicySnapshotIndex will begin with 0.
 // Each snapshot must have the following labels:
 //   - `CRPTrackingLabel` which points to its owner CRP.
 //   - `PolicyIndexLabel` which is the index of the policy snapshot.

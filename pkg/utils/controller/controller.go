@@ -7,6 +7,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -26,6 +27,20 @@ const (
 	labelRequeue      = "requeue"
 	labelSuccess      = "success"
 )
+
+var (
+	// ErrUnexpectedBehavior indicates the current situation is not expected.
+	// There should be something wrong with the system and cannot be recovered by itself.
+	ErrUnexpectedBehavior = errors.New("unexpected behavior which cannot be handled by the controller")
+)
+
+// NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error.
+func NewUnexpectedBehaviorError(err error) error {
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err)
+	}
+	return ErrUnexpectedBehavior
+}
 
 // Controller maintains a rate limiting queue and the items in the queue will be reconciled by a "ReconcileFunc".
 // The item will be re-queued if "ReconcileFunc" returns an error, maximum re-queue times defined by "maxRetries" above,

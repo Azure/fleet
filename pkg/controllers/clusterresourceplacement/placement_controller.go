@@ -344,6 +344,7 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 // handleUpdate handles the create/update clusterResourcePlacement event.
 // It creates corresponding clusterPolicySnapshot and clusterResourceSnapshot if needed and updates the status based on
 // clusterPolicySnapshot status and work status.
+// If the error type is ErrUnexpectedBehavior, the controller will skip the reconciling.
 func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResourcePlacement) (ctrl.Result, error) {
 	crpKObj := klog.KObj(crp)
 	policyHash, err := generatePolicyHash(crp.Spec.Policy)
@@ -389,7 +390,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 			klog.ErrorS(err, "Failed to create set owner reference", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
 			// should never happen
 			// TODO(zhiying) emit error metrics or well defined logs
-			return ctrl.Result{}, err
+			return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 		}
 		if err := r.Client.Create(ctx, latestPolicySnapshot); err != nil {
 			klog.ErrorS(err, "Failed to create new clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
@@ -444,7 +445,7 @@ func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp 
 		err := fmt.Errorf("there are %d active clusterPolicySnapshots owned by clusterResourcePlacement %v", len(snapshotList.Items), crp.Name)
 		klog.ErrorS(err, "It should never happen", "clusterResourcePlacement", crpKObj)
 		// TODO(zhiying) emit error metrics or well defined logs
-		return nil, -1, err
+		return nil, -1, controller.NewUnexpectedBehaviorError(err)
 	}
 	// When there are no active snapshots, find the one who has the largest policy index.
 	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1.CRPTrackingLabel: crp.Name}); err != nil {
@@ -477,7 +478,7 @@ func parsePolicyIndexFromLabel(s *fleetv1.ClusterPolicySnapshot) (int, error) {
 		klog.ErrorS(err, "Failed to parse the policy index label", "clusterPolicySnapshot", klog.KObj(s), "policyIndexLabel", indexLabel)
 		// should never happen
 		// TODO(zhiying) emit error metrics or well defined logs
-		return -1, err
+		return -1, controller.NewUnexpectedBehaviorError(err)
 	}
 	return v, nil
 }

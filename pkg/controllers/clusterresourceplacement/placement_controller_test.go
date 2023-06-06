@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"go.goms.io/fleet/pkg/utils/controller"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -650,6 +652,9 @@ func TestHandleUpdate_failure(t *testing.T) {
 			got, err := r.handleUpdate(ctx, crp)
 			if err == nil { // if error is nil
 				t.Fatal("handleUpdate = nil, want err")
+			}
+			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
+				t.Errorf("handleUpdate() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
 			}
 			want := ctrl.Result{}
 			if !cmp.Equal(got, want) {
