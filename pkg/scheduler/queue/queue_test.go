@@ -11,18 +11,18 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TestSimplePolicySnapshotKeySchedulingQueueBasicOps tests the basic ops
+// TestSimpleClusterPolicySnapshotKeySchedulingQueueBasicOps tests the basic ops
 // (Add, NextClusterPolicySnapshotKey, Done) of a simplePolicySnapshotKeySchedulingQueue.
-func TestSimplePolicySnapshotKeySchedulingQueueBasicOps(t *testing.T) {
-	sq := NewSimplePolicySnapshotKeySchedulingQueue()
+func TestSimpleClusterPolicySnapshotKeySchedulingQueueBasicOps(t *testing.T) {
+	sq := NewSimpleClusterPolicySnapshotKeySchedulingQueue()
 	sq.Run()
 
-	keysToAdd := []PolicySnapshotKey{"A", "B", "C", "D", "E"}
+	keysToAdd := []ClusterPolicySnapshotKey{"A", "B", "C", "D", "E"}
 	for _, key := range keysToAdd {
 		sq.Add(key)
 	}
 
-	keysRecved := []PolicySnapshotKey{}
+	keysRecved := []ClusterPolicySnapshotKey{}
 	for i := 0; i < len(keysToAdd); i++ {
 		key := sq.NextClusterPolicySnapshotKey()
 		keysRecved = append(keysRecved, key)
