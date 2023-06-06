@@ -3,15 +3,15 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package schedulingqueue features a scheduling queue, which keeps track of all placements for the scheduler
+// Package queue features a scheduling queue, which keeps track of all placements for the scheduler
 // to schedule.
-package schedulingqueue
+package queue
 
 import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// PolicySnapshotKey is the unique identifier for a PolicySnapshot stored in a scheduling queue.
+// PolicySnapshotKey is the unique identifier (the name of the policy) for a PolicySnapshot stored in a scheduling queue.
 type PolicySnapshotKey string
 
 // PolicySnapshotKeySchedulingQueueWriter is an interface which allows sources, such as controllers, to add
