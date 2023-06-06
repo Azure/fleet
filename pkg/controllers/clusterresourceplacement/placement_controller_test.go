@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.goms.io/fleet/pkg/utils/controller"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1 "go.goms.io/fleet/apis/v1"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (

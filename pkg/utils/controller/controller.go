@@ -37,7 +37,7 @@ var (
 // NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error.
 func NewUnexpectedBehaviorError(err error) error {
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err)
+		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err.Error())
 	}
 	return ErrUnexpectedBehavior
 }
