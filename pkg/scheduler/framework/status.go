@@ -30,7 +30,7 @@ const (
 	Skip
 )
 
-var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "PreSkip"}
+var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "Skip"}
 
 // Name returns the name of a status code.
 func (sc StatusCode) Name() string {
