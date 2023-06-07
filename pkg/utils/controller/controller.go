@@ -32,14 +32,26 @@ var (
 	// ErrUnexpectedBehavior indicates the current situation is not expected.
 	// There should be something wrong with the system and cannot be recovered by itself.
 	ErrUnexpectedBehavior = errors.New("unexpected behavior which cannot be handled by the controller")
+
+	// ErrAPIServerError indicates the error is returned by the API server.
+	ErrAPIServerError = errors.New("error returned by the API server")
 )
 
 // NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error.
 func NewUnexpectedBehaviorError(err error) error {
+	// TODO(zhiying) emit error metrics or well defined logs
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err.Error())
 	}
 	return ErrUnexpectedBehavior
+}
+
+// NewAPIServerError returns ErrAPIServerError type error.
+func NewAPIServerError(err error) error {
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrAPIServerError, err.Error())
+	}
+	return ErrAPIServerError
 }
 
 // Controller maintains a rate limiting queue and the items in the queue will be reconciled by a "ReconcileFunc".
