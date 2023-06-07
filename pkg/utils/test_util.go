@@ -53,10 +53,7 @@ func GetObjectFromRawExtension(rawByte []byte, obj runtime.Object) error {
 	if err != nil {
 		return err
 	}
-	if err = runtime.DecodeInto(genericCodec, json, obj); err != nil {
-		return err
-	}
-	return nil
+	return runtime.DecodeInto(genericCodec, json, obj)
 }
 
 // GetObjectFromManifest returns a runtime object decoded from the file.

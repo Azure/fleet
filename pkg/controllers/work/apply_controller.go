@@ -391,7 +391,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	// We only try to update the object if its spec hash value has changed.
 	if manifestObj.GetAnnotations()[ManifestHashAnnotation] != curObj.GetAnnotations()[ManifestHashAnnotation] {
 		// we need to merge the owner reference between the current and the manifest since we support one manifest
-		// belong to multiple work so it contains the union of all the appliedWork.
+		// belong to multiple work, so it contains the union of all the appliedWork.
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
 		// record the raw manifest with the hash annotation in the manifest.
 		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
