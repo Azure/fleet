@@ -62,7 +62,6 @@ func GetObjectFromManifest(relativeFilePath string, obj runtime.Object) error {
 	if err != nil {
 		return err
 	}
-
 	return GetObjectFromRawExtension(fileRaw, obj)
 }
 
