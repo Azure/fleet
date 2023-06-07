@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -24,34 +25,34 @@ const (
 // TODO: Get valid user names as flag and check to validate those user names.
 
 // ValidateUser checks to see if user is authenticated to make a request to the hub cluster's api-server.
-func ValidateUser(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo) bool {
+func ValidateUser(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo) error {
 	// special case where users belong to the masters group.
 	if slices.Contains(userInfo.Groups, mastersGroup) {
-		return true
+		return nil
 	}
 	if slices.Contains(userInfo.Groups, bootstrapGroup) && slices.Contains(userInfo.Groups, authenticatedGroup) {
-		return true
+		return nil
 	}
 	// this ensures all internal service accounts are validated.
 	if slices.Contains(userInfo.Groups, serviceAccountGroup) && slices.Contains(userInfo.Groups, authenticatedGroup) {
 		match := regexp.MustCompile(serviceAccountUser).FindStringSubmatch(userInfo.Username)[1]
 		if match != "" {
-			return true
+			return nil
 		}
 	}
 	// list all the member clusters
 	var memberClusterList fleetv1alpha1.MemberClusterList
 	if err := client.List(ctx, &memberClusterList); err != nil {
 		klog.V(2).ErrorS(err, "failed to list member clusters")
-		return false
+		return err
 	}
-	var identities []string
-	for _, memberCluster := range memberClusterList.Items {
-		identities = append(identities, memberCluster.Spec.Identity.Name)
+	identities := make([]string, len(memberClusterList.Items))
+	for i, memberCluster := range memberClusterList.Items {
+		identities[i] = memberCluster.Spec.Identity.Name
 	}
 	// this ensures will allow all member agents are validated.
-	if slices.Contains(identities, userInfo.Username) {
-		return true
+	if slices.Contains(identities, userInfo.Username) && slices.Contains(userInfo.Groups, authenticatedGroup) {
+		return nil
 	}
-	return false
+	return fmt.Errorf("failed to validate user %s in groups %v", userInfo.Username, userInfo.Groups)
 }

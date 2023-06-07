@@ -68,7 +68,7 @@ func (v *fleetResourceValidator) handleCRD(ctx context.Context, req admission.Re
 	}
 
 	// Need to check to see if the user is authenticated to do the operation.
-	if !validation.ValidateUser(ctx, v.Client, req.UserInfo) {
+	if err := validation.ValidateUser(ctx, v.Client, req.UserInfo); err != nil {
 		return admission.Denied(fmt.Sprintf("failed to validate user %s in groups: %v to modify CRD", req.UserInfo.Username, req.UserInfo.Groups))
 	}
 	klog.V(2).InfoS("successfully validated the user", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
