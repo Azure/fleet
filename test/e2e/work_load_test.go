@@ -16,19 +16,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
+	pkgutils "go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/utils"
 )
 
 var _ = Describe("workload orchestration testing", func() {
 	var (
-		crp                   *v1alpha1.ClusterResourcePlacement
-		labelKey              = "fleet.azure.com/name"
-		labelValue            = "test"
+		crp        *v1alpha1.ClusterResourcePlacement
+		labelKey   = "fleet.azure.com/name"
+		labelValue = "test"
+		// Ignoring typeMeta to get the tests to pass, because on Create and Get Type Meta is not populated but it gets populated on Update. Known issue: https://github.com/kubernetes-sigs/controller-runtime/issues/1735
 		resourceIgnoreOptions = []cmp.Option{cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion", "UID", "Annotations", "CreationTimestamp", "ManagedFields"),
-			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID")}
+			cmpopts.IgnoreFields(metav1.OwnerReference{}, "UID"), cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")}
 	)
 
 	Context("Test Workload Orchestration", func() {
@@ -99,15 +101,15 @@ var _ = Describe("workload orchestration testing", func() {
 			By("check if cluster role is propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
 				{
-					APIVersion:         workapi.GroupVersion.String(),
+					APIVersion:         workapiv1alpha1.GroupVersion.String(),
 					BlockOwnerDeletion: pointer.Bool(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},
 			}
-			expectedClusterRole := clusterRole
-			expectedClusterRole.OwnerReferences = ownerReferences
-			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
+			wantClusterRole := clusterRole
+			wantClusterRole.OwnerReferences = ownerReferences
+			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, wantClusterRole, resourceIgnoreOptions)
 
 			By("update cluster role in Hub cluster")
 			rules := []rbacv1.PolicyRule{
@@ -127,7 +129,7 @@ var _ = Describe("workload orchestration testing", func() {
 			Expect(HubCluster.KubeClient.Update(ctx, updatedClusterRole)).Should(Succeed(), "Failed to update cluster role %s in %s cluster", updatedClusterRole.Name, HubCluster.ClusterName)
 
 			By("check if cluster role got updated in member cluster")
-			expectedClusterRole = &rbacv1.ClusterRole{
+			wantClusterRole = &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "test-cluster-role",
 					Labels:          updatedClusterRole.Labels,
@@ -135,7 +137,7 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				Rules: rules,
 			}
-			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, expectedClusterRole, resourceIgnoreOptions)
+			utils.CmpClusterRole(ctx, *MemberCluster, &types.NamespacedName{Name: clusterRole.Name}, wantClusterRole, resourceIgnoreOptions)
 
 			By("delete cluster role on hub cluster")
 			Expect(HubCluster.KubeClient.Delete(ctx, clusterRole)).Should(Succeed(), "Failed to delete cluster role %s in %s cluster", clusterRole.Name, HubCluster.ClusterName)
@@ -266,21 +268,21 @@ var _ = Describe("workload orchestration testing", func() {
 			By("check if resources in namespace are propagated to member cluster")
 			ownerReferences := []metav1.OwnerReference{
 				{
-					APIVersion:         workapi.GroupVersion.String(),
+					APIVersion:         workapiv1alpha1.GroupVersion.String(),
 					BlockOwnerDeletion: pointer.Bool(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},
 			}
-			expectedNamespace := namespace1
-			expectedRole := role
-			expectedRoleBinding := roleBinding
-			expectedNamespace.OwnerReferences = ownerReferences
-			expectedRole.OwnerReferences = ownerReferences
-			expectedRoleBinding.OwnerReferences = ownerReferences
-			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, expectedNamespace, resourceIgnoreOptions)
-			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
-			utils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, expectedRoleBinding, resourceIgnoreOptions)
+			wantNamespace := namespace1
+			wantRole := role
+			wantRoleBinding := roleBinding
+			wantNamespace.OwnerReferences = ownerReferences
+			wantRole.OwnerReferences = ownerReferences
+			wantRoleBinding.OwnerReferences = ownerReferences
+			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace1.Name}, wantNamespace, resourceIgnoreOptions)
+			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, wantRole, resourceIgnoreOptions)
+			utils.CmpRoleBinding(ctx, *MemberCluster, &types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, wantRoleBinding, resourceIgnoreOptions)
 
 			By("check if namespace not selected by CRP doesn't exist on member cluster")
 			Consistently(func() bool {
@@ -303,10 +305,10 @@ var _ = Describe("workload orchestration testing", func() {
 				Rules: rules,
 			}
 			Expect(HubCluster.KubeClient.Update(ctx, updatedRole)).Should(Succeed(), "Failed to update role %s in %s cluster", updatedRole.Name, HubCluster.ClusterName)
-			expectedRole.Rules = rules
+			wantRole.Rules = rules
 
 			By("check if role got updated in member cluster")
-			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, expectedRole, resourceIgnoreOptions)
+			utils.CmpRole(ctx, *MemberCluster, &types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, wantRole, resourceIgnoreOptions)
 
 			By("delete namespaces")
 			utils.DeleteNamespace(ctx, *HubCluster, namespace1)
@@ -317,6 +319,125 @@ var _ = Describe("workload orchestration testing", func() {
 				return errors.IsNotFound(MemberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: namespace1.Name}, namespace1))
 			}, utils.PollTimeout, utils.PollInterval).Should(BeTrue(), "Failed to wait for cluster role %s to be deleted in %s cluster", namespace1.Name, MemberCluster.ClusterName)
 
+			By("delete cluster resource placement on hub cluster")
+			utils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
+		})
+
+		It("Apply CRP select namespace propagate small secret, then update secret to be large to handle annotation limitation", func() {
+			By("create the resources to be propagated")
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{labelKey: labelValue},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, namespace)).Should(Succeed(), "Failed to create namespace %s in %s cluster", namespace.Name, HubCluster.ClusterName)
+			var testSmallSecret corev1.Secret
+			err := pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-small-secret.yaml", &testSmallSecret)
+			Expect(err).Should(Succeed())
+			Expect(HubCluster.KubeClient.Create(ctx, &testSmallSecret)).Should(Succeed(), "Failed to create small secret %s in %s cluster", testSmallSecret.Name, HubCluster.ClusterName)
+
+			By("create the cluster resource placement in the hub cluster")
+			crp = &v1alpha1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-crp"},
+				Spec: v1alpha1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []v1alpha1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    namespace.Name,
+						},
+					},
+				},
+			}
+
+			Expect(HubCluster.KubeClient.Create(ctx, crp)).Should(Succeed(), "Failed to create cluster resource placement %s in %s cluster", crp.Name, HubCluster.ClusterName)
+
+			By("check if work gets created for cluster resource placement")
+			utils.WaitWork(ctx, *HubCluster, crp.Name, memberNamespace.Name)
+
+			By("check if cluster resource placement status is updated")
+			crpStatus := v1alpha1.ClusterResourcePlacementStatus{
+				Conditions: []metav1.Condition{
+					{
+						Reason: "ScheduleSucceeded",
+						Status: metav1.ConditionTrue,
+						Type:   string(v1alpha1.ResourcePlacementConditionTypeScheduled),
+					},
+					{
+						Reason: "ApplySucceeded",
+						Status: metav1.ConditionTrue,
+						Type:   string(v1alpha1.ResourcePlacementStatusConditionTypeApplied),
+					},
+				},
+				SelectedResources: []v1alpha1.ResourceIdentifier{
+					{
+						Version:   "v1",
+						Kind:      "Secret",
+						Name:      testSmallSecret.Name,
+						Namespace: testSmallSecret.Namespace,
+					},
+					{
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    namespace.Name,
+					},
+				},
+				TargetClusters: []string{"kind-member-testing"},
+			}
+			utils.WaitCreateClusterResourcePlacementStatus(ctx, *HubCluster, &types.NamespacedName{Name: crp.Name}, crpStatus, crpStatusCmpOptions, 3*utils.PollTimeout)
+
+			By("check if resources in namespace are propagated to member cluster")
+			ownerReferences := []metav1.OwnerReference{
+				{
+					APIVersion:         workapiv1alpha1.GroupVersion.String(),
+					BlockOwnerDeletion: pointer.Bool(false),
+					Kind:               "AppliedWork",
+					Name:               crp.Name,
+				},
+			}
+			wantNamespace := namespace
+			wantSecret := &testSmallSecret
+			wantNamespace.OwnerReferences = ownerReferences
+			wantSecret.OwnerReferences = ownerReferences
+
+			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace.Name}, wantNamespace, resourceIgnoreOptions)
+			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
+			gotSmallSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testSmallSecret.Name, Namespace: testSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+
+			By("update secret so that annotation limit crosses threshold of 256KB")
+			var testLargeSecret corev1.Secret
+			err = pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-large-secret.yaml", &testLargeSecret)
+			Expect(err).Should(Succeed())
+			// testLargeSecret has the same name as testSmallSecret.
+			Expect(HubCluster.KubeClient.Update(ctx, &testLargeSecret)).Should(Succeed(), "Failed to update secret %s to be large in %s cluster", testLargeSecret.Name, HubCluster.ClusterName)
+			wantSecret = &testLargeSecret
+			wantSecret.OwnerReferences = ownerReferences
+
+			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
+			gotLargeSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testLargeSecret.Name, Namespace: testLargeSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			diff := cmp.Diff(gotSmallSecret, gotLargeSecret, resourceIgnoreOptions...)
+			Expect(diff).To(Not(Equal("")))
+
+			By("update secret so that it's small again")
+			// Using a new variable to prevent failure, leads to 409 if not.
+			var initialSmallSecret corev1.Secret
+			err = pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-small-secret.yaml", &initialSmallSecret)
+			Expect(err).Should(Succeed())
+			Eventually(func() error {
+				return HubCluster.KubeClient.Update(ctx, &initialSmallSecret)
+			}, utils.PollTimeout, utils.PollInterval).Should(Succeed(), "Failed to update secret to be small in %s cluster", HubCluster.ClusterName)
+			wantSecret = &initialSmallSecret
+			wantSecret.OwnerReferences = ownerReferences
+
+			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
+			gotSmallSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			diff = cmp.Diff(gotLargeSecret, gotSmallSecret, resourceIgnoreOptions...)
+			Expect(diff).To(Not(Equal("")))
+
+			By("delete namespaces")
+			utils.DeleteNamespace(ctx, *HubCluster, namespace)
 			By("delete cluster resource placement on hub cluster")
 			utils.DeleteClusterResourcePlacement(ctx, *HubCluster, crp)
 		})

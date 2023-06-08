@@ -284,18 +284,27 @@ func TestIsManifestManagedByWork(t *testing.T) {
 }
 
 func TestApplyUnstructured(t *testing.T) {
-	correctObj, correctDynamicClient, correctSpecHash := createObjAndDynamicClient(testManifest.Raw)
+	correctObj, correctDynamicClient, correctSpecHash, err := createObjAndDynamicClient(testManifest.Raw)
+	if err != nil {
+		t.Errorf("failed to create obj and dynamic client: %s", err)
+	}
 
 	testDeploymentGenerated := testDeployment.DeepCopy()
 	testDeploymentGenerated.Name = ""
 	testDeploymentGenerated.GenerateName = utilrand.String(10)
 	rawGenerated, _ := json.Marshal(testDeploymentGenerated)
-	generatedSpecObj, generatedSpecDynamicClient, generatedSpecHash := createObjAndDynamicClient(rawGenerated)
+	generatedSpecObj, generatedSpecDynamicClient, generatedSpecHash, err := createObjAndDynamicClient(rawGenerated)
+	if err != nil {
+		t.Errorf("failed to create obj and dynamic client: %s", err)
+	}
 
 	testDeploymentDiffSpec := testDeployment.DeepCopy()
 	testDeploymentDiffSpec.Spec.MinReadySeconds = 0
 	rawDiffSpec, _ := json.Marshal(testDeploymentDiffSpec)
-	diffSpecObj, diffSpecDynamicClient, diffSpecHash := createObjAndDynamicClient(rawDiffSpec)
+	diffSpecObj, diffSpecDynamicClient, diffSpecHash, err := createObjAndDynamicClient(rawDiffSpec)
+	if err != nil {
+		t.Errorf("failed to create obj and dynamic client: %s", err)
+	}
 
 	patchFailClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	patchFailClient.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
@@ -307,7 +316,7 @@ func TestApplyUnstructured(t *testing.T) {
 
 	dynamicClientNotFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	dynamicClientNotFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
-		return false,
+		return true,
 			nil,
 			&apierrors.StatusError{
 				ErrStatus: metav1.Status{
@@ -341,10 +350,77 @@ func TestApplyUnstructured(t *testing.T) {
 		},
 	}
 	rawTestDeploymentWithDifferentOwner, _ := json.Marshal(testDeploymentWithDifferentOwner)
-	_, diffOwnerDynamicClient, _ := createObjAndDynamicClient(rawTestDeploymentWithDifferentOwner)
+	_, diffOwnerDynamicClient, _, err := createObjAndDynamicClient(rawTestDeploymentWithDifferentOwner)
+	if err != nil {
+		t.Errorf("failed to create obj and dynamic client: %s", err)
+	}
 
 	specHashFailObj := correctObj.DeepCopy()
 	specHashFailObj.Object["test"] = math.Inf(1)
+
+	largeObj, err := createLargeObj()
+	if err != nil {
+		t.Errorf("failed to create large obj: %s", err)
+	}
+	updatedLargeObj := largeObj.DeepCopy()
+
+	largeObjSpecHash, err := computeManifestHash(largeObj)
+	if err != nil {
+		t.Errorf("failed to compute manifest hash: %s", err)
+	}
+
+	// Not mocking create for dynamicClientLargeObjNotFound because by default it somehow deep copies the object as the test runs and returns it.
+	dynamicClientLargeObjNotFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	dynamicClientLargeObjNotFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true,
+			nil,
+			&apierrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Reason: metav1.StatusReasonNotFound,
+				}}
+	})
+
+	updatedLargeObj.SetLabels(map[string]string{"test-label-key": "test-label"})
+	updatedLargeObjSpecHash, err := computeManifestHash(updatedLargeObj)
+	if err != nil {
+		t.Errorf("failed to compute manifest hash: %s", err)
+	}
+
+	// Need to mock patch because apply return error if not.
+	dynamicClientLargeObjFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	// Need to set annotation to ensure on comparison between curObj and manifestObj is different.
+	largeObj.SetAnnotations(map[string]string{manifestHashAnnotation: largeObjSpecHash})
+	dynamicClientLargeObjFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, largeObj.DeepCopy(), nil
+	})
+	dynamicClientLargeObjFound.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		// updatedLargeObj.DeepCopy() is executed when the test runs meaning the deep copy is computed as the test runs and since we pass updatedLargeObj as reference
+		// in the test case input all changes made by the controller will be included when DeepCopy is computed.
+		return true, updatedLargeObj.DeepCopy(), nil
+	})
+
+	dynamicClientLargeObjCreateFail := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	dynamicClientLargeObjCreateFail.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true,
+			nil,
+			&apierrors.StatusError{
+				ErrStatus: metav1.Status{
+					Status: metav1.StatusFailure,
+					Reason: metav1.StatusReasonNotFound,
+				}}
+	})
+	dynamicClientLargeObjCreateFail.PrependReactor("create", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, errors.New("create error")
+	})
+
+	dynamicClientLargeObjApplyFail := fake.NewSimpleDynamicClient(runtime.NewScheme())
+	dynamicClientLargeObjApplyFail.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, largeObj.DeepCopy(), nil
+	})
+	dynamicClientLargeObjApplyFail.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, errors.New("apply error")
+	})
 
 	testCases := map[string]struct {
 		reconciler     ApplyWorkReconciler
@@ -430,8 +506,50 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj,
 			resultSpecHash: diffSpecHash,
-			resultAction:   ManifestUpdatedAction,
+			resultAction:   ManifestThreeWayMergePatchAction,
 			resultErr:      nil,
+		},
+		"test create succeeds for large manifest when object does not exist": {
+			reconciler: ApplyWorkReconciler{
+				spokeDynamicClient: dynamicClientLargeObjNotFound,
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			workObj:        largeObj,
+			resultSpecHash: largeObjSpecHash,
+			resultAction:   ManifestCreatedAction,
+			resultErr:      nil,
+		},
+		"test apply succeeds on update for large manifest when object exists": {
+			reconciler: ApplyWorkReconciler{
+				spokeDynamicClient: dynamicClientLargeObjFound,
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			workObj:        updatedLargeObj,
+			resultSpecHash: updatedLargeObjSpecHash,
+			resultAction:   ManifestServerSideAppliedAction,
+			resultErr:      nil,
+		},
+		"test create fails for large manifest when object does not exist": {
+			reconciler: ApplyWorkReconciler{
+				spokeDynamicClient: dynamicClientLargeObjCreateFail,
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			workObj:      largeObj,
+			resultAction: ManifestNoChangeAction,
+			resultErr:    errors.New("create error"),
+		},
+		"test apply fails for large manifest when object exists": {
+			reconciler: ApplyWorkReconciler{
+				spokeDynamicClient: dynamicClientLargeObjApplyFail,
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			workObj:      updatedLargeObj,
+			resultAction: ManifestNoChangeAction,
+			resultErr:    errors.New("apply error"),
 		},
 	}
 
@@ -444,6 +562,7 @@ func TestApplyUnstructured(t *testing.T) {
 			} else {
 				assert.Truef(t, err == nil, "err is not nil for Testcase %s", testName)
 				assert.Truef(t, applyResult != nil, "applyResult is not nil for Testcase %s", testName)
+				// Not checking last applied config because it has live fields.
 				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[manifestHashAnnotation],
 					"specHash not matching for Testcase %s", testName)
 				assert.Equalf(t, ownerRef, applyResult.GetOwnerReferences()[0], "ownerRef not matching for Testcase %s", testName)
@@ -639,7 +758,10 @@ func TestReconcile(t *testing.T) {
 	happyManifest := workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawHappyDeployment,
 	}}
-	_, happyDynamicClient, _ := createObjAndDynamicClient(happyManifest.Raw)
+	_, happyDynamicClient, _, err := createObjAndDynamicClient(happyManifest.Raw)
+	if err != nil {
+		t.Errorf("failed to create obj and dynamic client: %s", err)
+	}
 
 	getMockAppliedWork := func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 		if key.Name != workName {
@@ -892,12 +1014,21 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, dynamic.Interface, string) {
+func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, dynamic.Interface, string, error) {
 	uObj := unstructured.Unstructured{}
-	_ = uObj.UnmarshalJSON(rawManifest)
-	validSpecHash, _ := computeManifestHash(&uObj)
+	err := uObj.UnmarshalJSON(rawManifest)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	validSpecHash, err := computeManifestHash(&uObj)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	uObj.SetAnnotations(map[string]string{manifestHashAnnotation: validSpecHash})
-	_ = setModifiedConfigurationAnnotation(&uObj)
+	_, err = setModifiedConfigurationAnnotation(&uObj)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	dynamicClient := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	dynamicClient.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
 		return true, uObj.DeepCopy(), nil
@@ -905,5 +1036,26 @@ func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, 
 	dynamicClient.PrependReactor("patch", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
 		return true, uObj.DeepCopy(), nil
 	})
-	return &uObj, dynamicClient, validSpecHash
+	return &uObj, dynamicClient, validSpecHash, nil
+}
+
+func createLargeObj() (*unstructured.Unstructured, error) {
+	var largeSecret v1.Secret
+	if err := utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &largeSecret); err != nil {
+		return nil, err
+	}
+	largeSecret.ObjectMeta = metav1.ObjectMeta{
+		OwnerReferences: []metav1.OwnerReference{
+			ownerRef,
+		},
+	}
+	rawSecret, err := json.Marshal(largeSecret)
+	if err != nil {
+		return nil, err
+	}
+	var largeObj unstructured.Unstructured
+	if err := largeObj.UnmarshalJSON(rawSecret); err != nil {
+		return nil, err
+	}
+	return &largeObj, nil
 }

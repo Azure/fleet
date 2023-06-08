@@ -305,8 +305,8 @@ var _ = Describe("Work API Controller test", func() {
 			By(fmt.Sprintf("Verify that either works %s and %s condition reason should be updated", namespaceTypeOne, namespaceTypeTwo))
 			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction) ||
 				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction)).Should(BeTrue())
-			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestUpdatedAction) ||
-				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestUpdatedAction)).Should(BeTrue())
+			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestThreeWayMergePatchAction) ||
+				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestThreeWayMergePatchAction)).Should(BeTrue())
 
 			By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
 			wantAppliedStatus := workapi.AppliedtWorkStatus{

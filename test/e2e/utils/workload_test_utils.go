@@ -78,6 +78,21 @@ func CmpRoleBinding(ctx context.Context, cluster framework.Cluster, objectKey *t
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected role bindings in %s cluster", cluster.ClusterName)
 }
 
+// CmpSecret compares actual secret with expected secret and returns actual secret.
+func CmpSecret(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantSecret *corev1.Secret, cmpOptions []cmp.Option) *corev1.Secret {
+	gotSecret := &corev1.Secret{}
+	gomega.Eventually(func() error {
+		if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: objectKey.Name, Namespace: objectKey.Namespace}, gotSecret); err != nil {
+			return err
+		}
+		if diff := cmp.Diff(wantSecret, gotSecret, cmpOptions...); diff != "" {
+			return fmt.Errorf("secret binding(%s) mismatch (-want +got):\n%s", gotSecret.Name, diff)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to compare actual and expected secret in %s cluster", cluster.ClusterName)
+	return gotSecret
+}
+
 // WaitCreateClusterResourcePlacementStatus waits for ClusterResourcePlacement to present on th hub cluster with a specific status.
 func WaitCreateClusterResourcePlacementStatus(ctx context.Context, cluster framework.Cluster, objectKey *types.NamespacedName, wantCRPStatus fleetv1alpha1.ClusterResourcePlacementStatus, crpStatusCmpOptions []cmp.Option, customTimeout time.Duration) {
 	gotCRP := &fleetv1alpha1.ClusterResourcePlacement{}

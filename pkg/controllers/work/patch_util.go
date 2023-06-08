@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/jsonmergepatch"
@@ -78,12 +79,14 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 
 // setModifiedConfigurationAnnotation serializes the object into byte stream.
 // If `updateAnnotation` is true, it embeds the result as an annotation in the
-// modified configuration.
-func setModifiedConfigurationAnnotation(obj runtime.Object) error {
+// modified configuration. If annotations size is greater than 256 kB it sets
+// to empty string. It returns true if the annotation contains a value, returns
+// false if the annotation is set to an empty string.
+func setModifiedConfigurationAnnotation(obj runtime.Object) (bool, error) {
 	var modified []byte
 	annotations, err := metadataAccessor.Annotations(obj)
 	if err != nil {
-		return fmt.Errorf("cannot access metadata.annotations: %w", err)
+		return false, fmt.Errorf("cannot access metadata.annotations: %w", err)
 	}
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -102,11 +105,16 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	// the produced json format is more three way merge friendly
 	modified, err = json.Marshal(obj)
 	if err != nil {
-		return err
+		return false, err
 	}
 	// set the last applied annotation back
 	annotations[lastAppliedConfigAnnotation] = string(modified)
-	return metadataAccessor.SetAnnotations(obj, annotations)
+	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
+		klog.V(2).InfoS(fmt.Sprintf("setting last applied config annotation to empty, %s", err))
+		annotations[lastAppliedConfigAnnotation] = ""
+		return false, metadataAccessor.SetAnnotations(obj, annotations)
+	}
+	return true, metadataAccessor.SetAnnotations(obj, annotations)
 }
 
 // getOriginalConfiguration gets original configuration of the object
