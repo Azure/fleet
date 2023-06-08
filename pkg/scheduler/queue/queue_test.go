@@ -24,7 +24,10 @@ func TestSimpleClusterPolicySnapshotKeySchedulingQueueBasicOps(t *testing.T) {
 
 	keysRecved := []ClusterPolicySnapshotKey{}
 	for i := 0; i < len(keysToAdd); i++ {
-		key := sq.NextClusterPolicySnapshotKey()
+		key, closed := sq.NextClusterPolicySnapshotKey()
+		if closed {
+			t.Fatalf("Queue closed unexpected")
+		}
 		keysRecved = append(keysRecved, key)
 		sq.Done(key)
 	}

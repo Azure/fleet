@@ -31,7 +31,7 @@ type ClusterPolicySnapshotKeySchedulingQueue interface {
 	// CloseWithDrain closes the scheduling queue after all items in the queue are processed.
 	CloseWithDrain()
 	// NextClusterPolicySnapshotKey returns the next-in-line ClusterPolicySnapshot key for the scheduler to schedule.
-	NextClusterPolicySnapshotKey() ClusterPolicySnapshotKey
+	NextClusterPolicySnapshotKey() (key ClusterPolicySnapshotKey, closed bool)
 	// Done marks a ClusterPolicySnapshot key as done.
 	Done(cpsKey ClusterPolicySnapshotKey)
 }
@@ -99,13 +99,17 @@ func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) CloseWithDrain() {
 
 // NextClusterPolicySnapshotKey returns the next ClusterPolicySnapshot key in the work queue for
 // the scheduler to process.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) NextClusterPolicySnapshotKey() ClusterPolicySnapshotKey {
+//
+// Note that for now the queue simply wraps a work queue, and consider its state (whether it
+// is shut down or not) as its own closedness. In the future, when more queues are added, the
+// queue implementation must manage its own state.
+func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) NextClusterPolicySnapshotKey() (key ClusterPolicySnapshotKey, closed bool) {
 	// This will block on a condition variable if the queue is empty.
 	cpsKey, shutdown := sq.clusterPolicySanpshotWorkQueue.Get()
 	if shutdown {
-		return ""
+		return "", true
 	}
-	return cpsKey.(ClusterPolicySnapshotKey)
+	return cpsKey.(ClusterPolicySnapshotKey), false
 }
 
 // Done marks a ClusterPolicySnapshot key as done.
