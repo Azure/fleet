@@ -3,9 +3,8 @@ package controllers
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime"
-
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func TestSetModifiedConfigurationAnnotation(t *testing.T) {
