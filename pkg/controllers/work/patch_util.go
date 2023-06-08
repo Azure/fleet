@@ -80,19 +80,20 @@ func threeWayMergePatch(currentObj, manifestObj client.Object) (client.Patch, er
 // setModifiedConfigurationAnnotation serializes the object into byte stream.
 // If `updateAnnotation` is true, it embeds the result as an annotation in the
 // modified configuration. If annotations size is greater than 256 kB it sets
-// to empty string.
-func setModifiedConfigurationAnnotation(obj runtime.Object) error {
+// to empty string. it returns true if the annotation is set returns false if
+// the annotation is set to an empty string.
+func setModifiedConfigurationAnnotation(obj runtime.Object) (bool, error) {
 	var modified []byte
 	annotations, err := metadataAccessor.Annotations(obj)
 	if err != nil {
-		return fmt.Errorf("cannot access metadata.annotations: %w", err)
+		return false, fmt.Errorf("cannot access metadata.annotations: %w", err)
 	}
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
 
 	// remove the annotation to avoid recursion
-	delete(annotations, LastAppliedConfigAnnotation)
+	delete(annotations, lastAppliedConfigAnnotation)
 	// do not include an empty map
 	if len(annotations) == 0 {
 		_ = metadataAccessor.SetAnnotations(obj, nil)
@@ -104,15 +105,16 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) error {
 	// the produced json format is more three way merge friendly
 	modified, err = json.Marshal(obj)
 	if err != nil {
-		return err
+		return false, err
 	}
 	// set the last applied annotation back
-	annotations[LastAppliedConfigAnnotation] = string(modified)
+	annotations[lastAppliedConfigAnnotation] = string(modified)
 	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
 		klog.V(2).InfoS(fmt.Sprintf("setting last applied config annotation to empty, %s", err))
-		annotations[LastAppliedConfigAnnotation] = ""
+		annotations[lastAppliedConfigAnnotation] = ""
+		return false, metadataAccessor.SetAnnotations(obj, annotations)
 	}
-	return metadataAccessor.SetAnnotations(obj, annotations)
+	return true, metadataAccessor.SetAnnotations(obj, annotations)
 }
 
 // getOriginalConfiguration gets original configuration of the object
@@ -128,7 +130,7 @@ func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 		klog.Warning("object does not have annotation", "obj", obj)
 		return nil, nil
 	}
-	original, ok := annots[LastAppliedConfigAnnotation]
+	original, ok := annots[lastAppliedConfigAnnotation]
 	if !ok {
 		klog.Warning("object does not have lastAppliedConfigAnnotation", "obj", obj)
 		return nil, nil

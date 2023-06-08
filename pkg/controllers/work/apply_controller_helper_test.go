@@ -51,8 +51,8 @@ func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 	for key := range cm.Annotations {
 		Expect(appliedCM.Annotations[key]).Should(Equal(cm.Annotations[key]))
 	}
-	Expect(appliedCM.Annotations[ManifestHashAnnotation]).ShouldNot(BeEmpty())
-	Expect(appliedCM.Annotations[LastAppliedConfigAnnotation]).ShouldNot(BeEmpty())
+	Expect(appliedCM.Annotations[manifestHashAnnotation]).ShouldNot(BeEmpty())
+	Expect(appliedCM.Annotations[lastAppliedConfigAnnotation]).ShouldNot(BeEmpty())
 
 	By("Check the config map data")
 	Expect(cmp.Diff(appliedCM.Data, cm.Data)).Should(BeEmpty())

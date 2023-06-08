@@ -19,7 +19,6 @@ import (
 	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	pkgwork "go.goms.io/fleet/pkg/controllers/work"
 	pkgutils "go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/utils"
 )
@@ -405,10 +404,7 @@ var _ = Describe("workload orchestration testing", func() {
 
 			utils.CmpNamespace(ctx, *MemberCluster, &types.NamespacedName{Name: namespace.Name}, wantNamespace, resourceIgnoreOptions)
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testSmallSecret.Name, Namespace: testSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
-			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).To(Not(BeEmpty()))
-			// Not checking spec hash equals some value because ObjectMeta.OwnerReferences has some live fields.
-			testSmallSecretSpecHash := gotSecret.Annotations[pkgwork.ManifestHashAnnotation]
+			gotSmallSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testSmallSecret.Name, Namespace: testSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
 
 			By("update secret so that annotation limit crosses threshold of 256KB")
 			var testLargeSecret corev1.Secret
@@ -420,9 +416,9 @@ var _ = Describe("workload orchestration testing", func() {
 			wantSecret.OwnerReferences = ownerReferences
 
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testLargeSecret.Name, Namespace: testLargeSecret.Namespace}, wantSecret, resourceIgnoreOptions)
-			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).To(BeEmpty())
-			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).ToNot(Equal(testSmallSecretSpecHash))
+			gotLargeSecret := utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: testLargeSecret.Name, Namespace: testLargeSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			diff := cmp.Diff(gotSmallSecret, gotLargeSecret, resourceIgnoreOptions...)
+			Expect(diff).To(Not(Equal("")))
 
 			By("update secret so that it's small again")
 			// Using a new variable to prevent failure, leads to 409 if not.
@@ -430,18 +426,15 @@ var _ = Describe("workload orchestration testing", func() {
 			err = pkgutils.GetObjectFromManifest("./test/integration/manifests/resources/test-small-secret.yaml", &initialSmallSecret)
 			Expect(err).Should(Succeed())
 			Eventually(func() error {
-				if err := HubCluster.KubeClient.Update(ctx, &initialSmallSecret); err != nil {
-					return err
-				}
-				return nil
+				return HubCluster.KubeClient.Update(ctx, &initialSmallSecret)
 			}, utils.PollTimeout, utils.PollInterval).Should(Succeed(), "Failed to update secret to be small in %s cluster", HubCluster.ClusterName)
 			wantSecret = &initialSmallSecret
 			wantSecret.OwnerReferences = ownerReferences
 
 			// Ignoring Annotations here because fleet.azure.com/last-applied-configuration has live fields, checking to see if it's not empty instead.
-			gotSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
-			Expect(gotSecret.Annotations[pkgwork.LastAppliedConfigAnnotation]).ToNot(BeEmpty())
-			Expect(gotSecret.Annotations[pkgwork.ManifestHashAnnotation]).To(Equal(testSmallSecretSpecHash))
+			gotSmallSecret = utils.CmpSecret(ctx, *MemberCluster, &types.NamespacedName{Name: initialSmallSecret.Name, Namespace: initialSmallSecret.Namespace}, wantSecret, resourceIgnoreOptions)
+			diff = cmp.Diff(gotLargeSecret, gotSmallSecret, resourceIgnoreOptions...)
+			Expect(diff).To(Not(Equal("")))
 
 			By("delete namespaces")
 			utils.DeleteNamespace(ctx, *HubCluster, namespace)

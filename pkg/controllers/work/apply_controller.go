@@ -86,11 +86,11 @@ const (
 	// ManifestCreatedAction indicates that we created the manifest for the first time.
 	ManifestCreatedAction applyAction = "ManifestCreated"
 
-	// ManifestUpdatedAction indicates that we updated the manifest.
-	ManifestUpdatedAction applyAction = "ManifestUpdated"
+	// ManifestThreeWayMergePatchAction indicates that we updated the manifest using three-way merge patch.
+	ManifestThreeWayMergePatchAction applyAction = "ManifestThreeWayMergePatched"
 
-	// ManifestAppliedAction indicates that we applied the manifest.
-	ManifestAppliedAction applyAction = "ManifestApplied"
+	// ManifestServerSideAppliedAction indicates that we updated the manifest using server side apply.
+	ManifestServerSideAppliedAction applyAction = "ManifestServerSideApplied"
 
 	// ManifestNoChangeAction indicates that we don't need to change the manifest.
 	ManifestNoChangeAction applyAction = "ManifestNoChange"
@@ -338,7 +338,7 @@ func (r *ApplyWorkReconciler) decodeManifest(manifest workv1alpha1.Manifest) (sc
 
 // applyUnstructured determines if an unstructured manifest object can & should be applied. It first validates
 // the size of the last modified annotation of the manifest, it removes the annotation if the size crosses the annotation size threshold
-// and then creates/updates the resource on the cluster using server side apply instead of three way merge patch.
+// and then creates/updates the resource on the cluster using server side apply instead of three-way merge patch.
 func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
@@ -354,7 +354,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
 		// record the raw manifest with the hash annotation in the manifest
-		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
+		if _, err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
@@ -389,16 +389,16 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// We only try to update the object if its spec hash value has changed.
-	if manifestObj.GetAnnotations()[ManifestHashAnnotation] != curObj.GetAnnotations()[ManifestHashAnnotation] {
+	if manifestObj.GetAnnotations()[manifestHashAnnotation] != curObj.GetAnnotations()[manifestHashAnnotation] {
 		// we need to merge the owner reference between the current and the manifest since we support one manifest
 		// belong to multiple work, so it contains the union of all the appliedWork.
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
 		// record the raw manifest with the hash annotation in the manifest.
-		if err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
+		isModifiedConfigAnnotationNotEmpty, err := setModifiedConfigurationAnnotation(manifestObj)
+		if err != nil {
 			return nil, ManifestNoChangeAction, err
 		}
-		annotations := manifestObj.GetAnnotations()
-		if annotations[LastAppliedConfigAnnotation] == "" {
+		if !isModifiedConfigAnnotationNotEmpty {
 			klog.V(2).InfoS("using server side apply for manifest", "gvr", gvr, "manifest", manifestRef)
 			return r.applyObject(ctx, gvr, manifestObj)
 		}
@@ -426,10 +426,10 @@ func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupV
 		return nil, ManifestNoChangeAction, err
 	}
 	klog.V(2).InfoS("manifest apply succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, ManifestAppliedAction, nil
+	return manifestObj, ManifestServerSideAppliedAction, nil
 }
 
-// patchCurrentResource uses three way merge to patch the current resource with the new manifest we get from the work.
+// patchCurrentResource uses three-way merge to patch the current resource with the new manifest we get from the work.
 func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj, curObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
@@ -437,8 +437,8 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		Namespace: manifestObj.GetNamespace(),
 	}
 	klog.V(2).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
-		"new hash", manifestObj.GetAnnotations()[ManifestHashAnnotation],
-		"existing hash", curObj.GetAnnotations()[ManifestHashAnnotation])
+		"new hash", manifestObj.GetAnnotations()[manifestHashAnnotation],
+		"existing hash", curObj.GetAnnotations()[manifestHashAnnotation])
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {
@@ -458,7 +458,7 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		return nil, ManifestNoChangeAction, patchErr
 	}
 	klog.V(2).InfoS("manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, ManifestUpdatedAction, nil
+	return manifestObj, ManifestThreeWayMergePatchAction, nil
 }
 
 // generateWorkCondition constructs the work condition based on the apply result
@@ -547,8 +547,8 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	// remove the last applied Annotation to avoid unlimited recursion
 	annotation := manifest.GetAnnotations()
 	if annotation != nil {
-		delete(annotation, ManifestHashAnnotation)
-		delete(annotation, LastAppliedConfigAnnotation)
+		delete(annotation, manifestHashAnnotation)
+		delete(annotation, lastAppliedConfigAnnotation)
 		if len(annotation) == 0 {
 			manifest.SetAnnotations(nil)
 		} else {
@@ -620,7 +620,7 @@ func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
 	if annotation == nil {
 		annotation = map[string]string{}
 	}
-	annotation[ManifestHashAnnotation] = manifestHash
+	annotation[manifestHashAnnotation] = manifestHash
 	manifestObj.SetAnnotations(annotation)
 	return nil
 }
