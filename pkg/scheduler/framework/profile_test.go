@@ -9,11 +9,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	fleetv1 "go.goms.io/fleet/apis/v1"
 )
 
 const (
-	dummyPluginName = "dummyAllPurposePlugin"
+	dummyProfileName = "dummyProfile"
+	dummyPluginName  = "dummyAllPurposePlugin"
 )
 
 // A no-op, dummy plugin which connects to all extension points.
@@ -51,8 +53,7 @@ func (p *DummyAllPurposePlugin) Score(ctx context.Context, state CycleStatePlugi
 
 // TestProfile tests the basic ops of a Profile.
 func TestProfile(t *testing.T) {
-	profileName := "testProfile"
-	profile := NewProfile(profileName)
+	profile := NewProfile(dummyProfileName)
 
 	dummyAllPurposePlugin := &DummyAllPurposePlugin{}
 	dummyPlugin := Plugin(dummyAllPurposePlugin)
@@ -63,46 +64,19 @@ func TestProfile(t *testing.T) {
 	profile.WithPreScorePlugin(dummyAllPurposePlugin)
 	profile.WithScorePlugin(dummyAllPurposePlugin)
 
-	// Same plugin should be registered only once, even if it connects to multiple extension points.
-	if len(profile.registeredPlugins) != 1 {
-		t.Fatalf("registerPlugins len() = %d, want %d", len(profile.registeredPlugins), 1)
-	}
-	if pl, ok := profile.registeredPlugins[dummyPluginName]; !ok || pl != dummyPlugin {
-		t.Fatalf("registeredPlugins[%s] = %v, %t, want %v, %t", dummyPluginName, pl, ok, dummyPlugin, true)
-	}
-
-	if len(profile.postBatchPlugins) != 1 {
-		t.Fatalf("postBatchPlugins len() = %d, want %d", len(profile.postBatchPlugins), 1)
-	}
-	if pl := profile.postBatchPlugins[0]; pl != dummyPlugin {
-		t.Fatalf("postBatchPlugins[0] = %v, want %v", pl, dummyPlugin)
+	wantProfile := &Profile{
+		name:             dummyProfileName,
+		postBatchPlugins: []PostBatchPlugin{dummyAllPurposePlugin},
+		preFilterPlugins: []PreFilterPlugin{dummyAllPurposePlugin},
+		filterPlugins:    []FilterPlugin{dummyAllPurposePlugin},
+		preScorePlugins:  []PreScorePlugin{dummyAllPurposePlugin},
+		scorePlugins:     []ScorePlugin{dummyAllPurposePlugin},
+		registeredPlugins: map[string]Plugin{
+			dummyPluginName: dummyPlugin,
+		},
 	}
 
-	if len(profile.preFilterPlugins) != 1 {
-		t.Fatalf("preFilterPlugins len() = %d, want %d", len(profile.preFilterPlugins), 1)
-	}
-	if pl := profile.preFilterPlugins[0]; pl != dummyPlugin {
-		t.Fatalf("preFilterPlugins[0] = %v, want %v", pl, dummyPlugin)
-	}
-
-	if len(profile.filterPlugins) != 1 {
-		t.Fatalf("filterPlugins len() = %d, want %d", len(profile.filterPlugins), 1)
-	}
-	if pl := profile.filterPlugins[0]; pl != dummyPlugin {
-		t.Fatalf("filterPlugins[0] = %v, want %v", pl, dummyPlugin)
-	}
-
-	if len(profile.preScorePlugins) != 1 {
-		t.Fatalf("preScorePlugins len() = %d, want %d", len(profile.preScorePlugins), 1)
-	}
-	if pl := profile.preScorePlugins[0]; pl != dummyPlugin {
-		t.Fatalf("preScorePlugins[0] = %v, want %v", pl, dummyPlugin)
-	}
-
-	if len(profile.scorePlugins) != 1 {
-		t.Fatalf("scorePlugins len() = %d, want %d", len(profile.scorePlugins), 1)
-	}
-	if pl := profile.scorePlugins[0]; pl != dummyPlugin {
-		t.Fatalf("scorePlugins[0] = %v, want %v", pl, dummyPlugin)
+	if !cmp.Equal(profile, wantProfile, cmp.AllowUnexported(Profile{})) {
+		t.Fatalf("NewProfile() = %v, want %v", profile, wantProfile)
 	}
 }
