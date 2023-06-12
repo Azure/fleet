@@ -28,9 +28,9 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: ClusterResourceBinding is represents a scheduling decision that
-          binds a group of resources to a cluster. it must have CRPTrackingLabel that
-          points to the cluster resource policy that creates it.
+        description: ClusterResourceBinding represents a scheduling decision that
+          binds a group of resources to a cluster. It MUST have a label named `CRPTrackingLabel`
+          that points to the cluster resource policy that creates it.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -47,22 +47,18 @@ spec:
           spec:
             description: The desired state of ClusterResourceBinding.
             properties:
-              resourcePolicyName:
-                description: ResourcePolicyName is the name of the resource policy
-                  that this resource binding points to.
+              resourceSnapshotName:
+                description: ResourceSnapshotName is the name of the resource snapshot
+                  that this resource binding points to. If the resources are divided
+                  into multiple snapshots because of the resource size limit, it points
+                  to the name of the leading snapshot of the index group.
                 type: string
-              resourceSnapshotIndex:
-                description: ResourceSnapshotIndex is the index of the resource snapshot
-                  to which that this resource binding points to.
-                format: int32
-                type: integer
               targetCluster:
                 description: TargetCluster is the name of the cluster that the scheduler
                   assigns the resources to.
                 type: string
             required:
-            - resourcePolicyName
-            - resourceSnapshotIndex
+            - resourceSnapshotName
             - targetCluster
             type: object
           status:

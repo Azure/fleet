@@ -52,23 +52,24 @@ type ClusterResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of ResourceSnapShot.
+	// The desired state of ResourceSnapshot.
 	// +required
-	Spec ResourceSnapShotSpec `json:"spec"`
+	Spec ResourceSnapshotSpec `json:"spec"`
 
-	// The observed status of ResourceSnapShot.
+	// The observed status of ResourceSnapshot.
 	// +optional
-	Status ResourceSnapShotStatus `json:"status,omitempty"`
+	Status ResourceSnapshotStatus `json:"status,omitempty"`
 }
 
-// ResourceSnapShotSpec	defines the desired state of ResourceSnapShot.
-type ResourceSnapShotSpec struct {
+// ResourceSnapshotSpec	defines the desired state of ResourceSnapshot.
+type ResourceSnapshotSpec struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +required
 	SelectedResources []ResourceContent `json:"selectedResources"`
 
-	// PolicySnapShotName is the name of the policy snapshot that this resource snapshot is pointing to.
-	PolicySnapShotName string `json:"policySnapShotName"`
+	// PolicySnapshotName is the name of the policy snapshot that this resource snapshot is pointing to.
+	// +required
+	PolicySnapshotName string `json:"policySnapshotName"`
 }
 
 // ResourceContent contains the content of a resource
@@ -78,21 +79,21 @@ type ResourceContent struct {
 	runtime.RawExtension `json:"-,inline"`
 }
 
-type ResourceSnapShotStatus struct {
+type ResourceSnapshotStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 
-	// Conditions is an array of current observed conditions for ResourceSnapShot.
+	// Conditions is an array of current observed conditions for ResourceSnapshot.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 }
 
-// ClusterResourceSnapShotList contains a list of ClusterResourceSnapshot.
+// ClusterResourceSnapshotList contains a list of ClusterResourceSnapshot.
 // +kubebuilder:resource:scope="Cluster"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ClusterResourceSnapShotList struct {
+type ClusterResourceSnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourceSnapshot `json:"items"`
@@ -111,5 +112,5 @@ func (m *ClusterResourceSnapshot) GetCondition(conditionType string) *metav1.Con
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterResourceSnapshot{}, &ClusterResourceSnapShotList{})
+	SchemeBuilder.Register(&ClusterResourceSnapshot{}, &ClusterResourceSnapshotList{})
 }

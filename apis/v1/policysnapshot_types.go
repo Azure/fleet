@@ -39,17 +39,17 @@ type ClusterPolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of PolicySnapShot.
+	// The desired state of PolicySnapshot.
 	// +required
-	Spec PolicySnapShotSpec `json:"spec"`
+	Spec PolicySnapshotSpec `json:"spec"`
 
-	// The observed status of PolicySnapShot.
+	// The observed status of PolicySnapshot.
 	// +optional
-	Status PolicySnapShotStatus `json:"status,omitempty"`
+	Status PolicySnapshotStatus `json:"status,omitempty"`
 }
 
-// PolicySnapShotSpec defines the desired state of PolicySnapShot.
-type PolicySnapShotSpec struct {
+// PolicySnapshotSpec defines the desired state of PolicySnapshot.
+type PolicySnapshotSpec struct {
 	// Policy defines how to select member clusters to place the selected resources.
 	// If unspecified, all the joined member clusters are selected.
 	// +optional
@@ -60,14 +60,14 @@ type PolicySnapShotSpec struct {
 	PolicyHash []byte `json:"policyHash"`
 }
 
-// PolicySnapShotStatus defines the observed state of PolicySnapShot.
-type PolicySnapShotStatus struct {
+// PolicySnapshotStatus defines the observed state of PolicySnapshot.
+type PolicySnapshotStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 
-	// Conditions is an array of current observed conditions for PolicySnapShot.
+	// Conditions is an array of current observed conditions for PolicySnapshot.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
@@ -79,16 +79,16 @@ type PolicySnapShotStatus struct {
 	ClusterDecisions []ClusterDecision `json:"targetClusters,omitempty"`
 }
 
-// PolicySnapShotConditionType identifies a specific condition of the PolicySnapShot.
-type PolicySnapShotConditionType string
+// PolicySnapshotConditionType identifies a specific condition of the PolicySnapshot.
+type PolicySnapshotConditionType string
 
 const (
-	// 	Scheduled indicates the scheduled condition of the given policySnapShot.
+	// 	Scheduled indicates the scheduled condition of the given policySnapshot.
 	// Its condition status can be one of the following:
-	// - "True" means the corresponding policySnapShot is fully scheduled.
-	// - "False" means the corresponding policySnapShot is not scheduled yet.
+	// - "True" means the corresponding policySnapshot is fully scheduled.
+	// - "False" means the corresponding policySnapshot is not scheduled yet.
 	// - "Unknown" means this policy does not have a full schedule yet.
-	PolicySnapshotScheduled PolicySnapShotConditionType = "Scheduled"
+	PolicySnapshotScheduled PolicySnapshotConditionType = "Scheduled"
 )
 
 // ClusterDecision represents a decision from a placement
@@ -128,10 +128,10 @@ type ClusterScore struct {
 	TopologySpreadScore *int32 `json:"priorityScore,omitempty"`
 }
 
-// ClusterPolicySnapShotList contains a list of ClusterPolicySnapShot.
+// ClusterPolicySnapshotList contains a list of ClusterPolicySnapshot.
 // +kubebuilder:resource:scope="Cluster"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ClusterPolicySnapShotList struct {
+type ClusterPolicySnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterPolicySnapshot `json:"items"`
@@ -150,5 +150,5 @@ func (m *ClusterPolicySnapshot) GetCondition(conditionType string) *metav1.Condi
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapShotList{})
+	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapshotList{})
 }

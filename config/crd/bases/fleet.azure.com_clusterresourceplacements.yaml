@@ -48,7 +48,8 @@ spec:
           default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved
           for fleet system namespaces). - reserved fleet resource types including:
           MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService,
-          ServiceImport, etc.'
+          ServiceImport, etc. The `ClusterResourceBinding` will be created and it
+          represents a scheduling decision that binds a group of resources to a cluster.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -262,15 +263,6 @@ spec:
                     description: Type of placement. Can be "PickAll" or "PickN". Default
                       is PickAll.
                     type: string
-                  strategy:
-                    description: The rollout strategy to use to replace existing applications
-                      with new ones.
-                    properties:
-                      type:
-                        description: Type of rollout strategy. Can be "Recreate" or
-                          "OnDelete". Default is "Recreate".
-                        type: string
-                    type: object
                   topologySpreadConstraints:
                     description: TopologySpreadConstraints describes how a group of
                       resources ought to spread across multiple topology domains.
