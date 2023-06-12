@@ -127,7 +127,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -155,7 +155,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -180,7 +180,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -210,7 +210,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -233,7 +233,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -258,7 +258,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -281,7 +281,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -304,7 +304,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -332,7 +332,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -357,7 +357,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -380,7 +380,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -408,7 +408,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -430,7 +430,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -455,7 +455,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -478,7 +478,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1.PolicySnapShotSpec{
+					Spec: fleetv1.PolicySnapshotSpec{
 						Policy:     placementPolicyForTest(),
 						PolicyHash: policyHash,
 					},
@@ -508,15 +508,15 @@ func TestHandleUpdate(t *testing.T) {
 			if !cmp.Equal(got, want) {
 				t.Errorf("handleUpdate() = %+v, want %+v", got, want)
 			}
-			clusterPolicySnapshotList := &fleetv1.ClusterPolicySnapShotList{}
+			clusterPolicySnapshotList := &fleetv1.ClusterPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
-				t.Fatalf("clusterPolicySnapShot List() got error %v, want no error", err)
+				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
 			}
 			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, options...); diff != "" {
-				t.Errorf("clusterPolicySnapShot List() mismatch (-want, +got):\n%s", diff)
+				t.Errorf("clusterPolicysnapShot List() mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}

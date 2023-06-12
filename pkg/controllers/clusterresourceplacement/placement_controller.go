@@ -381,7 +381,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 					fleetv1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
 				},
 			},
-			Spec: fleetv1.PolicySnapShotSpec{
+			Spec: fleetv1.PolicySnapshotSpec{
 				Policy:     crp.Spec.Policy,
 				PolicyHash: []byte(policyHash),
 			},
@@ -423,7 +423,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResou
 // invalid label value.
 // 2 & 3 should never happen.
 func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1.ClusterResourcePlacement) (*fleetv1.ClusterPolicySnapshot, int, error) {
-	snapshotList := &fleetv1.ClusterPolicySnapShotList{}
+	snapshotList := &fleetv1.ClusterPolicySnapshotList{}
 	latestSnapshotLabelMatcher := client.MatchingLabels{
 		fleetv1.CRPTrackingLabel:      crp.Name,
 		fleetv1.IsLatestSnapshotLabel: strconv.FormatBool(true),

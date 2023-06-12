@@ -28,6 +28,8 @@ import (
 // Note that you can't select the following resources:
 // - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces).
 // - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService, ServiceImport, etc.
+// The `ClusterResourceBinding` will be created and it represents a scheduling decision that binds a group of resources
+// to a cluster. You could control the progress of the new placement rollout by deleting the existing bindings.
 type ClusterResourcePlacement struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -108,11 +110,6 @@ type PlacementPolicy struct {
 	// NumberOfClusters of placement. Only valid if the placement type is "PickN".
 	// +optional
 	NumberOfClusters *int32 `json:"numberOfClusters,omitempty"`
-
-	// The rollout strategy to use to replace existing applications with new ones.
-	// +optional
-	// +patchStrategy=retainKeys
-	Strategy *RolloutStrategy `json:"strategy,omitempty" patchStrategy:"retainKeys" patchMergeKey:"type"`
 
 	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources.
 	// +optional
@@ -320,25 +317,6 @@ const (
 
 	// PickNPlacementType picks N clusters that satisfy the rules.
 	PickNPlacementType PlacementType = "PickN"
-)
-
-// RolloutStrategy describes how to replace existing application with new ones.
-type RolloutStrategy struct {
-	// Type of rollout strategy. Can be "Recreate" or "OnDelete". Default is "Recreate".
-	// +optional
-	Type RolloutStrategyType `json:"type,omitempty"`
-}
-
-// RolloutStrategyType identifies the type of strategy we use to roll out new resources.
-// +enum
-type RolloutStrategyType string
-
-const (
-	// RecreateRolloutStrategyType removes all existing resources from the clusters before creating new ones.
-	RecreateRolloutStrategyType RolloutStrategyType = "Recreate"
-
-	// OnDeleteRolloutStrategy schedules a new resource binding only after an old binding is deleted.
-	OnDeleteRolloutStrategy RolloutStrategyType = "OnDelete"
 )
 
 // ClusterResourcePlacementList contains a list of ClusterResourcePlacement.

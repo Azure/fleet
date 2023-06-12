@@ -28,9 +28,13 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: ClusterPolicySnapshot is used to store a snapshot of cluster
-          placement policy. It is immutable. It must have `CRPTrackingLabel`, `PolicyIndexLabel`
-          and `IsLatestSnapshotLabel` labels.
+        description: 'ClusterPolicySnapshot is used to store a snapshot of cluster
+          placement policy. Its spec is immutable. The naming convention of a ClusterPolicySnapshot
+          is {CRPName}-{PolicySnapshotIndex}. PolicySnapshotIndex will begin with
+          0. Each snapshot must have the following labels: - `CRPTrackingLabel` which
+          points to its owner CRP. - `PolicyIndexLabel` which is the index of the
+          policy snapshot. - `IsLatestSnapshotLabel` which indicates whether the snapshot
+          is the latest one.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -45,7 +49,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of PolicySnapShot.
+            description: The desired state of PolicySnapshot.
             properties:
               policy:
                 description: Policy defines how to select member clusters to place
@@ -244,15 +248,6 @@ spec:
                     description: Type of placement. Can be "PickAll" or "PickN". Default
                       is PickAll.
                     type: string
-                  strategy:
-                    description: The rollout strategy to use to replace existing applications
-                      with new ones.
-                    properties:
-                      type:
-                        description: Type of rollout strategy. Can be "Recreate" or
-                          "OnDelete". Default is "Recreate".
-                        type: string
-                    type: object
                   topologySpreadConstraints:
                     description: TopologySpreadConstraints describes how a group of
                       resources ought to spread across multiple topology domains.
@@ -297,18 +292,18 @@ spec:
                     type: array
                 type: object
               policyHash:
-                description: PolicyHash is the sha-256 hash value of the Policy field
+                description: PolicyHash is the sha-256 hash value of the Policy field.
                 format: byte
                 type: string
             required:
             - policyHash
             type: object
           status:
-            description: The observed status of PolicySnapShot.
+            description: The observed status of PolicySnapshot.
             properties:
               conditions:
                 description: Conditions is an array of current observed conditions
-                  for PolicySnapShot.
+                  for PolicySnapshot.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct
