@@ -29,7 +29,7 @@ import (
 // - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces).
 // - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService, ServiceImport, etc.
 // The `ClusterResourceBinding` will be created and it represents a scheduling decision that binds a group of resources
-// to a cluster. You could control the progress of the new placement rollout by deleting the existing bindings.
+// to a cluster.
 type ClusterResourcePlacement struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

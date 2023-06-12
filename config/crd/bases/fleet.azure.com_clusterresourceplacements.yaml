@@ -49,9 +49,7 @@ spec:
           for fleet system namespaces). - reserved fleet resource types including:
           MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService,
           ServiceImport, etc. The `ClusterResourceBinding` will be created and it
-          represents a scheduling decision that binds a group of resources to a cluster.
-          You could control the progress of the new placement rollout by deleting
-          the existing bindings.'
+          represents a scheduling decision that binds a group of resources to a cluster.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
