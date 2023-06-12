@@ -61,6 +61,11 @@ func (profile *Profile) WithScorePlugin(plugin ScorePlugin) *Profile {
 	return profile
 }
 
+// Name returns the name of the profile.
+func (profile *Profile) Name() string {
+	return profile.name
+}
+
 // NewProfile creates scheduling profile.
 func NewProfile(name string) *Profile {
 	return &Profile{
