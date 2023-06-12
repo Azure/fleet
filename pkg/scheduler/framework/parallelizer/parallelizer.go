@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// package parallelizer features some utilities to help run tasks in parallel.
+// Package parallelizer features some utilities to help run tasks in parallel.
 package parallelizer
 
 import (
