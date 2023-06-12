@@ -51,6 +51,9 @@ func (p *DummyAllPurposePlugin) Score(ctx context.Context, state CycleStatePlugi
 	return &ClusterScore{}, nil
 }
 
+// SetUpWithFramework is a no-op to satisfy the Plugin interface.
+func (p *DummyAllPurposePlugin) SetUpWithFramework(handle Handle) {} // nolint:revive
+
 // TestProfile tests the basic ops of a Profile.
 func TestProfile(t *testing.T) {
 	profile := NewProfile(dummyProfileName)

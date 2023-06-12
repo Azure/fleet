@@ -14,7 +14,10 @@ import (
 // Plugin is the interface which all scheduler plugins should implement.
 type Plugin interface {
 	Name() string
-	// TO-DO （chenyu1): add a method to help plugin set up the framework as needed.
+
+	// SetUpWithFramework helps a plugin to set it up with a scheduler framework, such as
+	// spinning up an informer.
+	SetUpWithFramework(handle Handle)
 }
 
 // PostBatchPlugin is the interface which all plugins that would like to run at the PostBatch

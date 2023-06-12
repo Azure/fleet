@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// package framework features the scheduler framework, which the scheduler runs to schedule
+// Package framework features the scheduler framework, which the scheduler runs to schedule
 // a placement to most appropriate clusters.
 package framework
 
@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	// eventRecorderNameTemplate is the template used to format event recorder name for a scheduler framework.
 	eventRecorderNameTemplate = "scheduler-framework-%s"
 )
 
