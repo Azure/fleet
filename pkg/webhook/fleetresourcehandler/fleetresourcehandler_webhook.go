@@ -40,10 +40,10 @@ func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind.String() {
 		case retrieveCRDGVK():
-			klog.V(2).InfoS("handling CRD resource", "crdGVK", retrieveCRDGVK())
+			klog.V(2).InfoS("handling CRD resource", "GVK", retrieveCRDGVK())
 			response = v.handleCRD(req)
 		default:
-			klog.V(2).InfoS(fmt.Sprintf("resource with GVK: %s is not monitored by fleet resource validator webhook", req.Kind.String()))
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
 			response = admission.Allowed("")
 		}
 	}
