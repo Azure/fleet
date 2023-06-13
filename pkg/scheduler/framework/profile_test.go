@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	fleetv1 "go.goms.io/fleet/apis/v1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/core/v1alpha1"
 )
 
 const (
@@ -27,27 +27,27 @@ func (p *DummyAllPurposePlugin) Name() string {
 }
 
 // PostBatch implements the PostBatch interface for the dummy plugin.
-func (p *DummyAllPurposePlugin) PostBatch(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1.ClusterPolicySnapshot) (size int, status *Status) { //nolint:revive
+func (p *DummyAllPurposePlugin) PostBatch(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1alpha1.ClusterPolicySnapshot) (size int, status *Status) { //nolint:revive
 	return 1, nil
 }
 
 // PreFilter implements the PreFilter interface for the dummy plugin.
-func (p *DummyAllPurposePlugin) PreFilter(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1.ClusterPolicySnapshot) (status *Status) { //nolint:revive
+func (p *DummyAllPurposePlugin) PreFilter(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1alpha1.ClusterPolicySnapshot) (status *Status) { //nolint:revive
 	return nil
 }
 
 // Filter implements the Filter interface for the dummy plugin.
-func (p *DummyAllPurposePlugin) Filter(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1.ClusterPolicySnapshot, cluster *fleetv1.MemberCluster) (status *Status) { //nolint:revive
+func (p *DummyAllPurposePlugin) Filter(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1alpha1.ClusterPolicySnapshot, cluster *fleetv1alpha1.MemberCluster) (status *Status) { //nolint:revive
 	return nil
 }
 
 // PreScore implements the PreScore interface for the dummy plugin.
-func (p *DummyAllPurposePlugin) PreScore(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1.ClusterPolicySnapshot) (status *Status) { //nolint:revive
+func (p *DummyAllPurposePlugin) PreScore(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1alpha1.ClusterPolicySnapshot) (status *Status) { //nolint:revive
 	return nil
 }
 
 // Score implements the Score interface for the dummy plugin.
-func (p *DummyAllPurposePlugin) Score(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1.ClusterPolicySnapshot, cluster *fleetv1.MemberCluster) (score *ClusterScore, status *Status) { //nolint:revive
+func (p *DummyAllPurposePlugin) Score(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1alpha1.ClusterPolicySnapshot, cluster *fleetv1alpha1.MemberCluster) (score *ClusterScore, status *Status) { //nolint:revive
 	return &ClusterScore{}, nil
 }
 
