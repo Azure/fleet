@@ -16,6 +16,8 @@ const (
 
 	// PolicySnapshotNameFmt is clusterPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
 	PolicySnapshotNameFmt = "%s-%d"
+
+	NumberOfClustersAnnotation = fleetPrefix + "numberOfClusters"
 )
 
 // +genclient

@@ -345,9 +345,11 @@ func (r *Reconciler) updatePlacementAppliedCondition(placement *fleetv1alpha1.Cl
 // It creates corresponding clusterPolicySnapshot and clusterResourceSnapshot if needed and updates the status based on
 // clusterPolicySnapshot status and work status.
 // If the error type is ErrUnexpectedBehavior, the controller will skip the reconciling.
-func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (ctrl.Result, error) {
+func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1.ClusterResourcePlacement) (ctrl.Result, error) {
 	crpKObj := klog.KObj(crp)
-	policyHash, err := generatePolicyHash(crp.Spec.Policy)
+	schedulingPolicy := *crp.Spec.Policy // will exclude the numberOfClusters
+	schedulingPolicy.NumberOfClusters = nil
+	policyHash, err := generatePolicyHash(&schedulingPolicy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to generate policy hash of crp", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
@@ -361,57 +363,97 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	// mark the last policy snapshot as inactive if it is different from what we have now
 	if latestPolicySnapshot != nil &&
 		string(latestPolicySnapshot.Spec.PolicyHash) != policyHash &&
-		latestPolicySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
+		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] == strconv.FormatBool(true) {
 		// set the latest label to false first to make sure there is only one or none active policy snapshot
-		latestPolicySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
+		latestPolicySnapshot.Labels[fleetv1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
 		if err := r.Client.Update(ctx, latestPolicySnapshot); err != nil {
 			klog.ErrorS(err, "Failed to set the isLatestSnapshot label to false", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
 			return ctrl.Result{}, controller.NewAPIServerError(err)
 		}
 	}
-	if latestPolicySnapshot == nil || string(latestPolicySnapshot.Spec.PolicyHash) != policyHash {
+	if latestPolicySnapshot != nil && string(latestPolicySnapshot.Spec.PolicyHash) == policyHash {
+		if err := r.ensureLatestPolicySnapshot(ctx, crp, latestPolicySnapshot); err != nil {
+			return ctrl.Result{}, err
+		}
+	} else {
 		// create a new policy snapshot
 		latestPolicySnapshotIndex++
-		latestPolicySnapshot = &fleetv1beta1.ClusterPolicySnapshot{
+		latestPolicySnapshot = &fleetv1.ClusterPolicySnapshot{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, crp.Name, latestPolicySnapshotIndex),
+				Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, crp.Name, latestPolicySnapshotIndex),
 				Labels: map[string]string{
-					fleetv1beta1.CRPTrackingLabel:      crp.Name,
-					fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-					fleetv1beta1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
+					fleetv1.CRPTrackingLabel:      crp.Name,
+					fleetv1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+					fleetv1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
 				},
 			},
-			Spec: fleetv1beta1.PolicySnapshotSpec{
-				Policy:     crp.Spec.Policy,
+			Spec: fleetv1.PolicySnapshotSpec{
+				Policy:     &schedulingPolicy,
 				PolicyHash: []byte(policyHash),
 			},
 		}
+		policySnapshotKObj := klog.KObj(latestPolicySnapshot)
 		if err := controllerutil.SetControllerReference(crp, latestPolicySnapshot, r.Scheme); err != nil {
-			klog.ErrorS(err, "Failed to create set owner reference", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
+			klog.ErrorS(err, "Failed to create set owner reference", "clusterPolicySnapshot", policySnapshotKObj)
 			// should never happen
 			return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 		}
+		// make sure each policySnapshot should always have the annotation if CRP is selectN type
+		if crp.Spec.Policy != nil &&
+			crp.Spec.Policy.PlacementType == fleetv1.PickNPlacementType &&
+			crp.Spec.Policy.NumberOfClusters != nil {
+			latestPolicySnapshot.Annotations = map[string]string{
+				fleetv1.NumberOfClustersAnnotation: strconv.Itoa(int(*crp.Spec.Policy.NumberOfClusters)),
+			}
+		}
+
 		if err := r.Client.Create(ctx, latestPolicySnapshot); err != nil {
-			klog.ErrorS(err, "Failed to create new clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
+			klog.ErrorS(err, "Failed to create new clusterPolicySnapshot", "clusterPolicySnapshot", policySnapshotKObj)
 			return ctrl.Result{}, controller.NewAPIServerError(err)
 		}
-	} else if latestPolicySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] != strconv.FormatBool(true) {
+	}
+
+	// create clusterResourceSnapshot
+	// update the status based on the latestPolicySnapshot status
+	// update the status based on the work
+	return ctrl.Result{}, nil
+}
+
+// ensureLatestPolicySnapshot ensures the latest policySnapshot has the isLatest label and the numberOfClusters are updated.
+func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv1.ClusterResourcePlacement, latest *fleetv1.ClusterPolicySnapshot) error {
+	needUpdate := false
+	if latest.Labels[fleetv1.IsLatestSnapshotLabel] != strconv.FormatBool(true) {
 		// When latestPolicySnapshot.Spec.PolicyHash == policyHash,
 		// It could happen when the controller just sets the latest label to false for the old snapshot, and fails to
 		// create a new policy snapshot.
 		// And then the customers revert back their policy to the old one again.
 		// In this case, the "latest" snapshot without isLatest label has the same policy hash as the current policy.
 
-		latestPolicySnapshot.Labels[fleetv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(true)
-		if err := r.Client.Update(ctx, latestPolicySnapshot); err != nil {
-			klog.ErrorS(err, "Failed to set the isLatestSnapshot label to true", "clusterPolicySnapshot", klog.KObj(latestPolicySnapshot))
-			return ctrl.Result{}, controller.NewAPIServerError(err)
+		latest.Labels[fleetv1.IsLatestSnapshotLabel] = strconv.FormatBool(true)
+		needUpdate = true
+	}
+
+	if crp.Spec.Policy != nil &&
+		crp.Spec.Policy.PlacementType == fleetv1.PickNPlacementType &&
+		crp.Spec.Policy.NumberOfClusters != nil {
+		oldCount, err := parseNumberOfClustersFromAnnotation(latest)
+		if err != nil {
+			return controller.NewUnexpectedBehaviorError(err)
+		}
+		newCount := int(*crp.Spec.Policy.NumberOfClusters)
+		if oldCount != newCount {
+			latest.Annotations[fleetv1.NumberOfClustersAnnotation] = strconv.Itoa(newCount)
+			needUpdate = true
 		}
 	}
-	// create clusterResourceSnapshot
-	// update the status based on the latestPolicySnapshot status
-	// update the status based on the work
-	return ctrl.Result{}, nil
+	if !needUpdate {
+		return nil
+	}
+	if err := r.Client.Update(ctx, latest); err != nil {
+		klog.ErrorS(err, "Failed to update the clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(latest))
+		return controller.NewAPIServerError(err)
+	}
+	return nil
 }
 
 // lookupLatestClusterPolicySnapshot finds the latest snapshots and its policy index.
@@ -480,7 +522,18 @@ func parsePolicyIndexFromLabel(s *fleetv1beta1.ClusterPolicySnapshot) (int, erro
 	return v, nil
 }
 
-func generatePolicyHash(policy *fleetv1beta1.PlacementPolicy) (string, error) {
+func parseNumberOfClustersFromAnnotation(s *fleetv1.ClusterPolicySnapshot) (int, error) {
+	n := s.Annotations[fleetv1.NumberOfClustersAnnotation]
+	v, err := strconv.Atoi(n)
+	if err != nil {
+		klog.ErrorS(err, "Failed to parse the numberOfClusterAnnotation", "clusterPolicySnapshot", klog.KObj(s), "numberOfClusterAnnotation", n)
+		// should never happen
+		return -1, err
+	}
+	return v, nil
+}
+
+func generatePolicyHash(policy *fleetv1.PlacementPolicy) (string, error) {
 	jsonBytes, err := json.Marshal(policy)
 	if err != nil {
 		return "", err
