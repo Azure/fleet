@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1
+package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/api/meta"

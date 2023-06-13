@@ -7,5 +7,5 @@ Licensed under the MIT license.
 
 // +kubebuilder:object:generate=true
 // +k8s:deepcopy-gen=package,register
-// +groupName=fleet.azure.com
-package v1
+// +groupName=fleet.io
+package v1alpha1

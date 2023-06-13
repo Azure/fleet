@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourcebindings.fleet.azure.com
+  name: clusterresourcebindings.fleet.io
 spec:
-  group: fleet.azure.com
+  group: fleet.io
   names:
     categories:
     - fleet
@@ -25,7 +25,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ClusterResourceBinding represents a scheduling decision that

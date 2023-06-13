@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: internalmemberclusters.fleet.azure.com
+  name: internalmemberclusters.fleet.io
 spec:
-  group: fleet.azure.com
+  group: fleet.io
   names:
     categories:
     - fleet

@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	fleetv1 "go.goms.io/fleet/apis/v1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/core/v1alpha1"
 )
 
 func TestClusterScoreAdd(t *testing.T) {
@@ -98,10 +98,10 @@ func TestClusterScoreEqual(t *testing.T) {
 }
 
 func TestScoredClustersSort(t *testing.T) {
-	clusterA := &fleetv1.MemberCluster{}
-	clusterB := &fleetv1.MemberCluster{}
-	clusterC := &fleetv1.MemberCluster{}
-	clusterD := &fleetv1.MemberCluster{}
+	clusterA := &fleetv1alpha1.MemberCluster{}
+	clusterB := &fleetv1alpha1.MemberCluster{}
+	clusterC := &fleetv1alpha1.MemberCluster{}
+	clusterD := &fleetv1alpha1.MemberCluster{}
 
 	testCases := []struct {
 		name string
