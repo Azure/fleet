@@ -21,7 +21,6 @@ const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
 	ValidationPath = "/validate-v1-fleetresourcehandler"
 	groupMatch     = `^[^.]*\.(.*)`
-	crdGVK         = "apiextensions.k8s.io/v1, Kind=CustomResourceDefinition"
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -36,23 +35,22 @@ type fleetResourceValidator struct {
 	decoder *admission.Decoder
 }
 
-func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	var response admission.Response
-	klog.V(2).InfoS("GVKs", "request GVK", req.Kind.String(), "crd GVK", crdGVK)
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind.String() {
-		case crdGVK:
-			klog.V(2).InfoS("handling CRD resource", "crdGVK", crdGVK)
-			response = v.handleCRD(ctx, req)
+		case retrieveCRDGVK():
+			klog.V(2).InfoS("handling CRD resource", "crdGVK", retrieveCRDGVK())
+			response = v.handleCRD(req)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook")
+			klog.V(2).InfoS(fmt.Sprintf("resource with GVK: %s is not monitored by fleet resource validator webhook", req.Kind.String()))
 			response = admission.Allowed("")
 		}
 	}
 	return response
 }
 
-func (v *fleetResourceValidator) handleCRD(ctx context.Context, req admission.Request) admission.Response {
+func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Response {
 	var crd v1.CustomResourceDefinition
 	if req.Operation == admissionv1.Delete {
 		// req.Object is not populated for delete: https://github.com/kubernetes-sigs/controller-runtime/issues/1762.
@@ -67,18 +65,18 @@ func (v *fleetResourceValidator) handleCRD(ctx context.Context, req admission.Re
 		}
 	}
 
-	// Need to check to see if the user is authenticated to do the operation.
-	if err := validation.ValidateUser(ctx, v.Client, req.UserInfo); err != nil {
-		return admission.Denied(fmt.Sprintf("failed to validate user %s in groups: %v to modify CRD", req.UserInfo.Username, req.UserInfo.Groups))
-	}
-	klog.V(2).InfoS("successfully validated the user", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
-
 	group := regexp.MustCompile(groupMatch).FindStringSubmatch(crd.Name)[1]
-	if validation.CheckCRDGroup(group) {
-		return admission.Denied(fmt.Sprintf("user: %s in groups: %v cannot modify fleet CRD %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
+	if validation.CheckCRDGroup(group) && !validation.ValidateUserForCRD(req.UserInfo) {
+		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 	}
-	klog.V(2).InfoS("successfully validated the CRD group", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 	return admission.Allowed("")
+}
+
+func retrieveCRDGVK() string {
+	var crd v1.CustomResourceDefinition
+	crd.APIVersion = v1.SchemeGroupVersion.Group + "/" + v1.SchemeGroupVersion.Version
+	crd.Kind = "CustomResourceDefinition"
+	return crd.GroupVersionKind().String()
 }
 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
