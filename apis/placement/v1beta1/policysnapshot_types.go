@@ -16,6 +16,11 @@ const (
 
 	// PolicySnapshotNameFmt is clusterPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
 	PolicySnapshotNameFmt = "%s-%d"
+
+	// NumOfClustersAnnotation is an annotation that indicates the desired number of clusters where
+	// the selected resources should be placed. It is annotated on policy snapshots and is sync'd
+	// from the CRP to the currently active policy snapshot.
+	NumOfClustersAnnotation = fleetPrefix + "numOfClusters"
 )
 
 // +genclient

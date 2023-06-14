@@ -150,6 +150,14 @@ func (f *framework) EventRecorder() record.EventRecorder {
 func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
 	errorFormat := "failed to run scheduling cycle for policy %s: %w"
 
+	// Retrieve the desired number of clusters from the policy.
+	//
+	// TO-DO (chenyu1): assign variable(s) when more logic is added.
+	_, err = extractNumOfClustersFromPolicySnapshot(policy)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+	}
+
 	// Collect all clusters.
 	//
 	// Note that clusters here are listed from the cached client for improved performance. This is

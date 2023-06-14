@@ -40,6 +40,78 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// TestExtractNumOfClustersFromPolicySnapshot tests the extractNumOfClustersFromPolicySnapshot function.
+func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
+	testCases := []struct {
+		name              string
+		policy            *fleetv1.ClusterPolicySnapshot
+		wantNumOfClusters int
+		expectedToFail    bool
+	}{
+		{
+			name: "valid annotation",
+			policy: &fleetv1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+					Annotations: map[string]string{
+						fleetv1.NumOfClustersAnnotation: "1",
+					},
+				},
+			},
+			wantNumOfClusters: 1,
+		},
+		{
+			name: "no annotation",
+			policy: &fleetv1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name: "invalid annotation: not an integer",
+			policy: &fleetv1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+					Annotations: map[string]string{
+						fleetv1.NumOfClustersAnnotation: "abc",
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name: "invalid annotation: negative integer",
+			policy: &fleetv1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+					Annotations: map[string]string{
+						fleetv1.NumOfClustersAnnotation: "-1",
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			numOfClusters, err := extractNumOfClustersFromPolicySnapshot(tc.policy)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Fatalf("extractNumOfClustersFromPolicySnapshot() = %v, %v, want error", numOfClusters, err)
+				}
+				return
+			}
+
+			if numOfClusters != tc.wantNumOfClusters {
+				t.Fatalf("extractNumOfClustersFromPolicySnapshot() = %v, %v, want %v, nil", numOfClusters, err, tc.wantNumOfClusters)
+			}
+		})
+	}
+}
+
 // TestCollectClusters tests the collectClusters method.
 func TestCollectClusters(t *testing.T) {
 	cluster := fleetv1.MemberCluster{
