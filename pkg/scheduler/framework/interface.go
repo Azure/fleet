@@ -8,7 +8,7 @@ package framework
 import (
 	"context"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/core/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 // Plugin is the interface which all scheduler plugins should implement.

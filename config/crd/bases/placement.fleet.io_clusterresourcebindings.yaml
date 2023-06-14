@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourcebindings.fleet.io
+  name: clusterresourcebindings.placement.fleet.io
 spec:
-  group: fleet.io
+  group: placement.fleet.io
   names:
     categories:
     - fleet

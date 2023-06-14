@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/core/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 func TestClusterScoreAdd(t *testing.T) {

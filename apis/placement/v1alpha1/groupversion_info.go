@@ -4,7 +4,7 @@ Licensed under the MIT license.
 */
 
 // +kubebuilder:object:generate=true
-// +groupName=fleet.io
+// +groupName=placement.fleet.io
 package v1alpha1
 
 import (
@@ -14,7 +14,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "fleet.io", Version: "v1alpha1"}
+	GroupVersion = schema.GroupVersion{Group: "placement.fleet.io", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}

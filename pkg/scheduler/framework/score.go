@@ -6,7 +6,7 @@ Licensed under the MIT license.
 package framework
 
 import (
-	fleetv1alpha1 "go.goms.io/fleet/apis/core/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 // ClusterScore is the scores the scheduler assigns to a cluster.
