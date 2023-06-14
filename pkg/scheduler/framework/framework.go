@@ -10,7 +10,10 @@ package framework
 import (
 	"context"
 	"fmt"
+	"sort"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -21,12 +24,27 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
 	// eventRecorderNameTemplate is the template used to format event recorder name for a scheduler framework.
 	eventRecorderNameTemplate = "scheduler-framework-%s"
+
+	// maxClusterDecisionCount controls the maximum number of decisions added to the policy snapshot status.
+	//
+	// Note that all picked clusters will have their associated decisions on the status, even if the number
+	// exceeds this limit. The limit is mostly for filling up the status with reasons why a cluster is
+	// **not** picked by the scheduler, when there are enough number of clusters to choose from, and not
+	// enough picked clusters.
+	maxClusterDecisionCount = 20
+
+	// The reasons and messages for scheduled conditions.
+	fullyScheduledReason     = "SchedulingCompleted"
+	fullyScheduledMessage    = "all required number of bindings have been created"
+	notFullyScheduledReason  = "Pendingscheduling"
+	notFullyScheduledMessage = "might not have enough bindings created"
 )
 
 // Handle is an interface which allows plugins to access some shared structs (e.g., client, manager)
@@ -162,9 +180,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	}
 
 	// Retrieve the desired number of clusters from the policy.
-	//
-	// TO-DO (chenyu1): assign variable(s) when more logic is added.
-	_, err = extractNumOfClustersFromPolicySnapshot(policy)
+	numOfClusters, err := extractNumOfClustersFromPolicySnapshot(policy)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
 	}
@@ -212,15 +228,110 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// where the scheduler binds a cluster to a resource placement, even though the dispatcher has
 	// not started, or is still in the process of, removing the same set of resources from
 	// the cluster, triggered by a recently deleted binding.
-	//
-	// TO-DO (chenyu1): assign variable(s) when more logic is added.
-	_, _, deletedWithoutDispatcherFinalizer := classifyBindings(bindings)
+	active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer := classifyBindings(bindings)
 
 	// If a binding has been marked for deletion and no longer has the dispatcher finalizer, the scheduler
 	// removes its own finalizer from it, to clear it for eventual deletion.
 	if err := f.removeSchedulerFinalizerFromBindings(ctx, deletedWithoutDispatcherFinalizer); err != nil {
 		klog.ErrorS(err, errorMessage, klog.KObj(policy))
 		return ctrl.Result{}, err
+	}
+
+	// Check if the scheduler should downscale, i.e., remove some bindings.
+	// Note that the scheduler will only down-scale if
+	// * the policy is of the PickN type; and
+	// * the desired number of bindings is less the number of active bindings.
+	//
+	// Once again, note that the scheduler only considers a binding to be deleted if it is marked for deletion
+	// and does not have the dispatcher finalizer. Scheduler will be triggered again for such bindings,
+	// and a up-scaling may happen then, if appropriate.
+	act, downscaleCount := shouldDownscale(policy, numOfClusters, active)
+
+	// Downscale if necessary; older (ranked by CreationTimestamp) bindings will be picked first.
+	//
+	// This assumes a monotonic clock.
+	if act {
+		remaining, err := f.downscale(ctx, active, downscaleCount)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		}
+
+		// Prepare new scheduling decisions.
+		newSchedulingDecisions := prepareNewSchedulingDecisions(policy, remaining, deletedWithDispatcherFinalizer)
+		// Prepare new scheduling condition.
+		//
+		// In the case of downscaling, the scheduler considers the policy to be fully scheduled.
+		newSchedulingCondition := fullyScheduledCondition(policy)
+
+		// Update the policy snapshot status; since a downscaling has occurred, this update is always requied, hence
+		// no sameness (no change) checks are necessary.
+		//
+		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
+		// preserved.
+		if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
+			return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		}
+
+		// Return immediately as there are no more bindings for the scheduler to scheduler at this moment.
+		return ctrl.Result{}, nil
+	}
+
+	// If no downscaling is needed, update the policy snapshot status any way.
+	//
+	// This is needed as a number of situations (e.g., POST/PUT failures) may lead to inconsistencies between
+	// the decisions added to the policy snapshot status and the actual list of bindings.
+
+	// Collect current decisions and conditions for sameness (no change) checks.
+	currentSchedulingDecisions := policy.Status.ClusterDecisions
+	currentSchedulingCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1.PolicySnapshotScheduled))
+
+	// Check if the scheduler needs to take action; a scheduling cycle is only needed if
+	// * the policy is of the PickAll type; or
+	// * the policy is of the PickN type, and currently there are not enough number of bindings.
+	if !shouldSchedule(policy, numOfClusters, len(active)+len(deletedWithDispatcherFinalizer)) {
+		// No action is needed; however, a status refresh might be warranted.
+
+		// Prepare new scheduling decisions.
+		newSchedulingDecisions := prepareNewSchedulingDecisions(policy, active, deletedWithDispatcherFinalizer)
+		// Prepare new scheduling condition.
+		//
+		// In this case, since no action is needed, the scheduler considers the policy to be fully scheduled.
+		newSchedulingCondition := fullyScheduledCondition(policy)
+
+		// Check if a refresh is warranted; the scheduler only update the status when there is a change in
+		// scheduling decisions and/or the scheduling condition.
+		if !equalDecisons(currentSchedulingDecisions, newSchedulingDecisions) || condition.EqualCondition(currentSchedulingCondition, &newSchedulingCondition) {
+			// Update the policy snapshot status.
+			//
+			// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
+			// preserved.
+			if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
+				return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+			}
+		}
+
+		// Return immediate as there no more bindings for the scheduler to schedule at this moment.
+		return ctrl.Result{}, nil
+	}
+
+	// The scheduler needs to take action; refresh the status first.
+
+	// Prepare new scheduling decisions.
+	newSchedulingDecisions := prepareNewSchedulingDecisions(policy, active, deletedWithDispatcherFinalizer)
+	// Prepare new scheduling condition.
+	//
+	// In this case, since action is needed, the scheduler marks the policy as not fully scheduled.
+	newSchedulingCondition := notFullyScheduledCondition(policy, numOfClusters)
+	// Check if a refresh is warranted; the scheduler only update the status when there is a change in
+	// scheduling decisions and/or the scheduling condition.
+	if !equalDecisons(currentSchedulingDecisions, newSchedulingDecisions) || condition.EqualCondition(currentSchedulingCondition, &newSchedulingCondition) {
+		// Update the policy snapshot status.
+		//
+		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
+		// preserved.
+		if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
+			return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		}
 	}
 
 	// Not yet fully implemented.
@@ -267,6 +378,61 @@ func (f *framework) removeSchedulerFinalizerFromBindings(ctx context.Context, bi
 		if err := f.client.Update(ctx, binding, &client.UpdateOptions{}); err != nil {
 			return controller.NewAPIServerError(fmt.Errorf(errorFormat, binding.Name, err))
 		}
+	}
+	return nil
+}
+
+// sortByCreationTimestampBindings is a wrapper which implements Sort.Interface, which allows easy
+// sorting of bindings by their CreationTimestamps.
+type sortByCreationTimestampBindings struct {
+	bindings []*fleetv1.ClusterResourceBinding
+}
+
+// Len() is for implementing Sort.Interface.
+func (s sortByCreationTimestampBindings) Len() int {
+	return len(s.bindings)
+}
+
+// Swap() is for implementing Sort.Interface.
+func (s sortByCreationTimestampBindings) Swap(i, j int) {
+	s.bindings[i], s.bindings[j] = s.bindings[j], s.bindings[i]
+}
+
+// Less() is for implementing Sort.Interface.
+func (s sortByCreationTimestampBindings) Less(i, j int) bool {
+	return s.bindings[i].CreationTimestamp.Before(&(s.bindings[j].CreationTimestamp))
+}
+
+// downscale performs downscaling, removing some number of bindings. It picks the oldest (by CreationTimestamp)
+// bindings first.
+func (f *framework) downscale(ctx context.Context, active []*fleetv1.ClusterResourceBinding, count int) ([]*fleetv1.ClusterResourceBinding, error) {
+	errorFormat := "failed to delete binding %s: %w"
+
+	// Sort the bindings by their CreationTimestamps.
+	sorted := sortByCreationTimestampBindings{bindings: active}
+	sort.Sort(sorted)
+
+	// Delete the first count number of bindings.
+	bindingsToDelete := sorted.bindings[:count]
+	for _, binding := range bindingsToDelete {
+		if err := f.client.Delete(ctx, binding, &client.DeleteOptions{}); err != nil {
+			return nil, fmt.Errorf(errorFormat, binding.Name, err)
+		}
+	}
+
+	// Return the remaining bindings.
+	return sorted.bindings[count:], nil
+}
+
+// updatePolicySnapshotStatus updates the status of a policy snapshot, setting new scheduling decisions
+// and condition on the object.
+func (f *framework) updatePolicySnapshotStatus(ctx context.Context, policy *fleetv1.ClusterPolicySnapshot, decisions []fleetv1.ClusterDecision, condition metav1.Condition) error {
+	errorFormat := "failed to update policy snapshot status: %w"
+
+	policy.Status.ClusterDecisions = decisions
+	meta.SetStatusCondition(&policy.Status.Conditions, condition)
+	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
+		return fmt.Errorf(errorFormat, err)
 	}
 	return nil
 }

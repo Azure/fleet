@@ -7,8 +7,10 @@ package framework
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -71,4 +73,103 @@ func classifyBindings(bindings []fleetv1beta1.ClusterResourceBinding) (active, d
 	}
 
 	return active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer
+}
+
+// shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how many bindings
+// it should remove.
+func shouldDownscale(policy *fleetv1.ClusterPolicySnapshot, numOfClusters int, active []*fleetv1.ClusterResourceBinding) (act bool, count int) {
+	if policy.Spec.Policy.PlacementType == fleetv1.PickNPlacementType && numOfClusters < len(active) {
+		return true, len(active) - numOfClusters
+	}
+	return false, 0
+}
+
+// prepareNewSchedulingDecisions returns a list of new scheduling decisions, in accordance with the list
+// of existing bindings.
+func prepareNewSchedulingDecisions(policy *fleetv1.ClusterPolicySnapshot, existing ...[]*fleetv1.ClusterResourceBinding) []fleetv1.ClusterDecision {
+	// Pre-allocate arrays.
+	current := policy.Status.ClusterDecisions
+	desired := make([]fleetv1.ClusterDecision, 0, len(existing))
+
+	// Build new scheduling decisions.
+	for _, bindings := range existing {
+		for _, binding := range bindings {
+			desired = append(desired, binding.Spec.ClusterDecision)
+		}
+	}
+
+	// Move some decisions from unbound clusters, if there are still enough room.
+	if diff := maxClusterDecisionCount - len(current); diff > 0 {
+		for _, decision := range current {
+			if !decision.Selected {
+				desired = append(desired, decision)
+				diff--
+				if diff == 0 {
+					break
+				}
+			}
+		}
+	}
+
+	return desired
+}
+
+// fullySchedulingCondition returns a condition for fully scheduled policy snapshot.
+func fullyScheduledCondition(policy *fleetv1.ClusterPolicySnapshot) metav1.Condition {
+	return metav1.Condition{
+		Type:               string(fleetv1.PolicySnapshotScheduled),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: policy.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             fullyScheduledReason,
+		Message:            fullyScheduledMessage,
+	}
+}
+
+// shouldSchedule checks if the scheduler needs to perform some scheduling, and (if so) how many bindings.
+//
+// A scheduling cycle is only needed if
+// * the policy is of the PickAll type; or
+// * the policy is of the PickN type, and currently there are not enough number of bindings.
+func shouldSchedule(policy *fleetv1.ClusterPolicySnapshot, numOfClusters, existingBindingsCount int) bool {
+	if policy.Spec.Policy.PlacementType == fleetv1.PickAllPlacementType {
+		return true
+	}
+
+	return numOfClusters > existingBindingsCount
+}
+
+// equalDecisions returns if two arrays of ClusterDecisions are equal; it returns true if
+// every decision in one array is also present in the other array regardless of their indexes,
+// and vice versa.
+func equalDecisons(current, desired []fleetv1.ClusterDecision) bool {
+	desiredDecisionByCluster := make(map[string]fleetv1.ClusterDecision, len(desired))
+	for _, decision := range desired {
+		desiredDecisionByCluster[decision.ClusterName] = decision
+	}
+
+	for _, decision := range current {
+		// Note that it will return false if no matching decision can be found.
+		if !reflect.DeepEqual(decision, desiredDecisionByCluster[decision.ClusterName]) {
+			return false
+		}
+	}
+
+	return len(current) == len(desired)
+}
+
+// notFullyScheduledCondition returns a condition for not fully scheduled policy snapshot.
+func notFullyScheduledCondition(policy *fleetv1.ClusterPolicySnapshot, desiredCount int) metav1.Condition {
+	message := notFullyScheduledMessage
+	if policy.Spec.Policy.PlacementType == fleetv1.PickNPlacementType {
+		message = fmt.Sprintf("%s: expected count %d, current count %d", message, policy.Spec.Policy.NumberOfClusters, desiredCount)
+	}
+	return metav1.Condition{
+		Type:               string(fleetv1.PolicySnapshotScheduled),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: policy.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             notFullyScheduledReason,
+		Message:            message,
+	}
 }

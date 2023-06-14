@@ -40,6 +40,9 @@ type ResourceBindingSpec struct {
 
 	// TargetCluster is the name of the cluster that the scheduler assigns the resources to.
 	TargetCluster string `json:"targetCluster"`
+
+	// ClusterDecision explains why the scheduler makes this binding.
+	ClusterDecision ClusterDecision `json:"clusterDecision"`
 }
 
 // ResourceBindingStatus represents the current status of a ClusterResourceBinding.

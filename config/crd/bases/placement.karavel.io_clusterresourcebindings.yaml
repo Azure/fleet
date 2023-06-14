@@ -47,6 +47,48 @@ spec:
           spec:
             description: The desired state of ClusterResourceBinding.
             properties:
+              clusterDecision:
+                description: ClusterDecision explains why the scheduler makes this
+                  binding.
+                properties:
+                  clusterName:
+                    description: ClusterName is the name of the ManagedCluster. If
+                      it is not empty, its value should be unique cross all placement
+                      decisions for the Placement.
+                    type: string
+                  clusterScore:
+                    description: ClusterScore represents the score of the cluster
+                      calculated by the scheduler.
+                    properties:
+                      affinityScore:
+                        description: AffinityScore represents the affinity score of
+                          the cluster calculated by the last scheduling decision based
+                          on the preferred affinity selector. An affinity score may
+                          not present if the cluster does not meet the required affinity.
+                        format: int32
+                        type: integer
+                      priorityScore:
+                        description: TopologySpreadScore represents the priority score
+                          of the cluster calculated by the last scheduling decision
+                          based on the topology spread applied to the cluster. A priority
+                          score may not present if the cluster does not meet the topology
+                          spread.
+                        format: int32
+                        type: integer
+                    type: object
+                  reason:
+                    description: Reason represents the reason why the cluster is selected
+                      or not.
+                    type: string
+                  selected:
+                    description: Selected indicates if this cluster is selected by
+                      the scheduler.
+                    type: boolean
+                required:
+                - clusterName
+                - reason
+                - selected
+                type: object
               resourceSnapshotName:
                 description: ResourceSnapshotName is the name of the resource snapshot
                   that this resource binding points to. If the resources are divided
@@ -58,6 +100,7 @@ spec:
                   assigns the resources to.
                 type: string
             required:
+            - clusterDecision
             - resourceSnapshotName
             - targetCluster
             type: object
