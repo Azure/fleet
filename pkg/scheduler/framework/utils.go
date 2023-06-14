@@ -1,0 +1,56 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+package framework
+
+import (
+	"fmt"
+
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	fleetv1 "go.goms.io/fleet/apis/v1"
+	"go.goms.io/fleet/pkg/utils"
+)
+
+// extractOwnerCRPNameFromPolicySnapshot extracts the name of the owner CRP from the policy snapshot.
+func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1.ClusterPolicySnapshot) (string, error) {
+	var owner string
+	for _, ownerRef := range policy.OwnerReferences {
+		if ownerRef.Kind == utils.CRPV1GVK.Kind {
+			owner = ownerRef.Name
+			break
+		}
+	}
+	if len(owner) == 0 {
+		return "", fmt.Errorf("cannot find owner reference for policy snapshot %v", policy.Name)
+	}
+	return owner, nil
+}
+
+// classifyBindings categorizes bindings into three groups:
+// * active: active bindings, that is, bindings that are not marked for deletion; and
+// * deletedWithDispatcherFinalizer: bindings that are marked for deletion, but still has the dispatcher finalizer present; and
+// * deletedWithoutDispatcherFinalizer: bindings that are marked for deletion, and the dispatcher finalizer is already removed.
+func classifyBindings(bindings []fleetv1.ClusterResourceBinding) (active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer []*fleetv1.ClusterResourceBinding) {
+	// Pre-allocate arrays.
+	active = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
+	deletedWithDispatcherFinalizer = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
+	deletedWithoutDispatcherFinalizer = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
+
+	for idx := range bindings {
+		binding := bindings[idx]
+		if binding.DeletionTimestamp != nil {
+			if controllerutil.ContainsFinalizer(&binding, utils.DispatcherFinalizer) {
+				deletedWithDispatcherFinalizer = append(deletedWithDispatcherFinalizer, &binding)
+			} else {
+				deletedWithoutDispatcherFinalizer = append(deletedWithoutDispatcherFinalizer, &binding)
+			}
+		} else {
+			active = append(active, &binding)
+		}
+	}
+
+	return active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer
+}
