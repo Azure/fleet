@@ -7,7 +7,6 @@ package framework
 
 import (
 	"fmt"
-<<<<<<< HEAD
 	"strconv"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -38,20 +37,6 @@ func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySna
 	var owner string
 	for _, ownerRef := range policy.OwnerReferences {
 		if ownerRef.Kind == utils.CRPV1Beta1GVK.Kind {
-=======
-
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	fleetv1 "go.goms.io/fleet/apis/v1"
-	"go.goms.io/fleet/pkg/utils"
-)
-
-// extractOwnerCRPNameFromPolicySnapshot extracts the name of the owner CRP from the policy snapshot.
-func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1.ClusterPolicySnapshot) (string, error) {
-	var owner string
-	for _, ownerRef := range policy.OwnerReferences {
-		if ownerRef.Kind == utils.CRPV1GVK.Kind {
->>>>>>> 2223a3a (Added more scheduler framework logic)
 			owner = ownerRef.Name
 			break
 		}
@@ -66,19 +51,11 @@ func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1.ClusterPolicySnapshot
 // * active: active bindings, that is, bindings that are not marked for deletion; and
 // * deletedWithDispatcherFinalizer: bindings that are marked for deletion, but still has the dispatcher finalizer present; and
 // * deletedWithoutDispatcherFinalizer: bindings that are marked for deletion, and the dispatcher finalizer is already removed.
-<<<<<<< HEAD
 func classifyBindings(bindings []fleetv1beta1.ClusterResourceBinding) (active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer []*fleetv1beta1.ClusterResourceBinding) {
 	// Pre-allocate arrays.
 	active = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
 	deletedWithDispatcherFinalizer = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
 	deletedWithoutDispatcherFinalizer = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
-=======
-func classifyBindings(bindings []fleetv1.ClusterResourceBinding) (active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer []*fleetv1.ClusterResourceBinding) {
-	// Pre-allocate arrays.
-	active = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
-	deletedWithDispatcherFinalizer = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
-	deletedWithoutDispatcherFinalizer = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
->>>>>>> 2223a3a (Added more scheduler framework logic)
 
 	for idx := range bindings {
 		binding := bindings[idx]

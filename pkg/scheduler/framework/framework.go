@@ -161,6 +161,14 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		return ctrl.Result{}, err
 	}
 
+	// Retrieve the desired number of clusters from the policy.
+	//
+	// TO-DO (chenyu1): assign variable(s) when more logic is added.
+	_, err = extractNumOfClustersFromPolicySnapshot(policy)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+	}
+
 	// Collect all clusters.
 	//
 	// Note that clusters here are listed from the cached client for improved performance. This is
