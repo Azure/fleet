@@ -24,7 +24,8 @@ const (
 	eventRecorderNameTemplate = "scheduler-framework-%s"
 )
 
-// Handle is an interface which allows plugins to set themselves up with the scheduler framework.
+// Handle is an interface which allows plugins to access some shared structs (e.g., client, manager)
+// and set themselves up with the scheduler framework (e.g., sign up for an informer).
 type Handle interface {
 	// Client returns a cached client.
 	Client() client.Client
