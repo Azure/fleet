@@ -28,7 +28,7 @@ func extractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySn
 	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
 	numOfClusters, err := strconv.Atoi(numOfClustersStr)
 	if err != nil || numOfClusters < 0 {
-		return 0, controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation %s: Atoi(%s) = %v, %v", fleetv1beta1.NumOfClustersAnnotation, numOfClustersStr, numOfClusters, err))
+		return 0, controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation %s: %s is not a valid count: %w", fleetv1beta1.NumOfClustersAnnotation, numOfClustersStr, err))
 	}
 
 	return numOfClusters, nil
@@ -77,8 +77,8 @@ func classifyBindings(bindings []fleetv1beta1.ClusterResourceBinding) (active, d
 
 // shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how many bindings
 // it should remove.
-func shouldDownscale(policy *fleetv1.ClusterPolicySnapshot, numOfClusters int, active []*fleetv1.ClusterResourceBinding) (act bool, count int) {
-	if policy.Spec.Policy.PlacementType == fleetv1.PickNPlacementType && numOfClusters < len(active) {
+func shouldDownscale(policy *fleetv1beta1.ClusterPolicySnapshot, numOfClusters int, active []*fleetv1beta1.ClusterResourceBinding) (act bool, count int) {
+	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && numOfClusters < len(active) {
 		return true, len(active) - numOfClusters
 	}
 	return false, 0
@@ -86,10 +86,10 @@ func shouldDownscale(policy *fleetv1.ClusterPolicySnapshot, numOfClusters int, a
 
 // prepareNewSchedulingDecisions returns a list of new scheduling decisions, in accordance with the list
 // of existing bindings.
-func prepareNewSchedulingDecisions(policy *fleetv1.ClusterPolicySnapshot, existing ...[]*fleetv1.ClusterResourceBinding) []fleetv1.ClusterDecision {
+func prepareNewSchedulingDecisions(policy *fleetv1beta1.ClusterPolicySnapshot, existing ...[]*fleetv1beta1.ClusterResourceBinding) []fleetv1beta1.ClusterDecision {
 	// Pre-allocate arrays.
 	current := policy.Status.ClusterDecisions
-	desired := make([]fleetv1.ClusterDecision, 0, len(existing))
+	desired := make([]fleetv1beta1.ClusterDecision, 0, len(existing))
 
 	// Build new scheduling decisions.
 	for _, bindings := range existing {
@@ -115,9 +115,9 @@ func prepareNewSchedulingDecisions(policy *fleetv1.ClusterPolicySnapshot, existi
 }
 
 // fullySchedulingCondition returns a condition for fully scheduled policy snapshot.
-func fullyScheduledCondition(policy *fleetv1.ClusterPolicySnapshot) metav1.Condition {
+func fullyScheduledCondition(policy *fleetv1beta1.ClusterPolicySnapshot) metav1.Condition {
 	return metav1.Condition{
-		Type:               string(fleetv1.PolicySnapshotScheduled),
+		Type:               string(fleetv1beta1.PolicySnapshotScheduled),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: policy.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -131,8 +131,8 @@ func fullyScheduledCondition(policy *fleetv1.ClusterPolicySnapshot) metav1.Condi
 // A scheduling cycle is only needed if
 // * the policy is of the PickAll type; or
 // * the policy is of the PickN type, and currently there are not enough number of bindings.
-func shouldSchedule(policy *fleetv1.ClusterPolicySnapshot, numOfClusters, existingBindingsCount int) bool {
-	if policy.Spec.Policy.PlacementType == fleetv1.PickAllPlacementType {
+func shouldSchedule(policy *fleetv1beta1.ClusterPolicySnapshot, numOfClusters, existingBindingsCount int) bool {
+	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType {
 		return true
 	}
 
@@ -142,8 +142,8 @@ func shouldSchedule(policy *fleetv1.ClusterPolicySnapshot, numOfClusters, existi
 // equalDecisions returns if two arrays of ClusterDecisions are equal; it returns true if
 // every decision in one array is also present in the other array regardless of their indexes,
 // and vice versa.
-func equalDecisons(current, desired []fleetv1.ClusterDecision) bool {
-	desiredDecisionByCluster := make(map[string]fleetv1.ClusterDecision, len(desired))
+func equalDecisons(current, desired []fleetv1beta1.ClusterDecision) bool {
+	desiredDecisionByCluster := make(map[string]fleetv1beta1.ClusterDecision, len(desired))
 	for _, decision := range desired {
 		desiredDecisionByCluster[decision.ClusterName] = decision
 	}
@@ -159,13 +159,13 @@ func equalDecisons(current, desired []fleetv1.ClusterDecision) bool {
 }
 
 // notFullyScheduledCondition returns a condition for not fully scheduled policy snapshot.
-func notFullyScheduledCondition(policy *fleetv1.ClusterPolicySnapshot, desiredCount int) metav1.Condition {
+func notFullyScheduledCondition(policy *fleetv1beta1.ClusterPolicySnapshot, desiredCount int) metav1.Condition {
 	message := notFullyScheduledMessage
-	if policy.Spec.Policy.PlacementType == fleetv1.PickNPlacementType {
+	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType {
 		message = fmt.Sprintf("%s: expected count %d, current count %d", message, policy.Spec.Policy.NumberOfClusters, desiredCount)
 	}
 	return metav1.Condition{
-		Type:               string(fleetv1.PolicySnapshotScheduled),
+		Type:               string(fleetv1beta1.PolicySnapshotScheduled),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: policy.Generation,
 		LastTransitionTime: metav1.Now(),

@@ -171,18 +171,10 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	errorMessage := "failed to run scheduling cycle"
 
 	// Retrieve the desired number of clusters from the policy.
-	//
-	// TO-DO (chenyu1): assign variable(s) when more logic is added.
-	_, err = extractNumOfClustersFromPolicySnapshot(policy)
+	numOfClusters, err := extractNumOfClustersFromPolicySnapshot(policy)
 	if err != nil {
 		klog.ErrorS(err, errorMessage, klog.KObj(policy))
 		return ctrl.Result{}, err
-	}
-
-	// Retrieve the desired number of clusters from the policy.
-	numOfClusters, err := extractNumOfClustersFromPolicySnapshot(policy)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
 	}
 
 	// Collect all clusters.
@@ -253,7 +245,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	if act {
 		remaining, err := f.downscale(ctx, active, downscaleCount)
 		if err != nil {
-			return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+			klog.ErrorS(err, errorMessage, klog.KObj(policy))
+			return ctrl.Result{}, err
 		}
 
 		// Prepare new scheduling decisions.
@@ -269,7 +262,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
 		// preserved.
 		if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
-			return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+			klog.ErrorS(err, errorMessage, klog.KObj(policy))
+			return ctrl.Result{}, err
 		}
 
 		// Return immediately as there are no more bindings for the scheduler to scheduler at this moment.
@@ -283,7 +277,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 
 	// Collect current decisions and conditions for sameness (no change) checks.
 	currentSchedulingDecisions := policy.Status.ClusterDecisions
-	currentSchedulingCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1.PolicySnapshotScheduled))
+	currentSchedulingCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
 
 	// Check if the scheduler needs to take action; a scheduling cycle is only needed if
 	// * the policy is of the PickAll type; or
@@ -306,7 +300,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 			// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
 			// preserved.
 			if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
-				return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+				klog.ErrorS(err, errorMessage, klog.KObj(policy))
+				return ctrl.Result{}, err
 			}
 		}
 
@@ -330,7 +325,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
 		// preserved.
 		if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
-			return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+			klog.ErrorS(err, errorMessage, klog.KObj(policy))
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -384,55 +380,53 @@ func (f *framework) removeSchedulerFinalizerFromBindings(ctx context.Context, bi
 
 // sortByCreationTimestampBindings is a wrapper which implements Sort.Interface, which allows easy
 // sorting of bindings by their CreationTimestamps.
-type sortByCreationTimestampBindings struct {
-	bindings []*fleetv1.ClusterResourceBinding
-}
+type sortByCreationTimestampBindings []*fleetv1beta1.ClusterResourceBinding
 
 // Len() is for implementing Sort.Interface.
 func (s sortByCreationTimestampBindings) Len() int {
-	return len(s.bindings)
+	return len(s)
 }
 
 // Swap() is for implementing Sort.Interface.
 func (s sortByCreationTimestampBindings) Swap(i, j int) {
-	s.bindings[i], s.bindings[j] = s.bindings[j], s.bindings[i]
+	s[i], s[j] = s[j], s[i]
 }
 
 // Less() is for implementing Sort.Interface.
 func (s sortByCreationTimestampBindings) Less(i, j int) bool {
-	return s.bindings[i].CreationTimestamp.Before(&(s.bindings[j].CreationTimestamp))
+	return s[i].CreationTimestamp.Before(&(s[j].CreationTimestamp))
 }
 
 // downscale performs downscaling, removing some number of bindings. It picks the oldest (by CreationTimestamp)
 // bindings first.
-func (f *framework) downscale(ctx context.Context, active []*fleetv1.ClusterResourceBinding, count int) ([]*fleetv1.ClusterResourceBinding, error) {
+func (f *framework) downscale(ctx context.Context, active []*fleetv1beta1.ClusterResourceBinding, count int) ([]*fleetv1beta1.ClusterResourceBinding, error) {
 	errorFormat := "failed to delete binding %s: %w"
 
 	// Sort the bindings by their CreationTimestamps.
-	sorted := sortByCreationTimestampBindings{bindings: active}
+	sorted := sortByCreationTimestampBindings(active)
 	sort.Sort(sorted)
 
 	// Delete the first count number of bindings.
-	bindingsToDelete := sorted.bindings[:count]
+	bindingsToDelete := sorted[:count]
 	for _, binding := range bindingsToDelete {
 		if err := f.client.Delete(ctx, binding, &client.DeleteOptions{}); err != nil {
-			return nil, fmt.Errorf(errorFormat, binding.Name, err)
+			return nil, controller.NewAPIServerError(fmt.Errorf(errorFormat, binding.Name, err))
 		}
 	}
 
 	// Return the remaining bindings.
-	return sorted.bindings[count:], nil
+	return sorted[count:], nil
 }
 
 // updatePolicySnapshotStatus updates the status of a policy snapshot, setting new scheduling decisions
 // and condition on the object.
-func (f *framework) updatePolicySnapshotStatus(ctx context.Context, policy *fleetv1.ClusterPolicySnapshot, decisions []fleetv1.ClusterDecision, condition metav1.Condition) error {
+func (f *framework) updatePolicySnapshotStatus(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, decisions []fleetv1beta1.ClusterDecision, condition metav1.Condition) error {
 	errorFormat := "failed to update policy snapshot status: %w"
 
 	policy.Status.ClusterDecisions = decisions
 	meta.SetStatusCondition(&policy.Status.Conditions, condition)
 	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
-		return fmt.Errorf(errorFormat, err)
+		return controller.NewAPIServerError(fmt.Errorf(errorFormat, err))
 	}
 	return nil
 }
