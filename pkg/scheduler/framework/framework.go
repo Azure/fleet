@@ -10,6 +10,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
@@ -150,14 +151,24 @@ func (f *framework) EventRecorder() record.EventRecorder {
 
 // RunSchedulingCycleFor performs scheduling for a policy snapshot.
 func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
+	startTime := time.Now()
+	clusterPolicySnapshotRef := klog.KObj(policy)
+	klog.V(2).InfoS("Scheduling cycle starts", "clusterPolicySnapshot", clusterPolicySnapshotRef)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("Scheduling cycle ends", "clusterPolicySnapshot", clusterPolicySnapshotRef, "latency", latency)
+	}()
+
 	errorMessage := "failed to run scheduling cycle"
+
+	klog.V(2).InfoS("Retrieving clusters and bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 
 	// Retrieve the desired number of clusters from the policy.
 	//
 	// TO-DO (chenyu1): assign variable(s) when more logic is added.
 	_, err = extractNumOfClustersFromPolicySnapshot(policy)
 	if err != nil {
-		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		klog.ErrorS(err, errorMessage, "clusterPolicySnapshot", clusterPolicySnapshotRef)
 		return ctrl.Result{}, err
 	}
 
@@ -206,6 +217,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// the cluster, triggered by a recently deleted binding.
 	//
 	// TO-DO (chenyu1): assign variable(s) when more logic is added.
+	klog.V(2).InfoS("Classifying bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 	_, _, deletedWithoutDispatcherFinalizer := classifyBindings(bindings)
 
 	// If a binding has been marked for deletion and no longer has the dispatcher finalizer, the scheduler
