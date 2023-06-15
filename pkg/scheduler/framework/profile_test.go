@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
