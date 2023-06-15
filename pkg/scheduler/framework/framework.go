@@ -32,8 +32,8 @@ type Handle interface {
 	// Manager returns a controller manager; this is mostly used for setting up a new informer
 	// (indirectly) via a reconciler.
 	Manager() ctrl.Manager
-	// APIReader returns an uncached read-only client, which allows direct (uncached) access to the API server.
-	APIReader() client.Reader
+	// UncachedReader returns an uncached read-only client, which allows direct (uncached) access to the API server.
+	UncachedReader() client.Reader
 	// EventRecorder returns an event recorder.
 	EventRecorder() record.EventRecorder
 }
@@ -54,11 +54,11 @@ type framework struct {
 
 	// client is the (cached) client in use by the scheduler framework for accessing Kubernetes API server.
 	client client.Client
-	// apiReader is the uncached read-only client in use by the scheduler framework for accessing
+	// uncachedReader is the uncached read-only client in use by the scheduler framework for accessing
 	// Kubernetes API server; in most cases client should be used instead, unless consistency becomes
 	// a serious concern.
 	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
-	apiReader client.Reader
+	uncachedReader client.Reader
 	// manager is the controller manager in use by the scheduler framework.
 	manager ctrl.Manager
 	// eventRecorder is the event recorder in use by the scheduler framework.
@@ -114,12 +114,12 @@ func NewFramework(profile *Profile, manager ctrl.Manager, opts ...Option) Framew
 	// Also note that an indexer might need to be set up for improved performance.
 
 	return &framework{
-		profile:       profile,
-		client:        manager.GetClient(),
-		apiReader:     manager.GetAPIReader(),
-		manager:       manager,
-		eventRecorder: manager.GetEventRecorderFor(fmt.Sprintf(eventRecorderNameTemplate, profile.Name())),
-		parallelizer:  parallelizer.NewParallelizer(options.numOfWorkers),
+		profile:        profile,
+		client:         manager.GetClient(),
+		uncachedReader: manager.GetAPIReader(),
+		manager:        manager,
+		eventRecorder:  manager.GetEventRecorderFor(fmt.Sprintf(eventRecorderNameTemplate, profile.Name())),
+		parallelizer:   parallelizer.NewParallelizer(options.numOfWorkers),
 	}
 }
 
@@ -134,8 +134,8 @@ func (f *framework) Manager() ctrl.Manager {
 }
 
 // APIReader returns the (uncached) read-only client in use by the scheduler framework.
-func (f *framework) APIReader() client.Reader {
-	return f.apiReader
+func (f *framework) UncachedReader() client.Reader {
+	return f.uncachedReader
 }
 
 // EventRecorder returns the event recorder in use by the scheduler framework.
