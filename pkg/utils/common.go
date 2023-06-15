@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1 "go.goms.io/fleet/apis/v1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -151,9 +151,10 @@ var (
 		Resource: "services",
 	}
 
-	CRPV1GVK = schema.GroupVersionKind{
-		Group:   fleetv1.GroupVersion.Group,
-		Version: fleetv1.GroupVersion.Version,
+	// TO-DO (chenyu1): Add more common GVRs/GVKs here.
+	CRPV1Beta1GVK = schema.GroupVersionKind{
+		Group:   fleetv1beta1.GroupVersion.Group,
+		Version: fleetv1beta1.GroupVersion.Version,
 		Kind:    "ClusterResourcePlacement",
 	}
 )

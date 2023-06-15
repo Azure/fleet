@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1 "go.goms.io/fleet/apis/v1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -33,7 +33,7 @@ const (
 // TestMain sets up the test environment.
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
-	if err := fleetv1.AddToScheme(scheme.Scheme); err != nil {
+	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
 	}
 
@@ -44,17 +44,17 @@ func TestMain(m *testing.M) {
 func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 	testCases := []struct {
 		name              string
-		policy            *fleetv1.ClusterPolicySnapshot
+		policy            *fleetv1beta1.ClusterPolicySnapshot
 		wantNumOfClusters int
 		expectedToFail    bool
 	}{
 		{
 			name: "valid annotation",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					Annotations: map[string]string{
-						fleetv1.NumOfClustersAnnotation: "1",
+						fleetv1beta1.NumOfClustersAnnotation: "1",
 					},
 				},
 			},
@@ -62,7 +62,7 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "no annotation",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -71,11 +71,11 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "invalid annotation: not an integer",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					Annotations: map[string]string{
-						fleetv1.NumOfClustersAnnotation: "abc",
+						fleetv1beta1.NumOfClustersAnnotation: "abc",
 					},
 				},
 			},
@@ -83,11 +83,11 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "invalid annotation: negative integer",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					Annotations: map[string]string{
-						fleetv1.NumOfClustersAnnotation: "-1",
+						fleetv1beta1.NumOfClustersAnnotation: "-1",
 					},
 				},
 			},
@@ -114,7 +114,7 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 
 // TestCollectClusters tests the collectClusters method.
 func TestCollectClusters(t *testing.T) {
-	cluster := fleetv1.MemberCluster{
+	cluster := fleetv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 		},
@@ -135,7 +135,7 @@ func TestCollectClusters(t *testing.T) {
 		t.Fatalf("collectClusters() = %v, %v, want no error", clusters, err)
 	}
 
-	wantClusters := []fleetv1.MemberCluster{cluster}
+	wantClusters := []fleetv1beta1.MemberCluster{cluster}
 	if !cmp.Equal(clusters, wantClusters) {
 		t.Fatalf("collectClusters() = %v, %v, want %v, nil", clusters, err, wantClusters)
 	}
@@ -145,17 +145,17 @@ func TestCollectClusters(t *testing.T) {
 func TestExtractOwnerCRPNameFromPolicySnapshot(t *testing.T) {
 	testCases := []struct {
 		name         string
-		policy       *fleetv1.ClusterPolicySnapshot
+		policy       *fleetv1beta1.ClusterPolicySnapshot
 		expectToFail bool
 	}{
 		{
 			name: "policy with CRP owner reference",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Kind: utils.CRPV1GVK.Kind,
+							Kind: utils.CRPV1Beta1GVK.Kind,
 							Name: CRPName,
 						},
 					},
@@ -164,7 +164,7 @@ func TestExtractOwnerCRPNameFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "policy without CRP owner reference",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            policyName,
 					OwnerReferences: []metav1.OwnerReference{},
@@ -193,11 +193,11 @@ func TestExtractOwnerCRPNameFromPolicySnapshot(t *testing.T) {
 
 // TestCollectBindings tests the collectBindings method.
 func TestCollectBindings(t *testing.T) {
-	binding := &fleetv1.ClusterResourceBinding{
+	binding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 			Labels: map[string]string{
-				fleetv1.CRPTrackingLabel: CRPName,
+				fleetv1beta1.CRPTrackingLabel: CRPName,
 			},
 		},
 	}
@@ -205,20 +205,20 @@ func TestCollectBindings(t *testing.T) {
 
 	testCases := []struct {
 		name                   string
-		binding                *fleetv1.ClusterResourceBinding
-		policy                 *fleetv1.ClusterPolicySnapshot
+		binding                *fleetv1beta1.ClusterResourceBinding
+		policy                 *fleetv1beta1.ClusterPolicySnapshot
 		expectToFail           bool
 		expectToFindNoBindings bool
 	}{
 		{
 			name:    "found matching bindings",
 			binding: binding,
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Kind: utils.CRPV1GVK.Kind,
+							Kind: utils.CRPV1Beta1GVK.Kind,
 							Name: CRPName,
 						},
 					},
@@ -227,7 +227,7 @@ func TestCollectBindings(t *testing.T) {
 		},
 		{
 			name: "no owner reference in policy",
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -237,12 +237,12 @@ func TestCollectBindings(t *testing.T) {
 		{
 			name:    "no matching bindings",
 			binding: binding,
-			policy: &fleetv1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							Kind: utils.CRPV1GVK.Kind,
+							Kind: utils.CRPV1Beta1GVK.Kind,
 							Name: altCRPName,
 						},
 					},
@@ -261,7 +261,7 @@ func TestCollectBindings(t *testing.T) {
 			fakeClient := fakeClientBuilder.Build()
 			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
 			f := &framework{
-				apiReader: fakeClient,
+				uncachedReader: fakeClient,
 			}
 
 			ctx := context.Background()
@@ -276,7 +276,7 @@ func TestCollectBindings(t *testing.T) {
 			if err != nil {
 				t.Fatalf("collectBindings() = %v, %v, want %v, no error", bindings, err, binding)
 			}
-			wantBindings := []fleetv1.ClusterResourceBinding{}
+			wantBindings := []fleetv1beta1.ClusterResourceBinding{}
 			if !tc.expectToFindNoBindings {
 				wantBindings = append(wantBindings, *binding)
 			}
@@ -290,12 +290,12 @@ func TestCollectBindings(t *testing.T) {
 // TestClassifyBindings tests the classifyBindings function.
 func TestClassifyBindings(t *testing.T) {
 	timestamp := metav1.Now()
-	activeBinding := &fleetv1.ClusterResourceBinding{
+	activeBinding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "active-binding",
 		},
 	}
-	deletedBindingWithDispatcherFinalizer := &fleetv1.ClusterResourceBinding{
+	deletedBindingWithDispatcherFinalizer := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "deleted-binding-with-dispatcher-finalizer",
 			DeletionTimestamp: &timestamp,
@@ -304,28 +304,28 @@ func TestClassifyBindings(t *testing.T) {
 			},
 		},
 	}
-	deletedBindingWithoutDispatcherFinalizer := &fleetv1.ClusterResourceBinding{
+	deletedBindingWithoutDispatcherFinalizer := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "deleted-binding-without-dispatcher-finalizer",
 			DeletionTimestamp: &timestamp,
 		},
 	}
 
-	active, deletedWith, deletedWithout := classifyBindings([]fleetv1.ClusterResourceBinding{*activeBinding, *deletedBindingWithDispatcherFinalizer, *deletedBindingWithoutDispatcherFinalizer})
-	if diff := cmp.Diff(active, []*fleetv1.ClusterResourceBinding{activeBinding}); diff != "" {
-		t.Errorf("classifyBindings() active = %v, want %v", active, []*fleetv1.ClusterResourceBinding{activeBinding})
+	active, deletedWith, deletedWithout := classifyBindings([]fleetv1beta1.ClusterResourceBinding{*activeBinding, *deletedBindingWithDispatcherFinalizer, *deletedBindingWithoutDispatcherFinalizer})
+	if diff := cmp.Diff(active, []*fleetv1beta1.ClusterResourceBinding{activeBinding}); diff != "" {
+		t.Errorf("classifyBindings() active = %v, want %v", active, []*fleetv1beta1.ClusterResourceBinding{activeBinding})
 	}
-	if !cmp.Equal(deletedWith, []*fleetv1.ClusterResourceBinding{deletedBindingWithDispatcherFinalizer}) {
-		t.Errorf("classifyBindings() deletedWithDispatcherFinalizer = %v, want %v", deletedWith, []*fleetv1.ClusterResourceBinding{deletedBindingWithDispatcherFinalizer})
+	if !cmp.Equal(deletedWith, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithDispatcherFinalizer}) {
+		t.Errorf("classifyBindings() deletedWithDispatcherFinalizer = %v, want %v", deletedWith, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithDispatcherFinalizer})
 	}
-	if !cmp.Equal(deletedWithout, []*fleetv1.ClusterResourceBinding{deletedBindingWithoutDispatcherFinalizer}) {
-		t.Errorf("classifyBindings() deletedWithoutDispatcherFinalizer = %v, want %v", deletedWithout, []*fleetv1.ClusterResourceBinding{deletedBindingWithoutDispatcherFinalizer})
+	if !cmp.Equal(deletedWithout, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithoutDispatcherFinalizer}) {
+		t.Errorf("classifyBindings() deletedWithoutDispatcherFinalizer = %v, want %v", deletedWithout, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithoutDispatcherFinalizer})
 	}
 }
 
 // TestRemoveSchedulerFinalizerFromBindings tests the removeSchedulerFinalizerFromBindings method.
 func TestRemoveSchedulerFinalizerFromBindings(t *testing.T) {
-	binding := &fleetv1.ClusterResourceBinding{
+	binding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       bindingName,
 			Finalizers: []string{utils.SchedulerFinalizer},
@@ -342,12 +342,12 @@ func TestRemoveSchedulerFinalizerFromBindings(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := f.removeSchedulerFinalizerFromBindings(ctx, []*fleetv1.ClusterResourceBinding{binding}); err != nil {
+	if err := f.removeSchedulerFinalizerFromBindings(ctx, []*fleetv1beta1.ClusterResourceBinding{binding}); err != nil {
 		t.Fatalf("removeSchedulerFinalizerFromBindings() = %v, want no error", err)
 	}
 
 	// Verify that the finalizer has been removed.
-	updatedBinding := &fleetv1.ClusterResourceBinding{}
+	updatedBinding := &fleetv1beta1.ClusterResourceBinding{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, updatedBinding); err != nil {
 		t.Fatalf("Binding Get(%v) = %v, want no error", bindingName, err)
 	}

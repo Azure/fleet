@@ -11,31 +11,32 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1 "go.goms.io/fleet/apis/v1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // extractNumOfClustersFromPolicySnapshot extracts the numOfClusters from the policy snapshot.
-func extractNumOfClustersFromPolicySnapshot(policy *fleetv1.ClusterPolicySnapshot) (int, error) {
-	numOfClustersStr, ok := policy.Annotations[fleetv1.NumOfClustersAnnotation]
+func extractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySnapshot) (int, error) {
+	numOfClustersStr, ok := policy.Annotations[fleetv1beta1.NumOfClustersAnnotation]
 	if !ok {
-		return 0, fmt.Errorf("cannot find annotation %s", fleetv1.NumOfClustersAnnotation)
+		return 0, controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot find annotation %s", fleetv1beta1.NumOfClustersAnnotation))
 	}
 
 	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
 	numOfClusters, err := strconv.Atoi(numOfClustersStr)
 	if err != nil || numOfClusters < 0 {
-		return 0, fmt.Errorf("invalid annotation %s: Atoi(%s) = %v, %v", fleetv1.NumOfClustersAnnotation, numOfClustersStr, numOfClusters, err)
+		return 0, controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation %s: Atoi(%s) = %v, %v", fleetv1beta1.NumOfClustersAnnotation, numOfClustersStr, numOfClusters, err))
 	}
 
 	return numOfClusters, nil
 }
 
 // extractOwnerCRPNameFromPolicySnapshot extracts the name of the owner CRP from the policy snapshot.
-func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1.ClusterPolicySnapshot) (string, error) {
+func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySnapshot) (string, error) {
 	var owner string
 	for _, ownerRef := range policy.OwnerReferences {
-		if ownerRef.Kind == utils.CRPV1GVK.Kind {
+		if ownerRef.Kind == utils.CRPV1Beta1GVK.Kind {
 			owner = ownerRef.Name
 			break
 		}
@@ -50,11 +51,11 @@ func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1.ClusterPolicySnapshot
 // * active: active bindings, that is, bindings that are not marked for deletion; and
 // * deletedWithDispatcherFinalizer: bindings that are marked for deletion, but still has the dispatcher finalizer present; and
 // * deletedWithoutDispatcherFinalizer: bindings that are marked for deletion, and the dispatcher finalizer is already removed.
-func classifyBindings(bindings []fleetv1.ClusterResourceBinding) (active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer []*fleetv1.ClusterResourceBinding) {
+func classifyBindings(bindings []fleetv1beta1.ClusterResourceBinding) (active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer []*fleetv1beta1.ClusterResourceBinding) {
 	// Pre-allocate arrays.
-	active = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
-	deletedWithDispatcherFinalizer = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
-	deletedWithoutDispatcherFinalizer = make([]*fleetv1.ClusterResourceBinding, 0, len(bindings))
+	active = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
+	deletedWithDispatcherFinalizer = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
+	deletedWithoutDispatcherFinalizer = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
 
 	for idx := range bindings {
 		binding := bindings[idx]

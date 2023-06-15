@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -20,6 +21,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -148,14 +150,15 @@ func (f *framework) EventRecorder() record.EventRecorder {
 
 // RunSchedulingCycleFor performs scheduling for a policy snapshot.
 func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
-	errorFormat := "failed to run scheduling cycle for policy %s: %w"
+	errorMessage := "failed to run scheduling cycle"
 
 	// Retrieve the desired number of clusters from the policy.
 	//
 	// TO-DO (chenyu1): assign variable(s) when more logic is added.
 	_, err = extractNumOfClustersFromPolicySnapshot(policy)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
 	}
 
 	// Collect all clusters.
@@ -167,7 +170,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// TO-DO (chenyu1): assign variable(s) when more logic is added.
 	_, err = f.collectClusters(ctx)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
 	}
 
 	// Collect all bindings.
@@ -185,7 +189,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
 	bindings, err := f.collectBindings(ctx, policy)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
 	}
 
 	// Parse the bindings, find out
@@ -206,7 +211,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// If a binding has been marked for deletion and no longer has the dispatcher finalizer, the scheduler
 	// removes its own finalizer from it, to clear it for eventual deletion.
 	if err := f.removeSchedulerFinalizerFromBindings(ctx, deletedWithoutDispatcherFinalizer); err != nil {
-		return ctrl.Result{}, fmt.Errorf(errorFormat, policy.Name, err)
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
 	}
 
 	// Not yet fully implemented.
@@ -219,7 +225,7 @@ func (f *framework) collectClusters(ctx context.Context) ([]fleetv1beta1.MemberC
 
 	clusterList := &fleetv1beta1.MemberClusterList{}
 	if err := f.client.List(ctx, clusterList, &client.ListOptions{}); err != nil {
-		return nil, fmt.Errorf(errorFormat, err)
+		return nil, controller.NewAPIServerError(fmt.Errorf(errorFormat, err))
 	}
 	return clusterList.Items, nil
 }
@@ -232,14 +238,14 @@ func (f *framework) collectBindings(ctx context.Context, policy *fleetv1beta1.Cl
 	if err != nil {
 		// This branch should never run in most cases, as the a policy snapshot is expected to be
 		// owned by a CRP.
-		return nil, fmt.Errorf(errorFormat, err)
+		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf(errorFormat, err))
 	}
 
 	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
 	labelSelector := labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: bindingOwner})
 	// List bindings directly from the API server.
 	if err := f.uncachedReader.List(ctx, bindingList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
-		return nil, fmt.Errorf(errorFormat, err)
+		return nil, controller.NewAPIServerError(fmt.Errorf(errorFormat, err))
 	}
 	return bindingList.Items, nil
 }
@@ -251,7 +257,7 @@ func (f *framework) removeSchedulerFinalizerFromBindings(ctx context.Context, bi
 	for _, binding := range bindings {
 		controllerutil.RemoveFinalizer(binding, utils.SchedulerFinalizer)
 		if err := f.client.Update(ctx, binding, &client.UpdateOptions{}); err != nil {
-			return fmt.Errorf(errorFormat, binding.Name, err)
+			return controller.NewAPIServerError(fmt.Errorf(errorFormat, binding.Name, err))
 		}
 	}
 	return nil
