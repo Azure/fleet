@@ -26,7 +26,7 @@ func extractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySn
 	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
 	numOfClusters, err := strconv.Atoi(numOfClustersStr)
 	if err != nil || numOfClusters < 0 {
-		return 0, controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation %s: Atoi(%s) = %v, %v", fleetv1beta1.NumOfClustersAnnotation, numOfClustersStr, numOfClusters, err))
+		return 0, controller.NewUnexpectedBehaviorError(fmt.Errorf("invalid annotation %s: %s is not a valid count: %w", fleetv1beta1.NumOfClustersAnnotation, numOfClustersStr, err))
 	}
 
 	return numOfClusters, nil
