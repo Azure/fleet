@@ -133,10 +133,10 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -164,10 +164,10 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -192,10 +192,10 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -319,10 +319,10 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -398,10 +398,10 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -438,8 +438,8 @@ func TestHandleUpdate(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
 						Labels: map[string]string{
-							fleetv1.PolicyIndexLabel: "1",
-							fleetv1.CRPTrackingLabel: testName,
+							fleetv1beta1.PolicyIndexLabel: "1",
+							fleetv1beta1.CRPTrackingLabel: testName,
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -451,124 +451,19 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 0),
-						Labels: map[string]string{
-							fleetv1.PolicyIndexLabel:      "0",
-							fleetv1.IsLatestSnapshotLabel: "false",
-							fleetv1.CRPTrackingLabel:      testName,
-						},
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								Name:               testName,
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-								APIVersion:         fleetAPIVersion,
-								Kind:               "ClusterResourcePlacement",
-							},
-						},
-					},
-					Spec: fleetv1.PolicySnapshotSpec{
-						// Policy is not specified.
-						PolicyHash: unspecifiedPolicyHash,
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 1),
-						Labels: map[string]string{
-							fleetv1.PolicyIndexLabel:      "1",
-							fleetv1.IsLatestSnapshotLabel: "true",
-							fleetv1.CRPTrackingLabel:      testName,
-						},
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								Name:               testName,
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-								APIVersion:         fleetAPIVersion,
-								Kind:               "ClusterResourcePlacement",
-							},
-						},
-						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
-						},
-					},
-					Spec: fleetv1.PolicySnapshotSpec{
-						Policy:     wantPolicy,
-						PolicyHash: policyHash,
-					},
-				},
-			},
-		},
-		{
-			name: "crp policy has not been changed and only the numberOfCluster is changed",
-			policySnapshots: []fleetv1.ClusterPolicySnapshot{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 0),
-						Labels: map[string]string{
-							fleetv1.PolicyIndexLabel:      "0",
-							fleetv1.IsLatestSnapshotLabel: "false",
-							fleetv1.CRPTrackingLabel:      testName,
-						},
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								Name:               testName,
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-								APIVersion:         fleetAPIVersion,
-								Kind:               "ClusterResourcePlacement",
-							},
-						},
-					},
-					Spec: fleetv1.PolicySnapshotSpec{
-						// Policy is not specified.
-						PolicyHash: unspecifiedPolicyHash,
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 1),
-						Labels: map[string]string{
-							fleetv1.PolicyIndexLabel:      "1",
-							fleetv1.CRPTrackingLabel:      testName,
-							fleetv1.IsLatestSnapshotLabel: "true",
-						},
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								Name:               testName,
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-								APIVersion:         fleetAPIVersion,
-								Kind:               "ClusterResourcePlacement",
-							},
-						},
-						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(1),
-						},
-					},
-					Spec: fleetv1.PolicySnapshotSpec{
-						Policy:     wantPolicy,
-						PolicyHash: policyHash,
-					},
-				},
-			},
-			wantPolicySnapshots: []fleetv1.ClusterPolicySnapshot{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1.PolicySnapshotNameFmt, testName, 0),
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
 						Labels: map[string]string{
 							fleetv1beta1.PolicyIndexLabel:      "0",
 							fleetv1beta1.IsLatestSnapshotLabel: "false",
@@ -607,10 +502,115 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.PolicySnapshotSpec{
+						Policy:     wantPolicy,
+						PolicyHash: policyHash,
+					},
+				},
+			},
+		},
+		{
+			name: "crp policy has not been changed and only the numberOfCluster is changed",
+			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "false",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+					},
+					Spec: fleetv1beta1.PolicySnapshotSpec{
+						// Policy is not specified.
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
+						},
+					},
+					Spec: fleetv1beta1.PolicySnapshotSpec{
+						Policy:     wantPolicy,
+						PolicyHash: policyHash,
+					},
+				},
+			},
+			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "false",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+					},
+					Spec: fleetv1beta1.PolicySnapshotSpec{
+						// Policy is not specified.
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+						},
+					},
+					Spec: fleetv1beta1.PolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -655,6 +655,13 @@ func TestHandleUpdate(t *testing.T) {
 }
 
 func TestHandleUpdate_failure(t *testing.T) {
+	wantPolicy := placementPolicyForTest()
+	wantPolicy.NumberOfClusters = nil
+	jsonBytes, err := json.Marshal(wantPolicy)
+	if err != nil {
+		t.Fatalf("failed to create the policy hash: %v", err)
+	}
+	policyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
 	tests := []struct {
 		name            string
 		policySnapshots []fleetv1beta1.ClusterPolicySnapshot
@@ -762,6 +769,91 @@ func TestHandleUpdate_failure(t *testing.T) {
 								Controller:         pointer.Bool(true),
 							},
 						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
+			name: "no active policy snapshot exists and policySnapshot with invalid policyIndex label (negative value)",
+			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel: "-1",
+							fleetv1beta1.CRPTrackingLabel: testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
+			name: "active policy snapshot exists and policySnapshot with invalid numberOfClusters annotation",
+			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: "invalid",
+						},
+					},
+					Spec: fleetv1beta1.PolicySnapshotSpec{
+						Policy:     wantPolicy,
+						PolicyHash: policyHash,
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
+			name: "no active policy snapshot exists and policySnapshot with invalid numberOfClusters annotation (negative)",
+			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel: "1",
+							fleetv1beta1.CRPTrackingLabel: testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: "-123",
+						},
+					},
+					Spec: fleetv1beta1.PolicySnapshotSpec{
+						Policy:     wantPolicy,
+						PolicyHash: policyHash,
 					},
 				},
 			},
