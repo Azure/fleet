@@ -46,7 +46,7 @@ func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request
 			response = v.handleCRD(req)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
-			response = admission.Allowed("")
+			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
 	return response
