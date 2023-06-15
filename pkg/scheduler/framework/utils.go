@@ -142,7 +142,7 @@ func shouldSchedule(policy *fleetv1beta1.ClusterPolicySnapshot, numOfClusters, e
 // equalDecisions returns if two arrays of ClusterDecisions are equal; it returns true if
 // every decision in one array is also present in the other array regardless of their indexes,
 // and vice versa.
-func equalDecisons(current, desired []fleetv1beta1.ClusterDecision) bool {
+func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
 	desiredDecisionByCluster := make(map[string]fleetv1beta1.ClusterDecision, len(desired))
 	for _, decision := range desired {
 		desiredDecisionByCluster[decision.ClusterName] = decision

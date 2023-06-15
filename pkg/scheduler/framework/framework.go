@@ -294,7 +294,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 
 		// Check if a refresh is warranted; the scheduler only update the status when there is a change in
 		// scheduling decisions and/or the scheduling condition.
-		if !equalDecisons(currentSchedulingDecisions, newSchedulingDecisions) || condition.EqualCondition(currentSchedulingCondition, &newSchedulingCondition) {
+		if !equalDecisions(currentSchedulingDecisions, newSchedulingDecisions) || condition.EqualCondition(currentSchedulingCondition, &newSchedulingCondition) {
 			// Update the policy snapshot status.
 			//
 			// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
@@ -319,7 +319,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	newSchedulingCondition := notFullyScheduledCondition(policy, numOfClusters)
 	// Check if a refresh is warranted; the scheduler only update the status when there is a change in
 	// scheduling decisions and/or the scheduling condition.
-	if !equalDecisons(currentSchedulingDecisions, newSchedulingDecisions) || condition.EqualCondition(currentSchedulingCondition, &newSchedulingCondition) {
+	if !equalDecisions(currentSchedulingDecisions, newSchedulingDecisions) || condition.EqualCondition(currentSchedulingCondition, &newSchedulingCondition) {
 		// Update the policy snapshot status.
 		//
 		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is

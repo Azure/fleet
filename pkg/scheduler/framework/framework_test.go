@@ -9,9 +9,13 @@ import (
 	"context"
 	"log"
 	"os"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -23,9 +27,16 @@ import (
 )
 
 const (
-	CRPName     = "test-placement"
-	policyName  = "test-policy"
-	bindingName = "test-binding"
+	CRPName        = "test-placement"
+	policyName     = "test-policy"
+	bindingName    = "test-binding"
+	altBindingName = "another-test-binding"
+	clusterName    = "bravelion"
+	altClusterName = "smartcat"
+)
+
+var (
+	ignoredCondFields = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 )
 
 // TO-DO (chenyu1): expand the test cases as development stablizes.
@@ -354,5 +365,416 @@ func TestRemoveSchedulerFinalizerFromBindings(t *testing.T) {
 
 	if controllerutil.ContainsFinalizer(updatedBinding, utils.SchedulerFinalizer) {
 		t.Fatalf("Binding %s finalizers = %v, want no scheduler finalizer", bindingName, updatedBinding.Finalizers)
+	}
+}
+
+// TestShouldDownscale tests the shouldDownscale function.
+func TestShouldDownscale(t *testing.T) {
+	testCases := []struct {
+		name          string
+		policy        *fleetv1beta1.ClusterPolicySnapshot
+		numOfClusters int
+		active        []*fleetv1beta1.ClusterResourceBinding
+		wantAct       bool
+		wantCount     int
+	}{
+		{
+			name: "should not downscale (pick all)",
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+				Spec: fleetv1beta1.PolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType: fleetv1beta1.PickAllPlacementType,
+					},
+				},
+			},
+		},
+		{
+			name: "should not downscale (enough bindings)",
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+				Spec: fleetv1beta1.PolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType: fleetv1beta1.PickNPlacementType,
+					},
+				},
+			},
+			numOfClusters: 1,
+			active: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName,
+					},
+				},
+			},
+		},
+		{
+			name: "should downscale (not enough bindings)",
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+				Spec: fleetv1beta1.PolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType: fleetv1beta1.PickNPlacementType,
+					},
+				},
+			},
+			numOfClusters: 0,
+			active: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName,
+					},
+				},
+			},
+			wantAct:   true,
+			wantCount: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			act, count := shouldDownscale(tc.policy, tc.numOfClusters, tc.active)
+			if act != tc.wantAct || count != tc.wantCount {
+				t.Fatalf("shouldDownscale() = %v, %v, want %v, %v", act, count, tc.wantAct, tc.wantCount)
+			}
+		})
+	}
+}
+
+// TestSortByCreationTimestampBindingsWrapper checks if the sortByCreationTimestampBindings wrapper implements
+// sort.Interface correctly, i.e, if it is sortable by CreationTimestamp.
+func TestSortByCreationTimestampBindingsWrapper(t *testing.T) {
+	timestampA := metav1.Now()
+	timestampB := metav1.NewTime(time.Now().Add(time.Second))
+
+	sorted := sortByCreationTimestampBindings([]*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              bindingName,
+				CreationTimestamp: timestampB,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              altBindingName,
+				CreationTimestamp: timestampA,
+			},
+		},
+	})
+	sort.Sort(sorted)
+
+	wantSorted := sortByCreationTimestampBindings([]*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              altBindingName,
+				CreationTimestamp: timestampA,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              bindingName,
+				CreationTimestamp: timestampB,
+			},
+		},
+	})
+	if !cmp.Equal(sorted, wantSorted) {
+		t.Fatalf("sortByCreationTimestamp, got %v, want %v", sorted, wantSorted)
+	}
+}
+
+// TestDownscale tests the downscale method.
+func TestDownscale(t *testing.T) {
+	timestampA := metav1.Now()
+	timestampB := metav1.NewTime(time.Now().Add(time.Second))
+
+	bindingA := fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              bindingName,
+			CreationTimestamp: timestampA,
+		},
+	}
+	bindingB := fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              altBindingName,
+			CreationTimestamp: timestampB,
+		},
+	}
+
+	active := []*fleetv1beta1.ClusterResourceBinding{&bindingA, &bindingB}
+	count := 1
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(&bindingA, &bindingB).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+
+	ctx := context.Background()
+	remains, err := f.downscale(ctx, active, count)
+	wantRemains := []*fleetv1beta1.ClusterResourceBinding{&bindingB}
+	if err != nil || !cmp.Equal(remains, wantRemains) {
+		t.Fatalf("downscale(%v, %v) = %v, %v, want %v, no error", active, count, remains, err, wantRemains)
+	}
+}
+
+// TestPrepareNewSchedulingDecisions tests the prepareNewSchedulingDecisions function.
+func TestPrepareNewSchedulingDecisions(t *testing.T) {
+	policy := &fleetv1beta1.ClusterPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+		Status: fleetv1beta1.PolicySnapshotStatus{
+			ClusterDecisions: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+				},
+			},
+		},
+	}
+	binding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			TargetCluster: clusterName,
+			ClusterDecision: fleetv1beta1.ClusterDecision{
+				ClusterName: clusterName,
+				Selected:    true,
+			},
+		},
+	}
+
+	decisions := prepareNewSchedulingDecisions(policy, []*fleetv1beta1.ClusterResourceBinding{binding})
+	wantDecisions := []fleetv1beta1.ClusterDecision{
+		binding.Spec.ClusterDecision,
+		policy.Status.ClusterDecisions[0],
+	}
+
+	if !cmp.Equal(decisions, wantDecisions) {
+		t.Fatalf("prepareNewSchedulingDecisions(%v, %v) = %v, want %v", policy, binding, decisions, wantDecisions)
+	}
+}
+
+// TestShouldSchedule tests the shouldSchedule function.
+func TestShouldSchedule(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		policy                *fleetv1beta1.ClusterPolicySnapshot
+		numOfClusters         int
+		existingBindingsCount int
+		want                  bool
+	}{
+		{
+			name: "should schedule (pick all)",
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+				Spec: fleetv1beta1.PolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType: fleetv1beta1.PickAllPlacementType,
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "should not schedule (enough bindings)",
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+				Spec: fleetv1beta1.PolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType: fleetv1beta1.PickNPlacementType,
+					},
+				},
+			},
+			numOfClusters:         1,
+			existingBindingsCount: 1,
+		},
+		{
+			name: "should schedule (not enough bindings)",
+			policy: &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+				Spec: fleetv1beta1.PolicySnapshotSpec{
+					Policy: &fleetv1beta1.PlacementPolicy{
+						PlacementType: fleetv1beta1.PickNPlacementType,
+					},
+				},
+			},
+			numOfClusters:         2,
+			existingBindingsCount: 1,
+			want:                  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if shouldSchedule(tc.policy, tc.numOfClusters, tc.existingBindingsCount) != tc.want {
+				t.Fatalf("shouldSchedule(%v, %v, %v) = %v, want %v", tc.policy, tc.numOfClusters, tc.existingBindingsCount, !tc.want, tc.want)
+			}
+		})
+	}
+}
+
+// TestEqualDecisions tests the equalDecisions function.
+func TestEqualDecisions(t *testing.T) {
+	testCases := []struct {
+		name    string
+		current []fleetv1beta1.ClusterDecision
+		desired []fleetv1beta1.ClusterDecision
+		want    bool
+	}{
+		{
+			name: "equal decisions",
+			current: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+			},
+			desired: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+			},
+			want: true,
+		},
+		{
+			name: "not equal decisions (different value)",
+			current: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+			},
+			desired: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    false,
+				},
+			},
+		},
+		{
+			name: "not equal decisions (empty current)",
+			current: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+			},
+			desired: []fleetv1beta1.ClusterDecision{},
+		},
+		{
+			name: "not equal decisions (empty desired)",
+			current: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+			},
+			desired: []fleetv1beta1.ClusterDecision{},
+		},
+		{
+			name: "not equal decisions (no match)",
+			current: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+			},
+			desired: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+				},
+			},
+		},
+		{
+			name: "not equal decisions (different lengths)",
+			current: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+				},
+			},
+			desired: []fleetv1beta1.ClusterDecision{
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if equalDecisions(tc.current, tc.desired) != tc.want {
+				t.Fatalf("equalDecisions(%v, %v) = %v, want %v", tc.current, tc.desired, !tc.want, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpdatePolicySnapshotStatus tests the updatePolicySnapshotStatus method.
+func TestUpdatePolicySnapshotStatus(t *testing.T) {
+	policy := &fleetv1beta1.ClusterPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
+	decisions := []fleetv1beta1.ClusterDecision{
+		{
+			ClusterName: clusterName,
+			Selected:    true,
+		},
+	}
+	condition := fullyScheduledCondition(policy)
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(policy).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+
+	ctx := context.Background()
+	if err := f.updatePolicySnapshotStatus(ctx, policy, decisions, condition); err != nil {
+		t.Fatalf("updatePolicySnapshotStatus(%v, %v, %v) = %v, want no error", policy, decisions, condition, err)
+	}
+
+	// Verify that the policy was updated.
+	updatedPolicy := &fleetv1beta1.ClusterPolicySnapshot{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: policy.Name}, updatedPolicy); err != nil {
+		t.Fatalf("clusterPolicySnapshot Get(%v) = %v, want no error", policy.Name, err)
+	}
+
+	if !cmp.Equal(updatedPolicy.Status.ClusterDecisions, decisions) {
+		t.Errorf("cluster decisions, got %v, want %v", updatedPolicy.Status.ClusterDecisions, decisions)
+	}
+
+	updatedCondition := meta.FindStatusCondition(updatedPolicy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
+	if !cmp.Equal(updatedCondition, &condition, ignoredCondFields) {
+		t.Errorf("scheduled condition, got %v, want %v", updatedCondition, condition)
 	}
 }
