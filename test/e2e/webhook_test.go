@@ -34,6 +34,17 @@ var (
 		kubeSystemNamespace,
 		memberNamespace,
 	}
+	testGroups = []string{"system:authenticated"}
+)
+
+const (
+	testUser                   = "test-user"
+	testKey                    = "test-key"
+	testValue                  = "test-value"
+	testUserClusterRole        = "test-user-cluster-role"
+	testUserClusterRoleBinding = "test-user-cluster-role-binding"
+
+	crdStatusErrFormat = `failed to validate user: %s in groups: %v to modify fleet CRD: %s`
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
@@ -469,11 +480,11 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		By("create cluster role to modify CRDs")
 		cr := rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-user-cluster-role",
+				Name: testUserClusterRole,
 			},
 			Rules: []rbacv1.PolicyRule{
 				{
-					APIGroups: []string{"apiextensions.k8s.io"},
+					APIGroups: []string{v1.SchemeGroupVersion.Group},
 					Verbs:     []string{"*"},
 					Resources: []string{"*"},
 				},
@@ -485,19 +496,19 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		By("create cluster role binding for test-user to modify CRD")
 		crb := rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-user-cluster-role-binding",
+				Name: testUserClusterRoleBinding,
 			},
 			Subjects: []rbacv1.Subject{
 				{
 					APIGroup: rbacv1.GroupName,
 					Kind:     "User",
-					Name:     "test-user",
+					Name:     testUser,
 				},
 			},
 			RoleRef: rbacv1.RoleRef{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "ClusterRole",
-				Name:     "test-user-cluster-role",
+				Name:     testUserClusterRole,
 			},
 		}
 		err = HubCluster.KubeClient.Create(ctx, &crb)
@@ -508,7 +519,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		By("remove cluster role binding")
 		crb := rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-user-cluster-role-binding",
+				Name: testUserClusterRoleBinding,
 			},
 		}
 		err := HubCluster.KubeClient.Delete(ctx, &crb)
@@ -517,7 +528,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		By("remove cluster role")
 		cr := rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-user-cluster-role",
+				Name: testUserClusterRole,
 			},
 		}
 		err = HubCluster.KubeClient.Delete(ctx, &cr)
@@ -534,8 +545,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 			err = HubCluster.ImpersonateKubeClient.Create(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			msg := fmt.Sprintf(`admission webhook "fleet.customresourcedefinition.validating" denied the request: failed to validate user: test-user in groups: [system:authenticated] to modify fleet CRD: %s`, crd.Name)
-			Expect(statusErr.ErrStatus.Message).Should(Equal(msg))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
 		})
 
 		It("should deny UPDATE operation on Fleet CRD for user not in system:masters group", func() {
@@ -545,15 +555,14 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 			By("update labels in CRD")
 			labels := crd.GetLabels()
-			labels["test-key"] = "test-value"
+			labels[testKey] = testValue
 			crd.SetLabels(labels)
 
 			By("expecting denial of operation UPDATE of CRD")
 			err = HubCluster.ImpersonateKubeClient.Update(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(
-				`admission webhook "fleet.customresourcedefinition.validating" denied the request: failed to validate user: test-user in groups: [system:authenticated] to modify fleet CRD: %s`, crd.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
 		})
 
 		It("should deny DELETE operation on Fleet CRD for user not in system:masters group", func() {
@@ -566,7 +575,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(Equal(fmt.Sprintf(`admission webhook "fleet.customresourcedefinition.validating" denied the request: failed to validate user: test-user in groups: [system:authenticated] to modify fleet CRD: %s`, crd.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
 		})
 
 		It("should allow UPDATE operation on Fleet CRDs if user in system:masters group", func() {
@@ -576,17 +585,17 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 			By("update labels in CRD")
 			labels := crd.GetLabels()
-			labels["test-key"] = "test-value"
+			labels[testKey] = testValue
 			crd.SetLabels(labels)
 
 			By("expecting denial of operation UPDATE of CRD")
 			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
 			err = HubCluster.KubeClient.Update(ctx, &crd)
-			Expect(err).To(BeNil())
+			Expect(err).To(Succeed())
 
 			By("remove new label added for test")
 			labels = crd.GetLabels()
-			delete(labels, "test-key")
+			delete(labels, testKey)
 			crd.SetLabels(labels)
 		})
 
@@ -597,11 +606,11 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 			By("expecting error to be nil")
 			err = HubCluster.KubeClient.Create(ctx, &crd)
-			Expect(err).To(BeNil())
+			Expect(err).To(Succeed())
 
 			By("delete clone set CRD")
 			err = HubCluster.KubeClient.Delete(ctx, &crd)
-			Expect(err).To(BeNil())
+			Expect(err).To(Succeed())
 		})
 	})
 })

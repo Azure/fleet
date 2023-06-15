@@ -21,6 +21,7 @@ import (
 	"time"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
+	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -44,6 +45,14 @@ const (
 	FleetWebhookKeyFileName  = "tls.key"
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
+
+	crdResourceName        = "customresourcedefinitions"
+	replicaSetResourceName = "replicasets"
+	podResourceName        = "pods"
+)
+
+var (
+	admissionReviewVersions = []string{admv1.SchemeGroupVersion.Version, admv1beta1.SchemeGroupVersion.Version}
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
@@ -122,7 +131,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(corev1.Pod{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 
 				Rules: []admv1.RuleWithOperations{
 					{
@@ -130,9 +139,9 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Create,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{""},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"pods"},
+							APIGroups:   []string{corev1.SchemeGroupVersion.Group},
+							APIVersions: []string{corev1.SchemeGroupVersion.Version},
+							Resources:   []string{podResourceName},
 							Scope:       &namespacedScope,
 						},
 					},
@@ -143,7 +152,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(fleetv1alpha1.ClusterResourcePlacement{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 
 				Rules: []admv1.RuleWithOperations{
 					{
@@ -152,8 +161,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Update,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{"fleet.azure.com"},
-							APIVersions: []string{"v1alpha1"},
+							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group},
+							APIVersions: []string{fleetv1alpha1.GroupVersion.Version},
 							Resources:   []string{fleetv1alpha1.ClusterResourcePlacementResource},
 							Scope:       &clusterScope,
 						},
@@ -165,16 +174,16 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(appsv1.ReplicaSet{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
 							admv1.Create,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{"apps"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"replicasets"},
+							APIGroups:   []string{appsv1.SchemeGroupVersion.Group},
+							APIVersions: []string{appsv1.SchemeGroupVersion.Version},
+							Resources:   []string{replicaSetResourceName},
 							Scope:       &namespacedScope,
 						},
 					},
@@ -185,7 +194,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(v1.CustomResourceDefinition{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
@@ -194,9 +203,9 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Delete,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{"apiextensions.k8s.io"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"customresourcedefinitions"},
+							APIGroups:   []string{v1.SchemeGroupVersion.Group},
+							APIVersions: []string{v1.SchemeGroupVersion.Version},
+							Resources:   []string{crdResourceName},
 							Scope:       &clusterScope,
 						},
 					},

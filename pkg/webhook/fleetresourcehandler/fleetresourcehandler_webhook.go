@@ -8,6 +8,7 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -21,6 +22,7 @@ const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
 	ValidationPath = "/validate-v1-fleetresourcehandler"
 	groupMatch     = `^[^.]*\.(.*)`
+	crdKind        = "CustomResourceDefinition"
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -38,7 +40,7 @@ type fleetResourceValidator struct {
 func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
-		switch req.Kind.String() {
+		switch req.Kind {
 		case retrieveCRDGVK():
 			klog.V(2).InfoS("handling CRD resource", "GVK", retrieveCRDGVK())
 			response = v.handleCRD(req)
@@ -69,14 +71,15 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	if validation.CheckCRDGroup(group) && !validation.ValidateUserForCRD(req.UserInfo) {
 		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 	}
-	return admission.Allowed("")
+	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 }
 
-func retrieveCRDGVK() string {
-	var crd v1.CustomResourceDefinition
-	crd.APIVersion = v1.SchemeGroupVersion.Group + "/" + v1.SchemeGroupVersion.Version
-	crd.Kind = "CustomResourceDefinition"
-	return crd.GroupVersionKind().String()
+func retrieveCRDGVK() metav1.GroupVersionKind {
+	return metav1.GroupVersionKind{
+		Group:   v1.SchemeGroupVersion.Group,
+		Version: v1.SchemeGroupVersion.Version,
+		Kind:    crdKind,
+	}
 }
 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
