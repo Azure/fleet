@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourceplacements.placement.fleet.io
+  name: clusterresourceplacements.placement.karavel.io
 spec:
-  group: placement.fleet.io
+  group: placement.karavel.io
   names:
     categories:
     - fleet-workload
@@ -37,7 +37,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1alpha1
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: 'ClusterResourcePlacement is used to select cluster scoped resources,

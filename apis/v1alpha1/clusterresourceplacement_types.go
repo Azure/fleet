@@ -14,7 +14,6 @@ import (
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-workload}
-// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Scheduled")].status`,name="Scheduled",type=string

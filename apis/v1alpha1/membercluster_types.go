@@ -12,7 +12,6 @@ import (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 // +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=mc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
