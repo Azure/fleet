@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1
+package v1beta1
 
 import (
 	v1 "k8s.io/api/core/v1"
@@ -14,9 +14,9 @@ type ClusterState string
 
 const (
 	// Unprefixed labels/annotations are reserved for end-users
-	// we will add a fleet.azure.com to designate these labels/annotations as official fleet labels/annotations.
+	// we will add a placement.karavel.io to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
-	fleetPrefix = "fleet.azure.com/"
+	fleetPrefix = "placement.karavel.io/"
 
 	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
 	CRPTrackingLabel = fleetPrefix + "parentCRP"

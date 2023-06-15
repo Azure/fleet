@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourceplacements.fleet.azure.com
+  name: clusterresourceplacements.placement.karavel.io
 spec:
-  group: fleet.azure.com
+  group: placement.karavel.io
   names:
     categories:
     - fleet-workload
@@ -37,7 +37,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1alpha1
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: 'ClusterResourcePlacement is used to select cluster scoped resources,
@@ -48,7 +48,8 @@ spec:
           default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved
           for fleet system namespaces). - reserved fleet resource types including:
           MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService,
-          ServiceImport, etc.'
+          ServiceImport, etc. The `ClusterResourceBinding` will be created and it
+          represents a scheduling decision that binds a group of resources to a cluster.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -78,80 +79,231 @@ spec:
                         description: ClusterAffinity contains cluster affinity scheduling
                           rules for the selected resources.
                         properties:
-                          clusterSelectorTerms:
-                            description: ClusterSelectorTerms is a list of cluster
-                              selector terms. The terms are `ORed`.
+                          preferredDuringSchedulingIgnoredDuringExecution:
+                            description: The scheduler computes a score for each cluster
+                              at schedule time by iterating through the elements of
+                              this field and adding "weight" to the sum if the cluster
+                              matches the corresponding matchExpression. The scheduler
+                              then chooses the first `N` clusters with the highest
+                              sum to satisfy the placement. This field is ignored
+                              if the placement type is "PickAll". If the cluster score
+                              changes at some point after the placement (e.g. due
+                              to an update), the system may or may not try to eventually
+                              move the resource from a cluster with a lower score
+                              to a cluster with higher score.
                             items:
-                              description: ClusterSelectorTerm contains the requirements
-                                to select clusters.
                               properties:
-                                labelSelector:
-                                  description: LabelSelector is a label query over
-                                    all the joined member clusters. Clusters matching
-                                    the query are selected.
+                                preference:
+                                  description: A cluster selector term, associated
+                                    with the corresponding weight.
                                   properties:
-                                    matchExpressions:
-                                      description: matchExpressions is a list of label
-                                        selector requirements. The requirements are
-                                        ANDed.
-                                      items:
-                                        description: A label selector requirement
-                                          is a selector that contains values, a key,
-                                          and an operator that relates the key and
-                                          values.
-                                        properties:
-                                          key:
-                                            description: key is the label key that
-                                              the selector applies to.
+                                    labelSelector:
+                                      description: LabelSelector is a label query
+                                        over all the joined member clusters. Clusters
+                                        matching the query are selected.
+                                      properties:
+                                        matchExpressions:
+                                          description: matchExpressions is a list
+                                            of label selector requirements. The requirements
+                                            are ANDed.
+                                          items:
+                                            description: A label selector requirement
+                                              is a selector that contains values,
+                                              a key, and an operator that relates
+                                              the key and values.
+                                            properties:
+                                              key:
+                                                description: key is the label key
+                                                  that the selector applies to.
+                                                type: string
+                                              operator:
+                                                description: operator represents a
+                                                  key's relationship to a set of values.
+                                                  Valid operators are In, NotIn, Exists
+                                                  and DoesNotExist.
+                                                type: string
+                                              values:
+                                                description: values is an array of
+                                                  string values. If the operator is
+                                                  In or NotIn, the values array must
+                                                  be non-empty. If the operator is
+                                                  Exists or DoesNotExist, the values
+                                                  array must be empty. This array
+                                                  is replaced during a strategic merge
+                                                  patch.
+                                                items:
+                                                  type: string
+                                                type: array
+                                            required:
+                                            - key
+                                            - operator
+                                            type: object
+                                          type: array
+                                        matchLabels:
+                                          additionalProperties:
                                             type: string
-                                          operator:
-                                            description: operator represents a key's
-                                              relationship to a set of values. Valid
-                                              operators are In, NotIn, Exists and
-                                              DoesNotExist.
-                                            type: string
-                                          values:
-                                            description: values is an array of string
-                                              values. If the operator is In or NotIn,
-                                              the values array must be non-empty.
-                                              If the operator is Exists or DoesNotExist,
-                                              the values array must be empty. This
-                                              array is replaced during a strategic
-                                              merge patch.
-                                            items:
-                                              type: string
-                                            type: array
-                                        required:
-                                        - key
-                                        - operator
-                                        type: object
-                                      type: array
-                                    matchLabels:
-                                      additionalProperties:
-                                        type: string
-                                      description: matchLabels is a map of {key,value}
-                                        pairs. A single {key,value} in the matchLabels
-                                        map is equivalent to an element of matchExpressions,
-                                        whose key field is "key", the operator is
-                                        "In", and the values array contains only "value".
-                                        The requirements are ANDed.
+                                          description: matchLabels is a map of {key,value}
+                                            pairs. A single {key,value} in the matchLabels
+                                            map is equivalent to an element of matchExpressions,
+                                            whose key field is "key", the operator
+                                            is "In", and the values array contains
+                                            only "value". The requirements are ANDed.
+                                          type: object
                                       type: object
+                                      x-kubernetes-map-type: atomic
+                                  required:
+                                  - labelSelector
                                   type: object
-                                  x-kubernetes-map-type: atomic
+                                weight:
+                                  description: Weight associated with matching the
+                                    corresponding clusterSelectorTerm, in the range
+                                    [-100, 100].
+                                  format: int32
+                                  type: integer
                               required:
-                              - labelSelector
+                              - preference
+                              - weight
                               type: object
-                            maxItems: 10
                             type: array
+                          requiredDuringSchedulingIgnoredDuringExecution:
+                            description: If the affinity requirements specified by
+                              this field are not met at scheduling time, the resource
+                              will not be scheduled onto the cluster. If the affinity
+                              requirements specified by this field cease to be met
+                              at some point after the placement (e.g. due to an update),
+                              the system may or may not try to eventually remove the
+                              resource from the cluster.
+                            properties:
+                              clusterSelectorTerms:
+                                description: ClusterSelectorTerms is a list of cluster
+                                  selector terms. The terms are `ORed`.
+                                items:
+                                  description: ClusterSelectorTerm contains the requirements
+                                    to select clusters.
+                                  properties:
+                                    labelSelector:
+                                      description: LabelSelector is a label query
+                                        over all the joined member clusters. Clusters
+                                        matching the query are selected.
+                                      properties:
+                                        matchExpressions:
+                                          description: matchExpressions is a list
+                                            of label selector requirements. The requirements
+                                            are ANDed.
+                                          items:
+                                            description: A label selector requirement
+                                              is a selector that contains values,
+                                              a key, and an operator that relates
+                                              the key and values.
+                                            properties:
+                                              key:
+                                                description: key is the label key
+                                                  that the selector applies to.
+                                                type: string
+                                              operator:
+                                                description: operator represents a
+                                                  key's relationship to a set of values.
+                                                  Valid operators are In, NotIn, Exists
+                                                  and DoesNotExist.
+                                                type: string
+                                              values:
+                                                description: values is an array of
+                                                  string values. If the operator is
+                                                  In or NotIn, the values array must
+                                                  be non-empty. If the operator is
+                                                  Exists or DoesNotExist, the values
+                                                  array must be empty. This array
+                                                  is replaced during a strategic merge
+                                                  patch.
+                                                items:
+                                                  type: string
+                                                type: array
+                                            required:
+                                            - key
+                                            - operator
+                                            type: object
+                                          type: array
+                                        matchLabels:
+                                          additionalProperties:
+                                            type: string
+                                          description: matchLabels is a map of {key,value}
+                                            pairs. A single {key,value} in the matchLabels
+                                            map is equivalent to an element of matchExpressions,
+                                            whose key field is "key", the operator
+                                            is "In", and the values array contains
+                                            only "value". The requirements are ANDed.
+                                          type: object
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  required:
+                                  - labelSelector
+                                  type: object
+                                maxItems: 10
+                                type: array
+                            required:
+                            - clusterSelectorTerms
+                            type: object
                         type: object
                     type: object
                   clusterNames:
                     description: ClusterNames contains a list of names of MemberCluster
-                      to place the selected resources. If the list is not empty, Affinity
-                      is ignored.
+                      to place the selected resources. If the list is not empty, `PlacementType`,
+                      `NumberOfClusters`, `Affinity`, and `TopologySpreadConstraints`
+                      are ignored.
                     items:
                       type: string
                     maxItems: 100
+                    type: array
+                  numberOfClusters:
+                    description: NumberOfClusters of placement. Only valid if the
+                      placement type is "PickN".
+                    format: int32
+                    type: integer
+                  placementType:
+                    description: Type of placement. Can be "PickAll" or "PickN". Default
+                      is PickAll.
+                    type: string
+                  topologySpreadConstraints:
+                    description: TopologySpreadConstraints describes how a group of
+                      resources ought to spread across multiple topology domains.
+                      Scheduler will schedule resources in a way which abides by the
+                      constraints. All topologySpreadConstraints are ANDed.
+                    items:
+                      description: TopologySpreadConstraint specifies how to spread
+                        resources among the given cluster topology.
+                      properties:
+                        maxSkew:
+                          description: MaxSkew describes the degree to which resources
+                            may be unevenly distributed. When `whenUnsatisfiable=DoNotSchedule`,
+                            it is the maximum permitted difference between the number
+                            of resource copies in the target topology and the global
+                            minimum. The global minimum is the minimum number of resource
+                            copies in a domain. When `whenUnsatisfiable=ScheduleAnyway`,
+                            it is used to give higher precedence to topologies that
+                            satisfy it. It's an optional field. Default value is 1
+                            and 0 is not allowed.
+                          format: int32
+                          type: integer
+                        topologyKey:
+                          description: TopologyKey is the key of cluster labels. Clusters
+                            that have a label with this key and identical values are
+                            considered to be in the same topology. We consider each
+                            <key, value> as a "bucket", and try to put balanced number
+                            of replicas of the resource into each bucket honor the
+                            `MaxSkew` value. It's a required field.
+                          type: string
+                        whenUnsatisfiable:
+                          description: WhenUnsatisfiable indicates how to deal with
+                            the resource if it doesn't satisfy the spread constraint.
+                            - DoNotSchedule (default) tells the scheduler not to schedule
+                            it. - ScheduleAnyway tells the scheduler to schedule the
+                            resource in any cluster, but giving higher precedence
+                            to topologies that would help reduce the skew. It's an
+                            optional field.
+                          type: string
+                      required:
+                      - topologyKey
+                      type: object
                     type: array
                 type: object
               resourceSelectors:
@@ -408,6 +560,7 @@ spec:
                   - condition
                   - kind
                   - name
+                  - version
                   type: object
                 maxItems: 1000
                 type: array
@@ -436,6 +589,7 @@ spec:
                   required:
                   - kind
                   - name
+                  - version
                   type: object
                 type: array
               targetClusters:

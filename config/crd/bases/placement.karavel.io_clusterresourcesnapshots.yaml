@@ -4,33 +4,46 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourcebindings.fleet.azure.com
+  name: clusterresourcesnapshots.placement.karavel.io
 spec:
-  group: fleet.azure.com
+  group: placement.karavel.io
   names:
     categories:
-    - fleet
-    kind: ClusterResourceBinding
-    listKind: ClusterResourceBindingList
-    plural: clusterresourcebindings
+    - fleet-workload
+    kind: ClusterResourceSnapshot
+    listKind: ClusterResourceSnapshotList
+    plural: clusterresourcesnapshots
     shortNames:
-    - rb
-    singular: clusterresourcebinding
+    - rss
+    singular: clusterresourcesnapshot
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="ResourceBindingApplied")].status
-      name: Applied
+    - jsonPath: .metadata.generation
+      name: Gen
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1
+    name: v1beta1
     schema:
       openAPIV3Schema:
-        description: ClusterResourceBinding represents a scheduling decision that
-          binds a group of resources to a cluster. It MUST have a label named `CRPTrackingLabel`
-          that points to the cluster resource policy that creates it.
+        description: "ClusterResourceSnapshot is used to store a snapshot of selected
+          resources by a resource placement policy. Its spec is immutable. We may
+          need to produce more than one resourceSnapshot for all the resources a ResourcePlacement
+          selected to get around the 1MB size limit of k8s objects. We assign an ever-increasing
+          index for each such group of resourceSnapshots. The name convention of a
+          clusterResourceSnapshot is {CRPName}-{resourceIndex}(-{subindex})* where
+          the name of the first snapshot of a group has no subindex part so its name
+          is {CRPName}-{resourceIndex}. Each snapshot MUST have the following labels:
+          - `CRPTrackingLabel` which points to its owner CRP. - `ResourceIndexLabel`
+          which is the index  of the snapshot group. - `IsLatestSnapshotLabel` which
+          indicates whether the snapshot is the latest one. \n All the snapshots within
+          the same index group must have the same ResourceIndexLabel. \n The first
+          snapshot of the index group MUST have the following annotations: - \"NumberOfResourceSnapshots\"
+          to store the total number of resource snapshots in the index group. - `ResourceGroupHashAnnotation`
+          whose value is the sha-256 hash of all the snapshots belong to the same
+          snapshot index."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -45,28 +58,31 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of ClusterResourceBinding.
+            description: The desired state of ResourceSnapshot.
             properties:
-              resourceSnapshotName:
-                description: ResourceSnapshotName is the name of the resource snapshot
-                  that this resource binding points to. If the resources are divided
-                  into multiple snapshots because of the resource size limit, it points
-                  to the name of the leading snapshot of the index group.
+              policySnapshotName:
+                description: PolicySnapshotName is the name of the policy snapshot
+                  that this resource snapshot is pointing to.
                 type: string
-              targetCluster:
-                description: TargetCluster is the name of the cluster that the scheduler
-                  assigns the resources to.
-                type: string
+              selectedResources:
+                description: SelectedResources contains a list of resources selected
+                  by ResourceSelectors.
+                items:
+                  description: ResourceContent contains the content of a resource
+                  type: object
+                  x-kubernetes-embedded-resource: true
+                  x-kubernetes-preserve-unknown-fields: true
+                type: array
             required:
-            - resourceSnapshotName
-            - targetCluster
+            - policySnapshotName
+            - selectedResources
             type: object
           status:
-            description: The observed status of ClusterResourceBinding.
+            description: The observed status of ResourceSnapshot.
             properties:
               conditions:
                 description: Conditions is an array of current observed conditions
-                  for ClusterResourceBinding.
+                  for ResourceSnapshot.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct

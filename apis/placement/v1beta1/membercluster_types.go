@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1
+package v1beta1
 
 import (
 	rbacv1 "k8s.io/api/rbac/v1"
