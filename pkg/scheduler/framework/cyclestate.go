@@ -8,6 +8,8 @@ package framework
 import (
 	"fmt"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // StateKey is the key for a state value stored in a CycleState.
@@ -32,6 +34,14 @@ type CycleStatePluginReadWriter interface {
 type CycleState struct {
 	// store is a concurrency-safe store (a map).
 	store sync.Map
+
+	// skippedFilterPlugins is a set of Filter plugins that should be skipped in the current scheduling cycle.
+	skippedFilterPlugins sets.String
+	// desiredBatchSize is the desired batch size for the current scheduling cycle.
+	desiredBatchSize int
+	// batchSizeLimit is the limit on batch size for the current scheduling cycle, set by
+	// post-batch plugins.
+	batchSizeLimit int
 }
 
 // Read retrieves a value from CycleState by a key.

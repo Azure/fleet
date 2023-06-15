@@ -5,7 +5,10 @@ Licensed under the MIT license.
 
 package framework
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // StatusCode is the status code of a Status, returned by a plugin.
 type StatusCode int
@@ -30,7 +33,7 @@ const (
 	Skip
 )
 
-var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "Skip"}
+var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "PreSkip"}
 
 // Name returns the name of a status code.
 func (sc StatusCode) Name() string {
@@ -69,8 +72,8 @@ func (s *Status) IsInteralError() bool {
 	return s.code() == internalError
 }
 
-// IsPreSkip returns if a Status is of the status code Skip.
-func (s *Status) IsPreSkip() bool {
+// IsSkip returns if a Status is of the status code Skip.
+func (s *Status) IsSkip() bool {
 	return s.code() == Skip
 }
 
@@ -114,6 +117,15 @@ func (s *Status) String() string {
 	}
 	desc = append(desc, s.reasons...)
 	return strings.Join(desc, ", ")
+}
+
+// AsError returns a status as an error; it returns nil if the status is of the internalError code.
+func (s *Status) AsError() error {
+	if !s.IsInteralError() {
+		return nil
+	}
+
+	return fmt.Errorf("plugin %s returned an error %s", s.sourcePlugin, s.String())
 }
 
 // NewNonErrorStatus returns a Status with a non-error status code.

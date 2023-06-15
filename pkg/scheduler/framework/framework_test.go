@@ -778,3 +778,14 @@ func TestUpdatePolicySnapshotStatus(t *testing.T) {
 		t.Errorf("scheduled condition, got %v, want %v", updatedCondition, condition)
 	}
 }
+
+// Below are a few dummy post batch plugins for testing.
+type dummyPostBatchPlugin struct{}
+
+func (p *dummyPostBatchPlugin) Name() {
+	return dummyPluginName
+}
+
+func TestRunPostBatchPlugins(t *testing.T) {
+
+}

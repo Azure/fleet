@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync/atomic"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -182,9 +183,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// Note that clusters here are listed from the cached client for improved performance. This is
 	// safe in consistency as it is guaranteed that the scheduler will receive all events for cluster
 	// changes eventually.
-	//
-	// TO-DO (chenyu1): assign variable(s) when more logic is added.
-	_, err = f.collectClusters(ctx)
+	clusters, err := f.collectClusters(ctx)
 	if err != nil {
 		klog.ErrorS(err, errorMessage, klog.KObj(policy))
 		return ctrl.Result{}, err
@@ -330,6 +329,75 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		}
 	}
 
+	// Enter the actual scheduling stages.
+
+	// Prepare the cycle state for this run.
+	//
+	// Note that this state is shared between all plugins and the scheduler framework itself (though some fields are reserved by
+	// the framework). These resevered fields are never accessed concurrently, as each scheduling run has its own cycle and a run
+	// is always executed in one single goroutine; plugin access to the state is guarded by sync.Map.
+	state := NewCycleState()
+
+	// Calculate the batch size.
+	state.desiredBatchSize = int(*policy.Spec.Policy.NumberOfClusters) - len(active) - len(deletedWithDispatcherFinalizer)
+
+	// The earlier check guarantees that the desired batch size is always positive; however, the scheduler still
+	// performs a sanity check here; normally this branch will never run.
+	if state.desiredBatchSize <= 0 {
+		err = fmt.Errorf("desired batch size is below zero: %d", state.desiredBatchSize)
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Run pre-batch plugins.
+	//
+	// These plugins each yields a batch size limit; the minimum of these limits is used as the actual batch size for
+	// this scheduling cycle.
+	//
+	// Note that any failure would lead to the cancellation of the scheduling cycle.
+	batchSizeLimit, status := f.runPostBatchPlugins(ctx, state, policy)
+	if status.IsInteralError() {
+		klog.ErrorS(status.AsError(), errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(status.AsError())
+	}
+
+	// A sanity check; normally this branch will never run, as runPostBatchPlugins guarantees that
+	// the batch size limit is never greater than the desired batch size.
+	if batchSizeLimit > state.desiredBatchSize {
+		err := fmt.Errorf("batch size limit is greater than desired batch size: %d > %d", batchSizeLimit, state.desiredBatchSize)
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+	}
+	state.batchSizeLimit = batchSizeLimit
+
+	// Run pre-filter plugins.
+	//
+	// Each plugin can:
+	// * set up some common state for future calls (on different extensions points) in the scheduling cycle; and/or
+	// * check if it needs to run the the Filter stage.
+	//   Any plugin that would like to be skipped is listed in the cycle state for future reference.
+	//
+	// Note that any failure would lead to the cancellation of the scheduling cycle.
+	if status := f.runPreFilterPlugins(ctx, state, policy); status.IsInteralError() {
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(status.AsError())
+	}
+
+	// Run filter plugins.
+	//
+	// The scheduler checks each cluster candidate by calling the chain of filter plugins; if any plugin suggests
+	// that the cluster should not be bound, the cluster is ignored for the rest of the cycle. Note that clusters
+	// are inspected in parallel.
+	//
+	// Note that any failure would lead to the cancellation of the scheduling cycle.
+	//
+	// TO-DO (chenyu1): assign variables when the implementation is ready.
+	_, _, err = f.runFilterPlugins(ctx, state, policy, clusters)
+	if err != nil {
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+	}
+
 	// Not yet fully implemented.
 	return ctrl.Result{}, nil
 }
@@ -429,4 +497,125 @@ func (f *framework) updatePolicySnapshotStatus(ctx context.Context, policy *flee
 		return controller.NewAPIServerError(fmt.Errorf(errorFormat, err))
 	}
 	return nil
+}
+
+// runPostBatchPlugins runs all post batch plugins sequentially.
+func (f *framework) runPostBatchPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterPolicySnapshot) (int, *Status) {
+	minBatchSizeLimit := state.desiredBatchSize
+	for _, pl := range f.profile.postBatchPlugins {
+		batchSizeLimit, status := pl.PostBatch(ctx, state, policy)
+		switch {
+		case status.IsSuccess():
+			if batchSizeLimit < minBatchSizeLimit {
+				minBatchSizeLimit = batchSizeLimit
+			}
+		case status.IsInteralError():
+			return 0, status
+		case status.IsSkip(): // Do nothing.
+		default:
+			// Any status that is not Success, InternalError, or Skip is considered an error.
+			return 0, FromError(fmt.Errorf("postbatch plugin returned an unsupported status: %s", status), pl.Name())
+		}
+	}
+
+	return minBatchSizeLimit, nil
+}
+
+// runPreFilterPlugins runs all pre filter plugins sequentially.
+func (f *framework) runPreFilterPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterPolicySnapshot) *Status {
+	for _, pl := range f.profile.preFilterPlugins {
+		status := pl.PreFilter(ctx, state, policy)
+		switch {
+		case status.IsSuccess(): // Do nothing.
+		case status.IsInteralError():
+			return status
+		case status.IsSkip():
+			state.skippedFilterPlugins.Insert(pl.Name())
+		default:
+			// Any status that is not Success, InternalError, or Skip is considered an error.
+			return FromError(fmt.Errorf("prefilter plugin returned an unknown status %s", status), pl.Name())
+		}
+	}
+
+	return nil
+}
+
+// runFilterPluginsFor runs filter plugins for a signle cluster.
+func (f *framework) runFilterPluginsFor(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) *Status {
+	for _, pl := range f.profile.filterPlugins {
+		// Skip the plugin if it is not needed.
+		if state.skippedFilterPlugins.Has(pl.Name()) {
+			continue
+		}
+		status := pl.Filter(ctx, state, policy, cluster)
+		switch {
+		case status.IsSuccess(): // Do nothing.
+		case status.IsInteralError():
+			return status
+		case status.IsClusterUnschedulable():
+			return status
+		default:
+			// Any status that is not Success, InternalError, or ClusterUnschedulable is considered an error.
+			return FromError(fmt.Errorf("filter plugin returned an unknown status %s", status), pl.Name())
+		}
+	}
+
+	return nil
+}
+
+// filteredClusterWithStatus is struct that documents clusters filtered out at the Filter stage,
+// along with a plugin status, which documents why a cluster is filtered out.
+//
+// This struct is used for the purpose of keeping reasons for returning scheduling decision to
+// the user.
+type filteredClusterWithStatus struct {
+	cluster *fleetv1beta1.MemberCluster
+	status  *Status
+}
+
+// runFilterPlugins runs filter plugins on clusters in parallel.
+func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterPolicySnapshot, clusters []fleetv1beta1.MemberCluster) (passed []*fleetv1beta1.MemberCluster, filtered []*filteredClusterWithStatus, err error) {
+	// Create a child context.
+	childCtx, cancel := context.WithCancel(ctx)
+
+	// Pre-allocate slices to avoid races.
+	passed = make([]*fleetv1beta1.MemberCluster, 0, len(clusters))
+	var passedIdx int32 = -1
+	filtered = make([]*filteredClusterWithStatus, 0, len(clusters))
+	var filteredIdx int32 = -1
+
+	errFlag := parallelizer.NewErrorFlag()
+
+	doWork := func(pieces int) {
+		cluster := clusters[pieces]
+		status := f.runFilterPluginsFor(childCtx, state, policy, &cluster)
+		switch {
+		case status.IsSuccess():
+			// Use atomic add to avoid races.
+			newPassedIdx := atomic.AddInt32(&passedIdx, 1)
+			passed[newPassedIdx] = &cluster
+		case status.IsClusterUnschedulable():
+			// Use atomic add to avoid races.
+			newFilteredIdx := atomic.AddInt32(&filteredIdx, 1)
+			filtered[newFilteredIdx] = &filteredClusterWithStatus{
+				cluster: &cluster,
+				status:  status,
+			}
+		default: // An error has occurred.
+			errFlag.Raise(status.AsError())
+			// Cancel the child context, which will lead the parallelizer to stop running tasks.
+			cancel()
+		}
+	}
+
+	// Run inspection in paralle.
+	//
+	// Note that the parallel run will be stopped immediately upon encounter of the first error.
+	f.parallelizer.ParallelizeUntil(childCtx, len(clusters), doWork, "runFilterPlugins")
+	// Retrieve the first error from the error flag.
+	if err := errFlag.Lower(); err != nil {
+		return nil, nil, err
+	}
+
+	return passed, filtered, nil
 }
