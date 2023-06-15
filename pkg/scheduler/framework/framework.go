@@ -15,7 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1 "go.goms.io/fleet/apis/v1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 )
 
@@ -43,7 +43,7 @@ type Framework interface {
 	Handle
 
 	// RunSchedulerCycleFor performs scheduling for a policy snapshot.
-	RunSchedulingCycleFor(ctx context.Context, policy *fleetv1.ClusterPolicySnapshot, resources *fleetv1.ClusterResourceSnapshot) (result ctrl.Result, err error)
+	RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error)
 }
 
 // framework implements the Framework interface.
@@ -144,7 +144,7 @@ func (f *framework) EventRecorder() record.EventRecorder {
 }
 
 // RunSchedulingCycleFor performs scheduling for a policy snapshot.
-func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1.ClusterPolicySnapshot, resources *fleetv1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
+func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
 	// Not yet implemented.
 	return ctrl.Result{}, nil
 }
