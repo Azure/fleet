@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -168,7 +169,17 @@ func (f *framework) EventRecorder() record.EventRecorder {
 
 // RunSchedulingCycleFor performs scheduling for a policy snapshot.
 func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
+	startTime := time.Now()
+	clusterPolicySnapshotRef := klog.KObj(policy)
+	klog.V(2).InfoS("Scheduling cycle starts", "clusterPolicySnapshot", clusterPolicySnapshotRef)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("Scheduling cycle ends", "clusterPolicySnapshot", clusterPolicySnapshotRef, "latency", latency)
+	}()
+
 	errorMessage := "failed to run scheduling cycle"
+
+	klog.V(2).InfoS("Retrieving clusters and bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 
 	// Retrieve the desired number of clusters from the policy.
 	numOfClusters, err := extractNumOfClustersFromPolicySnapshot(policy)
@@ -220,6 +231,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// where the scheduler binds a cluster to a resource placement, even though the dispatcher has
 	// not started, or is still in the process of, removing the same set of resources from
 	// the cluster, triggered by a recently deleted binding.
+	klog.V(2).InfoS("Classifying bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 	active, deletedWithDispatcherFinalizer, deletedWithoutDispatcherFinalizer := classifyBindings(bindings)
 
 	// If a binding has been marked for deletion and no longer has the dispatcher finalizer, the scheduler
@@ -243,6 +255,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	//
 	// This assumes a monotonic clock.
 	if act {
+		klog.V(2).InfoS("Downscaling", "clusterPolicySnapshot", clusterPolicySnapshotRef, "count", downscaleCount)
 		remaining, err := f.downscale(ctx, active, downscaleCount)
 		if err != nil {
 			klog.ErrorS(err, errorMessage, klog.KObj(policy))
@@ -261,6 +274,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		//
 		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
 		// preserved.
+		klog.V(2).InfoS("Refreshing scheduling decision", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 		if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
 			klog.ErrorS(err, errorMessage, klog.KObj(policy))
 			return ctrl.Result{}, err
@@ -284,6 +298,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// * the policy is of the PickN type, and currently there are not enough number of bindings.
 	if !shouldSchedule(policy, numOfClusters, len(active)+len(deletedWithDispatcherFinalizer)) {
 		// No action is needed; however, a status refresh might be warranted.
+		klog.V(2).InfoS("No scheduling action is needed", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 
 		// Prepare new scheduling decisions.
 		newSchedulingDecisions := prepareNewSchedulingDecisions(policy, active, deletedWithDispatcherFinalizer)
@@ -299,6 +314,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 			//
 			// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
 			// preserved.
+			klog.V(2).InfoS("Refreshing scheduling decision", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 			if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
 				klog.ErrorS(err, errorMessage, klog.KObj(policy))
 				return ctrl.Result{}, err
@@ -310,6 +326,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	}
 
 	// The scheduler needs to take action; refresh the status first.
+	klog.V(2).InfoS("Scheduling action is needed", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 
 	// Prepare new scheduling decisions.
 	newSchedulingDecisions := prepareNewSchedulingDecisions(policy, active, deletedWithDispatcherFinalizer)
@@ -324,6 +341,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		//
 		// Note that the op would fail if the policy snapshot is not the latest, so that consistency is
 		// preserved.
+		klog.V(2).InfoS("Refreshing scheduling decision", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 		if err := f.updatePolicySnapshotStatus(ctx, policy, newSchedulingDecisions, newSchedulingCondition); err != nil {
 			klog.ErrorS(err, errorMessage, klog.KObj(policy))
 			return ctrl.Result{}, err
