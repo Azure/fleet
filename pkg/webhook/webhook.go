@@ -21,8 +21,10 @@ import (
 	"time"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
+	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -33,6 +35,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
 )
@@ -42,6 +45,14 @@ const (
 	FleetWebhookKeyFileName  = "tls.key"
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
+
+	crdResourceName        = "customresourcedefinitions"
+	replicaSetResourceName = "replicasets"
+	podResourceName        = "pods"
+)
+
+var (
+	admissionReviewVersions = []string{admv1.SchemeGroupVersion.Version, admv1beta1.SchemeGroupVersion.Version}
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
@@ -120,7 +131,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(corev1.Pod{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 
 				Rules: []admv1.RuleWithOperations{
 					{
@@ -128,9 +139,9 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Create,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{""},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"pods"},
+							APIGroups:   []string{corev1.SchemeGroupVersion.Group},
+							APIVersions: []string{corev1.SchemeGroupVersion.Version},
+							Resources:   []string{podResourceName},
 							Scope:       &namespacedScope,
 						},
 					},
@@ -141,7 +152,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(fleetv1alpha1.ClusterResourcePlacement{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 
 				Rules: []admv1.RuleWithOperations{
 					{
@@ -150,8 +161,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Update,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{"fleet.azure.com"},
-							APIVersions: []string{"v1alpha1"},
+							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group},
+							APIVersions: []string{fleetv1alpha1.GroupVersion.Version},
 							Resources:   []string{fleetv1alpha1.ClusterResourcePlacementResource},
 							Scope:       &clusterScope,
 						},
@@ -163,17 +174,39 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				ClientConfig:            w.createClientConfig(appsv1.ReplicaSet{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: []admv1.OperationType{
 							admv1.Create,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{"apps"},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"replicasets"},
+							APIGroups:   []string{appsv1.SchemeGroupVersion.Group},
+							APIVersions: []string{appsv1.SchemeGroupVersion.Version},
+							Resources:   []string{replicaSetResourceName},
 							Scope:       &namespacedScope,
+						},
+					},
+				},
+			},
+			{
+				Name:                    "fleet.customresourcedefinition.validating",
+				ClientConfig:            w.createClientConfig(v1.CustomResourceDefinition{}),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.Create,
+							admv1.Update,
+							admv1.Delete,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{v1.SchemeGroupVersion.Group},
+							APIVersions: []string{v1.SchemeGroupVersion.Version},
+							Resources:   []string{crdResourceName},
+							Scope:       &clusterScope,
 						},
 					},
 				},
@@ -225,6 +258,9 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 	case appsv1.ReplicaSet:
 		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
 		serviceRef.Path = pointer.String(replicaset.ValidationPath)
+	case v1.CustomResourceDefinition:
+		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
+		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}
 
 	config := admv1.WebhookClientConfig{
