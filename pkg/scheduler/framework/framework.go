@@ -133,7 +133,7 @@ func (f *framework) Manager() ctrl.Manager {
 	return f.manager
 }
 
-// APIReader returns the (uncached) read-only client in use by the scheduler framework.
+// UncachedReader returns the (uncached) read-only client in use by the scheduler framework.
 func (f *framework) UncachedReader() client.Reader {
 	return f.uncachedReader
 }
