@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -58,6 +59,14 @@ const (
 
 	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster.
 	MemberClusterFinalizer = "work.fleet.azure.com/membercluster-finalizer"
+
+	// DispatcherFinalizer is added by the dispatcher to make sure that a binding can only be deleted if the dispatcher
+	// has removed all selected resources from the bound cluster.
+	DispatcherFinalizer = "fleet.io/dispatcher-cleanup"
+
+	// SchedulerFinalizer is added by the scheduler to make sure that a binding can only be deleted if the scheduler
+	// has relieved it from scheduling consideration.
+	SchedulerFinalizer = "fleet.io/scheduler-cleanup"
 
 	// LastWorkUpdateTimeAnnotationKey is used to mark the last update time on a work object.
 	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
@@ -140,6 +149,13 @@ var (
 		Group:    corev1.GroupName,
 		Version:  corev1.SchemeGroupVersion.Version,
 		Resource: "services",
+	}
+
+	// TO-DO (chenyu1): Add more common GVRs/GVKs here.
+	CRPV1Beta1GVK = schema.GroupVersionKind{
+		Group:   fleetv1beta1.GroupVersion.Group,
+		Version: fleetv1beta1.GroupVersion.Version,
+		Kind:    "ClusterResourcePlacement",
 	}
 )
 

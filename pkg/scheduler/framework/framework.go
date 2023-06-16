@@ -10,13 +10,19 @@ package framework
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -145,6 +151,126 @@ func (f *framework) EventRecorder() record.EventRecorder {
 
 // RunSchedulingCycleFor performs scheduling for a policy snapshot.
 func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
-	// Not yet implemented.
+	startTime := time.Now()
+	clusterPolicySnapshotRef := klog.KObj(policy)
+	klog.V(2).InfoS("Scheduling cycle starts", "clusterPolicySnapshot", clusterPolicySnapshotRef)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("Scheduling cycle ends", "clusterPolicySnapshot", clusterPolicySnapshotRef, "latency", latency)
+	}()
+
+	errorMessage := "failed to run scheduling cycle"
+
+	klog.V(2).InfoS("Retrieving clusters and bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
+
+	// Retrieve the desired number of clusters from the policy.
+	//
+	// TO-DO (chenyu1): assign variable(s) when more logic is added.
+	_, err = extractNumOfClustersFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, errorMessage, "clusterPolicySnapshot", clusterPolicySnapshotRef)
+		return ctrl.Result{}, err
+	}
+
+	// Collect all clusters.
+	//
+	// Note that clusters here are listed from the cached client for improved performance. This is
+	// safe in consistency as it is guaranteed that the scheduler will receive all events for cluster
+	// changes eventually.
+	//
+	// TO-DO (chenyu1): assign variable(s) when more logic is added.
+	_, err = f.collectClusters(ctx)
+	if err != nil {
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
+	}
+
+	// Collect all bindings.
+	//
+	// Note that for consistency reasons, bindings are listed directly from the API server; this helps
+	// avoid a classic read-after-write consistency issue, which, though should only happen when there
+	// are connectivity issues and/or API server is overloaded, can lead to over-scheduling in adverse
+	// scenarios. It is true that even when bindings are over-scheduled, the scheduler can still correct
+	// the situation in the next cycle; however, considering that placing resources to clusters, unlike
+	// pods to nodes, is more expensive, it is better to avoid over-scheduling in the first place.
+	//
+	// This, of course, has additional performance overhead (and may further exacerbate API server
+	// overloading). In the long run we might still want to resort to a cached situtation.
+	//
+	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
+	bindings, err := f.collectBindings(ctx, policy)
+	if err != nil {
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
+	}
+
+	// Parse the bindings, find out
+	// * active bindings, i.e., bindings that are not marked for deletion; and
+	// * bindings that are already marked for deletion, but still have the dispatcher finalizer
+	//   present;
+	// * bindings that are already marked for deletion, and no longer have the dispatcher finalizer
+	//
+	// Note that the scheduler only considers a binding to be deleted if it is marked for deletion
+	// and it no longer has the dispatcher finalizer. This helps avoid a rare racing condition
+	// where the scheduler binds a cluster to a resource placement, even though the dispatcher has
+	// not started, or is still in the process of, removing the same set of resources from
+	// the cluster, triggered by a recently deleted binding.
+	//
+	// TO-DO (chenyu1): assign variable(s) when more logic is added.
+	klog.V(2).InfoS("Classifying bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
+	_, _, deletedWithoutDispatcherFinalizer := classifyBindings(bindings)
+
+	// If a binding has been marked for deletion and no longer has the dispatcher finalizer, the scheduler
+	// removes its own finalizer from it, to clear it for eventual deletion.
+	if err := f.removeSchedulerFinalizerFromBindings(ctx, deletedWithoutDispatcherFinalizer); err != nil {
+		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		return ctrl.Result{}, err
+	}
+
+	// Not yet fully implemented.
 	return ctrl.Result{}, nil
+}
+
+// collectClusters lists all clusters in the cache.
+func (f *framework) collectClusters(ctx context.Context) ([]fleetv1beta1.MemberCluster, error) {
+	errorFormat := "failed to collect clusters: %w"
+
+	clusterList := &fleetv1beta1.MemberClusterList{}
+	if err := f.client.List(ctx, clusterList, &client.ListOptions{}); err != nil {
+		return nil, controller.NewAPIServerError(fmt.Errorf(errorFormat, err))
+	}
+	return clusterList.Items, nil
+}
+
+// collectBindings lists all bindings associated with a CRP **using the uncached client**.
+func (f *framework) collectBindings(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot) ([]fleetv1beta1.ClusterResourceBinding, error) {
+	errorFormat := "failed to collect bindings: %w"
+
+	bindingOwner, err := extractOwnerCRPNameFromPolicySnapshot(policy)
+	if err != nil {
+		// This branch should never run in most cases, as the a policy snapshot is expected to be
+		// owned by a CRP.
+		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf(errorFormat, err))
+	}
+
+	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
+	labelSelector := labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: bindingOwner})
+	// List bindings directly from the API server.
+	if err := f.uncachedReader.List(ctx, bindingList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
+		return nil, controller.NewAPIServerError(fmt.Errorf(errorFormat, err))
+	}
+	return bindingList.Items, nil
+}
+
+// removeSchedulerFinalizerFromBindings removes the scheduler finalizer from a list of bindings.
+func (f *framework) removeSchedulerFinalizerFromBindings(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
+	errorFormat := "failed to remove scheduler finalizer from binding %s: %w"
+
+	for _, binding := range bindings {
+		controllerutil.RemoveFinalizer(binding, utils.SchedulerFinalizer)
+		if err := f.client.Update(ctx, binding, &client.UpdateOptions{}); err != nil {
+			return controller.NewAPIServerError(fmt.Errorf(errorFormat, binding.Name, err))
+		}
+	}
+	return nil
 }
