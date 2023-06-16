@@ -41,8 +41,8 @@ func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind {
-		case retrieveCRDGVK():
-			klog.V(2).InfoS("handling CRD resource", "GVK", retrieveCRDGVK())
+		case createCRDGVK():
+			klog.V(2).InfoS("handling CRD resource", "GVK", createCRDGVK())
 			response = v.handleCRD(req)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
@@ -75,7 +75,7 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 }
 
-func retrieveCRDGVK() metav1.GroupVersionKind {
+func createCRDGVK() metav1.GroupVersionKind {
 	return metav1.GroupVersionKind{
 		Group:   v1.SchemeGroupVersion.Group,
 		Version: v1.SchemeGroupVersion.Version,
