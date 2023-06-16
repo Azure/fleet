@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -50,6 +51,9 @@ func (p *DummyAllPurposePlugin) PreScore(ctx context.Context, state CycleStatePl
 func (p *DummyAllPurposePlugin) Score(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) { //nolint:revive
 	return &ClusterScore{}, nil
 }
+
+// SetUpWithFramework is a no-op to satisfy the Plugin interface.
+func (p *DummyAllPurposePlugin) SetUpWithFramework(handle Handle) {} // nolint:revive
 
 // TestProfile tests the basic ops of a Profile.
 func TestProfile(t *testing.T) {
