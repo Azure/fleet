@@ -67,6 +67,7 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 		}
 	}
 
+	// This regex works because every CRD name in kubernetes follows this pattern <plural>.<group>.
 	group := regexp.MustCompile(groupMatch).FindStringSubmatch(crd.Name)[1]
 	if validation.CheckCRDGroup(group) && !validation.ValidateUserForCRD(req.UserInfo) {
 		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
