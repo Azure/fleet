@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -273,4 +274,21 @@ func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]boo
 		return false
 	}
 	return true
+}
+
+// ExtractNumOfClustersFromPolicySnapshot extracts the numOfClusters value from the annotations
+// on a policy snapshot.
+func ExtractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySnapshot) (int, error) {
+	numOfClustersStr, ok := policy.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
+	if !ok {
+		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.NumberOfClustersAnnotation)
+	}
+
+	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
+	numOfClusters, err := strconv.Atoi(numOfClustersStr)
+	if err != nil || numOfClusters < 0 {
+		return 0, fmt.Errorf("invalid annotation %s: %s is not a valid count: %w", fleetv1beta1.NumberOfClustersAnnotation, numOfClustersStr, err)
+	}
+
+	return numOfClusters, nil
 }

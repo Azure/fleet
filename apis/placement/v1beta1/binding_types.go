@@ -10,6 +10,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// DispatcherFinalizer is added by the dispatcher to make sure that a binding can only be deleted if the dispatcher
+	// has removed all selected resources from the bound cluster.
+	DispatcherFinalizer = fleetPrefix + "dispatcher-cleanup"
+
+	// SchedulerFinalizer is added by the scheduler to make sure that a binding can only be deleted if the scheduler
+	// has relieved it from scheduling consideration.
+	SchedulerFinalizer = fleetPrefix + "scheduler-cleanup"
+)
+
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=rb
 // +kubebuilder:subresource:status

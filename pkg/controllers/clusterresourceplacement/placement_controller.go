@@ -436,7 +436,7 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
 		crp.Spec.Policy.NumberOfClusters != nil {
-		oldCount, err := parseNumberOfClustersFromAnnotation(latest)
+		oldCount, err := utils.ExtractNumOfClustersFromPolicySnapshot(latest)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the numberOfClusterAnnotation", "clusterPolicySnapshot", klog.KObj(latest))
 			return controller.NewUnexpectedBehaviorError(err)
@@ -523,19 +523,6 @@ func parsePolicyIndexFromLabel(s *fleetv1beta1.ClusterPolicySnapshot) (int, erro
 	}
 	if v < 0 {
 		return -1, fmt.Errorf("policy index should not be negative: %d", v)
-	}
-	return v, nil
-}
-
-// parseNumberOfClustersFromAnnotation returns error when parsing the annotation which should never return error in production.
-func parseNumberOfClustersFromAnnotation(s *fleetv1beta1.ClusterPolicySnapshot) (int, error) {
-	n := s.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
-	v, err := strconv.Atoi(n)
-	if err != nil {
-		return -1, err
-	}
-	if v < 0 {
-		return -1, fmt.Errorf("numberOfCluster should not be negative: %d", v)
 	}
 	return v, nil
 }

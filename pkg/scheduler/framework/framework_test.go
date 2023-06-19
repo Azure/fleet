@@ -40,78 +40,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// TestExtractNumOfClustersFromPolicySnapshot tests the extractNumOfClustersFromPolicySnapshot function.
-func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
-	testCases := []struct {
-		name              string
-		policy            *fleetv1beta1.ClusterPolicySnapshot
-		wantNumOfClusters int
-		expectedToFail    bool
-	}{
-		{
-			name: "valid annotation",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-					Annotations: map[string]string{
-						fleetv1beta1.NumberOfClustersAnnotation: "1",
-					},
-				},
-			},
-			wantNumOfClusters: 1,
-		},
-		{
-			name: "no annotation",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-				},
-			},
-			expectedToFail: true,
-		},
-		{
-			name: "invalid annotation: not an integer",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-					Annotations: map[string]string{
-						fleetv1beta1.NumberOfClustersAnnotation: "abc",
-					},
-				},
-			},
-			expectedToFail: true,
-		},
-		{
-			name: "invalid annotation: negative integer",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-					Annotations: map[string]string{
-						fleetv1beta1.NumberOfClustersAnnotation: "-1",
-					},
-				},
-			},
-			expectedToFail: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			numOfClusters, err := extractNumOfClustersFromPolicySnapshot(tc.policy)
-			if tc.expectedToFail {
-				if err == nil {
-					t.Fatalf("extractNumOfClustersFromPolicySnapshot() = %v, %v, want error", numOfClusters, err)
-				}
-				return
-			}
-
-			if numOfClusters != tc.wantNumOfClusters {
-				t.Fatalf("extractNumOfClustersFromPolicySnapshot() = %v, %v, want %v, nil", numOfClusters, err, tc.wantNumOfClusters)
-			}
-		})
-	}
-}
-
 // TestCollectClusters tests the collectClusters method.
 func TestCollectClusters(t *testing.T) {
 	cluster := fleetv1beta1.MemberCluster{
@@ -300,7 +228,7 @@ func TestClassifyBindings(t *testing.T) {
 			Name:              "deleted-binding-with-dispatcher-finalizer",
 			DeletionTimestamp: &timestamp,
 			Finalizers: []string{
-				utils.DispatcherFinalizer,
+				fleetv1beta1.DispatcherFinalizer,
 			},
 		},
 	}
@@ -328,7 +256,7 @@ func TestRemoveSchedulerFinalizerFromBindings(t *testing.T) {
 	binding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       bindingName,
-			Finalizers: []string{utils.SchedulerFinalizer},
+			Finalizers: []string{fleetv1beta1.SchedulerFinalizer},
 		},
 	}
 
@@ -352,7 +280,7 @@ func TestRemoveSchedulerFinalizerFromBindings(t *testing.T) {
 		t.Fatalf("Binding Get(%v) = %v, want no error", bindingName, err)
 	}
 
-	if controllerutil.ContainsFinalizer(updatedBinding, utils.SchedulerFinalizer) {
+	if controllerutil.ContainsFinalizer(updatedBinding, fleetv1beta1.SchedulerFinalizer) {
 		t.Fatalf("Binding %s finalizers = %v, want no scheduler finalizer", bindingName, updatedBinding.Finalizers)
 	}
 }

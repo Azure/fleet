@@ -159,14 +159,14 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 		klog.V(2).InfoS("Scheduling cycle ends", "clusterPolicySnapshot", clusterPolicySnapshotRef, "latency", latency)
 	}()
 
-	errorMessage := "failed to run scheduling cycle"
+	errorMessage := "Failed to run scheduling cycle"
 
 	klog.V(2).InfoS("Retrieving clusters and bindings", "clusterPolicySnapshot", clusterPolicySnapshotRef)
 
 	// Retrieve the desired number of clusters from the policy.
 	//
 	// TO-DO (chenyu1): assign variable(s) when more logic is added.
-	_, err = extractNumOfClustersFromPolicySnapshot(policy)
+	_, err = utils.ExtractNumOfClustersFromPolicySnapshot(policy)
 	if err != nil {
 		klog.ErrorS(err, errorMessage, "clusterPolicySnapshot", clusterPolicySnapshotRef)
 		return ctrl.Result{}, err
@@ -181,7 +181,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// TO-DO (chenyu1): assign variable(s) when more logic is added.
 	_, err = f.collectClusters(ctx)
 	if err != nil {
-		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		klog.ErrorS(err, errorMessage, clusterPolicySnapshotRef)
 		return ctrl.Result{}, err
 	}
 
@@ -200,7 +200,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
 	bindings, err := f.collectBindings(ctx, policy)
 	if err != nil {
-		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		klog.ErrorS(err, errorMessage, clusterPolicySnapshotRef)
 		return ctrl.Result{}, err
 	}
 
@@ -223,7 +223,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1be
 	// If a binding has been marked for deletion and no longer has the dispatcher finalizer, the scheduler
 	// removes its own finalizer from it, to clear it for eventual deletion.
 	if err := f.removeSchedulerFinalizerFromBindings(ctx, deletedWithoutDispatcherFinalizer); err != nil {
-		klog.ErrorS(err, errorMessage, klog.KObj(policy))
+		klog.ErrorS(err, errorMessage, clusterPolicySnapshotRef)
 		return ctrl.Result{}, err
 	}
 
@@ -267,7 +267,7 @@ func (f *framework) removeSchedulerFinalizerFromBindings(ctx context.Context, bi
 	errorFormat := "failed to remove scheduler finalizer from binding %s: %w"
 
 	for _, binding := range bindings {
-		controllerutil.RemoveFinalizer(binding, utils.SchedulerFinalizer)
+		controllerutil.RemoveFinalizer(binding, fleetv1beta1.SchedulerFinalizer)
 		if err := f.client.Update(ctx, binding, &client.UpdateOptions{}); err != nil {
 			return controller.NewAPIServerError(fmt.Errorf(errorFormat, binding.Name, err))
 		}
