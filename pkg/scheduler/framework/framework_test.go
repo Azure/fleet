@@ -7,6 +7,7 @@ package framework
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"sort"
@@ -23,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -36,7 +38,8 @@ const (
 )
 
 var (
-	ignoredCondFields = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoredCondFields   = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoredStatusFields = cmpopts.IgnoreFields(Status{}, "reasons", "err")
 )
 
 // TO-DO (chenyu1): expand the test cases as development stablizes.
@@ -779,13 +782,501 @@ func TestUpdatePolicySnapshotStatus(t *testing.T) {
 	}
 }
 
-// Below are a few dummy post batch plugins for testing.
-type dummyPostBatchPlugin struct{}
+// TestRunPostBatchPlugins tests the runPostBatchPlugins method.
+func TestRunPostBatchPlugins(t *testing.T) {
+	dummyPostBatchPluginNameA := fmt.Sprintf(dummyPostBatchPluginNameFormat, 0)
+	dummyPostBatchPluginNameB := fmt.Sprintf(dummyPostBatchPluginNameFormat, 1)
 
-func (p *dummyPostBatchPlugin) Name() {
-	return dummyPluginName
+	testCases := []struct {
+		name             string
+		postBatchPlugins []PostBatchPlugin
+		desiredBatchSize int
+		wantBatchLimit   int
+		wantStatus       *Status
+	}{
+		{
+			name: "single plugin, success",
+			postBatchPlugins: []PostBatchPlugin{
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   1,
+		},
+		{
+			name: "single plugin, success, oversized",
+			postBatchPlugins: []PostBatchPlugin{
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 15, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   10,
+		},
+		{
+			name: "multiple plugins, all success",
+			postBatchPlugins: []PostBatchPlugin{
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 2, nil
+					},
+				},
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   1,
+		},
+		{
+			name: "multple plugins, one success, one error",
+			postBatchPlugins: []PostBatchPlugin{
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 0, FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA)
+					},
+				},
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantStatus:       FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA),
+		},
+		{
+			name: "single plugin, skip",
+			postBatchPlugins: []PostBatchPlugin{
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 0, NewNonErrorStatus(Skip, dummyPostBatchPluginNameA)
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   10,
+		},
+		{
+			name: "single plugin, unschedulable",
+			postBatchPlugins: []PostBatchPlugin{
+				&dummyPostBatchPlugin{
+					name: dummyPostBatchPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (size int, status *Status) {
+						return 1, NewNonErrorStatus(ClusterUnschedulable, dummyPostBatchPluginNameA)
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantStatus:       FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.postBatchPlugins {
+				profile.WithPostBatchPlugin(p)
+			}
+			f := &framework{
+				profile: profile,
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			state.desiredBatchSize = tc.desiredBatchSize
+			policy := &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+			batchLimit, status := f.runPostBatchPlugins(ctx, state, policy)
+			if batchLimit != tc.wantBatchLimit || !cmp.Equal(status, tc.wantStatus, cmpopts.IgnoreUnexported(Status{}), ignoredStatusFields) {
+				t.Errorf("runPostBatchPlugins(%v, %v) = %v %v, want %v, %v", state, policy, batchLimit, status, tc.wantBatchLimit, tc.wantStatus)
+			}
+		})
+	}
 }
 
-func TestRunPostBatchPlugins(t *testing.T) {
+// TestRunPreFilterPlugins tests the runPreFilterPlugins method.
+func TestRunPreFilterPlugins(t *testing.T) {
+	dummyPreFilterPluginNameA := fmt.Sprintf(dummyPreFilterPluginNameFormat, 0)
+	dummyPreFilterPluginNameB := fmt.Sprintf(dummyPreFilterPluginNameFormat, 1)
 
+	testCases := []struct {
+		name                   string
+		preFilterPlugins       []PreFilterPlugin
+		wantSkippedPluginNames []string
+		wantStatus             *Status
+	}{
+		{
+			name: "single plugin, success",
+			preFilterPlugins: []PreFilterPlugin{
+				&dummyPreFilterPlugin{
+					name: dummyPreFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) *Status {
+						return nil
+					},
+				},
+			},
+		},
+		{
+			name: "multiple plugins, one success, one skip",
+			preFilterPlugins: []PreFilterPlugin{
+				&dummyPreFilterPlugin{
+					name: dummyPreFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+				&dummyPreFilterPlugin{
+					name: dummyPreFilterPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) (status *Status) {
+						return NewNonErrorStatus(Skip, dummyPreFilterPluginNameB)
+					},
+				},
+			},
+			wantSkippedPluginNames: []string{dummyPreFilterPluginNameB},
+		},
+		{
+			name: "single plugin, internal error",
+			preFilterPlugins: []PreFilterPlugin{
+				&dummyPreFilterPlugin{
+					name: dummyPreFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) *Status {
+						return FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameA),
+		},
+		{
+			name: "single plugin, unschedulable",
+			preFilterPlugins: []PreFilterPlugin{
+				&dummyPreFilterPlugin{
+					name: dummyPreFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot) *Status {
+						return NewNonErrorStatus(ClusterUnschedulable, dummyPreFilterPluginNameA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("cluster is unschedulable"), dummyPreFilterPluginNameA),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.preFilterPlugins {
+				profile.WithPreFilterPlugin(p)
+			}
+			f := &framework{
+				profile: profile,
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			policy := &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+
+			status := f.runPreFilterPlugins(ctx, state, policy)
+			if !cmp.Equal(status, tc.wantStatus, cmp.AllowUnexported(Status{}), ignoredStatusFields) {
+				t.Errorf("runPreFilterPlugins(%v, %v) = %v, want %v", state, policy, status, tc.wantStatus)
+			}
+		})
+	}
+}
+
+// TestRunFilterPluginsFor tests the runFilterPluginsFor method.
+func TestRunFilterPluginsFor(t *testing.T) {
+	dummyFilterPluginNameA := fmt.Sprintf(dummyFilterPluginNameFormat, 0)
+	dummyFilterPluginNameB := fmt.Sprintf(dummyFilterPluginNameFormat, 1)
+
+	testCases := []struct {
+		name               string
+		filterPlugins      []FilterPlugin
+		skippedPluginNames []string
+		wantStatus         *Status
+	}{
+		{
+			name: "single plugin, success",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+			},
+		},
+		{
+			name: "multiple plugins, one success, one skipped",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
+					},
+				},
+			},
+			skippedPluginNames: []string{dummyFilterPluginNameB},
+		},
+		{
+			name: "single plugin, internal error",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA),
+		},
+		{
+			name: "multiple plugins, one unschedulable, one success",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+					},
+				},
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+			},
+			wantStatus: NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+		},
+		{
+			name: "single plugin, skip",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return NewNonErrorStatus(Skip, dummyFilterPluginNameA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.filterPlugins {
+				profile.WithFilterPlugin(p)
+			}
+			f := &framework{
+				profile: profile,
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			for _, name := range tc.skippedPluginNames {
+				state.skippedFilterPlugins.Insert(name)
+			}
+			policy := &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+			cluster := &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			}
+
+			status := f.runFilterPluginsFor(ctx, state, policy, cluster)
+			if !cmp.Equal(status, tc.wantStatus, cmpopts.IgnoreUnexported(Status{}), ignoredStatusFields) {
+				t.Errorf("runFilterPluginsFor(%v, %v, %v) = %v, want %v", state, policy, cluster, status, tc.wantStatus)
+			}
+		})
+	}
+}
+
+// TestRunFilterPlugins tests the runFilterPlugins method.
+func TestRunFilterPlugins(t *testing.T) {
+	dummyFilterPluginNameA := fmt.Sprintf(dummyFilterPluginNameFormat, 0)
+	dummyFilterPluginNameB := fmt.Sprintf(dummyFilterPluginNameFormat, 1)
+
+	anotherClusterName := "singingbutterfly"
+	clusters := []fleetv1beta1.MemberCluster{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altClusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherClusterName,
+			},
+		},
+	}
+
+	testCases := []struct {
+		name                     string
+		filterPlugins            []FilterPlugin
+		wantPassedClusterNames   []string
+		wantFilteredClusterNames []string
+		expectedToFail           bool
+	}{
+		{
+			name: "three clusters, two filter plugins, all passed",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+			},
+			wantPassedClusterNames: []string{clusterName, altClusterName, anotherClusterName},
+		},
+		{
+			name: "three clusters, two filter plugins, two filtered",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == clusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+						}
+						return nil
+					},
+				},
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == anotherClusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			wantPassedClusterNames:   []string{altClusterName},
+			wantFilteredClusterNames: []string{clusterName, anotherClusterName},
+		},
+		{
+			name: "three clusters, internal error",
+			filterPlugins: []FilterPlugin{
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameA,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&dummyFilterPlugin{
+					name: dummyFilterPluginNameB,
+					runner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == anotherClusterName {
+							return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.filterPlugins {
+				profile.WithFilterPlugin(p)
+			}
+			f := &framework{
+				profile:      profile,
+				parallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			policy := &fleetv1beta1.ClusterPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+
+			passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Errorf("runFilterPlugins(%v, %v, %v) = %v %v %v, want error", state, policy, clusters, passed, filtered, err)
+				}
+				return
+			}
+
+			// The method runs in parallel; as a result the order cannot be guaranteed.
+			// Organize the results into maps for easier comparison.
+			passedMap := make(map[string]bool)
+			for _, cluster := range passed {
+				passedMap[cluster.Name] = true
+			}
+			wantPassedMap := make(map[string]bool)
+			for _, name := range tc.wantPassedClusterNames {
+				wantPassedMap[name] = true
+			}
+
+			if !cmp.Equal(passedMap, wantPassedMap) {
+				t.Errorf("passed clusters, got %v, want %v", passedMap, wantPassedMap)
+			}
+
+			filteredMap := make(map[string]bool)
+			for _, item := range filtered {
+				filteredMap[item.cluster.Name] = true
+				// As a sanity check, verify if all status are of the ClusterUnschedulable status code.
+				if !item.status.IsClusterUnschedulable() {
+					t.Errorf("filtered cluster %s status, got %v, want status code ClusterUnschedulable", item.cluster.Name, item.status)
+				}
+			}
+			wantFilteredMap := make(map[string]bool)
+			for _, name := range tc.wantFilteredClusterNames {
+				wantFilteredMap[name] = true
+			}
+
+			if !cmp.Equal(filteredMap, wantFilteredMap) {
+				t.Errorf("filtered clusters, got %v, want %v", filteredMap, wantFilteredMap)
+			}
+		})
+	}
 }

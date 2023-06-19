@@ -540,7 +540,7 @@ func (f *framework) runPreFilterPlugins(ctx context.Context, state *CycleState, 
 	return nil
 }
 
-// runFilterPluginsFor runs filter plugins for a signle cluster.
+// runFilterPluginsFor runs filter plugins for a single cluster.
 func (f *framework) runFilterPluginsFor(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterPolicySnapshot, cluster *fleetv1beta1.MemberCluster) *Status {
 	for _, pl := range f.profile.filterPlugins {
 		// Skip the plugin if it is not needed.
@@ -579,9 +579,9 @@ func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, pol
 	childCtx, cancel := context.WithCancel(ctx)
 
 	// Pre-allocate slices to avoid races.
-	passed = make([]*fleetv1beta1.MemberCluster, 0, len(clusters))
+	passed = make([]*fleetv1beta1.MemberCluster, len(clusters))
 	var passedIdx int32 = -1
-	filtered = make([]*filteredClusterWithStatus, 0, len(clusters))
+	filtered = make([]*filteredClusterWithStatus, len(clusters))
 	var filteredIdx int32 = -1
 
 	errFlag := parallelizer.NewErrorFlag()
@@ -591,11 +591,11 @@ func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, pol
 		status := f.runFilterPluginsFor(childCtx, state, policy, &cluster)
 		switch {
 		case status.IsSuccess():
-			// Use atomic add to avoid races.
+			// Use atomic add to avoid races with minimum overhead.
 			newPassedIdx := atomic.AddInt32(&passedIdx, 1)
 			passed[newPassedIdx] = &cluster
 		case status.IsClusterUnschedulable():
-			// Use atomic add to avoid races.
+			// Use atomic add to avoid races with minimum overhead.
 			newFilteredIdx := atomic.AddInt32(&filteredIdx, 1)
 			filtered[newFilteredIdx] = &filteredClusterWithStatus{
 				cluster: &cluster,
@@ -616,6 +616,10 @@ func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, pol
 	if err := errFlag.Lower(); err != nil {
 		return nil, nil, err
 	}
+
+	// Trim the slices to the actual size.
+	passed = passed[:passedIdx+1]
+	filtered = filtered[:filteredIdx+1]
 
 	return passed, filtered, nil
 }

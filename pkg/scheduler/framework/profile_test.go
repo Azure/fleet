@@ -13,7 +13,6 @@ import (
 
 const (
 	dummyProfileName = "dummyProfile"
-	dummyPluginName  = "dummyAllPurposePlugin"
 )
 
 // TestProfile tests the basic ops of a Profile.
@@ -37,7 +36,7 @@ func TestProfile(t *testing.T) {
 		preScorePlugins:  []PreScorePlugin{dummyAllPurposePlugin},
 		scorePlugins:     []ScorePlugin{dummyAllPurposePlugin},
 		registeredPlugins: map[string]Plugin{
-			dummyPluginName: dummyPlugin,
+			dummyAllPurposePluginName: dummyPlugin,
 		},
 	}
 

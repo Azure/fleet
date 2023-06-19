@@ -64,5 +64,8 @@ func (c *CycleState) Delete(key StateKey) {
 
 // NewCycleState creates a CycleState.
 func NewCycleState() *CycleState {
-	return &CycleState{}
+	return &CycleState{
+		store:                sync.Map{},
+		skippedFilterPlugins: sets.NewString(),
+	}
 }
