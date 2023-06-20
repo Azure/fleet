@@ -21,6 +21,9 @@ const (
 
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
 	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
+
+	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}.
+	ResourceSnapshotNameFmt = "%s-%d"
 )
 
 // +genclient
@@ -38,6 +41,7 @@ const (
 // We assign an ever-increasing index for each such group of resourceSnapshots.
 // The name convention of a clusterResourceSnapshot is {CRPName}-{resourceIndex}(-{subindex})*
 // where the name of the first snapshot of a group has no subindex part so its name is {CRPName}-{resourceIndex}.
+// resourceIndex will begin with 0.
 // Each snapshot MUST have the following labels:
 //   - `CRPTrackingLabel` which points to its owner CRP.
 //   - `ResourceIndexLabel` which is the index  of the snapshot group.
