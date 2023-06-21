@@ -19,12 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
 	CRPName     = "test-placement"
-	policyName  = "test-policy"
 	bindingName = "test-binding"
 )
 
@@ -69,56 +67,6 @@ func TestCollectClusters(t *testing.T) {
 	}
 }
 
-// TestExtractOwnerCRPNameFromPolicySnapshot tests the extractOwnerCRPNameFromPolicySnapshot method.
-func TestExtractOwnerCRPNameFromPolicySnapshot(t *testing.T) {
-	testCases := []struct {
-		name         string
-		policy       *fleetv1beta1.SchedulingPolicySnapshot
-		expectToFail bool
-	}{
-		{
-			name: "policy with CRP owner reference",
-			policy: &fleetv1beta1.SchedulingPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Kind: utils.CRPV1Beta1GVK.Kind,
-							Name: CRPName,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "policy without CRP owner reference",
-			policy: &fleetv1beta1.SchedulingPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:            policyName,
-					OwnerReferences: []metav1.OwnerReference{},
-				},
-			},
-			expectToFail: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			owner, err := extractOwnerCRPNameFromPolicySnapshot(tc.policy)
-			if tc.expectToFail {
-				if err == nil {
-					t.Fatalf("extractOwnerCRPNameFromPolicySnapshot() = %v, %v, want cannot find owner ref error", owner, err)
-				}
-				return
-			}
-
-			if err != nil || owner != CRPName {
-				t.Fatalf("extractOwnerCRPNameFromPolicySnapshot() = %v, %v, want %v, no error", owner, err, CRPName)
-			}
-		})
-	}
-}
-
 // TestCollectBindings tests the collectBindings method.
 func TestCollectBindings(t *testing.T) {
 	binding := &fleetv1beta1.ClusterResourceBinding{
@@ -134,48 +82,19 @@ func TestCollectBindings(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		binding                *fleetv1beta1.ClusterResourceBinding
-		policy                 *fleetv1beta1.SchedulingPolicySnapshot
+		crpName                string
 		expectToFail           bool
 		expectToFindNoBindings bool
 	}{
 		{
 			name:    "found matching bindings",
 			binding: binding,
-			policy: &fleetv1beta1.SchedulingPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Kind: utils.CRPV1Beta1GVK.Kind,
-							Name: CRPName,
-						},
-					},
-				},
-			},
+			crpName: CRPName,
 		},
 		{
-			name: "no owner reference in policy",
-			policy: &fleetv1beta1.SchedulingPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-				},
-			},
-			expectToFail: true,
-		},
-		{
-			name:    "no matching bindings",
-			binding: binding,
-			policy: &fleetv1beta1.SchedulingPolicySnapshot{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: policyName,
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							Kind: utils.CRPV1Beta1GVK.Kind,
-							Name: altCRPName,
-						},
-					},
-				},
-			},
+			name:                   "no matching bindings",
+			binding:                binding,
+			crpName:                altCRPName,
 			expectToFindNoBindings: true,
 		},
 	}
@@ -193,7 +112,7 @@ func TestCollectBindings(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			bindings, err := f.collectBindings(ctx, tc.policy)
+			bindings, err := f.collectBindings(ctx, tc.crpName)
 			if tc.expectToFail {
 				if err == nil {
 					t.Fatalf("collectBindings() = %v, %v, want failed to collect bindings error", bindings, err)

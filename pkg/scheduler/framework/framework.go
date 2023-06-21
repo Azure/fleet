@@ -198,7 +198,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// overloading). In the long run we might still want to resort to a cached situtation.
 	//
 	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
-	bindings, err := f.collectBindings(ctx, policy)
+	bindings, err := f.collectBindings(ctx, crpName)
 	if err != nil {
 		klog.ErrorS(err, errorMessage, schedulingPolicySnapshotRef)
 		return ctrl.Result{}, err
@@ -242,18 +242,11 @@ func (f *framework) collectClusters(ctx context.Context) ([]fleetv1beta1.MemberC
 }
 
 // collectBindings lists all bindings associated with a CRP **using the uncached client**.
-func (f *framework) collectBindings(ctx context.Context, policy *fleetv1beta1.SchedulingPolicySnapshot) ([]fleetv1beta1.ClusterResourceBinding, error) {
+func (f *framework) collectBindings(ctx context.Context, crpName string) ([]fleetv1beta1.ClusterResourceBinding, error) {
 	errorFormat := "failed to collect bindings: %w"
 
-	bindingOwner, err := extractOwnerCRPNameFromPolicySnapshot(policy)
-	if err != nil {
-		// This branch should never run in most cases, as the a policy snapshot is expected to be
-		// owned by a CRP.
-		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf(errorFormat, err))
-	}
-
 	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
-	labelSelector := labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: bindingOwner})
+	labelSelector := labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: crpName})
 	// List bindings directly from the API server.
 	if err := f.uncachedReader.List(ctx, bindingList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
 		return nil, controller.NewAPIServerError(fmt.Errorf(errorFormat, err))

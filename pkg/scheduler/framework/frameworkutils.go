@@ -9,24 +9,8 @@ import (
 	"fmt"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
-
-// extractOwnerCRPNameFromPolicySnapshot extracts the name of the owner CRP from the policy snapshot.
-func extractOwnerCRPNameFromPolicySnapshot(policy *fleetv1beta1.SchedulingPolicySnapshot) (string, error) {
-	var owner string
-	for _, ownerRef := range policy.OwnerReferences {
-		if ownerRef.Kind == utils.CRPV1Beta1GVK.Kind {
-			owner = ownerRef.Name
-			break
-		}
-	}
-	if len(owner) == 0 {
-		return "", fmt.Errorf("cannot find owner reference for policy snapshot %v", policy.Name)
-	}
-	return owner, nil
-}
 
 // classifyBindings categorizes bindings into the following groups:
 //   - active: active bindings, that is, bindings that should be (though may not necessarily have been) picked up by the dispatcher;
