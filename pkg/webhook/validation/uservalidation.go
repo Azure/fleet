@@ -15,12 +15,20 @@ const (
 	mastersGroup = "system:masters"
 )
 
-// ValidateUserForCRD checks to see if user is authenticated to make a request to modify fleet CRDs.
+// ValidateUserForCRD checks to see if user is allowed to make a request to modify fleet CRDs.
 func ValidateUserForCRD(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
 	return isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo)
 }
 
-// ValidateUserForFleetCR checks to see if user is authenticated to make a request to modify Fleet CRs.
+// ValidateUserForRole checks to see if user is allowed to make a request to modify fleet Role.
+func ValidateUserForRole(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
+	if slices.Contains(userInfo.Groups, mastersGroup) {
+		return true
+	}
+	return slices.Contains(whiteListedUsers, userInfo.Username)
+}
+
+// ValidateUserForFleetCR checks to see if user is allowed to make a request to modify fleet CRs.
 func ValidateUserForFleetCR(ctx context.Context, client client.Client, whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
 	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
 		return true

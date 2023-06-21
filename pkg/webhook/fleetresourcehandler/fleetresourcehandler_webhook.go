@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +27,7 @@ const (
 	groupMatch        = `^[^.]*\.(.*)`
 	crdKind           = "CustomResourceDefinition"
 	memberClusterKind = "MemberCluster"
+	roleKind          = "Role"
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -51,6 +53,9 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case createMemberClusterGVK():
 			klog.V(2).InfoS("handling Member cluster resource", "GVK", createMemberClusterGVK())
 			response = v.handleMemberCluster(ctx, req)
+		case createRoleGVK():
+			klog.V(2).InfoS("handling Role resources", "GVK", createRoleGVK())
+			response = v.handleRole(req)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
@@ -84,6 +89,19 @@ func (v *fleetResourceValidator) handleMemberCluster(ctx context.Context, req ad
 	}
 	klog.V(2).InfoS("user in groups is allowed to modify member cluster CR", "user", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify member cluster: %s", req.UserInfo.Username, req.UserInfo.Groups, mc.Name))
+}
+
+func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Response {
+	var role rbacv1.Role
+	if err := v.decodeRequestObject(req, &role); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+
+	if validation.ValidateUserForRole(v.whiteListedUsers, req.UserInfo) {
+		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet Role: %s", req.UserInfo.Username, req.UserInfo.Groups, role.Name))
+	}
+
+	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify fleet Role: %s", req.UserInfo.Username, req.UserInfo.Groups, role.Name))
 }
 
 func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj runtime.Object) error {
@@ -120,5 +138,13 @@ func createMemberClusterGVK() metav1.GroupVersionKind {
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
 		Kind:    memberClusterKind,
+	}
+}
+
+func createRoleGVK() metav1.GroupVersionKind {
+	return metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    roleKind,
 	}
 }

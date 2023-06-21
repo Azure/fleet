@@ -24,6 +24,7 @@ import (
 	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,7 @@ const (
 	memberClusterResourceName = "memberclusters"
 	replicaSetResourceName    = "replicasets"
 	podResourceName           = "pods"
+	roleResourceName          = "roles"
 )
 
 var (
@@ -234,6 +236,28 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 					},
 				},
 			},
+			{
+				Name:                    "fleet.roles.validating",
+				ClientConfig:            w.createClientConfig(rbacv1.Role{}),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.Create,
+							admv1.Update,
+							admv1.Delete,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{rbacv1.SchemeGroupVersion.Group},
+							APIVersions: []string{rbacv1.SchemeGroupVersion.Version},
+							Resources:   []string{roleResourceName},
+							Scope:       &namespacedScope,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -285,6 +309,9 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	case fleetv1alpha1.MemberCluster:
+		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
+		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
+	case rbacv1.Role:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}
