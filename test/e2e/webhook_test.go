@@ -607,7 +607,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 	BeforeEach(func() {
-		By("create cluster role to modify Fleet CRs")
+		By("create cluster role to modify fleet CRs")
 		cr := rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testUserClusterRole,
@@ -662,7 +662,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 	})
 
 	Context("CR validation webhook", func() {
-		It("should deny CREATE operation on Fleet Member cluster CR for user not in system:masters group", func() {
+		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
 			mc := fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-member-cluster",
@@ -708,14 +708,14 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 				},
 			}
 
-			By("expecting denial of operation Delete of member cluster")
+			By("expecting denial of operation DELETE of member cluster")
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &mc)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
 		})
 
-		It("should allow update operation on member cluster if user in system:masters group", func() {
+		It("should allow update operation on member cluster CR for user in system:masters group", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
 
