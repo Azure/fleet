@@ -4,18 +4,18 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterpolicysnapshots.placement.karavel.io
+  name: schedulingpolicysnapshots.placement.karavel.io
 spec:
   group: placement.karavel.io
   names:
     categories:
     - fleet-workload
-    kind: ClusterPolicySnapshot
-    listKind: ClusterPolicySnapshotList
-    plural: clusterpolicysnapshots
+    kind: SchedulingPolicySnapshot
+    listKind: SchedulingPolicySnapshotList
+    plural: schedulingpolicysnapshots
     shortNames:
     - pss
-    singular: clusterpolicysnapshot
+    singular: schedulingpolicysnapshot
   scope: Cluster
   versions:
   - additionalPrinterColumns:
@@ -28,8 +28,8 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: 'ClusterPolicySnapshot is used to store a snapshot of cluster
-          placement policy. Its spec is immutable. The naming convention of a ClusterPolicySnapshot
+        description: 'SchedulingPolicySnapshot is used to store a snapshot of cluster
+          placement policy. Its spec is immutable. The naming convention of a SchedulingPolicySnapshot
           is {CRPName}-{PolicySnapshotIndex}. PolicySnapshotIndex will begin with
           0. Each snapshot must have the following labels: - `CRPTrackingLabel` which
           points to its owner CRP. - `PolicyIndexLabel` which is the index of the

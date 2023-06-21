@@ -14,7 +14,7 @@ const (
 	// PolicyIndexLabel is the label that indicate the policy snapshot index of a cluster policy.
 	PolicyIndexLabel = fleetPrefix + "policyIndex"
 
-	// PolicySnapshotNameFmt is clusterPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
+	// PolicySnapshotNameFmt is schedulingPolicySnapshot name format: {CRPName}-{PolicySnapshotIndex}.
 	PolicySnapshotNameFmt = "%s-%d"
 
 	// NumberOfClustersAnnotation is the annotation that indicates how many clusters should be selected for selectN placement type.
@@ -30,15 +30,15 @@ const (
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterPolicySnapshot is used to store a snapshot of cluster placement policy.
+// SchedulingPolicySnapshot is used to store a snapshot of cluster placement policy.
 // Its spec is immutable.
-// The naming convention of a ClusterPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
+// The naming convention of a SchedulingPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
 // PolicySnapshotIndex will begin with 0.
 // Each snapshot must have the following labels:
 //   - `CRPTrackingLabel` which points to its owner CRP.
 //   - `PolicyIndexLabel` which is the index of the policy snapshot.
 //   - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
-type ClusterPolicySnapshot struct {
+type SchedulingPolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -131,27 +131,27 @@ type ClusterScore struct {
 	TopologySpreadScore *int32 `json:"priorityScore,omitempty"`
 }
 
-// ClusterPolicySnapshotList contains a list of ClusterPolicySnapshot.
+// SchedulingPolicySnapshotList contains a list of SchedulingPolicySnapshot.
 // +kubebuilder:resource:scope="Cluster"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ClusterPolicySnapshotList struct {
+type SchedulingPolicySnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ClusterPolicySnapshot `json:"items"`
+	Items           []SchedulingPolicySnapshot `json:"items"`
 }
 
-// SetConditions sets the given conditions on the ClusterPolicySnapshot.
-func (m *ClusterPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
+// SetConditions sets the given conditions on the SchedulingPolicySnapshot.
+func (m *SchedulingPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
 // GetCondition returns the condition of the given type if exists.
-func (m *ClusterPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
+func (m *SchedulingPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapshotList{})
+	SchemeBuilder.Register(&SchedulingPolicySnapshot{}, &SchedulingPolicySnapshotList{})
 }

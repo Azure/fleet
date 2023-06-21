@@ -18,6 +18,39 @@ const (
 	// SchedulerFinalizer is added by the scheduler to make sure that a binding can only be deleted if the scheduler
 	// has relieved it from scheduling consideration.
 	SchedulerFinalizer = fleetPrefix + "scheduler-cleanup"
+
+	// ActiveBindingLabel is added by the update controller to mark that a binding is active, i.e., the dispatcher
+	// should place resources to it.
+	//
+	// Note that an active binding may not be associated with the latest scheduling policy snapshot or the latest
+	// resource snapshot. It may be up to another controller, e.g., the rolling update controller, to modify the
+	// association (if applicable). In certain cases (e.g., not enough fitting clusters), the binding may not even
+	// has a target cluster.
+	//
+	// Note also that it is not the scheduler's responsibility to add this label, even though it does
+	// reads this label to inform the scheduling cycle..
+	ActiveBindingLabel = fleetPrefix + "is-active-binding"
+
+	// CreatingBindingLabel is added by the scheduler to mark that a binding is being created. Any binding in
+	// this state should not be picked up by the dispatcher.
+	//
+	// Note that the scheduler **always** produces enough number of bindings, as user specified, after a scheduling run,
+	// even if there might not be enough number of fitting clusters.
+	//
+	// Note also that it is up to another controller, e.g., the rolling update controller, to mark a creating
+	// binding as active.
+	CreatingBindingLabel = fleetPrefix + "is-creating-binding"
+
+	// ObsoleteBindingLabel is added by the scheduler to mark that a binding is no longer needed, i.e., its
+	// associated cluster (if any) no longer fits the current (as seen by the scheduler) scheduling policy.
+	//
+	// Note that it is up to another controller, e.g, the rolling update controller, to actually delete the
+	// binding.
+	ObsoleteBindingLabel = fleetPrefix + "is-obsolete-binding"
+
+	// NoTargetClusterBindingLabel is added by the scheduler to mark that a binding does not have a target cluster.
+	// This usually happens when there is not enough number of fitting clusters in the system.
+	NoTargetClusterBindingLabel = fleetPrefix + "no-target-cluster-binding"
 )
 
 // +kubebuilder:object:root=true

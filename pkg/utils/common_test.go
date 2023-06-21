@@ -19,13 +19,13 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 
 	testCases := []struct {
 		name              string
-		policy            *fleetv1beta1.ClusterPolicySnapshot
+		policy            *fleetv1beta1.SchedulingPolicySnapshot
 		wantNumOfClusters int
 		expectedToFail    bool
 	}{
 		{
 			name: "valid annotation",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					Annotations: map[string]string{
@@ -37,7 +37,7 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "no annotation",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -46,7 +46,7 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "invalid annotation: not an integer",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					Annotations: map[string]string{
@@ -58,7 +58,7 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "invalid annotation: negative integer",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					Annotations: map[string]string{

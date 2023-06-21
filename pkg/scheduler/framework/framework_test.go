@@ -73,12 +73,12 @@ func TestCollectClusters(t *testing.T) {
 func TestExtractOwnerCRPNameFromPolicySnapshot(t *testing.T) {
 	testCases := []struct {
 		name         string
-		policy       *fleetv1beta1.ClusterPolicySnapshot
+		policy       *fleetv1beta1.SchedulingPolicySnapshot
 		expectToFail bool
 	}{
 		{
 			name: "policy with CRP owner reference",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					OwnerReferences: []metav1.OwnerReference{
@@ -92,7 +92,7 @@ func TestExtractOwnerCRPNameFromPolicySnapshot(t *testing.T) {
 		},
 		{
 			name: "policy without CRP owner reference",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            policyName,
 					OwnerReferences: []metav1.OwnerReference{},
@@ -134,14 +134,14 @@ func TestCollectBindings(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		binding                *fleetv1beta1.ClusterResourceBinding
-		policy                 *fleetv1beta1.ClusterPolicySnapshot
+		policy                 *fleetv1beta1.SchedulingPolicySnapshot
 		expectToFail           bool
 		expectToFindNoBindings bool
 	}{
 		{
 			name:    "found matching bindings",
 			binding: binding,
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					OwnerReferences: []metav1.OwnerReference{
@@ -155,7 +155,7 @@ func TestCollectBindings(t *testing.T) {
 		},
 		{
 			name: "no owner reference in policy",
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -165,7 +165,7 @@ func TestCollectBindings(t *testing.T) {
 		{
 			name:    "no matching bindings",
 			binding: binding,
-			policy: &fleetv1beta1.ClusterPolicySnapshot{
+			policy: &fleetv1beta1.SchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 					OwnerReferences: []metav1.OwnerReference{
@@ -218,36 +218,63 @@ func TestCollectBindings(t *testing.T) {
 // TestClassifyBindings tests the classifyBindings function.
 func TestClassifyBindings(t *testing.T) {
 	timestamp := metav1.Now()
+	isPresent := "true"
 	activeBinding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "active-binding",
-		},
-	}
-	deletedBindingWithDispatcherFinalizer := &fleetv1beta1.ClusterResourceBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "deleted-binding-with-dispatcher-finalizer",
-			DeletionTimestamp: &timestamp,
-			Finalizers: []string{
-				fleetv1beta1.DispatcherFinalizer,
+			Labels: map[string]string{
+				fleetv1beta1.ActiveBindingLabel: isPresent,
 			},
 		},
 	}
-	deletedBindingWithoutDispatcherFinalizer := &fleetv1beta1.ClusterResourceBinding{
+	creatingBinding := &fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:              "deleted-binding-without-dispatcher-finalizer",
+			Name: "creating-binding",
+			Labels: map[string]string{
+				fleetv1beta1.CreatingBindingLabel: isPresent,
+			},
+		},
+	}
+	creatingWithoutTargetClusterBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "creating-binding",
+			Labels: map[string]string{
+				fleetv1beta1.CreatingBindingLabel:        isPresent,
+				fleetv1beta1.NoTargetClusterBindingLabel: isPresent,
+			},
+		},
+	}
+	deletedBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "deleted-binding",
 			DeletionTimestamp: &timestamp,
+			Finalizers: []string{
+				fleetv1beta1.DispatcherFinalizer,
+				fleetv1beta1.SchedulerFinalizer,
+			},
+			Labels: map[string]string{
+				fleetv1beta1.ObsoleteBindingLabel: isPresent,
+			},
 		},
 	}
 
-	active, deletedWith, deletedWithout := classifyBindings([]fleetv1beta1.ClusterResourceBinding{*activeBinding, *deletedBindingWithDispatcherFinalizer, *deletedBindingWithoutDispatcherFinalizer})
-	if diff := cmp.Diff(active, []*fleetv1beta1.ClusterResourceBinding{activeBinding}); diff != "" {
+	active, creating, creatingWithoutTargetCluster, deleted, err := classifyBindings([]fleetv1beta1.ClusterResourceBinding{
+		*activeBinding, *deletedBinding, *creatingBinding, *creatingWithoutTargetClusterBinding,
+	})
+	if err != nil {
+		t.Fatalf("classifyBindings(), got %v, want no error", err)
+	}
+	if !cmp.Equal(active, []*fleetv1beta1.ClusterResourceBinding{activeBinding}) {
 		t.Errorf("classifyBindings() active = %v, want %v", active, []*fleetv1beta1.ClusterResourceBinding{activeBinding})
 	}
-	if !cmp.Equal(deletedWith, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithDispatcherFinalizer}) {
-		t.Errorf("classifyBindings() deletedWithDispatcherFinalizer = %v, want %v", deletedWith, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithDispatcherFinalizer})
+	if !cmp.Equal(deleted, []*fleetv1beta1.ClusterResourceBinding{deletedBinding}) {
+		t.Errorf("classifyBindings() deleted = %v, want %v", deleted, []*fleetv1beta1.ClusterResourceBinding{deletedBinding})
 	}
-	if !cmp.Equal(deletedWithout, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithoutDispatcherFinalizer}) {
-		t.Errorf("classifyBindings() deletedWithoutDispatcherFinalizer = %v, want %v", deletedWithout, []*fleetv1beta1.ClusterResourceBinding{deletedBindingWithoutDispatcherFinalizer})
+	if !cmp.Equal(creating, []*fleetv1beta1.ClusterResourceBinding{creatingBinding}) {
+		t.Errorf("classifyBindings() creating = %v, want %v", creating, []*fleetv1beta1.ClusterResourceBinding{creatingBinding})
+	}
+	if !cmp.Equal(creatingWithoutTargetCluster, []*fleetv1beta1.ClusterResourceBinding{creatingWithoutTargetClusterBinding}) {
+		t.Errorf("classifyBindings() creatingWithoutTargetCluster = %v, want %v", creatingWithoutTargetCluster, []*fleetv1beta1.ClusterResourceBinding{creatingWithoutTargetClusterBinding})
 	}
 }
 

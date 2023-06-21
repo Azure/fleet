@@ -11,20 +11,20 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TestSimpleClusterPolicySnapshotKeySchedulingQueueBasicOps tests the basic ops
-// (Add, NextClusterPolicySnapshotKey, Done) of a simplePolicySnapshotKeySchedulingQueue.
-func TestSimpleClusterPolicySnapshotKeySchedulingQueueBasicOps(t *testing.T) {
-	sq := NewSimpleClusterPolicySnapshotKeySchedulingQueue()
+// TestSimpleSchedulingPolicySnapshotKeySchedulingQueueBasicOps tests the basic ops
+// (Add, NextSchedulingPolicySnapshotKey, Done) of a simplePolicySnapshotKeySchedulingQueue.
+func TestSimpleSchedulingPolicySnapshotKeySchedulingQueueBasicOps(t *testing.T) {
+	sq := NewSimpleSchedulingPolicySnapshotKeySchedulingQueue()
 	sq.Run()
 
-	keysToAdd := []ClusterPolicySnapshotKey{"A", "B", "C", "D", "E"}
+	keysToAdd := []SchedulingPolicySnapshotKey{"A", "B", "C", "D", "E"}
 	for _, key := range keysToAdd {
 		sq.Add(key)
 	}
 
-	keysRecved := []ClusterPolicySnapshotKey{}
+	keysRecved := []SchedulingPolicySnapshotKey{}
 	for i := 0; i < len(keysToAdd); i++ {
-		key, closed := sq.NextClusterPolicySnapshotKey()
+		key, closed := sq.NextSchedulingPolicySnapshotKey()
 		if closed {
 			t.Fatalf("Queue closed unexpected")
 		}

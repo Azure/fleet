@@ -11,18 +11,18 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-// ClusterPolicySnapshotKey is the unique identifier (its name) for a ClusterPolicySnapshot stored in a scheduling queue.
-type ClusterPolicySnapshotKey string
+// SchedulingPolicySnapshotKey is the unique identifier (its name) for a SchedulingPolicySnapshot stored in a scheduling queue.
+type SchedulingPolicySnapshotKey string
 
-// ClusterPolicySnapshotKeySchedulingQueueWriter is an interface which allows sources, such as controllers, to add
-// ClusterPolicySnapshots to the scheduling queue.
-type ClusterPolicySnapshotKeySchedulingQueueWriter interface {
-	Add(cpsKey ClusterPolicySnapshotKey)
+// SchedulingPolicySnapshotKeySchedulingQueueWriter is an interface which allows sources, such as controllers, to add
+// SchedulingPolicySnapshots to the scheduling queue.
+type SchedulingPolicySnapshotKeySchedulingQueueWriter interface {
+	Add(cpsKey SchedulingPolicySnapshotKey)
 }
 
-// ClusterPolicySnapshotSchedulingQueue is an interface which queues ClusterPolicySnapshots for the scheduler to schedule.
-type ClusterPolicySnapshotKeySchedulingQueue interface {
-	ClusterPolicySnapshotKeySchedulingQueueWriter
+// SchedulingPolicySnapshotSchedulingQueue is an interface which queues SchedulingPolicySnapshots for the scheduler to schedule.
+type SchedulingPolicySnapshotKeySchedulingQueue interface {
+	SchedulingPolicySnapshotKeySchedulingQueueWriter
 
 	// Run starts the scheduling queue.
 	Run()
@@ -30,52 +30,52 @@ type ClusterPolicySnapshotKeySchedulingQueue interface {
 	Close()
 	// CloseWithDrain closes the scheduling queue after all items in the queue are processed.
 	CloseWithDrain()
-	// NextClusterPolicySnapshotKey returns the next-in-line ClusterPolicySnapshot key for the scheduler to schedule.
-	NextClusterPolicySnapshotKey() (key ClusterPolicySnapshotKey, closed bool)
-	// Done marks a ClusterPolicySnapshot key as done.
-	Done(cpsKey ClusterPolicySnapshotKey)
+	// NextSchedulingPolicySnapshotKey returns the next-in-line SchedulingPolicySnapshot key for the scheduler to schedule.
+	NextSchedulingPolicySnapshotKey() (key SchedulingPolicySnapshotKey, closed bool)
+	// Done marks a SchedulingPolicySnapshot key as done.
+	Done(cpsKey SchedulingPolicySnapshotKey)
 }
 
-// simpleClusterPolicySnapshotKeySchedulingQueue is a simple implementation of
-// ClusterPolicySnapshotKeySchedulingQueue.
+// simpleSchedulingPolicySnapshotKeySchedulingQueue is a simple implementation of
+// SchedulingPolicySnapshotKeySchedulingQueue.
 //
 // At this moment, one single workqueue would suffice, as sources such as the cluster watcher,
 // the binding watcher, etc., can catch all changes that need the scheduler's attention.
 // In the future, when more features, e.g., inter-placement affinity/anti-affinity, are added,
 // more queues, such as a backoff queue, might become necessary.
-type simpleClusterPolicySnapshotKeySchedulingQueue struct {
+type simpleSchedulingPolicySnapshotKeySchedulingQueue struct {
 	clusterPolicySanpshotWorkQueue workqueue.RateLimitingInterface
 }
 
-// Verify that simpleClusterPolicySnapshotKeySchedulingQueue implements
-// ClusterPolicySnapshotKeySchedulingQueue at compile time.
-var _ ClusterPolicySnapshotKeySchedulingQueue = &simpleClusterPolicySnapshotKeySchedulingQueue{}
+// Verify that simpleSchedulingPolicySnapshotKeySchedulingQueue implements
+// SchedulingPolicySnapshotKeySchedulingQueue at compile time.
+var _ SchedulingPolicySnapshotKeySchedulingQueue = &simpleSchedulingPolicySnapshotKeySchedulingQueue{}
 
-// simpleClusterPolicySnapshotKeySchedulingQueueOptions are the options for the
-// simpleClusterPolicySnapshotKeySchedulingQueue.
-type simpleClusterPolicySnapshotKeySchedulingQueueOptions struct {
+// simpleSchedulingPolicySnapshotKeySchedulingQueueOptions are the options for the
+// simpleSchedulingPolicySnapshotKeySchedulingQueue.
+type simpleSchedulingPolicySnapshotKeySchedulingQueueOptions struct {
 	workqueueRateLimiter workqueue.RateLimiter
 	workqueueName        string
 }
 
-// Option is the function that configures the simpleClusterPolicySnapshotKeySchedulingQueue.
-type Option func(*simpleClusterPolicySnapshotKeySchedulingQueueOptions)
+// Option is the function that configures the simpleSchedulingPolicySnapshotKeySchedulingQueue.
+type Option func(*simpleSchedulingPolicySnapshotKeySchedulingQueueOptions)
 
-var defaultSimpleClusterPolicySnapshotKeySchedulingQueueOptions = simpleClusterPolicySnapshotKeySchedulingQueueOptions{
+var defaultSimpleSchedulingPolicySnapshotKeySchedulingQueueOptions = simpleSchedulingPolicySnapshotKeySchedulingQueueOptions{
 	workqueueRateLimiter: workqueue.DefaultControllerRateLimiter(),
-	workqueueName:        "clusterPolicySnapshotKeySchedulingQueue",
+	workqueueName:        "schedulingPolicySnapshotKeySchedulingQueue",
 }
 
 // WithWorkqueueRateLimiter sets a rate limiter for the workqueue.
 func WithWorkqueueRateLimiter(rateLimiter workqueue.RateLimiter) Option {
-	return func(o *simpleClusterPolicySnapshotKeySchedulingQueueOptions) {
+	return func(o *simpleSchedulingPolicySnapshotKeySchedulingQueueOptions) {
 		o.workqueueRateLimiter = rateLimiter
 	}
 }
 
 // WithWorkqueueName sets a name for the workqueue.
 func WithWorkqueueName(name string) Option {
-	return func(o *simpleClusterPolicySnapshotKeySchedulingQueueOptions) {
+	return func(o *simpleSchedulingPolicySnapshotKeySchedulingQueueOptions) {
 		o.workqueueName = name
 	}
 }
@@ -85,52 +85,52 @@ func WithWorkqueueName(name string) Option {
 // At this moment, Run is an no-op as there is only one queue present; in the future,
 // when more queues are added, Run would start goroutines that move items between queues as
 // appropriate.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) Run() {}
+func (sq *simpleSchedulingPolicySnapshotKeySchedulingQueue) Run() {}
 
 // Close shuts down the scheduling queue immediately.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) Close() {
+func (sq *simpleSchedulingPolicySnapshotKeySchedulingQueue) Close() {
 	sq.clusterPolicySanpshotWorkQueue.ShutDown()
 }
 
 // CloseWithDrain shuts down the scheduling queue and returns until all items are processed.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) CloseWithDrain() {
+func (sq *simpleSchedulingPolicySnapshotKeySchedulingQueue) CloseWithDrain() {
 	sq.clusterPolicySanpshotWorkQueue.ShutDownWithDrain()
 }
 
-// NextClusterPolicySnapshotKey returns the next ClusterPolicySnapshot key in the work queue for
+// NextSchedulingPolicySnapshotKey returns the next SchedulingPolicySnapshot key in the work queue for
 // the scheduler to process.
 //
 // Note that for now the queue simply wraps a work queue, and consider its state (whether it
 // is shut down or not) as its own closedness. In the future, when more queues are added, the
 // queue implementation must manage its own state.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) NextClusterPolicySnapshotKey() (key ClusterPolicySnapshotKey, closed bool) {
+func (sq *simpleSchedulingPolicySnapshotKeySchedulingQueue) NextSchedulingPolicySnapshotKey() (key SchedulingPolicySnapshotKey, closed bool) {
 	// This will block on a condition variable if the queue is empty.
 	cpsKey, shutdown := sq.clusterPolicySanpshotWorkQueue.Get()
 	if shutdown {
 		return "", true
 	}
-	return cpsKey.(ClusterPolicySnapshotKey), false
+	return cpsKey.(SchedulingPolicySnapshotKey), false
 }
 
-// Done marks a ClusterPolicySnapshot key as done.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) Done(cpsKey ClusterPolicySnapshotKey) {
+// Done marks a SchedulingPolicySnapshot key as done.
+func (sq *simpleSchedulingPolicySnapshotKeySchedulingQueue) Done(cpsKey SchedulingPolicySnapshotKey) {
 	sq.clusterPolicySanpshotWorkQueue.Done(cpsKey)
 }
 
-// Add adds a ClusterPolicySnapshot key to the work queue.
-func (sq *simpleClusterPolicySnapshotKeySchedulingQueue) Add(cpsKey ClusterPolicySnapshotKey) {
+// Add adds a SchedulingPolicySnapshot key to the work queue.
+func (sq *simpleSchedulingPolicySnapshotKeySchedulingQueue) Add(cpsKey SchedulingPolicySnapshotKey) {
 	sq.clusterPolicySanpshotWorkQueue.Add(cpsKey)
 }
 
-// NewSimpleClusterPolicySnapshotKeySchedulingQueue returns a
-// simpleClusterPolicySnapshotKeySchedulingQueue.
-func NewSimpleClusterPolicySnapshotKeySchedulingQueue(opts ...Option) ClusterPolicySnapshotKeySchedulingQueue {
-	options := defaultSimpleClusterPolicySnapshotKeySchedulingQueueOptions
+// NewSimpleSchedulingPolicySnapshotKeySchedulingQueue returns a
+// simpleSchedulingPolicySnapshotKeySchedulingQueue.
+func NewSimpleSchedulingPolicySnapshotKeySchedulingQueue(opts ...Option) SchedulingPolicySnapshotKeySchedulingQueue {
+	options := defaultSimpleSchedulingPolicySnapshotKeySchedulingQueueOptions
 	for _, opt := range opts {
 		opt(&options)
 	}
 
-	return &simpleClusterPolicySnapshotKeySchedulingQueue{
+	return &simpleSchedulingPolicySnapshotKeySchedulingQueue{
 		clusterPolicySanpshotWorkQueue: workqueue.NewNamedRateLimitingQueue(options.workqueueRateLimiter, options.workqueueName),
 	}
 }

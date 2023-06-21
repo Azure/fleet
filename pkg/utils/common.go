@@ -61,14 +61,6 @@ const (
 	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster.
 	MemberClusterFinalizer = "work.fleet.azure.com/membercluster-finalizer"
 
-	// DispatcherFinalizer is added by the dispatcher to make sure that a binding can only be deleted if the dispatcher
-	// has removed all selected resources from the bound cluster.
-	DispatcherFinalizer = "fleet.io/dispatcher-cleanup"
-
-	// SchedulerFinalizer is added by the scheduler to make sure that a binding can only be deleted if the scheduler
-	// has relieved it from scheduling consideration.
-	SchedulerFinalizer = "fleet.io/scheduler-cleanup"
-
 	// LastWorkUpdateTimeAnnotationKey is used to mark the last update time on a work object.
 	LastWorkUpdateTimeAnnotationKey = "work.fleet.azure.com/last-update-time"
 )
@@ -278,7 +270,7 @@ func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]boo
 
 // ExtractNumOfClustersFromPolicySnapshot extracts the numOfClusters value from the annotations
 // on a policy snapshot.
-func ExtractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterPolicySnapshot) (int, error) {
+func ExtractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.SchedulingPolicySnapshot) (int, error) {
 	numOfClustersStr, ok := policy.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
 	if !ok {
 		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.NumberOfClustersAnnotation)
