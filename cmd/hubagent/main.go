@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -109,7 +110,8 @@ func main() {
 	}
 
 	if opts.EnableWebhook {
-		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType)); err != nil {
+		whiteListedUsers := strings.Split(opts.WhiteListedUsers, ",")
+		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType), whiteListedUsers); err != nil {
 			klog.ErrorS(err, "unable to set up webhook")
 			exitWithErrorFunc()
 		}
@@ -130,7 +132,7 @@ func main() {
 }
 
 // SetupWebhook generates the webhook cert and then set up the webhook configurator.
-func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType) error {
+func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType, whiteListedUsers []string) error {
 	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start.
 	w, err := webhook.NewWebhookConfig(mgr, FleetWebhookPort, &webhookClientConnectionType, FleetWebhookCertDir)
 	if err != nil {
@@ -141,7 +143,7 @@ func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.Webho
 		klog.ErrorS(err, "unable to add WebhookConfig")
 		return err
 	}
-	if err = webhook.AddToManager(mgr); err != nil {
+	if err = webhook.AddToManager(mgr, whiteListedUsers); err != nil {
 		klog.ErrorS(err, "unable to register webhooks to the manager")
 		return err
 	}

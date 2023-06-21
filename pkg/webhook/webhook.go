@@ -46,21 +46,22 @@ const (
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
 
-	crdResourceName        = "customresourcedefinitions"
-	replicaSetResourceName = "replicasets"
-	podResourceName        = "pods"
+	crdResourceName           = "customresourcedefinitions"
+	memberClusterResourceName = "memberclusters"
+	replicaSetResourceName    = "replicasets"
+	podResourceName           = "pods"
 )
 
 var (
 	admissionReviewVersions = []string{admv1.SchemeGroupVersion.Version, admv1beta1.SchemeGroupVersion.Version}
 )
 
-var AddToManagerFuncs []func(manager.Manager) error
+var AddToManagerFuncs []func(manager.Manager, []string) error
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager) error {
+func AddToManager(m manager.Manager, whiteListedUsers []string) error {
 	for _, f := range AddToManagerFuncs {
-		if err := f(m); err != nil {
+		if err := f(m, whiteListedUsers); err != nil {
 			return err
 		}
 	}
@@ -211,6 +212,28 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 					},
 				},
 			},
+			{
+				Name:                    "fleet.membercluster.validating",
+				ClientConfig:            w.createClientConfig(fleetv1alpha1.MemberCluster{}),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: []admv1.OperationType{
+							admv1.Create,
+							admv1.Update,
+							admv1.Delete,
+						},
+						Rule: admv1.Rule{
+							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group},
+							APIVersions: []string{fleetv1alpha1.GroupVersion.Version},
+							Resources:   []string{memberClusterResourceName},
+							Scope:       &clusterScope,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -259,6 +282,9 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
 		serviceRef.Path = pointer.String(replicaset.ValidationPath)
 	case v1.CustomResourceDefinition:
+		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
+		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
+	case fleetv1alpha1.MemberCluster:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}
