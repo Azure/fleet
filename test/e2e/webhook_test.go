@@ -720,8 +720,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
 
 			By("update labels in CRD")
-			labels := mc.GetLabels()
-			labels = make(map[string]string)
+			labels := make(map[string]string)
 			labels[testKey] = testValue
 			mc.SetLabels(labels)
 

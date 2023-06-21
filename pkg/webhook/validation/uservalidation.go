@@ -15,8 +15,6 @@ const (
 	mastersGroup = "system:masters"
 )
 
-// TODO:(Arvindthiru) Get valid usernames as flag and allow those usernames.
-
 // ValidateUserForCRD checks to see if user is authenticated to make a request to modify fleet CRDs.
 func ValidateUserForCRD(userInfo authenticationv1.UserInfo) bool {
 	return slices.Contains(userInfo.Groups, mastersGroup)
@@ -35,8 +33,8 @@ func ValidateUserForFleetCR(ctx context.Context, client client.Client, whiteList
 		klog.V(2).ErrorS(err, "failed to list member clusters")
 		return false
 	}
-	var identities []string
-	for i, _ := range memberClusterList.Items {
+	identities := make([]string, len(memberClusterList.Items))
+	for i := range memberClusterList.Items {
 		identities = append(identities, memberClusterList.Items[i].Spec.Identity.Name)
 	}
 	// this ensures will allow all member agents are validated.
