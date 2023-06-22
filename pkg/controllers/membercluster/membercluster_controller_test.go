@@ -42,13 +42,16 @@ func TestSyncNamespace(t *testing.T) {
 		wantedEvent         string
 		wantedError         string
 	}{
-		"namespace exists": {
+		"namespace exists but no diff": {
 			r: &Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*corev1.Namespace)
 						*o = corev1.Namespace{
-							ObjectMeta: metav1.ObjectMeta{Name: namespace1},
+							ObjectMeta: metav1.ObjectMeta{
+								Name:   namespace1,
+								Labels: map[string]string{fleetResourceLabelKey: fleetNamespaceValue},
+							},
 						}
 						return nil
 					},
@@ -56,6 +59,29 @@ func TestSyncNamespace(t *testing.T) {
 			},
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
+			wantedError:         "",
+		},
+		"namespace exists but with diff": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*corev1.Namespace)
+						*o = corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: namespace1,
+							},
+						}
+						return nil
+					},
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return nil
+					},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			wantedNamespaceName: namespace1,
+			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespaceUpdated, "Namespace was updated"),
 			wantedError:         "",
 		},
 		"namespace doesn't exist": {
@@ -101,6 +127,27 @@ func TestSyncNamespace(t *testing.T) {
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			wantedNamespaceName: "",
 			wantedError:         "namespace cannot be retrieved",
+		},
+		"namespace update error": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*corev1.Namespace)
+						*o = corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: namespace1,
+							},
+						}
+						return nil
+					},
+					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+						return errors.New("namespace cannot be updated")
+					},
+				},
+			},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			wantedNamespaceName: "",
+			wantedError:         "namespace cannot be updated",
 		},
 	}
 

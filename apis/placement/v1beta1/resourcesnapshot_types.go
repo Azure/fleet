@@ -13,14 +13,14 @@ import (
 
 const (
 	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster resource snapshot.
-	ResourceIndexLabel = fleetPrefix + "resourceIndex"
+	ResourceIndexLabel = FleetPrefix + "resourceIndex"
 
 	// ResourceGroupHashAnnotation is the annotation that contains the value of the sha-256 hash
 	// value of all the snapshots belong to the same snapshot index.
-	ResourceGroupHashAnnotation = fleetPrefix + "resourceHash"
+	ResourceGroupHashAnnotation = FleetPrefix + "resourceHash"
 
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
-	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
+	NumberOfResourceSnapshotsAnnotation = FleetPrefix + "numberOfResourceSnapshots"
 )
 
 // +genclient

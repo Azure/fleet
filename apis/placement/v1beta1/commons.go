@@ -13,16 +13,16 @@ import (
 type ClusterState string
 
 const (
-	// Unprefixed labels/annotations are reserved for end-users
-	// we will add a placement.karavel.io to designate these labels/annotations as official fleet labels/annotations.
+	// FleetPrefix placement.karavel.io will be used to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
-	fleetPrefix = "placement.karavel.io/"
+	// Non-prefixed labels/annotations are reserved for end-users
+	FleetPrefix = "placement.karavel.io/"
 
 	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
-	CRPTrackingLabel = fleetPrefix + "parentCRP"
+	CRPTrackingLabel = FleetPrefix + "parentCRP"
 
 	// IsLatestSnapshotLabel tells if the snapshot is the latest one.
-	IsLatestSnapshotLabel = fleetPrefix + "isLatestSnapshot"
+	IsLatestSnapshotLabel = FleetPrefix + "isLatestSnapshot"
 )
 
 const (

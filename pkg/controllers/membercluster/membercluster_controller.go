@@ -29,6 +29,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -36,6 +37,7 @@ import (
 
 const (
 	eventReasonNamespaceCreated       = "NamespaceCreated"
+	eventReasonNamespaceUpdated       = "NamespaceUpdated"
 	eventReasonRoleCreated            = "RoleCreated"
 	eventReasonRoleUpdated            = "RoleUpdated"
 	eventReasonRoleBindingCreated     = "RoleBindingCreated"
@@ -47,6 +49,9 @@ const (
 	reasonMemberClusterJoined         = "MemberClusterJoined"
 	reasonMemberClusterLeft           = "MemberClusterLeft"
 	reasonMemberClusterUnknown        = "MemberClusterUnknown"
+
+	fleetResourceLabelKey = fleetv1beta1.FleetPrefix + "isFleetResource"
+	fleetNamespaceValue   = "fleet-namespace"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -232,6 +237,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
+			Labels:          map[string]string{fleetResourceLabelKey: fleetNamespaceValue},
 		},
 	}
 
@@ -251,8 +257,17 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		return namespaceName, nil
 	}
 
-	// TODO: Update namespace if currentNS != expectedNS.
-
+	// Updates namespace if currentNS != expectedNS.
+	if cmp.Equal(currentNS.Labels, expectedNS.Labels) {
+		return namespaceName, nil
+	}
+	currentNS.Labels = expectedNS.Labels
+	klog.V(2).InfoS("updating namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+	if err := r.Client.Update(ctx, &currentNS, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
+		return "", fmt.Errorf("failed to update namespace %s: %w", namespaceName, err)
+	}
+	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceUpdated, "Namespace was updated")
+	klog.V(2).InfoS("updated namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	return namespaceName, nil
 }
 
@@ -292,7 +307,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	currentRole.Rules = expectedRole.Rules
 	klog.V(2).InfoS("updating role", "memberCluster", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return "", fmt.Errorf("failed to update role %s with rules %+v: %w", roleName, currentRole.Rules, err)
+		return "", fmt.Errorf("failed to update role %s: %w", roleName, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
 	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName)
