@@ -16,6 +16,6 @@ const (
 	ValidationPath = "/validate-fleet-azure-com-v1alpha1-clusterresourceplacement"
 )
 
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, _ []string) error {
 	return (&fleetv1alpha1.ClusterResourcePlacement{}).SetupWebhookWithManager(mgr)
 }
