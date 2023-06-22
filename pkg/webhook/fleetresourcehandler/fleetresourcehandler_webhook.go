@@ -31,17 +31,17 @@ const (
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager, whiteListedUsers []string) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &FleetResourceValidator{Client: mgr.GetClient(), whiteListedUsers: whiteListedUsers}})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &fleetResourceValidator{client: mgr.GetClient(), whiteListedUsers: whiteListedUsers}})
 	return nil
 }
 
-type FleetResourceValidator struct {
-	Client           client.Client
+type fleetResourceValidator struct {
+	client           client.Client
 	whiteListedUsers []string
 	decoder          *admission.Decoder
 }
 
-func (v *FleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind {
@@ -59,7 +59,7 @@ func (v *FleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	return response
 }
 
-func (v *FleetResourceValidator) handleCRD(req admission.Request) admission.Response {
+func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Response {
 	var crd v1.CustomResourceDefinition
 	if err := v.decodeRequestObject(req, &crd); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
@@ -67,26 +67,26 @@ func (v *FleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 
 	// This regex works because every CRD name in kubernetes follows this pattern <plural>.<group>.
 	group := regexp.MustCompile(groupMatch).FindStringSubmatch(crd.Name)[1]
-	if validation.CheckCRDGroup(group) && !validation.ValidateUserForCRD(req.UserInfo) {
+	if validation.CheckCRDGroup(group) && !validation.ValidateUserForCRD(v.whiteListedUsers, req.UserInfo) {
 		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 	}
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 }
 
-func (v *FleetResourceValidator) handleMemberCluster(ctx context.Context, req admission.Request) admission.Response {
+func (v *fleetResourceValidator) handleMemberCluster(ctx context.Context, req admission.Request) admission.Response {
 	var mc fleetv1alpha1.MemberCluster
 	if err := v.decodeRequestObject(req, &mc); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	if !validation.ValidateUserForFleetCR(ctx, v.Client, v.whiteListedUsers, req.UserInfo) {
+	if !validation.ValidateUserForFleetCR(ctx, v.client, v.whiteListedUsers, req.UserInfo) {
 		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify member cluster CR: %s", req.UserInfo.Username, req.UserInfo.Groups, mc.Name))
 	}
 	klog.V(2).InfoS("user in groups is allowed to modify member cluster CR", "user", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify member cluster: %s", req.UserInfo.Username, req.UserInfo.Groups, mc.Name))
 }
 
-func (v *FleetResourceValidator) decodeRequestObject(req admission.Request, obj runtime.Object) error {
+func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj runtime.Object) error {
 	if req.Operation == admissionv1.Delete {
 		// req.Object is not populated for delete: https://github.com/kubernetes-sigs/controller-runtime/issues/1762.
 		if err := v.decoder.DecodeRaw(req.OldObject, obj); err != nil {
@@ -99,6 +99,11 @@ func (v *FleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 			return err
 		}
 	}
+	return nil
+}
+
+func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
+	v.decoder = d
 	return nil
 }
 
@@ -116,9 +121,4 @@ func createMemberClusterGVK() metav1.GroupVersionKind {
 		Version: fleetv1alpha1.GroupVersion.Version,
 		Kind:    memberClusterKind,
 	}
-}
-
-func (v *FleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
 }

@@ -114,7 +114,7 @@ func (w *Config) Start(ctx context.Context) error {
 
 // createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook.
 func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
-	failPolicy := admv1.Fail
+	failPolicy := admv1.Ignore
 	sideEffortsNone := admv1.SideEffectClassNone
 	namespacedScope := admv1.NamespacedScope
 	clusterScope := admv1.ClusterScope

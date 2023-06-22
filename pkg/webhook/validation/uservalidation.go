@@ -16,16 +16,13 @@ const (
 )
 
 // ValidateUserForCRD checks to see if user is authenticated to make a request to modify fleet CRDs.
-func ValidateUserForCRD(userInfo authenticationv1.UserInfo) bool {
-	return slices.Contains(userInfo.Groups, mastersGroup)
+func ValidateUserForCRD(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
+	return isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo)
 }
 
 // ValidateUserForFleetCR checks to see if user is authenticated to make a request to modify Fleet CRs.
 func ValidateUserForFleetCR(ctx context.Context, client client.Client, whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
-	if slices.Contains(userInfo.Groups, mastersGroup) {
-		return true
-	}
-	if slices.Contains(whiteListedUsers, userInfo.Username) {
+	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
 		return true
 	}
 	var memberClusterList fleetv1alpha1.MemberClusterList
@@ -39,4 +36,8 @@ func ValidateUserForFleetCR(ctx context.Context, client client.Client, whiteList
 	}
 	// this ensures will allow all member agents are validated.
 	return slices.Contains(identities, userInfo.Username)
+}
+
+func isMasterGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
+	return slices.Contains(whiteListedUsers, userInfo.Username) || slices.Contains(userInfo.Groups, mastersGroup)
 }

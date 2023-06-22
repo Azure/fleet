@@ -17,8 +17,9 @@ import (
 
 func TestValidateUserForCRD(t *testing.T) {
 	testCases := map[string]struct {
-		userInfo   v1.UserInfo
-		wantResult bool
+		userInfo         v1.UserInfo
+		whiteListedUsers []string
+		wantResult       bool
 	}{
 		"allow user in system:masters group": {
 			userInfo: v1.UserInfo{
@@ -26,6 +27,13 @@ func TestValidateUserForCRD(t *testing.T) {
 				Groups:   []string{"system:masters"},
 			},
 			wantResult: true,
+		},
+		"allow white listed user not in system:masters group": {
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+			},
+			whiteListedUsers: []string{"test-user"},
+			wantResult:       true,
 		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: v1.UserInfo{
@@ -38,7 +46,7 @@ func TestValidateUserForCRD(t *testing.T) {
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForCRD(testCase.userInfo)
+			gotResult := ValidateUserForCRD(testCase.whiteListedUsers, testCase.userInfo)
 			assert.Equal(t, testCase.wantResult, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
