@@ -47,6 +47,11 @@ const (
 	reasonMemberClusterJoined         = "MemberClusterJoined"
 	reasonMemberClusterLeft           = "MemberClusterLeft"
 	reasonMemberClusterUnknown        = "MemberClusterUnknown"
+
+	fleetLabelKey              = "fleet-resource"
+	fleetRoleLabelValue        = "fleet-role"
+	fleetRoleBindingLabelValue = "fleet-role-binding"
+	fleetNamespaceValue        = "fleet-Namespace"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -232,6 +237,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
+			Labels:          map[string]string{fleetLabelKey: fleetNamespaceValue},
 		},
 	}
 
@@ -266,6 +272,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 			Name:            roleName,
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
+			Labels:          map[string]string{fleetLabelKey: fleetRoleLabelValue},
 		},
 		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.WorkRule},
 	}
@@ -309,6 +316,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 			Name:            roleBindingName,
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
+			Labels:          map[string]string{fleetLabelKey: fleetRoleBindingLabelValue},
 		},
 		Subjects: []rbacv1.Subject{mc.Spec.Identity},
 		RoleRef: rbacv1.RoleRef{
