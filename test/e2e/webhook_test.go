@@ -6,7 +6,7 @@ Licensed under the MIT license.
 package e2e
 
 import (
-	errors "errors"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -15,8 +15,11 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -31,6 +34,18 @@ var (
 		kubeSystemNamespace,
 		memberNamespace,
 	}
+	testGroups = []string{"system:authenticated"}
+)
+
+const (
+	testUser                   = "test-user"
+	testKey                    = "test-key"
+	testValue                  = "test-value"
+	testUserClusterRole        = "test-user-cluster-role"
+	testUserClusterRoleBinding = "test-user-cluster-role-binding"
+
+	crdStatusErrFormat = `failed to validate user: %s in groups: %v to modify fleet CRD: %s`
+	mcStatusErrFormat  = `failed to validate user: %s in groups: %v to modify member cluster CR: %s`
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
@@ -457,6 +472,266 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ReplicaSet call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(`admission webhook "fleet.replicaset.validating" denied the request`))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("ReplicaSet %s/%s creation is disallowed in the fleet hub cluster", rs.Namespace, rs.Name)))
+		})
+	})
+})
+
+var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
+	BeforeEach(func() {
+		By("create cluster role to modify CRDs")
+		cr := rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRole,
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{v1.SchemeGroupVersion.Group},
+					Verbs:     []string{"*"},
+					Resources: []string{"*"},
+				},
+			},
+		}
+		Expect(HubCluster.KubeClient.Create(ctx, &cr)).Should(Succeed())
+
+		By("create cluster role binding for test-user to modify CRD")
+		crb := rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRoleBinding,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					APIGroup: rbacv1.GroupName,
+					Kind:     "User",
+					Name:     testUser,
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "ClusterRole",
+				Name:     testUserClusterRole,
+			},
+		}
+		Expect(HubCluster.KubeClient.Create(ctx, &crb)).Should(Succeed())
+	})
+
+	AfterEach(func() {
+		By("remove cluster role binding")
+		crb := rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRoleBinding,
+			},
+		}
+		Expect(HubCluster.KubeClient.Delete(ctx, &crb)).Should(Succeed())
+
+		By("remove cluster role")
+		cr := rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRole,
+			},
+		}
+		Expect(HubCluster.KubeClient.Delete(ctx, &cr)).Should(Succeed())
+	})
+
+	Context("CRD validation webhook", func() {
+		It("should deny CREATE operation on Fleet CRD for user not in system:masters group", func() {
+			var crd v1.CustomResourceDefinition
+			Expect(utils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)).Should(Succeed())
+
+			By("expecting denial of operation CREATE of CRD")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &crd)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
+		})
+
+		It("should deny UPDATE operation on Fleet CRD for user not in system:masters group", func() {
+			var crd v1.CustomResourceDefinition
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)).Should(Succeed())
+
+			By("update labels in CRD")
+			labels := crd.GetLabels()
+			labels[testKey] = testValue
+			crd.SetLabels(labels)
+
+			By("expecting denial of operation UPDATE of CRD")
+			err := HubCluster.ImpersonateKubeClient.Update(ctx, &crd)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
+		})
+
+		It("should deny DELETE operation on Fleet CRD for user not in system:masters group", func() {
+			crd := v1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "works.multicluster.x-k8s.io",
+				},
+			}
+			By("expecting denial of operation Delete of CRD")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &crd)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
+		})
+
+		It("should allow UPDATE operation on Fleet CRDs if user in system:masters group", func() {
+			var crd v1.CustomResourceDefinition
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)).Should(Succeed())
+
+			By("update labels in CRD")
+			labels := crd.GetLabels()
+			labels[testKey] = testValue
+			crd.SetLabels(labels)
+
+			By("expecting denial of operation UPDATE of CRD")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &crd)).To(Succeed())
+
+			By("remove new label added for test")
+			labels = crd.GetLabels()
+			delete(labels, testKey)
+			crd.SetLabels(labels)
+		})
+
+		It("should allow CREATE operation on Other CRDs", func() {
+			var crd v1.CustomResourceDefinition
+			Expect(utils.GetObjectFromManifest("./test/integration/manifests/resources/test_clonesets_crd.yaml", &crd)).Should(Succeed())
+
+			By("expecting error to be nil")
+			Expect(HubCluster.KubeClient.Create(ctx, &crd)).To(Succeed())
+
+			By("delete clone set CRD")
+			Expect(HubCluster.KubeClient.Delete(ctx, &crd)).To(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
+	BeforeEach(func() {
+		By("create cluster role to modify fleet CRs")
+		cr := rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRole,
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+					Verbs:     []string{"*"},
+					Resources: []string{"*"},
+				},
+			},
+		}
+		Expect(HubCluster.KubeClient.Create(ctx, &cr)).Should(Succeed())
+
+		By("create cluster role binding for test-user to modify fleet CRs")
+		crb := rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRoleBinding,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					APIGroup: rbacv1.GroupName,
+					Kind:     "User",
+					Name:     testUser,
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "ClusterRole",
+				Name:     testUserClusterRole,
+			},
+		}
+		Expect(HubCluster.KubeClient.Create(ctx, &crb)).Should(Succeed())
+	})
+
+	AfterEach(func() {
+		By("remove cluster role binding")
+		crb := rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRoleBinding,
+			},
+		}
+		Expect(HubCluster.KubeClient.Delete(ctx, &crb)).Should(Succeed())
+
+		By("remove cluster role")
+		cr := rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testUserClusterRole,
+			},
+		}
+		Expect(HubCluster.KubeClient.Delete(ctx, &cr)).Should(Succeed())
+	})
+
+	Context("CR validation webhook", func() {
+		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
+			mc := fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-member-cluster",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateJoin,
+					Identity: rbacv1.Subject{
+						Kind:      "User",
+						APIGroup:  "",
+						Name:      "test-subject",
+						Namespace: "fleet-system",
+					},
+				},
+			}
+
+			By("expecting denial of operation CREATE of member cluster")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &mc)
+			fmt.Println(err)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+		})
+
+		It("should deny UPDATE operation on member cluster CR for user not in system:masters group", func() {
+			var mc fleetv1alpha1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+
+			By("update member cluster spec")
+			mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+
+			By("expecting denial of operation UPDATE of member cluster")
+			err := HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
+			var statusErr *k8sErrors.StatusError
+			fmt.Println(err.Error())
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+		})
+
+		It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
+			mc := fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: MemberCluster.ClusterName,
+				},
+			}
+
+			By("expecting denial of operation DELETE of member cluster")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &mc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+		})
+
+		It("should allow update operation on member cluster CR for user in system:masters group", func() {
+			var mc fleetv1alpha1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+
+			By("update labels in CRD")
+			labels := make(map[string]string)
+			labels[testKey] = testValue
+			mc.SetLabels(labels)
+
+			By("expecting denial of operation UPDATE of CRD")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
+
+			By("remove new label added for test")
+			labels = mc.GetLabels()
+			delete(labels, testKey)
+			mc.SetLabels(labels)
 		})
 	})
 })
