@@ -36,6 +36,7 @@ import (
 
 const (
 	eventReasonNamespaceCreated       = "NamespaceCreated"
+	eventReasonNamespaceUpdated       = "NamespaceUpdated"
 	eventReasonRoleCreated            = "RoleCreated"
 	eventReasonRoleUpdated            = "RoleUpdated"
 	eventReasonRoleBindingCreated     = "RoleBindingCreated"
@@ -51,7 +52,7 @@ const (
 	fleetLabelKey              = "fleet-resource"
 	fleetRoleLabelValue        = "fleet-role"
 	fleetRoleBindingLabelValue = "fleet-role-binding"
-	fleetNamespaceValue        = "fleet-Namespace"
+	fleetNamespaceValue        = "fleet-namespace"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -257,8 +258,17 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		return namespaceName, nil
 	}
 
-	// TODO: Update namespace if currentNS != expectedNS.
-
+	// Updates namespace if currentNS != expectedNS.
+	if cmp.Equal(currentNS.Labels, expectedNS.Labels) {
+		return namespaceName, nil
+	}
+	currentNS.Labels = expectedNS.Labels
+	klog.V(2).InfoS("updating namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+	if err := r.Client.Update(ctx, &currentNS, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
+		return "", fmt.Errorf("failed to update namespace %s: %w", namespaceName, err)
+	}
+	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceUpdated, "Namespace was updated")
+	klog.V(2).InfoS("updated namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	return namespaceName, nil
 }
 
@@ -293,13 +303,15 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	}
 
 	// Updates role if currentRole != expectedRole.
-	if cmp.Equal(currentRole.Rules, expectedRole.Rules) {
+	if cmp.Equal(currentRole.Rules, expectedRole.Rules) &&
+		cmp.Equal(currentRole.Labels, expectedRole.Labels) {
 		return roleName, nil
 	}
 	currentRole.Rules = expectedRole.Rules
+	currentRole.Labels = expectedRole.Labels
 	klog.V(2).InfoS("updating role", "memberCluster", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return "", fmt.Errorf("failed to update role %s with rules %+v: %w", roleName, currentRole.Rules, err)
+		return "", fmt.Errorf("failed to update role %s: %w", roleName, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
 	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName)
@@ -342,11 +354,14 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	}
 
 	// Updates role binding if currentRoleBinding != expectedRoleBinding.
-	if cmp.Equal(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) && cmp.Equal(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) {
+	if cmp.Equal(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) &&
+		cmp.Equal(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) &&
+		cmp.Equal(currentRoleBinding.Labels, expectedRoleBinding.Labels) {
 		return nil
 	}
 	currentRoleBinding.Subjects = expectedRoleBinding.Subjects
 	currentRoleBinding.RoleRef = expectedRoleBinding.RoleRef
+	currentRoleBinding.Labels = expectedRoleBinding.Labels
 	klog.V(2).InfoS("updating role binding", "memberCluster", klog.KObj(mc), "roleBinding", roleBindingName)
 	if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return fmt.Errorf("failed to update role binding %s: %w", roleBindingName, err)
