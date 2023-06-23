@@ -196,7 +196,6 @@ func TestSyncRole(t *testing.T) {
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "fleet-role-mc1",
 								Namespace: namespace1,
-								Labels:    map[string]string{fleetResourceLabelKey: fleetRoleLabelValue},
 							},
 							Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.WorkRule},
 						}
@@ -382,7 +381,6 @@ func TestSyncRoleBinding(t *testing.T) {
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      "fleet-rolebinding-mc1",
 								Namespace: namespace1,
-								Labels:    map[string]string{fleetResourceLabelKey: fleetRoleBindingLabelValue},
 							},
 							Subjects: []rbacv1.Subject{identity},
 							RoleRef:  roleRef,

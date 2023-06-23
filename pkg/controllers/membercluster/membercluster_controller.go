@@ -50,10 +50,8 @@ const (
 	reasonMemberClusterLeft           = "MemberClusterLeft"
 	reasonMemberClusterUnknown        = "MemberClusterUnknown"
 
-	fleetResourceLabelKey      = fleetv1beta1.FleetPrefix + "isFleetResource"
-	fleetRoleLabelValue        = "fleet-role"
-	fleetRoleBindingLabelValue = "fleet-role-binding"
-	fleetNamespaceValue        = "fleet-namespace"
+	fleetResourceLabelKey = fleetv1beta1.FleetPrefix + "isFleetResource"
+	fleetNamespaceValue   = "fleet-namespace"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -283,7 +281,6 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 			Name:            roleName,
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
-			Labels:          map[string]string{fleetResourceLabelKey: fleetRoleLabelValue},
 		},
 		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.WorkRule},
 	}
@@ -304,12 +301,10 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	}
 
 	// Updates role if currentRole != expectedRole.
-	if cmp.Equal(currentRole.Rules, expectedRole.Rules) &&
-		cmp.Equal(currentRole.Labels, expectedRole.Labels) {
+	if cmp.Equal(currentRole.Rules, expectedRole.Rules) {
 		return roleName, nil
 	}
 	currentRole.Rules = expectedRole.Rules
-	currentRole.Labels = expectedRole.Labels
 	klog.V(2).InfoS("updating role", "memberCluster", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return "", fmt.Errorf("failed to update role %s: %w", roleName, err)
@@ -329,7 +324,6 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 			Name:            roleBindingName,
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
-			Labels:          map[string]string{fleetResourceLabelKey: fleetRoleBindingLabelValue},
 		},
 		Subjects: []rbacv1.Subject{mc.Spec.Identity},
 		RoleRef: rbacv1.RoleRef{
@@ -355,14 +349,11 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	}
 
 	// Updates role binding if currentRoleBinding != expectedRoleBinding.
-	if cmp.Equal(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) &&
-		cmp.Equal(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) &&
-		cmp.Equal(currentRoleBinding.Labels, expectedRoleBinding.Labels) {
+	if cmp.Equal(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) && cmp.Equal(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) {
 		return nil
 	}
 	currentRoleBinding.Subjects = expectedRoleBinding.Subjects
 	currentRoleBinding.RoleRef = expectedRoleBinding.RoleRef
-	currentRoleBinding.Labels = expectedRoleBinding.Labels
 	klog.V(2).InfoS("updating role binding", "memberCluster", klog.KObj(mc), "roleBinding", roleBindingName)
 	if err := r.Client.Update(ctx, &expectedRoleBinding, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return fmt.Errorf("failed to update role binding %s: %w", roleBindingName, err)
