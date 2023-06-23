@@ -35,6 +35,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/controllers/membercluster"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/pod"
@@ -254,6 +255,15 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							APIVersions: []string{rbacv1.SchemeGroupVersion.Version},
 							Resources:   []string{roleResourceName},
 							Scope:       &namespacedScope,
+						},
+					},
+				},
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						{
+							Key:      membercluster.FleetResourceLabelKey,
+							Operator: metav1.LabelSelectorOpIn,
+							Values:   []string{membercluster.FleetNamespaceValue},
 						},
 					},
 				},

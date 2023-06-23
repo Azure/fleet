@@ -72,7 +72,7 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 
 	// This regex works because every CRD name in kubernetes follows this pattern <plural>.<group>.
 	group := regexp.MustCompile(groupMatch).FindStringSubmatch(crd.Name)[1]
-	if validation.CheckCRDGroup(group) && !validation.ValidateUserForCRD(v.whiteListedUsers, req.UserInfo) {
+	if validation.CheckCRDGroup(group) && !validation.IsMasterGroupUserOrWhiteListedUser(v.whiteListedUsers, req.UserInfo) {
 		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 	}
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
@@ -97,10 +97,10 @@ func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Res
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	if validation.ValidateUserForRole(v.whiteListedUsers, req.UserInfo) {
+	if !validation.IsMasterGroupUserOrWhiteListedUser(v.whiteListedUsers, req.UserInfo) {
 		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet Role: %s", req.UserInfo.Username, req.UserInfo.Groups, role.Name))
 	}
-
+	klog.V(2).InfoS("user in groups is allowed to modify fleet Role", "user", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify fleet Role: %s", req.UserInfo.Username, req.UserInfo.Groups, role.Name))
 }
 

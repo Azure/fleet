@@ -15,22 +15,9 @@ const (
 	mastersGroup = "system:masters"
 )
 
-// ValidateUserForCRD checks to see if user is allowed to make a request to modify fleet CRDs.
-func ValidateUserForCRD(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
-	return isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo)
-}
-
-// ValidateUserForRole checks to see if user is allowed to make a request to modify fleet Role.
-func ValidateUserForRole(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
-	if slices.Contains(userInfo.Groups, mastersGroup) {
-		return true
-	}
-	return slices.Contains(whiteListedUsers, userInfo.Username)
-}
-
 // ValidateUserForFleetCR checks to see if user is allowed to make a request to modify fleet CRs.
 func ValidateUserForFleetCR(ctx context.Context, client client.Client, whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
-	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
+	if IsMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
 		return true
 	}
 	var memberClusterList fleetv1alpha1.MemberClusterList
@@ -46,6 +33,6 @@ func ValidateUserForFleetCR(ctx context.Context, client client.Client, whiteList
 	return slices.Contains(identities, userInfo.Username)
 }
 
-func isMasterGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
+func IsMasterGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
 	return slices.Contains(whiteListedUsers, userInfo.Username) || slices.Contains(userInfo.Groups, mastersGroup)
 }
