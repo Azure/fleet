@@ -16,13 +16,13 @@ const (
 	// Unprefixed labels/annotations are reserved for end-users
 	// we will add a placement.azure.com to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
-	fleetPrefix = "placement.azure.com/"
+	FleetPrefix = "placement.azure.com/"
 
 	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
-	CRPTrackingLabel = fleetPrefix + "parentCRP"
+	CRPTrackingLabel = FleetPrefix + "parentCRP"
 
 	// IsLatestSnapshotLabel tells if the snapshot is the latest one.
-	IsLatestSnapshotLabel = fleetPrefix + "isLatestSnapshot"
+	IsLatestSnapshotLabel = FleetPrefix + "isLatestSnapshot"
 )
 
 const (

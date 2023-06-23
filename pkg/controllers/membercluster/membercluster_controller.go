@@ -29,6 +29,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -49,7 +50,7 @@ const (
 	reasonMemberClusterLeft           = "MemberClusterLeft"
 	reasonMemberClusterUnknown        = "MemberClusterUnknown"
 
-	fleetLabelKey              = "fleet-resource"
+	fleetLabelKey              = fleetv1beta1.FleetPrefix + "isFleetResource"
 	fleetRoleLabelValue        = "fleet-role"
 	fleetRoleBindingLabelValue = "fleet-role-binding"
 	fleetNamespaceValue        = "fleet-namespace"
