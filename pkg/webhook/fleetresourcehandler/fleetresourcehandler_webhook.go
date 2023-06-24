@@ -28,6 +28,7 @@ const (
 	crdKind           = "CustomResourceDefinition"
 	memberClusterKind = "MemberCluster"
 	roleKind          = "Role"
+	roleBindingKind   = "RoleBinding"
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -54,8 +55,11 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			klog.V(2).InfoS("handling Member cluster resource", "GVK", createMemberClusterGVK())
 			response = v.handleMemberCluster(ctx, req)
 		case createRoleGVK():
-			klog.V(2).InfoS("handling Role resources", "GVK", createRoleGVK())
+			klog.V(2).InfoS("handling Role resource", "GVK", createRoleGVK())
 			response = v.handleRole(req)
+		case createRoleBindingGVK():
+			klog.V(2).InfoS("handling Role binding resource", "GVK", createRoleBindingGVK())
+			response = v.handleRoleBinding(req)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
@@ -97,11 +101,16 @@ func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Res
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	if !validation.IsMasterGroupUserOrWhiteListedUser(v.whiteListedUsers, req.UserInfo) {
-		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify fleet Role: %s", req.UserInfo.Username, req.UserInfo.Groups, role.Name))
+	return validation.ValidateUserForResource(v.whiteListedUsers, req.UserInfo, role.Kind, role.Name)
+}
+
+func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admission.Response {
+	var rb rbacv1.RoleBinding
+	if err := v.decodeRequestObject(req, &rb); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
 	}
-	klog.V(2).InfoS("user in groups is allowed to modify fleet Role", "user", req.UserInfo.Username, "groups", req.UserInfo.Groups)
-	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify fleet Role: %s", req.UserInfo.Username, req.UserInfo.Groups, role.Name))
+
+	return validation.ValidateUserForResource(v.whiteListedUsers, req.UserInfo, rb.Kind, rb.Name)
 }
 
 func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj runtime.Object) error {
@@ -146,5 +155,13 @@ func createRoleGVK() metav1.GroupVersionKind {
 		Group:   rbacv1.SchemeGroupVersion.Group,
 		Version: rbacv1.SchemeGroupVersion.Version,
 		Kind:    roleKind,
+	}
+}
+
+func createRoleBindingGVK() metav1.GroupVersionKind {
+	return metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    roleBindingKind,
 	}
 }

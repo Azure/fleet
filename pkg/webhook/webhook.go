@@ -53,6 +53,7 @@ const (
 	replicaSetResourceName    = "replicasets"
 	podResourceName           = "pods"
 	roleResourceName          = "roles"
+	roleBindingResourceName   = "rolebindings"
 )
 
 var (
@@ -122,6 +123,22 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 	namespacedScope := admv1.NamespacedScope
 	clusterScope := admv1.ClusterScope
 
+	namespaceSelector := &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      membercluster.FleetResourceLabelKey,
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{membercluster.FleetNamespaceValue},
+			},
+		},
+	}
+
+	CUDOperations := []admv1.OperationType{
+		admv1.Create,
+		admv1.Update,
+		admv1.Delete,
+	}
+
 	whCfg := admv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: FleetWebhookCfgName,
@@ -142,12 +159,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 						Operations: []admv1.OperationType{
 							admv1.Create,
 						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{corev1.SchemeGroupVersion.Group},
-							APIVersions: []string{corev1.SchemeGroupVersion.Version},
-							Resources:   []string{podResourceName},
-							Scope:       &namespacedScope,
-						},
+						Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
 					},
 				},
 			},
@@ -164,12 +176,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Create,
 							admv1.Update,
 						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group},
-							APIVersions: []string{fleetv1alpha1.GroupVersion.Version},
-							Resources:   []string{fleetv1alpha1.ClusterResourcePlacementResource},
-							Scope:       &clusterScope,
-						},
+						Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
 					},
 				},
 			},
@@ -184,12 +191,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 						Operations: []admv1.OperationType{
 							admv1.Create,
 						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{appsv1.SchemeGroupVersion.Group},
-							APIVersions: []string{appsv1.SchemeGroupVersion.Version},
-							Resources:   []string{replicaSetResourceName},
-							Scope:       &namespacedScope,
-						},
+						Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
 					},
 				},
 			},
@@ -201,17 +203,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
-						Operations: []admv1.OperationType{
-							admv1.Create,
-							admv1.Update,
-							admv1.Delete,
-						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{v1.SchemeGroupVersion.Group},
-							APIVersions: []string{v1.SchemeGroupVersion.Version},
-							Resources:   []string{crdResourceName},
-							Scope:       &clusterScope,
-						},
+						Operations: CUDOperations,
+						Rule:       createRule([]string{v1.SchemeGroupVersion.Group}, []string{v1.SchemeGroupVersion.Version}, []string{crdResourceName}, &clusterScope),
 					},
 				},
 			},
@@ -223,17 +216,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
-						Operations: []admv1.OperationType{
-							admv1.Create,
-							admv1.Update,
-							admv1.Delete,
-						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group},
-							APIVersions: []string{fleetv1alpha1.GroupVersion.Version},
-							Resources:   []string{memberClusterResourceName},
-							Scope:       &clusterScope,
-						},
+						Operations: CUDOperations,
+						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName}, &clusterScope),
 					},
 				},
 			},
@@ -245,28 +229,25 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
-						Operations: []admv1.OperationType{
-							admv1.Create,
-							admv1.Update,
-							admv1.Delete,
-						},
-						Rule: admv1.Rule{
-							APIGroups:   []string{rbacv1.SchemeGroupVersion.Group},
-							APIVersions: []string{rbacv1.SchemeGroupVersion.Version},
-							Resources:   []string{roleResourceName},
-							Scope:       &namespacedScope,
-						},
+						Operations: CUDOperations,
+						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName}, &namespacedScope),
 					},
 				},
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchExpressions: []metav1.LabelSelectorRequirement{
-						{
-							Key:      membercluster.FleetResourceLabelKey,
-							Operator: metav1.LabelSelectorOpIn,
-							Values:   []string{membercluster.FleetNamespaceValue},
-						},
+				NamespaceSelector: namespaceSelector,
+			},
+			{
+				Name:                    "fleet.rolesbindings.validating",
+				ClientConfig:            w.createClientConfig(rbacv1.RoleBinding{}),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: CUDOperations,
+						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleBindingResourceName}, &namespacedScope),
 					},
 				},
+				NamespaceSelector: namespaceSelector,
 			},
 		},
 	}
@@ -322,6 +303,9 @@ func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookC
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	case rbacv1.Role:
+		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
+		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
+	case rbacv1.RoleBinding:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}
@@ -510,4 +494,13 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 
 	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}
 	return nil
+}
+
+func createRule(apiGroups, apiResources, resources []string, scopeType *admv1.ScopeType) admv1.Rule {
+	return admv1.Rule{
+		APIGroups:   apiGroups,
+		APIVersions: apiResources,
+		Resources:   resources,
+		Scope:       scopeType,
+	}
 }

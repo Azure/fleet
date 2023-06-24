@@ -50,7 +50,7 @@ func TestSyncNamespace(t *testing.T) {
 						*o = corev1.Namespace{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:   namespace1,
-								Labels: map[string]string{fleetResourceLabelKey: fleetNamespaceValue},
+								Labels: map[string]string{FleetResourceLabelKey: FleetNamespaceValue},
 							},
 						}
 						return nil

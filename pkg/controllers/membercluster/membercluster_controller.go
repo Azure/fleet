@@ -50,8 +50,8 @@ const (
 	reasonMemberClusterLeft           = "MemberClusterLeft"
 	reasonMemberClusterUnknown        = "MemberClusterUnknown"
 
-	fleetResourceLabelKey = fleetv1beta1.FleetPrefix + "isFleetResource"
-	fleetNamespaceValue   = "fleet-namespace"
+	FleetResourceLabelKey = fleetv1beta1.FleetPrefix + "isFleetResource"
+	FleetNamespaceValue   = "fleet-namespace"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -237,7 +237,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
-			Labels:          map[string]string{fleetResourceLabelKey: fleetNamespaceValue},
+			Labels:          map[string]string{FleetResourceLabelKey: FleetNamespaceValue},
 		},
 	}
 
