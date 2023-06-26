@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -10,44 +11,54 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
-func TestValidateUserForCRD(t *testing.T) {
+func TestValidateUserForResource(t *testing.T) {
 	testCases := map[string]struct {
 		userInfo         v1.UserInfo
 		whiteListedUsers []string
-		wantResult       bool
+		resKind          string
+		resName          string
+		wantResponse     admission.Response
 	}{
 		"allow user in system:masters group": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResult: true,
+			resKind:      "Role",
+			resName:      "test-role",
+			wantResponse: admission.Allowed(fmt.Sprintf("user: test-user in groups: [system:masters] is allowed to modify fleet resource Role: test-role")),
 		},
 		"allow white listed user not in system:masters group": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
+				Groups:   []string{"test-group"},
 			},
+			resKind:          "RoleBinding",
+			resName:          "test-role-binding",
 			whiteListedUsers: []string{"test-user"},
-			wantResult:       true,
+			wantResponse:     admission.Allowed(fmt.Sprintf("user: test-user in groups: [test-group] is allowed to modify fleet resource RoleBinding: test-role-binding")),
 		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResult: false,
+			resKind:      "Role",
+			resName:      "test-role",
+			wantResponse: admission.Denied(fmt.Sprintf("failed to validate user: test-user in groups: [test-group] to modify fleet resource Role: test-role")),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForCRD(testCase.whiteListedUsers, testCase.userInfo)
-			assert.Equal(t, testCase.wantResult, gotResult, utils.TestCaseMsg, testName)
+			gotResult := ValidateUserForResource(testCase.whiteListedUsers, testCase.userInfo, testCase.resKind, testCase.resName)
+			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
 }
