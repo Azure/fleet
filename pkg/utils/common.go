@@ -25,6 +25,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
@@ -211,24 +212,21 @@ func ShouldPropagateObj(informerManager informer.Manager, uObj *unstructured.Uns
 		// The secret, with type 'kubernetes.io/service-account-token', is created along with `ServiceAccount` should be
 		// prevented from propagating.
 		var secret corev1.Secret
-		err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &secret)
-		if err != nil {
-			return false, fmt.Errorf(
-				"failed to convert a secret object %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err)
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &secret); err != nil {
+			return false, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to convert a secret object %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
 		}
 		if secret.Type == corev1.SecretTypeServiceAccountToken {
 			return false, nil
 		}
 	case corev1.SchemeGroupVersion.WithKind("Endpoints"):
 		// we assume that all endpoints with the same name of a service is created by the service controller
-		_, err := informerManager.Lister(ServiceGVR).ByNamespace(uObj.GetNamespace()).Get(uObj.GetName())
-		if err != nil {
+		if _, err := informerManager.Lister(ServiceGVR).ByNamespace(uObj.GetNamespace()).Get(uObj.GetName()); err != nil {
 			if apierrors.IsNotFound(err) {
 				// there is no service of the same name as the end point,
 				// we assume that this endpoint is created by the user
 				return true, nil
 			}
-			return false, fmt.Errorf("failed to get the service %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err)
+			return false, controller.NewAPIServerError(true, fmt.Errorf("failed to get the service %s in namespace %s: %w", uObj.GetName(), uObj.GetNamespace(), err))
 		}
 		// we find a service of the same name as the endpoint, we assume it's created by the service
 		return false, nil

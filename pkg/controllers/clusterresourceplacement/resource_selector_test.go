@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,6 +20,8 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 func TestGenerateManifest(t *testing.T) {
@@ -29,7 +32,7 @@ func TestGenerateManifest(t *testing.T) {
 	}{
 		"should generate sanitized manifest for Kind: CustomResourceDefinition": {
 			unstructuredObj: func() *unstructured.Unstructured {
-				crd := v1.CustomResourceDefinition{
+				crd := apiextensionsv1.CustomResourceDefinition{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "CustomResourceDefinition",
 						APIVersion: "apiextensions.k8s.io/v1",
@@ -79,7 +82,7 @@ func TestGenerateManifest(t *testing.T) {
 				return &unstructured.Unstructured{Object: mCrd}
 			},
 			expectedManifest: func() *workv1alpha1.Manifest {
-				crd := v1.CustomResourceDefinition{
+				crd := apiextensionsv1.CustomResourceDefinition{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "CustomResourceDefinition",
 						APIVersion: "apiextensions.k8s.io/v1",
@@ -299,4 +302,233 @@ func makeIPFamilyPolicyTypePointer(policyType corev1.IPFamilyPolicyType) *corev1
 }
 func makeServiceInternalTrafficPolicyPointer(policyType corev1.ServiceInternalTrafficPolicyType) *corev1.ServiceInternalTrafficPolicyType {
 	return &policyType
+}
+
+func TestGenerateResourceContent(t *testing.T) {
+	tests := map[string]struct {
+		resource     interface{}
+		wantResource interface{}
+	}{
+		"should generate sanitized resource content for Kind: CustomResourceDefinition": {
+			resource: apiextensionsv1.CustomResourceDefinition{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "CustomResourceDefinition",
+					APIVersion: "apiextensions.k8s.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:                       "object-name",
+					GenerateName:               "object-generateName",
+					Namespace:                  "object-namespace",
+					SelfLink:                   "object-selflink",
+					UID:                        types.UID(utilrand.String(10)),
+					ResourceVersion:            utilrand.String(10),
+					Generation:                 int64(utilrand.Int()),
+					CreationTimestamp:          metav1.Time{Time: time.Date(utilrand.IntnRange(0, 999), time.January, 1, 1, 1, 1, 1, time.UTC)},
+					DeletionTimestamp:          &metav1.Time{Time: time.Date(utilrand.IntnRange(1000, 1999), time.January, 1, 1, 1, 1, 1, time.UTC)},
+					DeletionGracePeriodSeconds: pointer.Int64(9999),
+					Labels: map[string]string{
+						"label-key": "label-value",
+					},
+					Annotations: map[string]string{
+						corev1.LastAppliedConfigAnnotation: "svc-object-annotation-lac-value",
+						"svc-annotation-key":               "svc-object-annotation-key-value",
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "svc-ownerRef-api/v1",
+							Kind:       "svc-owner-kind",
+							Name:       "svc-owner-name",
+							UID:        "svc-owner-uid",
+						},
+					},
+					Finalizers: []string{"object-finalizer"},
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							Manager:    utilrand.String(10),
+							Operation:  metav1.ManagedFieldsOperationApply,
+							APIVersion: utilrand.String(10),
+						},
+					},
+				},
+			},
+			wantResource: apiextensionsv1.CustomResourceDefinition{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "CustomResourceDefinition",
+					APIVersion: "apiextensions.k8s.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:                       "object-name",
+					GenerateName:               "object-generateName",
+					Namespace:                  "object-namespace",
+					DeletionGracePeriodSeconds: pointer.Int64(9999),
+					Labels: map[string]string{
+						"label-key": "label-value",
+					},
+					Annotations: map[string]string{
+						"svc-annotation-key": "svc-object-annotation-key-value",
+					},
+					Finalizers: []string{"object-finalizer"},
+				},
+			},
+		},
+		"should generate sanitized resource content for Kind: Service": {
+			resource: corev1.Service{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Service",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "svc-name",
+					Namespace:         "svc-namespace",
+					SelfLink:          utilrand.String(10),
+					DeletionTimestamp: &metav1.Time{Time: time.Date(00002, time.January, 1, 1, 1, 1, 1, time.UTC)},
+					ManagedFields: []metav1.ManagedFieldsEntry{
+						{
+							Manager:    "svc-manager",
+							Operation:  metav1.ManagedFieldsOperationApply,
+							APIVersion: "svc-manager-api/v1",
+						},
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "svc-ownerRef-api/v1",
+							Kind:       "svc-owner-kind",
+							Name:       "svc-owner-name",
+							UID:        "svc-owner-uid",
+						},
+					},
+					Annotations: map[string]string{
+						corev1.LastAppliedConfigAnnotation: "svc-object-annotation-lac-value",
+						"svc-annotation-key":               "svc-object-annotation-key-value",
+					},
+					ResourceVersion:   "svc-object-resourceVersion",
+					Generation:        int64(utilrand.Int()),
+					CreationTimestamp: metav1.Time{Time: time.Date(00001, time.January, 1, 1, 1, 1, 1, time.UTC)},
+					UID:               types.UID(utilrand.String(10)),
+				},
+				Spec: corev1.ServiceSpec{
+					ClusterIP:           utilrand.String(10),
+					ClusterIPs:          []string{},
+					HealthCheckNodePort: int32(utilrand.Int()),
+					Selector:            map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
+					Ports: []corev1.ServicePort{
+						{
+							Name:        "svc-port",
+							Protocol:    corev1.ProtocolTCP,
+							AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+							Port:        9001,
+							NodePort:    int32(utilrand.Int()),
+						},
+					},
+					Type:                     corev1.ServiceType("svc-spec-type"),
+					ExternalIPs:              []string{"svc-spec-externalIps-1"},
+					SessionAffinity:          corev1.ServiceAffinity("svc-spec-sessionAffinity"),
+					LoadBalancerIP:           "192.168.1.3",
+					LoadBalancerSourceRanges: []string{"192.168.1.1"},
+					ExternalName:             "svc-spec-externalName",
+					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
+					PublishNotReadyAddresses: false,
+					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+					IPFamilies: []corev1.IPFamily{
+						corev1.IPv4Protocol,
+						corev1.IPv6Protocol,
+					},
+					IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
+					AllocateLoadBalancerNodePorts: pointer.Bool(false),
+					LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+					InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
+				},
+				Status: corev1.ServiceStatus{
+					LoadBalancer: corev1.LoadBalancerStatus{
+						Ingress: []corev1.LoadBalancerIngress{
+							{
+								IP:       "192.168.1.1",
+								Hostname: "loadbalancer-ingress-hostname",
+								Ports: []corev1.PortStatus{
+									{
+										Port:     9003,
+										Protocol: corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantResource: corev1.Service{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Service",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "svc-name",
+					Namespace: "svc-namespace",
+					Annotations: map[string]string{
+						"svc-annotation-key": "svc-object-annotation-key-value",
+					},
+				},
+				Spec: corev1.ServiceSpec{
+					Selector: map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
+					Ports: []corev1.ServicePort{
+						{
+							Name:        "svc-port",
+							Protocol:    corev1.ProtocolTCP,
+							AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+							Port:        9001,
+						},
+					},
+					Type:                     corev1.ServiceType("svc-spec-type"),
+					ExternalIPs:              []string{"svc-spec-externalIps-1"},
+					SessionAffinity:          corev1.ServiceAffinity("svc-spec-sessionAffinity"),
+					LoadBalancerIP:           "192.168.1.3",
+					LoadBalancerSourceRanges: []string{"192.168.1.1"},
+					ExternalName:             "svc-spec-externalName",
+					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
+					PublishNotReadyAddresses: false,
+					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+					IPFamilies: []corev1.IPFamily{
+						corev1.IPv4Protocol,
+						corev1.IPv6Protocol,
+					},
+					IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
+					AllocateLoadBalancerNodePorts: pointer.Bool(false),
+					LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+					InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
+				},
+			},
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&tt.resource)
+			if err != nil {
+				t.Fatalf("ToUnstructured failed: %v", err)
+			}
+			got, err := generateResourceContent(&unstructured.Unstructured{Object: object})
+			if err != nil {
+				t.Fatalf("failed to generateResourceContent(): %v", err)
+			}
+			want, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&tt.wantResource)
+			if err != nil {
+				t.Fatalf("ToUnstructured failed: %v", err)
+			}
+			delete(want["metadata"].(map[string]interface{}), "creationTimestamp")
+			delete(want, "status")
+
+			uWant := unstructured.Unstructured{Object: want}
+			rawWant, err := uWant.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON failed: %v", err)
+			}
+			wantResourceContent := &fleetv1beta1.ResourceContent{
+				RawExtension: runtime.RawExtension{
+					Raw: rawWant,
+				},
+			}
+			if diff := cmp.Diff(wantResourceContent, got); diff != "" {
+				t.Errorf("generateResourceContent() mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
 }
