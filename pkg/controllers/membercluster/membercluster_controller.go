@@ -307,7 +307,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	currentRole.Rules = expectedRole.Rules
 	klog.V(2).InfoS("updating role", "memberCluster", klog.KObj(mc), "role", roleName)
 	if err := r.Client.Update(ctx, &currentRole, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return "", fmt.Errorf("failed to update role %s: %w", roleName, err)
+		return "", fmt.Errorf("failed to update role %s with rules %+v: %w", roleName, currentRole.Rules, err)
 	}
 	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
 	klog.V(2).InfoS("updated role", "memberCluster", klog.KObj(mc), "role", roleName)
