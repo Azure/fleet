@@ -58,7 +58,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	} else {
 		// create a new policy snapshot
 		latestPolicySnapshotIndex++
-		latestPolicySnapshot = &fleetv1beta1.ClusterPolicySnapshot{
+		latestPolicySnapshot = &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, crp.Name, latestPolicySnapshotIndex),
 				Labels: map[string]string{
@@ -104,7 +104,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 }
 
 // ensureLatestPolicySnapshot ensures the latest policySnapshot has the isLatest label and the numberOfClusters are updated.
-func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latest *fleetv1beta1.ClusterPolicySnapshot) error {
+func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latest *fleetv1beta1.ClusterSchedulingPolicySnapshot) error {
 	needUpdate := false
 	if latest.Labels[fleetv1beta1.IsLatestSnapshotLabel] != strconv.FormatBool(true) {
 		// When latestPolicySnapshot.Spec.PolicyHash == policyHash,
@@ -149,7 +149,7 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 // Return error when 1) cannot list the snapshots 2) there are more than one active policy snapshots 3) snapshot has the
 // invalid label value.
 // 2 & 3 should never happen.
-func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterPolicySnapshot, int, error) {
+func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, int, error) {
 	snapshotList := &fleetv1beta1.ClusterPolicySnapshotList{}
 	latestSnapshotLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel:      crp.Name,
@@ -199,7 +199,7 @@ func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp 
 }
 
 // parsePolicyIndexFromLabel returns error when parsing the label which should never return error in production.
-func parsePolicyIndexFromLabel(s *fleetv1beta1.ClusterPolicySnapshot) (int, error) {
+func parsePolicyIndexFromLabel(s *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, error) {
 	indexLabel := s.Labels[fleetv1beta1.PolicyIndexLabel]
 	v, err := strconv.Atoi(indexLabel)
 	if err != nil {
@@ -212,7 +212,7 @@ func parsePolicyIndexFromLabel(s *fleetv1beta1.ClusterPolicySnapshot) (int, erro
 }
 
 // parseNumberOfClustersFromAnnotation returns error when parsing the annotation which should never return error in production.
-func parseNumberOfClustersFromAnnotation(s *fleetv1beta1.ClusterPolicySnapshot) (int, error) {
+func parseNumberOfClustersFromAnnotation(s *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, error) {
 	n := s.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
 	v, err := strconv.Atoi(n)
 	if err != nil {

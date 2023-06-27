@@ -30,15 +30,15 @@ const (
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterPolicySnapshot is used to store a snapshot of cluster placement policy.
+// ClusterSchedulingPolicySnapshot is used to store a snapshot of cluster placement policy.
 // Its spec is immutable.
-// The naming convention of a ClusterPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
+// The naming convention of a ClusterSchedulingPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
 // PolicySnapshotIndex will begin with 0.
 // Each snapshot must have the following labels:
 //   - `CRPTrackingLabel` which points to its owner CRP.
 //   - `PolicyIndexLabel` which is the index of the policy snapshot.
 //   - `IsLatestSnapshotLabel` which indicates whether the snapshot is the latest one.
-type ClusterPolicySnapshot struct {
+type ClusterSchedulingPolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -132,27 +132,27 @@ type ClusterScore struct {
 	TopologySpreadScore *int32 `json:"priorityScore,omitempty"`
 }
 
-// ClusterPolicySnapshotList contains a list of ClusterPolicySnapshot.
+// ClusterPolicySnapshotList contains a list of ClusterSchedulingPolicySnapshot.
 // +kubebuilder:resource:scope="Cluster"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type ClusterPolicySnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ClusterPolicySnapshot `json:"items"`
+	Items           []ClusterSchedulingPolicySnapshot `json:"items"`
 }
 
-// SetConditions sets the given conditions on the ClusterPolicySnapshot.
-func (m *ClusterPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
+// SetConditions sets the given conditions on the ClusterSchedulingPolicySnapshot.
+func (m *ClusterSchedulingPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {
 		meta.SetStatusCondition(&m.Status.Conditions, c)
 	}
 }
 
 // GetCondition returns the condition of the given type if exists.
-func (m *ClusterPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
+func (m *ClusterSchedulingPolicySnapshot) GetCondition(conditionType string) *metav1.Condition {
 	return meta.FindStatusCondition(m.Status.Conditions, conditionType)
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterPolicySnapshot{}, &ClusterPolicySnapshotList{})
+	SchemeBuilder.Register(&ClusterSchedulingPolicySnapshot{}, &ClusterPolicySnapshotList{})
 }

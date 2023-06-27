@@ -43,7 +43,7 @@ type Framework interface {
 	Handle
 
 	// RunSchedulerCycleFor performs scheduling for a policy snapshot.
-	RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error)
+	RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error)
 }
 
 // framework implements the Framework interface.
@@ -144,7 +144,7 @@ func (f *framework) EventRecorder() record.EventRecorder {
 }
 
 // RunSchedulingCycleFor performs scheduling for a policy snapshot.
-func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
+func (f *framework) RunSchedulingCycleFor(ctx context.Context, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, resources *fleetv1beta1.ClusterResourceSnapshot) (result ctrl.Result, err error) { //nolint:revive
 	// Not yet implemented.
 	return ctrl.Result{}, nil
 }

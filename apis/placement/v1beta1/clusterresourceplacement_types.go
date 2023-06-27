@@ -24,13 +24,18 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterResourcePlacement is used to select cluster scoped resources, including built-in resources and custom resources, and placement them onto selected member clusters in a fleet.
+// ClusterResourcePlacement is used to select cluster scoped resources, including built-in resources and custom resources,
+// and placement them onto selected member clusters in a fleet.
+//
 // If a namespace is selected, ALL the resources under the namespace are placed to the target clusters.
 // Note that you can't select the following resources:
-// - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces).
-// - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService, ServiceImport, etc.
-// The `ClusterResourceBinding` will be created, and it represents a scheduling decision that binds a group of resources
-// to a cluster.
+//   - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces),
+//     fleet-* (reserved for fleet system namespaces).
+//   - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement,
+//     ClusterSchedulingPolicySnapshot, ClusterResourceSnapshot, ClusterResourceBinding, etc.
+//
+// `ClusterSchedulingPolicySnapshot` and `ClusterResourceSnapshot` objects are created when there are changes in the
+// system to keep the history of the changes affecting a `ClusterResourcePlacement`.
 type ClusterResourcePlacement struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -46,12 +51,6 @@ type ClusterResourcePlacement struct {
 
 // ClusterResourcePlacementSpec defines the desired state of ClusterResourcePlacement.
 type ClusterResourcePlacementSpec struct {
-	// The number of old snapshots to retain to allow rollback.
-	// This is a pointer to distinguish between explicit zero and not specified.
-	// Defaults to 10.
-	// +optional
-	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
-
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=100
 
@@ -69,6 +68,12 @@ type ClusterResourcePlacementSpec struct {
 	// +optional
 	// +patchStrategy=retainKeys
 	Strategy RolloutStrategy `json:"strategy,omitempty"`
+
+	// The number of old ClusterSchedulingPolicySnapshot or ClusterResourceSnapshot resources to retain to allow rollback.
+	// This is a pointer to distinguish between explicit zero and not specified.
+	// Defaults to 10.
+	// +optional
+	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
 }
 
 // ClusterResourceSelector is used to select cluster scoped resources as the target resources to be placed.
@@ -219,8 +224,21 @@ type TopologySpreadConstraint struct {
 	WhenUnsatisfiable UnsatisfiableConstraintAction `json:"whenUnsatisfiable,omitempty"`
 }
 
-// RolloutStrategy describes how to update existing placed resource either onto a different cluster
-// or in-place upgrade to the latest resource.
+// UnsatisfiableConstraintAction defines the type of actions that can be taken if a constraint is not satisfied.
+// +enum
+type UnsatisfiableConstraintAction string
+
+const (
+	// DoNotSchedule instructs the scheduler not to schedule the resource
+	// onto the cluster when constraints are not satisfied.
+	DoNotSchedule UnsatisfiableConstraintAction = "DoNotSchedule"
+
+	// ScheduleAnyway instructs the scheduler to schedule the resource
+	// even if constraints are not satisfied.
+	ScheduleAnyway UnsatisfiableConstraintAction = "ScheduleAnyway"
+)
+
+// RolloutStrategy describes how to roll out a new change in selected resources to target clusters.
 type RolloutStrategy struct {
 	// Type of rollout. The only supported type is "RollingUpdate". Default is "RollingUpdate".
 	// +optional
@@ -244,9 +262,11 @@ const (
 type RollingUpdateConfig struct {
 	// The maximum number of clusters that can be unavailable during the rolling update
 	// comparing to the desired number of clusters.
-	// Value can be an absolute number (ex: 5) or a percentage of desired number of clusters (ex: 10%).
-	// Absolute number is calculated from percentage by applying to the new target number of clusters.
-	// We consider a resource not available when we either remove it from a cluster or in-place
+	// The desired number equal to the `NumberOfClusters` field when the placement type is `PickN`.
+	// The desired number equal to the number of clusters scheduler selected when the placement type is `PickAll`.
+	// Value can be an absolute number (ex: 5) or a percentage of the desired number of clusters (ex: 10%).
+	// Absolute number is calculated from percentage by rounding up.
+	// We consider a resource unavailable when we either remove it from a cluster or in-place
 	// upgrade the resources content on the same cluster.
 	// This can not be 0 if MaxSurge is 0.
 	// Defaults to 25%.
@@ -254,38 +274,37 @@ type RollingUpdateConfig struct {
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
 	// The maximum number of clusters that can be scheduled above the desired number of clusters.
-	// Value can be an absolute number (ex: 5) or a percentage of desired number of clusters (ex: 10%).
-	// Absolute number is calculated from percentage by applying to the new target number of clusters.
+	// The desired number equal to the `NumberOfClusters` field when the placement type is `PickN`.
+	// The desired number equal to the number of clusters scheduler selected when the placement type is `PickAll`.
+	// Value can be an absolute number (ex: 5) or a percentage of desire (ex: 10%).
+	// Absolute number is calculated from percentage by rounding up.
 	// This does not apply to the case that we do in-place upgrade of resources on the same cluster.
 	// This can not be 0 if MaxUnavailable is 0.
 	// Defaults to 25%.
 	// +optional
 	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
 
-	// WaitBetweenRollingPeriodSeconds is used to config the time to wait between rolling out phases
-	// A resource placement is considered available if `WaitBetweenRollingPeriodSeconds` seconds
+	// UnavailablePeriodSeconds is used to config the time to wait between rolling out phases.
+	// A resource placement is considered available after `UnavailablePeriodSeconds` seconds
 	// has passed after the resources are applied to the target cluster successfully.
 	// Default is 60.
 	// +optional
-	WaitBetweenRollingPeriodSeconds *int `json:"waitBetweenRollingPeriodSeconds,omitempty"`
+	UnavailablePeriodSeconds *int `json:"waitBetweenRollingPeriodSeconds,omitempty"`
 }
-
-// UnsatisfiableConstraintAction defines the type of actions that can be taken if a constraint is not satisfied.
-// +enum
-type UnsatisfiableConstraintAction string
-
-const (
-	// DoNotSchedule instructs the scheduler not to schedule the resource
-	// onto the cluster when constraints are not satisfied.
-	DoNotSchedule UnsatisfiableConstraintAction = "DoNotSchedule"
-
-	// ScheduleAnyway instructs the scheduler to schedule the resource
-	// even if constraints are not satisfied.
-	ScheduleAnyway UnsatisfiableConstraintAction = "ScheduleAnyway"
-)
 
 // ClusterResourcePlacementStatus defines the observed state of the ClusterResourcePlacement object.
 type ClusterResourcePlacementStatus struct {
+	// SelectedResources contains a list of resources selected by ResourceSelectors.
+	// +optional
+	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
+
+	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
+	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
+	// In the pickN case, there are N placement statuses where N = NumberOfClusters. Some of them may not have assigned
+	// clusters when we cannot fill the required number of clusters.
+	// +optional
+	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
+
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
@@ -294,16 +313,6 @@ type ClusterResourcePlacementStatus struct {
 	// Conditions is an array of current observed conditions for ClusterResourcePlacement.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// SelectedResources contains a list of resources selected by ResourceSelectors.
-	// +optional
-	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
-
-	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
-	// Each selected cluster is guaranteed to have a corresponding placementStatuses.
-	// Note that the clusters must be both joined and meeting PlacementPolicy.
-	// +optional
-	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
 }
 
 // ResourceIdentifier identifies one Kubernetes resource.
@@ -329,25 +338,24 @@ type ResourceIdentifier struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// ResourcePlacementStatus represents the status of a group of resource placed on selected cluster
-// according to the PlacementPolicy field in the ClusterResourcePlacement object.
+// ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
 type ResourcePlacementStatus struct {
-	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
+	// ClusterName is the name of the cluster this resource is assigned to.
+	// If it is not empty, its value should be unique cross all placement decisions for the Placement.
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// ClusterName is the name of the ManagedCluster. If it is not empty, its value should be unique cross all
-	// placement decisions for the Placement.
-	// +kubebuilder:validation:Required
-	// +required
 	ClusterName string `json:"clusterName"`
 
 	// +kubebuilder:validation:MaxItems=100
 
 	// FailedResourcePlacements is a list of all the resources failed to be placed to the given cluster.
 	// Note that we only include 100 failed resource placements even if there are more than 100.
+	// This field is only meaningful if the `ClusterName` is not empty.
 	// +optional
 	FailedResourcePlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
+
+	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // FailedResourcePlacement contains the failure details of a failed resource placement.
@@ -365,25 +373,47 @@ type FailedResourcePlacement struct {
 	Condition metav1.Condition `json:"condition"`
 }
 
-// ResourcePlacementConditionType defines a specific condition of the cluster resource placement.
+// ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement.
 // +enum
-type ResourcePlacementConditionType string
+type ClusterResourcePlacementConditionType string
 
 const (
-	// ResourceScheduledConditionType indicates whether we have selected at least one resource to be placed to at least one
-	// member cluster and created work CRs under the corresponding per-cluster namespaces (i.e., fleet-member-<member-name>).
+	// ClusterResourcePlacementScheduledConditionType indicates whether we have successfully scheduled the
+	// ClusterResourcePlacement.
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to fully satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Reason field.
 	// - "Unknown" means we don't have a scheduling decision yet.
-	ResourceScheduledConditionType ResourcePlacementConditionType = "Scheduled"
+	ClusterResourcePlacementScheduledConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementScheduled"
 
-	// ResourcesAppliedConditionType indicates whether the selected member clusters have applied the selected resources locally.
+	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
+	// the selected resources locally.
 	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully applied to the target cluster.
+	// - "True" means all the selected resources are successfully applied to all the target clusters.
 	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
 	// - "Unknown" means we haven't started the apply yet.
-	ResourcesAppliedConditionType ResourcePlacementConditionType = "Applied"
+	ClusterResourcePlacementAppliedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementApplied"
+)
+
+// ResourcePlacementConditionType defines a specific condition of a resource placement.
+// +enum
+type ResourcePlacementConditionType string
+
+const (
+	// ResourceWorkCreatedConditionType indicates whether we have created the corresponding work object under the
+	// per-cluster namespaces (i.e., fleet-member-<member-name>).
+	// Its condition status can be one of the following:
+	// - "True" means we have successfully created the corresponding work resources.
+	// - "False" means we have failed to creat the corresponding work resources. We will fill the Reason field.
+	// - "Unknown" means we don't have a scheduling decision yet.
+	ResourceWorkCreatedConditionType ResourcePlacementConditionType = "WorkCreated"
+
+	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully applied to the target cluster.
+	// - "False" means some of them have failed.
+	// - "Unknown" means we haven't started the apply yet.
+	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
 )
 
 // PlacementType identifies the type of placement.
