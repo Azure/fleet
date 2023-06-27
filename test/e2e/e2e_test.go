@@ -26,7 +26,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
 	testutils "go.goms.io/fleet/test/e2e/utils"
@@ -39,8 +40,8 @@ var (
 	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
-	mc                *v1alpha1.MemberCluster
-	imc               *v1alpha1.InternalMemberCluster
+	mc                *fleetv1alpha1.MemberCluster
+	imc               *fleetv1alpha1.InternalMemberCluster
 	ctx               context.Context
 
 	// The fleet-system namespace.
@@ -73,15 +74,15 @@ var (
 
 	sortOption          = cmpopts.SortSlices(func(ref1, ref2 metav1.Condition) bool { return ref1.Type < ref2.Type })
 	imcStatusCmpOptions = []cmp.Option{
-		cmpopts.IgnoreTypes(v1alpha1.ResourceUsage{}),
+		cmpopts.IgnoreTypes(fleetv1alpha1.ResourceUsage{}),
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+		cmpopts.IgnoreFields(fleetv1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
 		sortOption,
 	}
 	mcStatusCmpOptions = []cmp.Option{
 		cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration"),
-		cmpopts.IgnoreFields(v1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
-		cmpopts.IgnoreFields(v1alpha1.ResourceUsage{}, "ObservationTime"),
+		cmpopts.IgnoreFields(fleetv1alpha1.AgentStatus{}, "LastReceivedHeartbeat"),
+		cmpopts.IgnoreFields(fleetv1alpha1.ResourceUsage{}, "ObservationTime"),
 		sortOption,
 	}
 	crpStatusCmpOptions = []cmp.Option{
@@ -89,36 +90,36 @@ var (
 		sortOption,
 	}
 
-	imcJoinedAgentStatus = []v1alpha1.AgentStatus{
+	imcJoinedAgentStatus = []fleetv1alpha1.AgentStatus{
 		{
-			Type: v1alpha1.MemberAgent,
+			Type: fleetv1alpha1.MemberAgent,
 			Conditions: []metav1.Condition{
 				{
 					Reason: "InternalMemberClusterHealthy",
 					Status: metav1.ConditionTrue,
-					Type:   string(v1alpha1.AgentHealthy),
+					Type:   string(fleetv1alpha1.AgentHealthy),
 				},
 				{
 					Reason: "InternalMemberClusterJoined",
 					Status: metav1.ConditionTrue,
-					Type:   string(v1alpha1.AgentJoined),
+					Type:   string(fleetv1alpha1.AgentJoined),
 				},
 			},
 		},
 	}
-	imcLeftAgentStatus = []v1alpha1.AgentStatus{
+	imcLeftAgentStatus = []fleetv1alpha1.AgentStatus{
 		{
-			Type: v1alpha1.MemberAgent,
+			Type: fleetv1alpha1.MemberAgent,
 			Conditions: []metav1.Condition{
 				{
 					Reason: "InternalMemberClusterHealthy",
 					Status: metav1.ConditionTrue,
-					Type:   string(v1alpha1.AgentHealthy),
+					Type:   string(fleetv1alpha1.AgentHealthy),
 				},
 				{
 					Reason: "InternalMemberClusterLeft",
 					Status: metav1.ConditionFalse,
-					Type:   string(v1alpha1.AgentJoined),
+					Type:   string(fleetv1alpha1.AgentJoined),
 				},
 			},
 		},
@@ -128,12 +129,12 @@ var (
 		{
 			Reason: "MemberClusterReadyToJoin",
 			Status: metav1.ConditionTrue,
-			Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
+			Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 		},
 		{
 			Reason: "MemberClusterJoined",
 			Status: metav1.ConditionTrue,
-			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
+			Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		},
 	}
 
@@ -141,12 +142,12 @@ var (
 		{
 			Reason: "MemberClusterNotReadyToJoin",
 			Status: metav1.ConditionFalse,
-			Type:   string(v1alpha1.ConditionTypeMemberClusterReadyToJoin),
+			Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
 		},
 		{
 			Reason: "MemberClusterLeft",
 			Status: metav1.ConditionFalse,
-			Type:   string(v1alpha1.ConditionTypeMemberClusterJoined),
+			Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
 		},
 	}
 
@@ -159,7 +160,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1beta1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 }
@@ -190,13 +192,13 @@ var _ = BeforeSuite(func() {
 		Kind:      "ServiceAccount",
 		Namespace: utils.FleetSystemNamespace,
 	}
-	mc = &v1alpha1.MemberCluster{
+	mc = &fleetv1alpha1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: MemberCluster.ClusterName,
 		},
-		Spec: v1alpha1.MemberClusterSpec{
+		Spec: fleetv1alpha1.MemberClusterSpec{
 			Identity:               identity,
-			State:                  v1alpha1.ClusterStateJoin,
+			State:                  fleetv1alpha1.ClusterStateJoin,
 			HeartbeatPeriodSeconds: 60,
 		},
 	}
@@ -205,7 +207,7 @@ var _ = BeforeSuite(func() {
 	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to be created in %s cluster", mc.Name, HubCluster.ClusterName)
 
 	By("check if internal member cluster created in the hub cluster")
-	imc = &v1alpha1.InternalMemberCluster{
+	imc = &fleetv1alpha1.InternalMemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      MemberCluster.ClusterName,
 			Namespace: memberNamespace.Name,
@@ -216,12 +218,12 @@ var _ = BeforeSuite(func() {
 	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for internal member cluster %s to be synced in %s cluster", imc.Name, HubCluster.ClusterName)
 
 	By("check if internal member cluster status is updated to Joined")
-	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcJoinedAgentStatus}
+	wantIMCStatus := fleetv1alpha1.InternalMemberClusterStatus{AgentStatus: imcJoinedAgentStatus}
 	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, wantIMCStatus, imcStatusCmpOptions)
 
 	By("check if member cluster status is updated to Joined")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)).Should(Succeed(), "Failed to retrieve internal member cluster %s in %s cluster", imc.Name, HubCluster.ClusterName)
-	wantMCStatus := v1alpha1.MemberClusterStatus{
+	wantMCStatus := fleetv1alpha1.MemberClusterStatus{
 		AgentStatus:   imc.Status.AgentStatus,
 		Conditions:    mcJoinedConditions,
 		ResourceUsage: imc.Status.ResourceUsage,
@@ -238,16 +240,16 @@ var _ = AfterSuite(func() {
 
 	By("update member cluster in the hub cluster")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
-	mc.Spec.State = v1alpha1.ClusterStateLeave
+	mc.Spec.State = fleetv1alpha1.ClusterStateLeave
 	Expect(HubCluster.KubeClient.Update(ctx, mc)).Should(Succeed(), "Failed to update member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 
 	By("check if internal member cluster status is updated to Left")
-	wantIMCStatus := v1alpha1.InternalMemberClusterStatus{AgentStatus: imcLeftAgentStatus}
+	wantIMCStatus := fleetv1alpha1.InternalMemberClusterStatus{AgentStatus: imcLeftAgentStatus}
 	testutils.CheckInternalMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, wantIMCStatus, imcStatusCmpOptions)
 
 	By("check if member cluster status is updated to Left")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)).Should(Succeed(), "Failed to retrieve internal member cluster %s in %s cluster", imc.Name, HubCluster.ClusterName)
-	wantMCStatus := v1alpha1.MemberClusterStatus{
+	wantMCStatus := fleetv1alpha1.MemberClusterStatus{
 		AgentStatus:   imc.Status.AgentStatus,
 		Conditions:    mcLeftConditions,
 		ResourceUsage: imc.Status.ResourceUsage,

@@ -23,6 +23,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
@@ -550,7 +551,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 	Context("CR validation webhook", func() {
-		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
+		It("should deny CREATE operation on v1alpha1 member cluster CR for user not in system:masters group", func() {
 			mc := fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-member-cluster",
@@ -573,7 +574,30 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
 		})
 
-		It("should deny UPDATE operation on member cluster CR for user not in system:masters group", func() {
+		It("should deny CREATE operation on v1beta1 member cluster CR for user not in system:masters group", func() {
+			mc := fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-member-cluster",
+				},
+				Spec: fleetv1beta1.MemberClusterSpec{
+					State: fleetv1beta1.ClusterStateJoin,
+					Identity: rbacv1.Subject{
+						Kind:      "User",
+						APIGroup:  "",
+						Name:      "test-subject",
+						Namespace: "fleet-system",
+					},
+				},
+			}
+
+			By("expecting denial of operation CREATE of member cluster")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &mc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+		})
+
+		It("should deny UPDATE operation on v1alpha1 member cluster CR for user not in system:masters group", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
 
@@ -587,7 +611,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
 		})
 
-		It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
+		It("should deny DELETE operation on v1alpha1 member cluster CR for user not in system:masters group", func() {
 			mc := fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: MemberCluster.ClusterName,

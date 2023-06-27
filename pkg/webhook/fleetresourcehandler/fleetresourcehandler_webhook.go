@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/webhook/validation"
 )
@@ -48,9 +49,14 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case createCRDGVK():
 			klog.V(2).InfoS("handling CRD resource", "GVK", createCRDGVK())
 			response = v.handleCRD(req)
-		case createMemberClusterGVK():
-			klog.V(2).InfoS("handling Member cluster resource", "GVK", createMemberClusterGVK())
-			response = v.handleMemberCluster(ctx, req)
+		case createV1alpha1MemberClusterGVK():
+			gvk := createV1alpha1MemberClusterGVK()
+			klog.V(2).InfoS("handling Member cluster resource", "GVK", gvk)
+			response = v.handleMemberCluster(ctx, req, gvk)
+		case createV1beta1MemberClusterGVK():
+			gvk := createV1beta1MemberClusterGVK()
+			klog.V(2).InfoS("handling Member cluster resource", "GVK", gvk)
+			response = v.handleMemberCluster(ctx, req, gvk)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
@@ -73,17 +79,29 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 }
 
-func (v *fleetResourceValidator) handleMemberCluster(ctx context.Context, req admission.Request) admission.Response {
-	var mc fleetv1alpha1.MemberCluster
-	if err := v.decodeRequestObject(req, &mc); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+func (v *fleetResourceValidator) handleMemberCluster(ctx context.Context, req admission.Request, gvk metav1.GroupVersionKind) admission.Response {
+	var mcName string
+	switch gvk {
+	case createV1alpha1MemberClusterGVK():
+		var mc fleetv1alpha1.MemberCluster
+		if err := v.decodeRequestObject(req, &mc); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		mcName = mc.Name
+	case createV1beta1MemberClusterGVK():
+		var mc fleetv1beta1.MemberCluster
+		if err := v.decodeRequestObject(req, &mc); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		mcName = mc.Name
+	default:
+		return admission.Denied(fmt.Sprintf("unsupported member cluster group: %s, version: %s & kind: %s", gvk.Group, gvk.Version, gvk.Kind))
 	}
-
 	if !validation.ValidateUserForFleetCR(ctx, v.client, v.whiteListedUsers, req.UserInfo) {
-		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify member cluster CR: %s", req.UserInfo.Username, req.UserInfo.Groups, mc.Name))
+		return admission.Denied(fmt.Sprintf("failed to validate user: %s in groups: %v to modify member cluster CR: %s", req.UserInfo.Username, req.UserInfo.Groups, mcName))
 	}
 	klog.V(2).InfoS("user in groups is allowed to modify member cluster CR", "user", req.UserInfo.Username, "groups", req.UserInfo.Groups)
-	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify member cluster: %s", req.UserInfo.Username, req.UserInfo.Groups, mc.Name))
+	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify member cluster: %s", req.UserInfo.Username, req.UserInfo.Groups, mcName))
 }
 
 func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj runtime.Object) error {
@@ -115,10 +133,18 @@ func createCRDGVK() metav1.GroupVersionKind {
 	}
 }
 
-func createMemberClusterGVK() metav1.GroupVersionKind {
+func createV1alpha1MemberClusterGVK() metav1.GroupVersionKind {
 	return metav1.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    memberClusterKind,
+	}
+}
+
+func createV1beta1MemberClusterGVK() metav1.GroupVersionKind {
+	return metav1.GroupVersionKind{
+		Group:   fleetv1beta1.GroupVersion.Group,
+		Version: fleetv1beta1.GroupVersion.Version,
 		Kind:    memberClusterKind,
 	}
 }

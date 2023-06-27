@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
@@ -50,6 +51,12 @@ const (
 	memberClusterResourceName = "memberclusters"
 	replicaSetResourceName    = "replicasets"
 	podResourceName           = "pods"
+
+	crdKind        = "CustomResourceDefinition"
+	mcKind         = "MemberCluster"
+	replicaSetKind = "ReplicaSet"
+	podKind        = "Pod"
+	crpKind        = "ClusterResourcePlacement"
 )
 
 var (
@@ -129,7 +136,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 		Webhooks: []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.pod.validating",
-				ClientConfig:            w.createClientConfig(corev1.Pod{}),
+				ClientConfig:            w.createClientConfig(podKind),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -150,7 +157,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.clusterresourceplacement.validating",
-				ClientConfig:            w.createClientConfig(fleetv1alpha1.ClusterResourcePlacement{}),
+				ClientConfig:            w.createClientConfig(crpKind),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -172,7 +179,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.replicaset.validating",
-				ClientConfig:            w.createClientConfig(appsv1.ReplicaSet{}),
+				ClientConfig:            w.createClientConfig(replicaSetKind),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -192,7 +199,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.customresourcedefinition.validating",
-				ClientConfig:            w.createClientConfig(v1.CustomResourceDefinition{}),
+				ClientConfig:            w.createClientConfig(crdKind),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -214,7 +221,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.membercluster.validating",
-				ClientConfig:            w.createClientConfig(fleetv1alpha1.MemberCluster{}),
+				ClientConfig:            w.createClientConfig(mcKind),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -226,8 +233,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Delete,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group},
-							APIVersions: []string{fleetv1alpha1.GroupVersion.Version},
+							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group, fleetv1beta1.GroupVersion.Group},
+							APIVersions: []string{fleetv1alpha1.GroupVersion.Version, fleetv1beta1.GroupVersion.Version},
 							Resources:   []string{memberClusterResourceName},
 							Scope:       &clusterScope,
 						},
@@ -264,27 +271,27 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 }
 
 // createClientConfig generates the client configuration with either service ref or URL for the argued interface.
-func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookClientConfig {
+func (w *Config) createClientConfig(kind string) admv1.WebhookClientConfig {
 	serviceRef := admv1.ServiceReference{
 		Namespace: w.serviceNamespace,
 		Name:      FleetWebhookSvcName,
 		Port:      pointer.Int32(w.servicePort),
 	}
 	var serviceEndpoint string
-	switch webhookInterface.(type) {
-	case corev1.Pod:
+	switch kind {
+	case podKind:
 		serviceEndpoint = w.serviceURL + pod.ValidationPath
 		serviceRef.Path = pointer.String(pod.ValidationPath)
-	case fleetv1alpha1.ClusterResourcePlacement:
+	case crpKind:
 		serviceEndpoint = w.serviceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
-	case appsv1.ReplicaSet:
+	case replicaSetKind:
 		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
 		serviceRef.Path = pointer.String(replicaset.ValidationPath)
-	case v1.CustomResourceDefinition:
+	case crdKind:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
-	case fleetv1alpha1.MemberCluster:
+	case mcKind:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}
