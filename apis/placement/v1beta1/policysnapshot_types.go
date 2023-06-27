@@ -42,17 +42,17 @@ type ClusterPolicySnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of PolicySnapshot.
+	// The desired state of SchedulingPolicySnapshot.
 	// +required
-	Spec PolicySnapshotSpec `json:"spec"`
+	Spec SchedulingPolicySnapshotSpec `json:"spec"`
 
-	// The observed status of PolicySnapshot.
+	// The observed status of SchedulingPolicySnapshot.
 	// +optional
-	Status PolicySnapshotStatus `json:"status,omitempty"`
+	Status SchedulingPolicySnapshotStatus `json:"status,omitempty"`
 }
 
-// PolicySnapshotSpec defines the desired state of PolicySnapshot.
-type PolicySnapshotSpec struct {
+// SchedulingPolicySnapshotSpec defines the desired state of SchedulingPolicySnapshot.
+type SchedulingPolicySnapshotSpec struct {
 	// Policy defines how to select member clusters to place the selected resources.
 	// If unspecified, all the joined member clusters are selected.
 	// +optional
@@ -63,35 +63,36 @@ type PolicySnapshotSpec struct {
 	PolicyHash []byte `json:"policyHash"`
 }
 
-// PolicySnapshotStatus defines the observed state of PolicySnapshot.
-type PolicySnapshotStatus struct {
+// SchedulingPolicySnapshotStatus defines the observed state of SchedulingPolicySnapshot.
+type SchedulingPolicySnapshotStatus struct {
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
 	// +listMapKey=type
 
-	// Conditions is an array of current observed conditions for PolicySnapshot.
+	// Conditions is an array of current observed conditions for SchedulingPolicySnapshot.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// +kubebuilder:validation:MaxItems=100
 	// ClusterDecisions contains a list of names of member clusters considered by the scheduler.
 	// Note that all the selected clusters must present in the list while not all the
-	// member clusters are guaranteed to be listed.
+	// member clusters are guaranteed to be listed due to the size limit. We will try to
+	// add the clusters that can provide the most insight to the list first.
 	// +optional
 	ClusterDecisions []ClusterDecision `json:"targetClusters,omitempty"`
 }
 
-// PolicySnapshotConditionType identifies a specific condition of the PolicySnapshot.
-type PolicySnapshotConditionType string
+// SchedulingPolicySnapshotConditionType identifies a specific condition of the SchedulingPolicySnapshot.
+type SchedulingPolicySnapshotConditionType string
 
 const (
-	// 	Scheduled indicates the scheduled condition of the given policySnapshot.
+	// 	Scheduled indicates the scheduled condition of the given SchedulingPolicySnapshot.
 	// Its condition status can be one of the following:
-	// - "True" means the corresponding policySnapshot is fully scheduled.
-	// - "False" means the corresponding policySnapshot is not scheduled yet.
-	// - "Unknown" means this policy does not have a full schedule yet.
-	PolicySnapshotScheduled PolicySnapshotConditionType = "Scheduled"
+	// - "True" means the corresponding SchedulingPolicySnapshot is scheduled.
+	// - "False" means the corresponding SchedulingPolicySnapshot is not scheduled yet.
+	// - "Unknown" means the status of the scheduling is unknown.
+	PolicySnapshotScheduled SchedulingPolicySnapshotConditionType = "Scheduled"
 )
 
 // ClusterDecision represents a decision from a placement

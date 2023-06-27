@@ -67,7 +67,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 					fleetv1beta1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
 				},
 			},
-			Spec: fleetv1beta1.PolicySnapshotSpec{
+			Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 				Policy:     &schedulingPolicy,
 				PolicyHash: []byte(policyHash),
 			},

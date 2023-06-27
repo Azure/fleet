@@ -136,7 +136,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -167,7 +167,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -195,7 +195,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -225,7 +225,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -248,7 +248,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -273,7 +273,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -296,7 +296,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -322,7 +322,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -350,7 +350,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -375,7 +375,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -401,7 +401,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -429,7 +429,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -454,7 +454,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -479,7 +479,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -505,7 +505,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -533,7 +533,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -559,7 +559,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -584,7 +584,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -610,7 +610,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -820,7 +820,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: "invalid",
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -851,7 +851,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: "-123",
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
