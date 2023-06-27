@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -33,25 +34,56 @@ var (
 	// There should be something wrong with the system and cannot be recovered by itself.
 	ErrUnexpectedBehavior = errors.New("unexpected behavior which cannot be handled by the controller")
 
+	// ErrExpectedBehavior indicates the current situation is expected, which can be recovered by itself after retries.
+	ErrExpectedBehavior = errors.New("expected behavior which can be recovered by itself")
+
 	// ErrAPIServerError indicates the error is returned by the API server.
 	ErrAPIServerError = errors.New("error returned by the API server")
+
+	// ErrUserError indicates the error is caused by the user and customer needs to take the action.
+	ErrUserError = errors.New("failed to process the request due to a client error")
 )
 
-// NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error.
+// NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error when err is not nil.
 func NewUnexpectedBehaviorError(err error) error {
 	// TODO(zhiying) emit error metrics or well defined logs
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err.Error())
 	}
-	return ErrUnexpectedBehavior
+	return nil
 }
 
-// NewAPIServerError returns ErrAPIServerError type error.
-func NewAPIServerError(err error) error {
+// NewExpectedBehaviorError returns ErrExpectedBehavior type error when err is not nil.
+func NewExpectedBehaviorError(err error) error {
 	if err != nil {
+		return fmt.Errorf("%w: %v", ErrExpectedBehavior, err.Error())
+	}
+	return nil
+}
+
+// NewAPIServerError returns error types when accessing data from cache or API server.
+func NewAPIServerError(fromCache bool, err error) error {
+	if err != nil {
+		if fromCache && isUnexpectedCacheError(err) {
+			return NewUnexpectedBehaviorError(err)
+		}
 		return fmt.Errorf("%w: %v", ErrAPIServerError, err.Error())
 	}
-	return ErrAPIServerError
+	return nil
+}
+
+func isUnexpectedCacheError(err error) bool {
+	// may need to add more error code based on the production
+	// Cache will return notFound for GET.
+	return !apierrors.IsNotFound(err)
+}
+
+// NewUserError returns ErrUserError type error when err is not nil.
+func NewUserError(err error) error {
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrUserError, err.Error())
+	}
+	return nil
 }
 
 // Controller maintains a rate limiting queue and the items in the queue will be reconciled by a "ReconcileFunc".

@@ -103,7 +103,7 @@ func (r *Reconciler) ReconcileV1Alpha1(ctx context.Context, key controller.Queue
 	klog.V(2).InfoS("Successfully selected clusters", "placement", placementOld.Name, "number of clusters", len(selectedClusters))
 
 	// select the new resources and record the result in the placementNew status
-	manifests, scheduleErr := r.selectResources(ctx, placementNew)
+	manifests, scheduleErr := r.selectResources(placementNew)
 	if scheduleErr != nil {
 		klog.ErrorS(scheduleErr, "failed to select the resources for this placement", "placement", placeRef)
 		r.updatePlacementScheduledCondition(placementOld, scheduleErr)
