@@ -45,7 +45,7 @@ type ResourceBindingSpec struct {
 	// PolicySnapshotName is the name of the scheduling policy snapshot that this resource binding
 	// points to; more specifically, the scheduler creates this bindings in accordance with this
 	// scheduling policy snapshot.
-	PolicySnapshotName string `json:"policySnapshotName"`
+	SchedulingPolicySnapshotName string `json:"schedulingPolicySnapshotName"`
 
 	// TargetCluster is the name of the cluster that the scheduler assigns the resources to.
 	TargetCluster string `json:"targetCluster"`
