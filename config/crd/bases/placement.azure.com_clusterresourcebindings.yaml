@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourcebindings.placement.karavel.io
+  name: clusterresourcebindings.placement.azure.com
 spec:
-  group: placement.karavel.io
+  group: placement.azure.com
   names:
     categories:
     - fleet
@@ -53,12 +53,17 @@ spec:
                   into multiple snapshots because of the resource size limit, it points
                   to the name of the leading snapshot of the index group.
                 type: string
+              state:
+                description: 'The desired state of the binding. Possible values: Scheduled,
+                  Bound, Unscheduled.'
+                type: string
               targetCluster:
                 description: TargetCluster is the name of the cluster that the scheduler
                   assigns the resources to.
                 type: string
             required:
             - resourceSnapshotName
+            - state
             - targetCluster
             type: object
           status:

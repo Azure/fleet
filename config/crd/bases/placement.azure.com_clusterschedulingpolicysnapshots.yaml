@@ -4,18 +4,18 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterpolicysnapshots.placement.karavel.io
+  name: clusterschedulingpolicysnapshots.placement.azure.com
 spec:
-  group: placement.karavel.io
+  group: placement.azure.com
   names:
     categories:
     - fleet-workload
-    kind: ClusterPolicySnapshot
-    listKind: ClusterPolicySnapshotList
-    plural: clusterpolicysnapshots
+    kind: ClusterSchedulingPolicySnapshot
+    listKind: ClusterSchedulingPolicySnapshotList
+    plural: clusterschedulingpolicysnapshots
     shortNames:
     - pss
-    singular: clusterpolicysnapshot
+    singular: clusterschedulingpolicysnapshot
   scope: Cluster
   versions:
   - additionalPrinterColumns:
@@ -28,13 +28,13 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: 'ClusterPolicySnapshot is used to store a snapshot of cluster
-          placement policy. Its spec is immutable. The naming convention of a ClusterPolicySnapshot
-          is {CRPName}-{PolicySnapshotIndex}. PolicySnapshotIndex will begin with
-          0. Each snapshot must have the following labels: - `CRPTrackingLabel` which
-          points to its owner CRP. - `PolicyIndexLabel` which is the index of the
-          policy snapshot. - `IsLatestSnapshotLabel` which indicates whether the snapshot
-          is the latest one.'
+        description: 'ClusterSchedulingPolicySnapshot is used to store a snapshot
+          of cluster placement policy. Its spec is immutable. The naming convention
+          of a ClusterSchedulingPolicySnapshot is {CRPName}-{PolicySnapshotIndex}.
+          PolicySnapshotIndex will begin with 0. Each snapshot must have the following
+          labels: - `CRPTrackingLabel` which points to its owner CRP. - `PolicyIndexLabel`
+          which is the index of the policy snapshot. - `IsLatestSnapshotLabel` which
+          indicates whether the snapshot is the latest one.'
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -49,7 +49,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of PolicySnapshot.
+            description: The desired state of SchedulingPolicySnapshot.
             properties:
               policy:
                 description: Policy defines how to select member clusters to place
@@ -299,11 +299,11 @@ spec:
             - policyHash
             type: object
           status:
-            description: The observed status of PolicySnapshot.
+            description: The observed status of SchedulingPolicySnapshot.
             properties:
               conditions:
                 description: Conditions is an array of current observed conditions
-                  for PolicySnapshot.
+                  for SchedulingPolicySnapshot.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct
@@ -378,7 +378,8 @@ spec:
                 description: ClusterDecisions contains a list of names of member clusters
                   considered by the scheduler. Note that all the selected clusters
                   must present in the list while not all the member clusters are guaranteed
-                  to be listed.
+                  to be listed due to the size limit. We will try to add the clusters
+                  that can provide the most insight to the list first.
                 items:
                   description: ClusterDecision represents a decision from a placement
                     An empty ClusterDecision indicates it is not scheduled yet.

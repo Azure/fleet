@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourceplacements.placement.karavel.io
+  name: clusterresourceplacements.placement.azure.com
 spec:
-  group: placement.karavel.io
+  group: placement.azure.com
   names:
     categories:
     - fleet-workload
@@ -40,16 +40,17 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: 'ClusterResourcePlacement is used to select cluster scoped resources,
+        description: "ClusterResourcePlacement is used to select cluster scoped resources,
           including built-in resources and custom resources, and placement them onto
-          selected member clusters in a fleet. If a namespace is selected, ALL the
-          resources under the namespace are placed to the target clusters. Note that
-          you can''t select the following resources: - reserved namespaces including:
+          selected member clusters in a fleet. \n If a namespace is selected, ALL
+          the resources under the namespace are placed to the target clusters. Note
+          that you can't select the following resources: - reserved namespaces including:
           default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved
           for fleet system namespaces). - reserved fleet resource types including:
-          MemberCluster, InternalMemberCluster, ClusterResourcePlacement, MultiClusterService,
-          ServiceImport, etc. The `ClusterResourceBinding` will be created and it
-          represents a scheduling decision that binds a group of resources to a cluster.'
+          MemberCluster, InternalMemberCluster, ClusterResourcePlacement, ClusterSchedulingPolicySnapshot,
+          ClusterResourceSnapshot, ClusterResourceBinding, etc. \n `ClusterSchedulingPolicySnapshot`
+          and `ClusterResourceSnapshot` objects are created when there are changes
+          in the system to keep the history of the changes affecting a `ClusterResourcePlacement`."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -388,6 +389,67 @@ spec:
                 maxItems: 100
                 minItems: 1
                 type: array
+              revisionHistoryLimit:
+                description: The number of old ClusterSchedulingPolicySnapshot or
+                  ClusterResourceSnapshot resources to retain to allow rollback. This
+                  is a pointer to distinguish between explicit zero and not specified.
+                  Defaults to 10.
+                format: int32
+                type: integer
+              strategy:
+                description: The rollout strategy to use to replace existing placement
+                  with new ones.
+                properties:
+                  rollingUpdate:
+                    description: Rolling update config params. Present only if RolloutStrategyType
+                      = RollingUpdate.
+                    properties:
+                      maxSurge:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: 'The maximum number of clusters that can be scheduled
+                          above the desired number of clusters. The desired number
+                          equal to the `NumberOfClusters` field when the placement
+                          type is `PickN`. The desired number equal to the number
+                          of clusters scheduler selected when the placement type is
+                          `PickAll`. Value can be an absolute number (ex: 5) or a
+                          percentage of desire (ex: 10%). Absolute number is calculated
+                          from percentage by rounding up. This does not apply to the
+                          case that we do in-place upgrade of resources on the same
+                          cluster. This can not be 0 if MaxUnavailable is 0. Defaults
+                          to 25%.'
+                        x-kubernetes-int-or-string: true
+                      maxUnavailable:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: 'The maximum number of clusters that can be unavailable
+                          during the rolling update comparing to the desired number
+                          of clusters. The desired number equal to the `NumberOfClusters`
+                          field when the placement type is `PickN`. The desired number
+                          equal to the number of clusters scheduler selected when
+                          the placement type is `PickAll`. Value can be an absolute
+                          number (ex: 5) or a percentage of the desired number of
+                          clusters (ex: 10%). Absolute number is calculated from percentage
+                          by rounding up. We consider a resource unavailable when
+                          we either remove it from a cluster or in-place upgrade the
+                          resources content on the same cluster. This can not be 0
+                          if MaxSurge is 0. Defaults to 25%.'
+                        x-kubernetes-int-or-string: true
+                      waitBetweenRollingPeriodSeconds:
+                        description: UnavailablePeriodSeconds is used to config the
+                          time to wait between rolling out phases. A resource placement
+                          is considered available after `UnavailablePeriodSeconds`
+                          seconds has passed after the resources are applied to the
+                          target cluster successfully. Default is 60.
+                        type: integer
+                    type: object
+                  type:
+                    description: Type of rollout. The only supported type is "RollingUpdate".
+                      Default is "RollingUpdate".
+                    type: string
+                type: object
             required:
             - resourceSelectors
             type: object
@@ -467,102 +529,203 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              failedPlacements:
-                description: FailedResourcePlacements is a list of all the resources
-                  failed to be placed to the given clusters. Note that we only include
-                  1000 failed resource placements even if there are more than 1000.
+              placementStatuses:
+                description: PlacementStatuses contains a list of placement status
+                  on the clusters that are selected by PlacementPolicy. Each selected
+                  cluster according to the latest resource placement is guaranteed
+                  to have a corresponding placementStatuses. In the pickN case, there
+                  are N placement statuses where N = NumberOfClusters. Some of them
+                  may not have assigned clusters when we cannot fill the required
+                  number of clusters.
                 items:
-                  description: FailedResourcePlacement contains the failure details
-                    of a failed resource placement.
+                  description: ResourcePlacementStatus represents the placement status
+                    of selected resources for one target cluster.
                   properties:
                     clusterName:
-                      description: Name of the member cluster that the resource is
-                        placed to.
+                      description: ClusterName is the name of the cluster this resource
+                        is assigned to. If it is not empty, its value should be unique
+                        cross all placement decisions for the Placement.
                       type: string
-                    condition:
-                      description: The failed condition status.
-                      properties:
-                        lastTransitionTime:
-                          description: lastTransitionTime is the last time the condition
-                            transitioned from one status to another. This should be
-                            when the underlying condition changed.  If that is not
-                            known, then using the time when the API field changed
-                            is acceptable.
-                          format: date-time
-                          type: string
-                        message:
-                          description: message is a human readable message indicating
-                            details about the transition. This may be an empty string.
-                          maxLength: 32768
-                          type: string
-                        observedGeneration:
-                          description: observedGeneration represents the .metadata.generation
-                            that the condition was set based upon. For instance, if
-                            .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration
-                            is 9, the condition is out of date with respect to the
-                            current state of the instance.
-                          format: int64
-                          minimum: 0
-                          type: integer
-                        reason:
-                          description: reason contains a programmatic identifier indicating
-                            the reason for the condition's last transition. Producers
-                            of specific condition types may define expected values
-                            and meanings for this field, and whether the values are
-                            considered a guaranteed API. The value should be a CamelCase
-                            string. This field may not be empty.
-                          maxLength: 1024
-                          minLength: 1
-                          pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                          type: string
-                        status:
-                          description: status of the condition, one of True, False,
-                            Unknown.
-                          enum:
-                          - "True"
-                          - "False"
-                          - Unknown
-                          type: string
-                        type:
-                          description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                            --- Many .condition.type values are consistent across
-                            resources like Available, but because arbitrary conditions
-                            can be useful (see .node.status.conditions), the ability
-                            to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-                          maxLength: 316
-                          pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                          type: string
-                      required:
-                      - lastTransitionTime
-                      - message
-                      - reason
-                      - status
-                      - type
-                      type: object
-                    group:
-                      description: Group is the group name of the selected resource.
-                      type: string
-                    kind:
-                      description: Kind represents the Kind of the selected resources.
-                      type: string
-                    name:
-                      description: Name of the target resource.
-                      type: string
-                    namespace:
-                      description: Namespace is the namespace of the resource. Empty
-                        if the resource is cluster scoped.
-                      type: string
-                    version:
-                      description: Version is the version of the selected resource.
-                      type: string
-                  required:
-                  - clusterName
-                  - condition
-                  - kind
-                  - name
-                  - version
+                    conditions:
+                      description: Conditions is an array of current observed conditions
+                        for ResourcePlacementStatus.
+                      items:
+                        description: "Condition contains details for one aspect of
+                          the current state of this API Resource. --- This struct
+                          is intended for direct use as an array at the field path
+                          .status.conditions.  For example, \n type FooStatus struct{
+                          // Represents the observations of a foo's current state.
+                          // Known .status.conditions.type are: \"Available\", \"Progressing\",
+                          and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
+                          // +listType=map // +listMapKey=type Conditions []metav1.Condition
+                          `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
+                          protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields
+                          }"
+                        properties:
+                          lastTransitionTime:
+                            description: lastTransitionTime is the last time the condition
+                              transitioned from one status to another. This should
+                              be when the underlying condition changed.  If that is
+                              not known, then using the time when the API field changed
+                              is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: message is a human readable message indicating
+                              details about the transition. This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: observedGeneration represents the .metadata.generation
+                              that the condition was set based upon. For instance,
+                              if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration
+                              is 9, the condition is out of date with respect to the
+                              current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: reason contains a programmatic identifier
+                              indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected
+                              values and meanings for this field, and whether the
+                              values are considered a guaranteed API. The value should
+                              be a CamelCase string. This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                              --- Many .condition.type values are consistent across
+                              resources like Available, but because arbitrary conditions
+                              can be useful (see .node.status.conditions), the ability
+                              to deconflict is important. The regex it matches is
+                              (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      type: array
+                    failedPlacements:
+                      description: FailedResourcePlacements is a list of all the resources
+                        failed to be placed to the given cluster. Note that we only
+                        include 100 failed resource placements even if there are more
+                        than 100. This field is only meaningful if the `ClusterName`
+                        is not empty.
+                      items:
+                        description: FailedResourcePlacement contains the failure
+                          details of a failed resource placement.
+                        properties:
+                          clusterName:
+                            description: Name of the member cluster that the resource
+                              is placed to.
+                            type: string
+                          condition:
+                            description: The failed condition status.
+                            properties:
+                              lastTransitionTime:
+                                description: lastTransitionTime is the last time the
+                                  condition transitioned from one status to another.
+                                  This should be when the underlying condition changed.  If
+                                  that is not known, then using the time when the
+                                  API field changed is acceptable.
+                                format: date-time
+                                type: string
+                              message:
+                                description: message is a human readable message indicating
+                                  details about the transition. This may be an empty
+                                  string.
+                                maxLength: 32768
+                                type: string
+                              observedGeneration:
+                                description: observedGeneration represents the .metadata.generation
+                                  that the condition was set based upon. For instance,
+                                  if .metadata.generation is currently 12, but the
+                                  .status.conditions[x].observedGeneration is 9, the
+                                  condition is out of date with respect to the current
+                                  state of the instance.
+                                format: int64
+                                minimum: 0
+                                type: integer
+                              reason:
+                                description: reason contains a programmatic identifier
+                                  indicating the reason for the condition's last transition.
+                                  Producers of specific condition types may define
+                                  expected values and meanings for this field, and
+                                  whether the values are considered a guaranteed API.
+                                  The value should be a CamelCase string. This field
+                                  may not be empty.
+                                maxLength: 1024
+                                minLength: 1
+                                pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                type: string
+                              status:
+                                description: status of the condition, one of True,
+                                  False, Unknown.
+                                enum:
+                                - "True"
+                                - "False"
+                                - Unknown
+                                type: string
+                              type:
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase. --- Many .condition.type
+                                  values are consistent across resources like Available,
+                                  but because arbitrary conditions can be useful (see
+                                  .node.status.conditions), the ability to deconflict
+                                  is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                                maxLength: 316
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                type: string
+                            required:
+                            - lastTransitionTime
+                            - message
+                            - reason
+                            - status
+                            - type
+                            type: object
+                          group:
+                            description: Group is the group name of the selected resource.
+                            type: string
+                          kind:
+                            description: Kind represents the Kind of the selected
+                              resources.
+                            type: string
+                          name:
+                            description: Name of the target resource.
+                            type: string
+                          namespace:
+                            description: Namespace is the namespace of the resource.
+                              Empty if the resource is cluster scoped.
+                            type: string
+                          version:
+                            description: Version is the version of the selected resource.
+                            type: string
+                        required:
+                        - clusterName
+                        - condition
+                        - kind
+                        - name
+                        - version
+                        type: object
+                      maxItems: 100
+                      type: array
                   type: object
-                maxItems: 1000
                 type: array
               selectedResources:
                 description: SelectedResources contains a list of resources selected
@@ -591,13 +754,6 @@ spec:
                   - name
                   - version
                   type: object
-                type: array
-              targetClusters:
-                description: TargetClusters contains a list of names of member clusters
-                  selected by PlacementPolicy. Note that the clusters must be both
-                  joined and meeting PlacementPolicy.
-                items:
-                  type: string
                 type: array
             type: object
         required:

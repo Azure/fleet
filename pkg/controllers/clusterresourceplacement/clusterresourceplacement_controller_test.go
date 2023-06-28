@@ -86,12 +86,12 @@ func TestHandleUpdate(t *testing.T) {
 	unspecifiedPolicyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
 	tests := []struct {
 		name                string
-		policySnapshots     []fleetv1beta1.ClusterPolicySnapshot
-		wantPolicySnapshots []fleetv1beta1.ClusterPolicySnapshot
+		policySnapshots     []fleetv1beta1.ClusterSchedulingPolicySnapshot
+		wantPolicySnapshots []fleetv1beta1.ClusterSchedulingPolicySnapshot
 	}{
 		{
 			name: "new clusterResourcePolicy and no existing policy snapshots owned by my-crp",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
@@ -103,7 +103,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
@@ -136,7 +136,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -145,7 +145,7 @@ func TestHandleUpdate(t *testing.T) {
 		},
 		{
 			name: "crp policy has no change",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -167,13 +167,13 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -195,7 +195,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -206,7 +206,7 @@ func TestHandleUpdate(t *testing.T) {
 			name: "crp policy has changed and there is no active snapshot",
 			// It happens when last reconcile loop fails after setting the latest label to false and
 			// before creating a new policy snapshot.
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -225,7 +225,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -248,13 +248,13 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -273,7 +273,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -296,7 +296,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -322,7 +322,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -331,7 +331,7 @@ func TestHandleUpdate(t *testing.T) {
 		},
 		{
 			name: "crp policy has changed and there is an active snapshot",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -350,13 +350,13 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -375,7 +375,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -401,7 +401,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -410,7 +410,7 @@ func TestHandleUpdate(t *testing.T) {
 		},
 		{
 			name: "crp policy has been changed and reverted back and there is no active snapshot",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -429,7 +429,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -454,13 +454,13 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -479,7 +479,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -505,7 +505,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -514,7 +514,7 @@ func TestHandleUpdate(t *testing.T) {
 		},
 		{
 			name: "crp policy has not been changed and only the numberOfCluster is changed",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -533,7 +533,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -559,13 +559,13 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -584,7 +584,7 @@ func TestHandleUpdate(t *testing.T) {
 							},
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
 						PolicyHash: unspecifiedPolicyHash,
 					},
@@ -610,7 +610,7 @@ func TestHandleUpdate(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -640,7 +640,7 @@ func TestHandleUpdate(t *testing.T) {
 			if !cmp.Equal(got, want) {
 				t.Errorf("handleUpdate() = %+v, want %+v", got, want)
 			}
-			clusterPolicySnapshotList := &fleetv1beta1.ClusterPolicySnapshotList{}
+			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}
@@ -664,12 +664,12 @@ func TestHandleUpdate_failure(t *testing.T) {
 	policyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
 	tests := []struct {
 		name            string
-		policySnapshots []fleetv1beta1.ClusterPolicySnapshot
+		policySnapshots []fleetv1beta1.ClusterSchedulingPolicySnapshot
 	}{
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "existing active policy snapshot does not have policyIndex label",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -691,7 +691,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "existing active policy snapshot has an invalid policyIndex label",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -714,7 +714,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "no active policy snapshot exists and policySnapshot with invalid policyIndex label",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -736,7 +736,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "multiple active policy snapshot exist",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -776,7 +776,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "no active policy snapshot exists and policySnapshot with invalid policyIndex label (negative value)",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -798,7 +798,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "active policy snapshot exists and policySnapshot with invalid numberOfClusters annotation",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
@@ -820,7 +820,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: "invalid",
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},
@@ -830,7 +830,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
 			name: "no active policy snapshot exists and policySnapshot with invalid numberOfClusters annotation (negative)",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
@@ -851,7 +851,7 @@ func TestHandleUpdate_failure(t *testing.T) {
 							fleetv1beta1.NumberOfClustersAnnotation: "-123",
 						},
 					},
-					Spec: fleetv1beta1.PolicySnapshotSpec{
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						Policy:     wantPolicy,
 						PolicyHash: policyHash,
 					},

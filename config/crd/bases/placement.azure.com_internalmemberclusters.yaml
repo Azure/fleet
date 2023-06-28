@@ -4,32 +4,30 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: memberclusters.placement.karavel.io
+  name: internalmemberclusters.placement.azure.com
 spec:
-  group: placement.karavel.io
+  group: placement.azure.com
   names:
     categories:
     - fleet
-    kind: MemberCluster
-    listKind: MemberClusterList
-    plural: memberclusters
+    kind: InternalMemberCluster
+    listKind: InternalMemberClusterList
+    plural: internalmemberclusters
     shortNames:
-    - mc
-    singular: membercluster
-  scope: Cluster
+    - imc
+    singular: internalmembercluster
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="Joined")].status
-      name: Joined
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: MemberCluster is a resource created in the hub cluster to represent
-          a member cluster within a fleet.
+        description: InternalMemberCluster is used by hub agent to notify the member
+          agents about the member cluster state changes, and is used by the member
+          agents to report their status.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -44,7 +42,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: The desired state of MemberCluster.
+            description: The desired state of InternalMemberCluster.
             properties:
               heartbeatPeriodSeconds:
                 default: 60
@@ -55,46 +53,15 @@ spec:
                 maximum: 600
                 minimum: 1
                 type: integer
-              identity:
-                description: The identity used by the member cluster to access the
-                  hub cluster. The hub agents deployed on the hub cluster will automatically
-                  grant the minimal required permissions to this identity for the
-                  member agents deployed on the member cluster to access the hub cluster.
-                properties:
-                  apiGroup:
-                    description: APIGroup holds the API group of the referenced subject.
-                      Defaults to "" for ServiceAccount subjects. Defaults to "rbac.authorization.k8s.io"
-                      for User and Group subjects.
-                    type: string
-                  kind:
-                    description: Kind of object being referenced. Values defined by
-                      this API group are "User", "Group", and "ServiceAccount". If
-                      the Authorizer does not recognized the kind value, the Authorizer
-                      should report an error.
-                    type: string
-                  name:
-                    description: Name of the object being referenced.
-                    type: string
-                  namespace:
-                    description: Namespace of the referenced object.  If the object
-                      kind is non-namespace, such as "User" or "Group", and this value
-                      is not empty the Authorizer should report an error.
-                    type: string
-                required:
-                - kind
-                - name
-                type: object
-                x-kubernetes-map-type: atomic
               state:
                 description: 'The desired state of the member cluster. Possible values:
                   Join, Leave.'
                 type: string
             required:
-            - identity
             - state
             type: object
           status:
-            description: The observed status of MemberCluster.
+            description: The observed status of InternalMemberCluster.
             properties:
               agentStatus:
                 description: AgentStatus is an array of current observed status, each
@@ -193,82 +160,9 @@ spec:
                   - type
                   type: object
                 type: array
-              conditions:
-                description: Conditions is an array of current observed conditions
-                  for the member cluster.
-                items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource. --- This struct is intended for direct
-                    use as an array at the field path .status.conditions.  For example,
-                    \n type FooStatus struct{ // Represents the observations of a
-                    foo's current state. // Known .status.conditions.type are: \"Available\",
-                    \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge
-                    // +listType=map // +listMapKey=type Conditions []metav1.Condition
-                    `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\"
-                    protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
-                  properties:
-                    lastTransitionTime:
-                      description: lastTransitionTime is the last time the condition
-                        transitioned from one status to another. This should be when
-                        the underlying condition changed.  If that is not known, then
-                        using the time when the API field changed is acceptable.
-                      format: date-time
-                      type: string
-                    message:
-                      description: message is a human readable message indicating
-                        details about the transition. This may be an empty string.
-                      maxLength: 32768
-                      type: string
-                    observedGeneration:
-                      description: observedGeneration represents the .metadata.generation
-                        that the condition was set based upon. For instance, if .metadata.generation
-                        is currently 12, but the .status.conditions[x].observedGeneration
-                        is 9, the condition is out of date with respect to the current
-                        state of the instance.
-                      format: int64
-                      minimum: 0
-                      type: integer
-                    reason:
-                      description: reason contains a programmatic identifier indicating
-                        the reason for the condition's last transition. Producers
-                        of specific condition types may define expected values and
-                        meanings for this field, and whether the values are considered
-                        a guaranteed API. The value should be a CamelCase string.
-                        This field may not be empty.
-                      maxLength: 1024
-                      minLength: 1
-                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                      type: string
-                    status:
-                      description: status of the condition, one of True, False, Unknown.
-                      enum:
-                      - "True"
-                      - "False"
-                      - Unknown
-                      type: string
-                    type:
-                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
-                        --- Many .condition.type values are consistent across resources
-                        like Available, but because arbitrary conditions can be useful
-                        (see .node.status.conditions), the ability to deconflict is
-                        important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-                      maxLength: 316
-                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                      type: string
-                  required:
-                  - lastTransitionTime
-                  - message
-                  - reason
-                  - status
-                  - type
-                  type: object
-                type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
-                  It is copied from the corresponding InternalMemberCluster object.
+                  It is populated by the member agent.
                 properties:
                   allocatable:
                     additionalProperties:

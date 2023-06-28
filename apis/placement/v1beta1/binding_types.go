@@ -33,6 +33,10 @@ type ClusterResourceBinding struct {
 
 // ResourceBindingSpec defines the desired state of ClusterResourceBinding.
 type ResourceBindingSpec struct {
+	// The desired state of the binding. Possible values: Scheduled, Bound, Unscheduled.
+	// +required
+	State BindingState `json:"state"`
+
 	// ResourceSnapshotName is the name of the resource snapshot that this resource binding points to.
 	// If the resources are divided into multiple snapshots because of the resource size limit,
 	// it points to the name of the leading snapshot of the index group.
@@ -41,6 +45,20 @@ type ResourceBindingSpec struct {
 	// TargetCluster is the name of the cluster that the scheduler assigns the resources to.
 	TargetCluster string `json:"targetCluster"`
 }
+
+// BindingState is the state of the binding.
+type BindingState string
+
+const (
+	// BindingStateScheduled means the binding is scheduled but need to be bound to the target cluster.
+	BindingStateScheduled BindingState = "Scheduled"
+
+	// BindingStateBound means the binding is bound to the target cluster.
+	BindingStateBound BindingState = "Bound"
+
+	// BindingStateUnScheduled means the binding is not scheduled on to the target cluster anymore.
+	BindingStateUnscheduled BindingState = "Unscheduled"
+)
 
 // ResourceBindingStatus represents the current status of a ClusterResourceBinding.
 type ResourceBindingStatus struct {

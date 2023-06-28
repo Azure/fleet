@@ -5,7 +5,6 @@ run:
 linters:
   disable-all: true
   enable:
-    - deadcode
     - decorder
     - errcheck
     - errorlint
@@ -27,7 +26,6 @@ linters:
     - typecheck
     - unconvert
     - unused
-    - varcheck
     - whitespace
   # Run with --fast=false for more extensive checks
   fast: true
