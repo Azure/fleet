@@ -57,7 +57,7 @@ const (
 	BindingStateBound BindingState = "Bound"
 
 	// BindingStateUnScheduled means the binding is not scheduled on to the target cluster anymore.
-	BindingStateUnScheduled BindingState = "UnScheduled"
+	BindingStateUnscheduled BindingState = "Unscheduled"
 )
 
 // ResourceBindingStatus represents the current status of a ClusterResourceBinding.
