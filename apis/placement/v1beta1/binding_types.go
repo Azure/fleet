@@ -50,15 +50,14 @@ type ResourceBindingSpec struct {
 type BindingState string
 
 const (
-	// BindingStateCreating means the binding is ready but need to be rolled
-	// out to the target cluster.
-	BindingStateCreating BindingState = "Creating"
+	// BindingStateScheduled means the binding is scheduled but need to be bound to the target cluster.
+	BindingStateScheduled BindingState = "Scheduled"
 
-	// BindingStateActive means the binding is in effect.
-	BindingStateActive BindingState = "Active"
+	// BindingStateBound means the binding is bound to the target cluster.
+	BindingStateBound BindingState = "Bound"
 
-	// BindingStateDeleting means the binding is about to be deleted.
-	BindingStateDeleting BindingState = "Deleting"
+	// BindingStateUnScheduled means the binding is not scheduled on to the target cluster anymore.
+	BindingStateUnScheduled BindingState = "UnScheduled"
 )
 
 // ResourceBindingStatus represents the current status of a ClusterResourceBinding.
