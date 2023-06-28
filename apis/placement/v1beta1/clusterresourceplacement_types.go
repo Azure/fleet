@@ -262,8 +262,8 @@ const (
 type RollingUpdateConfig struct {
 	// The maximum number of clusters that can be unavailable during the rolling update
 	// comparing to the desired number of clusters.
-	// The desired number equal to the `NumberOfClusters` field when the placement type is `PickN`.
-	// The desired number equal to the number of clusters scheduler selected when the placement type is `PickAll`.
+	// The desired number equals to the `NumberOfClusters` field when the placement type is `PickN`.
+	// The desired number equals to the number of clusters scheduler selected when the placement type is `PickAll`.
 	// Value can be an absolute number (ex: 5) or a percentage of the desired number of clusters (ex: 10%).
 	// Absolute number is calculated from percentage by rounding up.
 	// We consider a resource unavailable when we either remove it from a cluster or in-place
@@ -274,8 +274,8 @@ type RollingUpdateConfig struct {
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
 	// The maximum number of clusters that can be scheduled above the desired number of clusters.
-	// The desired number equal to the `NumberOfClusters` field when the placement type is `PickN`.
-	// The desired number equal to the number of clusters scheduler selected when the placement type is `PickAll`.
+	// The desired number equals to the `NumberOfClusters` field when the placement type is `PickN`.
+	// The desired number equals to the number of clusters scheduler selected when the placement type is `PickAll`.
 	// Value can be an absolute number (ex: 5) or a percentage of desire (ex: 10%).
 	// Absolute number is calculated from percentage by rounding up.
 	// This does not apply to the case that we do in-place upgrade of resources on the same cluster.
@@ -289,7 +289,7 @@ type RollingUpdateConfig struct {
 	// has passed after the resources are applied to the target cluster successfully.
 	// Default is 60.
 	// +optional
-	UnavailablePeriodSeconds *int `json:"waitBetweenRollingPeriodSeconds,omitempty"`
+	UnavailablePeriodSeconds *int `json:"unavailablePeriodSeconds,omitempty"`
 }
 
 // ClusterResourcePlacementStatus defines the observed state of the ClusterResourcePlacement object.

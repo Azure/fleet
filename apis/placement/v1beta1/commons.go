@@ -14,7 +14,7 @@ type ClusterState string
 
 const (
 	// Unprefixed labels/annotations are reserved for end-users
-	// we will add a placement.karavel.io to designate these labels/annotations as official fleet labels/annotations.
+	// we will add a placement.azure.com to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
 	fleetPrefix = "placement.azure.com/"
 

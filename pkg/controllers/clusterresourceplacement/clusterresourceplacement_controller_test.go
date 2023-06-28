@@ -640,7 +640,7 @@ func TestHandleUpdate(t *testing.T) {
 			if !cmp.Equal(got, want) {
 				t.Errorf("handleUpdate() = %+v, want %+v", got, want)
 			}
-			clusterPolicySnapshotList := &fleetv1beta1.ClusterPolicySnapshotList{}
+			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}

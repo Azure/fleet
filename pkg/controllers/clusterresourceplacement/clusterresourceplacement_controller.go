@@ -150,7 +150,7 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 // invalid label value.
 // 2 & 3 should never happen.
 func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, int, error) {
-	snapshotList := &fleetv1beta1.ClusterPolicySnapshotList{}
+	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 	latestSnapshotLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel:      crp.Name,
 		fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),

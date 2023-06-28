@@ -132,10 +132,10 @@ type ClusterScore struct {
 	TopologySpreadScore *int32 `json:"priorityScore,omitempty"`
 }
 
-// ClusterPolicySnapshotList contains a list of ClusterSchedulingPolicySnapshot.
+// ClusterSchedulingPolicySnapshotList contains a list of ClusterSchedulingPolicySnapshot.
 // +kubebuilder:resource:scope="Cluster"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ClusterPolicySnapshotList struct {
+type ClusterSchedulingPolicySnapshotList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterSchedulingPolicySnapshot `json:"items"`
@@ -154,5 +154,5 @@ func (m *ClusterSchedulingPolicySnapshot) GetCondition(conditionType string) *me
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterSchedulingPolicySnapshot{}, &ClusterPolicySnapshotList{})
+	SchemeBuilder.Register(&ClusterSchedulingPolicySnapshot{}, &ClusterSchedulingPolicySnapshotList{})
 }

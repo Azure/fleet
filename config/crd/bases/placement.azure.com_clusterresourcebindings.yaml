@@ -54,8 +54,8 @@ spec:
                   to the name of the leading snapshot of the index group.
                 type: string
               state:
-                description: 'The desired state of the binding. Possible values: Creating,
-                  Active, Deleting.'
+                description: 'The desired state of the binding. Possible values: Scheduled,
+                  Bound, Unscheduled.'
                 type: string
               targetCluster:
                 description: TargetCluster is the name of the cluster that the scheduler
