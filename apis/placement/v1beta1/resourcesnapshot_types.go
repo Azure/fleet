@@ -66,10 +66,6 @@ type ResourceSnapshotSpec struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +required
 	SelectedResources []ResourceContent `json:"selectedResources"`
-
-	// PolicySnapshotName is the name of the policy snapshot that this resource snapshot is pointing to.
-	// +required
-	PolicySnapshotName string `json:"policySnapshotName"`
 }
 
 // ResourceContent contains the content of a resource

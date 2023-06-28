@@ -60,10 +60,6 @@ spec:
           spec:
             description: The desired state of ResourceSnapshot.
             properties:
-              policySnapshotName:
-                description: PolicySnapshotName is the name of the policy snapshot
-                  that this resource snapshot is pointing to.
-                type: string
               selectedResources:
                 description: SelectedResources contains a list of resources selected
                   by ResourceSelectors.
@@ -74,7 +70,6 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
             required:
-            - policySnapshotName
             - selectedResources
             type: object
           status:

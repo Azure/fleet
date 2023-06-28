@@ -42,8 +42,16 @@ type ResourceBindingSpec struct {
 	// it points to the name of the leading snapshot of the index group.
 	ResourceSnapshotName string `json:"resourceSnapshotName"`
 
+	// PolicySnapshotName is the name of the scheduling policy snapshot that this resource binding
+	// points to; more specifically, the scheduler creates this bindings in accordance with this
+	// scheduling policy snapshot.
+	PolicySnapshotName string `json:"policySnapshotName"`
+
 	// TargetCluster is the name of the cluster that the scheduler assigns the resources to.
 	TargetCluster string `json:"targetCluster"`
+
+	// ClusterDecision explains why the scheduler makes this binding.
+	ClusterDecision ClusterDecision `json:"clusterDecision"`
 }
 
 // BindingState is the state of the binding.
@@ -82,6 +90,14 @@ const (
 	// - "False" means the corresponding work CR is not created yet.
 	// - "Unknown" means it is unknown.
 	ResourceBindingBound ResourceBindingConditionType = "Bound"
+
+	// ResourceBindingUpdated indicates whether (and when) a binding is updated to point
+	// to a new resource snapshot.
+	// Its condition status can be one of the following:
+	// - "True" means the binding has been updated.
+	// - "False" means the binding has not been updated yet.
+	// - "Unknown" means the update status is unknown.
+	ResourceBindingUpdated ResourceBindingConditionType = "Updated"
 
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
