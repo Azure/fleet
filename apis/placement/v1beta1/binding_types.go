@@ -46,7 +46,7 @@ type ResourceBindingSpec struct {
 	TargetCluster string `json:"targetCluster"`
 }
 
-// BindingState is the state of the binding
+// BindingState is the state of the binding.
 type BindingState string
 
 const (
