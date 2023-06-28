@@ -46,8 +46,8 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 }
 
 func (r *Reconciler) deleteClusterPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
-	snapshotList := &fleetv1beta1.ClusterPolicySnapshotList{}
-	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
+	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
 		klog.ErrorS(err, "Failed to list all clusterPolicySnapshots", "clusterResourcePlacement", klog.KObj(crp))
 		return controller.NewAPIServerError(false, err)
 	}
@@ -62,7 +62,7 @@ func (r *Reconciler) deleteClusterPolicySnapshots(ctx context.Context, crp *flee
 
 func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
 	snapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
-	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
 		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", klog.KObj(crp))
 		return controller.NewAPIServerError(false, err)
 	}

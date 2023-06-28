@@ -50,6 +50,10 @@ type Reconciler struct {
 	// Client is used to update objects which goes to the api server directly.
 	Client client.Client
 
+	// UncachedReader is the uncached read-only client for accessing Kubernetes API server; in most cases client should
+	// be used instead, unless consistency becomes a serious concern.
+	UncachedReader client.Reader
+
 	// DisabledResourceConfig contains all the api resources that we won't select.
 	DisabledResourceConfig *utils.DisabledResourceConfig
 

@@ -1522,14 +1522,14 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 func TestHandleDelete(t *testing.T) {
 	tests := []struct {
 		name                  string
-		policySnapshots       []fleetv1beta1.ClusterPolicySnapshot
+		policySnapshots       []fleetv1beta1.ClusterSchedulingPolicySnapshot
 		resourceSnapshots     []fleetv1beta1.ClusterResourceSnapshot
-		wantPolicySnapshots   []fleetv1beta1.ClusterPolicySnapshot
+		wantPolicySnapshots   []fleetv1beta1.ClusterSchedulingPolicySnapshot
 		wantResourceSnapshots []fleetv1beta1.ClusterResourceSnapshot
 	}{
 		{
 			name: "have active snapshots",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
@@ -1597,7 +1597,7 @@ func TestHandleDelete(t *testing.T) {
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
@@ -1627,7 +1627,7 @@ func TestHandleDelete(t *testing.T) {
 		},
 		{
 			name: "have no active snapshots",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -1670,12 +1670,12 @@ func TestHandleDelete(t *testing.T) {
 					},
 				},
 			},
-			wantPolicySnapshots:   []fleetv1beta1.ClusterPolicySnapshot{},
+			wantPolicySnapshots:   []fleetv1beta1.ClusterSchedulingPolicySnapshot{},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{},
 		},
 		{
 			name: "have no snapshots",
-			policySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
@@ -1702,7 +1702,7 @@ func TestHandleDelete(t *testing.T) {
 					},
 				},
 			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterPolicySnapshot{
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "another-crp-1",
@@ -1750,7 +1750,7 @@ func TestHandleDelete(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{Client: fakeClient, Scheme: scheme}
+			r := Reconciler{Client: fakeClient, Scheme: scheme, UncachedReader: fakeClient}
 			got, err := r.handleDelete(ctx, crp)
 			if err != nil {
 				t.Fatalf("failed to handle delete: %v", err)
@@ -1759,7 +1759,7 @@ func TestHandleDelete(t *testing.T) {
 			if !cmp.Equal(got, want) {
 				t.Errorf("handleDelete() = %+v, want %+v", got, want)
 			}
-			clusterPolicySnapshotList := &fleetv1beta1.ClusterPolicySnapshotList{}
+			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}
