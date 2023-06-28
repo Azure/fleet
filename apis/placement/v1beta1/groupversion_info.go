@@ -4,7 +4,7 @@ Licensed under the MIT license.
 */
 
 // +kubebuilder:object:generate=true
-// +groupName=placement.karavel.io
+// +groupName=placement.azure.com
 package v1beta1
 
 import (
