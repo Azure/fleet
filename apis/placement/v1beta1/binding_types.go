@@ -33,7 +33,7 @@ type ClusterResourceBinding struct {
 
 // ResourceBindingSpec defines the desired state of ClusterResourceBinding.
 type ResourceBindingSpec struct {
-	// The desired state of the binding. Possible values: Creating, Active, Deleting.
+	// The desired state of the binding. Possible values: Scheduled, Bound, Unscheduled.
 	// +required
 	State BindingState `json:"state"`
 
