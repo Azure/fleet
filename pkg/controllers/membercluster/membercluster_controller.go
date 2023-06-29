@@ -49,9 +49,6 @@ const (
 	reasonMemberClusterJoined         = "MemberClusterJoined"
 	reasonMemberClusterLeft           = "MemberClusterLeft"
 	reasonMemberClusterUnknown        = "MemberClusterUnknown"
-
-	fleetResourceLabelKey = fleetv1beta1.FleetPrefix + "isFleetResource"
-	fleetNamespaceValue   = "fleet-namespace"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -233,11 +230,12 @@ func (r *Reconciler) leave(ctx context.Context, mc *fleetv1alpha1.MemberCluster,
 func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.MemberCluster) (string, error) {
 	klog.V(2).InfoS("syncNamespace", "memberCluster", klog.KObj(mc))
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
+	fleetNamespaceLabelValue := "true"
 	expectedNS := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
-			Labels:          map[string]string{fleetResourceLabelKey: fleetNamespaceValue},
+			Labels:          map[string]string{fleetv1beta1.FleetResourceLabelKey: fleetNamespaceLabelValue},
 		},
 	}
 
@@ -260,7 +258,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 	// migration: To add new label to all existing member cluster namespaces.
 	klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	patch := client.MergeFrom(currentNS.DeepCopy())
-	currentNS.ObjectMeta.Labels[fleetResourceLabelKey] = fleetNamespaceValue
+	currentNS.ObjectMeta.Labels[fleetv1beta1.FleetResourceLabelKey] = fleetNamespaceLabelValue
 	if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 		return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
 	}
