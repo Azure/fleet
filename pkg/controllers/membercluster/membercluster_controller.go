@@ -257,6 +257,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		return namespaceName, nil
 	}
 
+	// migration: To add new label to all existing member cluster namespaces.
 	klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	patch := client.MergeFrom(currentNS.DeepCopy())
 	currentNS.ObjectMeta.Labels[fleetResourceLabelKey] = fleetNamespaceValue

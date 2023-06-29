@@ -201,6 +201,24 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
 		})
+
+		It("remove label from namespace and trigger reconcile to patch the namespace with the new label", func() {
+			By("remove label from namespace")
+			var mcNamespace corev1.Namespace
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &mcNamespace)).Should(Succeed())
+			delete(mcNamespace.Labels, fleetResourceLabelKey)
+			Expect(k8sClient.Update(ctx, &mcNamespace))
+
+			By("trigger reconcile again to patch member cluster namespace with new label")
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &mcNamespace)).Should(Succeed())
+			Expect(mcNamespace.Labels[fleetResourceLabelKey]).Should(Equal(fleetNamespaceValue))
+		})
 	})
 
 	Context("Test membercluster controller with enabling networking agents", func() {
