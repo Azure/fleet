@@ -48,8 +48,8 @@ spec:
             description: The desired state of ClusterResourceBinding.
             properties:
               clusterDecision:
-                description: ClusterDecision explains why the scheduler makes this
-                  binding.
+                description: ClusterDecision explains why the scheduler selected this
+                  cluster.
                 properties:
                   clusterName:
                     description: ClusterName is the name of the ManagedCluster. If
@@ -89,17 +89,17 @@ spec:
                 - reason
                 - selected
                 type: object
-              policySnapshotName:
-                description: PolicySnapshotName is the name of the scheduling policy
-                  snapshot that this resource binding points to; more specifically,
-                  the scheduler creates this bindings in accordance with this scheduling
-                  policy snapshot.
-                type: string
               resourceSnapshotName:
                 description: ResourceSnapshotName is the name of the resource snapshot
                   that this resource binding points to. If the resources are divided
                   into multiple snapshots because of the resource size limit, it points
                   to the name of the leading snapshot of the index group.
+                type: string
+              schedulingPolicySnapshotName:
+                description: SchedulingPolicySnapshotName is the name of the scheduling
+                  policy snapshot that this resource binding points to; more specifically,
+                  the scheduler creates this bindings in accordance with this scheduling
+                  policy snapshot.
                 type: string
               state:
                 description: 'The desired state of the binding. Possible values: Scheduled,
@@ -111,8 +111,8 @@ spec:
                 type: string
             required:
             - clusterDecision
-            - policySnapshotName
             - resourceSnapshotName
+            - schedulingPolicySnapshotName
             - state
             - targetCluster
             type: object
