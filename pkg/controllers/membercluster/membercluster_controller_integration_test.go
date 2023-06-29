@@ -204,13 +204,13 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		})
 
 		It("remove label from namespace and trigger reconcile to patch the namespace with the new label", func() {
-			By("remove label from namespace")
+			By("remove fleet resource label from namespace")
 			var mcNamespace corev1.Namespace
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &mcNamespace)).Should(Succeed())
 			delete(mcNamespace.Labels, fleetv1beta1.FleetResourceLabelKey)
 			Expect(k8sClient.Update(ctx, &mcNamespace)).Should(Succeed())
 
-			By("trigger reconcile again to patch member cluster namespace with new label")
+			By("trigger reconcile again to patch member cluster namespace with fleet resource label")
 			result, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
