@@ -410,8 +410,8 @@ spec:
                         - type: string
                         description: 'The maximum number of clusters that can be scheduled
                           above the desired number of clusters. The desired number
-                          equal to the `NumberOfClusters` field when the placement
-                          type is `PickN`. The desired number equal to the number
+                          equals to the `NumberOfClusters` field when the placement
+                          type is `PickN`. The desired number equals to the number
                           of clusters scheduler selected when the placement type is
                           `PickAll`. Value can be an absolute number (ex: 5) or a
                           percentage of desire (ex: 10%). Absolute number is calculated
@@ -426,9 +426,9 @@ spec:
                         - type: string
                         description: 'The maximum number of clusters that can be unavailable
                           during the rolling update comparing to the desired number
-                          of clusters. The desired number equal to the `NumberOfClusters`
+                          of clusters. The desired number equals to the `NumberOfClusters`
                           field when the placement type is `PickN`. The desired number
-                          equal to the number of clusters scheduler selected when
+                          equals to the number of clusters scheduler selected when
                           the placement type is `PickAll`. Value can be an absolute
                           number (ex: 5) or a percentage of the desired number of
                           clusters (ex: 10%). Absolute number is calculated from percentage
@@ -437,7 +437,7 @@ spec:
                           resources content on the same cluster. This can not be 0
                           if MaxSurge is 0. Defaults to 25%.'
                         x-kubernetes-int-or-string: true
-                      waitBetweenRollingPeriodSeconds:
+                      unavailablePeriodSeconds:
                         description: UnavailablePeriodSeconds is used to config the
                           time to wait between rolling out phases. A resource placement
                           is considered available after `UnavailablePeriodSeconds`
