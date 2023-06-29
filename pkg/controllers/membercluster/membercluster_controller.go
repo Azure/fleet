@@ -37,7 +37,7 @@ import (
 
 const (
 	eventReasonNamespaceCreated       = "NamespaceCreated"
-	eventReasonNamespaceUpdated       = "NamespaceUpdated"
+	eventReasonNamespacePatched       = "NamespacePatched"
 	eventReasonRoleCreated            = "RoleCreated"
 	eventReasonRoleUpdated            = "RoleUpdated"
 	eventReasonRoleBindingCreated     = "RoleBindingCreated"
@@ -257,17 +257,14 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 		return namespaceName, nil
 	}
 
-	// Updates namespace if currentNS != expectedNS.
-	if cmp.Equal(currentNS.Labels, expectedNS.Labels) {
-		return namespaceName, nil
+	klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+	patch := client.MergeFrom(currentNS.DeepCopy())
+	currentNS.ObjectMeta.Labels[fleetResourceLabelKey] = fleetNamespaceValue
+	if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
+		return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
 	}
-	currentNS.Labels = expectedNS.Labels
-	klog.V(2).InfoS("updating namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
-	if err := r.Client.Update(ctx, &currentNS, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return "", fmt.Errorf("failed to update namespace %s: %w", namespaceName, err)
-	}
-	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespaceUpdated, "Namespace was updated")
-	klog.V(2).InfoS("updated namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched")
+	klog.V(2).InfoS("patched namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	return namespaceName, nil
 }
 
