@@ -72,8 +72,8 @@ func TestCollectClusters(t *testing.T) {
 	}
 
 	want := []fleetv1beta1.MemberCluster{cluster}
-	if !cmp.Equal(clusters, want) {
-		t.Fatalf("collectClusters() = %v, want %v", clusters, want)
+	if diff := cmp.Diff(clusters, want); diff != "" {
+		t.Fatalf("collectClusters() diff (-got, +want) = %s", diff)
 	}
 }
 
@@ -126,8 +126,8 @@ func TestCollectBindings(t *testing.T) {
 			if err != nil {
 				t.Fatalf("collectBindings() = %v, want no error", err)
 			}
-			if !cmp.Equal(bindings, tc.want, ignoreObjectMetaResourceVersionField) {
-				t.Fatalf("collectBindings() = %v, want %v", bindings, tc.want)
+			if diff := cmp.Diff(bindings, tc.want, ignoreObjectMetaResourceVersionField); diff != "" {
+				t.Fatalf("collectBindings() diff (-got, +want) = %s", diff)
 			}
 		})
 	}
@@ -245,20 +245,20 @@ func TestClassifyBindings(t *testing.T) {
 	wantDangling := []*fleetv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
 
 	bound, scheduled, obsolete, dangling := classifyBindings(policy, bindings, clusters)
-	if !cmp.Equal(bound, wantBound) {
-		t.Errorf("classifyBindings() bound = %v, want %v", bound, wantBound)
+	if diff := cmp.Diff(bound, wantBound); diff != "" {
+		t.Errorf("classifyBindings() bound diff (-got, +want): %s", diff)
 	}
 
-	if !cmp.Equal(scheduled, wantScheduled) {
-		t.Errorf("classifyBindings() scheduled = %v, want %v", scheduled, wantScheduled)
+	if diff := cmp.Diff(scheduled, wantScheduled); diff != "" {
+		t.Errorf("classifyBindings() scheduled diff (-got, +want) = %s", diff)
 	}
 
-	if !cmp.Equal(obsolete, wantObsolete) {
-		t.Errorf("classifyBindings() obsolete = %v, want %v", obsolete, wantObsolete)
+	if diff := cmp.Diff(obsolete, wantObsolete); diff != "" {
+		t.Errorf("classifyBindings() obsolete diff (-got, +want) = %s", diff)
 	}
 
-	if !cmp.Equal(dangling, wantDangling) {
-		t.Errorf("classifyBindings() dangling = %v, want %v", dangling, wantDangling)
+	if diff := cmp.Diff(dangling, wantDangling); diff != "" {
+		t.Errorf("classifyBindings() dangling diff (-got, +want) = %s", diff)
 	}
 }
 
