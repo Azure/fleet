@@ -509,26 +509,30 @@ func TestGenerateResourceContent(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to generateResourceContent(): %v", err)
 			}
-			want, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&tt.wantResource)
-			if err != nil {
-				t.Fatalf("ToUnstructured failed: %v", err)
-			}
-			delete(want["metadata"].(map[string]interface{}), "creationTimestamp")
-			delete(want, "status")
-
-			uWant := unstructured.Unstructured{Object: want}
-			rawWant, err := uWant.MarshalJSON()
-			if err != nil {
-				t.Fatalf("MarshalJSON failed: %v", err)
-			}
-			wantResourceContent := &fleetv1beta1.ResourceContent{
-				RawExtension: runtime.RawExtension{
-					Raw: rawWant,
-				},
-			}
+			wantResourceContent := createResourceContentForTest(t, &tt.wantResource)
 			if diff := cmp.Diff(wantResourceContent, got); diff != "" {
 				t.Errorf("generateResourceContent() mismatch (-want, +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func createResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.ResourceContent {
+	want, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+	if err != nil {
+		t.Fatalf("ToUnstructured failed: %v", err)
+	}
+	delete(want["metadata"].(map[string]interface{}), "creationTimestamp")
+	delete(want, "status")
+
+	uWant := unstructured.Unstructured{Object: want}
+	rawWant, err := uWant.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+	return &fleetv1beta1.ResourceContent{
+		RawExtension: runtime.RawExtension{
+			Raw: rawWant,
+		},
 	}
 }

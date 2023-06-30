@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -67,11 +67,21 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 		},
 		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 			Policy: placementPolicyForTest(),
+			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+				{
+					Group:   corev1.GroupName,
+					Version: "v1",
+					Kind:    "Service",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"region": "east"},
+					},
+				},
+			},
 		},
 	}
 }
 
-func TestHandleUpdate(t *testing.T) {
+func TestGetOrCreateClusterPolicySnapshot(t *testing.T) {
 	wantPolicy := placementPolicyForTest()
 	wantPolicy.NumberOfClusters = nil
 	jsonBytes, err := json.Marshal(wantPolicy)
@@ -85,9 +95,10 @@ func TestHandleUpdate(t *testing.T) {
 	}
 	unspecifiedPolicyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
 	tests := []struct {
-		name                string
-		policySnapshots     []fleetv1beta1.ClusterSchedulingPolicySnapshot
-		wantPolicySnapshots []fleetv1beta1.ClusterSchedulingPolicySnapshot
+		name                    string
+		policySnapshots         []fleetv1beta1.ClusterSchedulingPolicySnapshot
+		wantPolicySnapshots     []fleetv1beta1.ClusterSchedulingPolicySnapshot
+		wantLatestSnapshotIndex int // index of the wantPolicySnapshots array
 	}{
 		{
 			name: "new clusterResourcePolicy and no existing policy snapshots owned by my-crp",
@@ -142,6 +153,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
+			wantLatestSnapshotIndex: 1,
 		},
 		{
 			name: "crp policy has no change",
@@ -201,6 +213,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
+			wantLatestSnapshotIndex: 0,
 		},
 		{
 			name: "crp policy has changed and there is no active snapshot",
@@ -328,6 +341,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
+			wantLatestSnapshotIndex: 2,
 		},
 		{
 			name: "crp policy has changed and there is an active snapshot",
@@ -407,6 +421,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
+			wantLatestSnapshotIndex: 1,
 		},
 		{
 			name: "crp policy has been changed and reverted back and there is no active snapshot",
@@ -511,6 +526,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
+			wantLatestSnapshotIndex: 1,
 		},
 		{
 			name: "crp policy has not been changed and only the numberOfCluster is changed",
@@ -616,6 +632,7 @@ func TestHandleUpdate(t *testing.T) {
 					},
 				},
 			},
+			wantLatestSnapshotIndex: 1,
 		},
 	}
 	for _, tc := range tests {
@@ -632,20 +649,19 @@ func TestHandleUpdate(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{Client: fakeClient, Scheme: scheme}
-			got, err := r.handleUpdate(ctx, crp)
+			got, err := r.getOrCreateClusterPolicySnapshot(ctx, crp)
 			if err != nil {
-				t.Fatalf("failed to handle update: %v", err)
+				t.Fatalf("failed to getOrCreateClusterPolicySnapshot: %v", err)
 			}
-			want := ctrl.Result{}
-			if !cmp.Equal(got, want) {
-				t.Errorf("handleUpdate() = %+v, want %+v", got, want)
+			options := []cmp.Option{
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+			}
+			if diff := cmp.Diff(tc.wantPolicySnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
+				t.Errorf("getOrCreateClusterPolicySnapshot() mismatch (-want, +got):\n%s", diff)
 			}
 			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
-			}
-			options := []cmp.Option{
-				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
 			}
 			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, options...); diff != "" {
 				t.Errorf("clusterPolicysnapShot List() mismatch (-want, +got):\n%s", diff)
@@ -654,7 +670,7 @@ func TestHandleUpdate(t *testing.T) {
 	}
 }
 
-func TestHandleUpdate_failure(t *testing.T) {
+func TestGetOrCreateClusterPolicySnapshot_failure(t *testing.T) {
 	wantPolicy := placementPolicyForTest()
 	wantPolicy.NumberOfClusters = nil
 	jsonBytes, err := json.Marshal(wantPolicy)
@@ -873,16 +889,629 @@ func TestHandleUpdate_failure(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{Client: fakeClient, Scheme: scheme}
-			got, err := r.handleUpdate(ctx, crp)
+			_, err := r.getOrCreateClusterPolicySnapshot(ctx, crp)
 			if err == nil { // if error is nil
-				t.Fatal("handleUpdate = nil, want err")
+				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}
 			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
-				t.Errorf("handleUpdate() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
+				t.Errorf("getOrCreateClusterResourceSnapshot() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
 			}
-			want := ctrl.Result{}
-			if !cmp.Equal(got, want) {
-				t.Errorf("handleUpdate() = %+v, want %+v", got, want)
+		})
+	}
+}
+
+func serviceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
+	svc := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Service",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svc-name",
+			Namespace: "svc-namespace",
+			Annotations: map[string]string{
+				"svc-annotation-key": "svc-object-annotation-key-value",
+			},
+			Labels: map[string]string{
+				"region": "east",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
+			Ports: []corev1.ServicePort{
+				{
+					Name:        "svc-port",
+					Protocol:    corev1.ProtocolTCP,
+					AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+					Port:        9001,
+				},
+			},
+		},
+	}
+	return createResourceContentForTest(t, svc)
+}
+
+func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
+	selectedResources := []fleetv1beta1.ResourceContent{
+		*serviceResourceContentForTest(t),
+	}
+	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: selectedResources,
+	}
+	jsonBytes, err := json.Marshal(resourceSnapshotSpecA)
+	if err != nil {
+		t.Fatalf("failed to create the resourceSnapshotSpecA hash: %v", err)
+	}
+	resourceSnapshotAHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	resourceSnapshotSpecB := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{},
+	}
+
+	jsonBytes, err = json.Marshal(resourceSnapshotSpecB)
+	if err != nil {
+		t.Fatalf("failed to create the policy hash: %v", err)
+	}
+	resourceSnapshotBHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	tests := []struct {
+		name                    string
+		resourceSnapshotSpec    *fleetv1beta1.ResourceSnapshotSpec
+		resourceSnapshots       []fleetv1beta1.ClusterResourceSnapshot
+		wantResourceSnapshots   []fleetv1beta1.ClusterResourceSnapshot
+		wantLatestSnapshotIndex int // index of the wantPolicySnapshots array
+	}{
+		{
+			name:                 "new resourceSnapshot and no existing snapshots owned by my-crp",
+			resourceSnapshotSpec: resourceSnapshotSpecA,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+				// new resource snapshot owned by the my-crp
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantLatestSnapshotIndex: 1,
+		},
+		{
+			name:                 "resource has no change",
+			resourceSnapshotSpec: resourceSnapshotSpecA,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantLatestSnapshotIndex: 0,
+		},
+		{
+			name: "resource has changed and there is no active snapshot",
+			// It happens when last reconcile loop fails after setting the latest label to false and
+			// before creating a new resource snapshot.
+			resourceSnapshotSpec: resourceSnapshotSpecB,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+				// new resource snapshot
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotBHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecB,
+				},
+			},
+			wantLatestSnapshotIndex: 1,
+		},
+		{
+			name:                 "resource has changed and there is an active snapshot",
+			resourceSnapshotSpec: resourceSnapshotSpecB,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+							fleetv1beta1.IsLatestSnapshotLabel: "false",
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+				// new resource snapshot
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotBHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecB,
+				},
+			},
+			wantLatestSnapshotIndex: 1,
+		},
+		{
+			name:                 "resource has been changed and reverted back and there is no active snapshot",
+			resourceSnapshotSpec: resourceSnapshotSpecA,
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: resourceSnapshotAHash,
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+			wantLatestSnapshotIndex: 0,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			crp := clusterResourcePlacementForTest()
+			objects := []client.Object{crp}
+			for i := range tc.resourceSnapshots {
+				objects = append(objects, &tc.resourceSnapshots[i])
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+				Scheme: scheme,
+			}
+			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.resourceSnapshotSpec)
+			if err != nil {
+				t.Fatalf("failed to handle getOrCreateClusterResourceSnapshot: %v", err)
+			}
+			options := []cmp.Option{
+				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+				// Fake API server will add a newline for the runtime.RawExtension type.
+				// ignoring the resourceContent field for now
+				cmpopts.IgnoreFields(runtime.RawExtension{}, "Raw"),
+			}
+			if diff := cmp.Diff(tc.wantResourceSnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
+				t.Errorf("getOrCreateClusterResourceSnapshot() mismatch (-want, +got):\n%s", diff)
+			}
+			clusterResourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
+				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
+			}
+			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, options...); diff != "" {
+				t.Errorf("clusterResourceSnapshot List() mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
+	selectedResources := []fleetv1beta1.ResourceContent{
+		*serviceResourceContentForTest(t),
+	}
+	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: selectedResources,
+	}
+	tests := []struct {
+		name              string
+		resourceSnapshots []fleetv1beta1.ClusterResourceSnapshot
+	}{
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
+			name: "existing active resource snapshot does not have resourceIndex label",
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
+			name: "existing active resource snapshot does not have resourceIndex label",
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
+			name: "existing active policy snapshot does not have hash annotation",
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+							fleetv1beta1.ResourceIndexLabel:    "0",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
+			name: "no active policy snapshot exists and policySnapshot with invalid resourceIndex label",
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:   testName,
+							fleetv1beta1.ResourceIndexLabel: "abc",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
+			name: "multiple active policy snapshot exist",
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "hashA",
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "hashA",
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
+			name: "no active resource snapshot exists and resourceSnapshot with invalid resourceIndex label (negative value)",
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "-12",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "hashA",
+						},
+					},
+					Spec: *resourceSnapshotSpecA,
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			crp := clusterResourcePlacementForTest()
+			objects := []client.Object{crp}
+			for i := range tc.resourceSnapshots {
+				objects = append(objects, &tc.resourceSnapshots[i])
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+				Scheme: scheme,
+			}
+			_, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, resourceSnapshotSpecA)
+			if err == nil { // if error is nil
+				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
+			}
+			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
+				t.Errorf("getOrCreateClusterResourceSnapshot() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
 			}
 		})
 	}
