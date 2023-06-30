@@ -209,7 +209,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
 	bindings, err := f.collectBindings(ctx, crpName)
 	if err != nil {
-		klog.ErrorS(err, "failed to collect bindings", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to collect bindings", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
 
@@ -232,7 +232,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 
 	// Mark all dangling bindings as unscheduled.
 	if err := f.markAsUnscheduledFor(ctx, dangling); err != nil {
-		klog.ErrorS(err, "failed to mark dangling bindings as unscheduled", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to mark dangling bindings as unscheduled", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
 
@@ -252,7 +252,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 		return f.runSchedulingCycleForPickNPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
 	default:
 		// This normally should never occur.
-		klog.ErrorS(err, "unknown placement type", "schedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, fmt.Sprintf("The placement type %s is unknown", policy.Spec.Policy.PlacementType), "schedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 	}
 }
@@ -279,15 +279,13 @@ func (f *framework) collectBindings(ctx context.Context, crpName string) ([]flee
 
 // markAsUnscheduledFor marks a list of bindings as unscheduled.
 func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
-	errorFormat := "failed to mark binding %s as unscheduled: %w"
-
 	for _, binding := range bindings {
 		// Note that Unscheduled is a terminal state for a binding; since there is no point of return,
 		// and the scheduler has acknowledged its fate at this moment, any binding marked as
 		// deletion will be disregarded by the scheduler from this point onwards.
 		binding.Spec.State = fleetv1beta1.BindingStateUnscheduled
 		if err := f.client.Update(ctx, binding, &client.UpdateOptions{}); err != nil {
-			return controller.NewAPIServerError(false, fmt.Errorf(errorFormat, binding.Name, err))
+			return controller.NewAPIServerError(false, fmt.Errorf("failed to mark binding %s as unscheduled: %w", binding.Name, err))
 		}
 	}
 	return nil
