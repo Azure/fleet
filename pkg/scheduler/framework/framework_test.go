@@ -34,6 +34,7 @@ const (
 
 var (
 	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
+	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
 )
 
 // TO-DO (chenyu1): expand the test cases as development stablizes.
@@ -291,7 +292,15 @@ func TestMarkAsUnscheduled(t *testing.T) {
 		t.Fatalf("Get cluster resource binding %s = %v, want no error", bindingName, err)
 	}
 
-	if binding.Spec.State != fleetv1beta1.BindingStateUnscheduled {
-		t.Errorf("binding state for binding %s = %v, want %v", bindingName, binding.Spec.State, fleetv1beta1.BindingStateUnscheduled)
+	want := fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			State: fleetv1beta1.BindingStateUnscheduled,
+		},
+	}
+	if diff := cmp.Diff(binding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
+		t.Errorf("binding diff (-got, +want): %s", diff)
 	}
 }

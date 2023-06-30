@@ -190,7 +190,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// changes eventually.
 	clusters, err := f.collectClusters(ctx)
 	if err != nil {
-		klog.ErrorS(err, "failed to collect clusters", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to collect clusters", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
 
@@ -259,24 +259,20 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 
 // collectClusters lists all clusters in the cache.
 func (f *framework) collectClusters(ctx context.Context) ([]fleetv1beta1.MemberCluster, error) {
-	errorFormat := "failed to collect clusters: %w"
-
 	clusterList := &fleetv1beta1.MemberClusterList{}
 	if err := f.client.List(ctx, clusterList, &client.ListOptions{}); err != nil {
-		return nil, controller.NewAPIServerError(true, fmt.Errorf(errorFormat, err))
+		return nil, controller.NewAPIServerError(true, err)
 	}
 	return clusterList.Items, nil
 }
 
 // collectBindings lists all bindings associated with a CRP **using the uncached client**.
 func (f *framework) collectBindings(ctx context.Context, crpName string) ([]fleetv1beta1.ClusterResourceBinding, error) {
-	errorFormat := "failed to collect bindings: %w"
-
 	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
 	labelSelector := labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: crpName})
 	// List bindings directly from the API server.
 	if err := f.uncachedReader.List(ctx, bindingList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
-		return nil, controller.NewAPIServerError(false, fmt.Errorf(errorFormat, err))
+		return nil, controller.NewAPIServerError(false, err)
 	}
 	return bindingList.Items, nil
 }
