@@ -935,20 +935,16 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 	selectedResources := []fleetv1beta1.ResourceContent{
 		*serviceResourceContentForTest(t),
 	}
-	policyA := "policy-a"
 	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources:  selectedResources,
-		PolicySnapshotName: policyA,
+		SelectedResources: selectedResources,
 	}
 	jsonBytes, err := json.Marshal(resourceSnapshotSpecA)
 	if err != nil {
 		t.Fatalf("failed to create the resourceSnapshotSpecA hash: %v", err)
 	}
 	resourceSnapshotAHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-	policyB := "policy-b"
 	resourceSnapshotSpecB := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources:  selectedResources,
-		PolicySnapshotName: policyB,
+		SelectedResources: []fleetv1beta1.ResourceContent{},
 	}
 
 	jsonBytes, err = json.Marshal(resourceSnapshotSpecB)
@@ -1335,10 +1331,8 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 	selectedResources := []fleetv1beta1.ResourceContent{
 		*serviceResourceContentForTest(t),
 	}
-	policyA := "policy-a"
 	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources:  selectedResources,
-		PolicySnapshotName: policyA,
+		SelectedResources: selectedResources,
 	}
 	tests := []struct {
 		name              string
