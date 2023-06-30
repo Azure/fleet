@@ -8,10 +8,10 @@ package clusterresourceplacementwatcher
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -27,8 +27,12 @@ type Reconciler struct {
 
 // Reconcile triggers a single CRP reconcile round if CRP has changed.
 func (r *Reconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("Reconciliation starts", "clusterResourcePlacement", req.Name)
-	defer klog.V(2).InfoS("Reconciliation ends", "clusterResourcePlacement", req.Name)
+	startTime := time.Now()
+	klog.V(2).InfoS("ClusterResourcePlacementWatcher reconciliation starts", "clusterResourcePlacement", req.Name)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("ClusterResourcePlacementWatcher reconciliation ends", "clusterResourcePlacement", req.Name, "latency", latency)
+	}()
 
 	r.PlacementController.Enqueue(req.Name)
 	return ctrl.Result{}, nil
@@ -38,14 +42,6 @@ func (r *Reconciler) Reconcile(_ context.Context, req ctrl.Request) (ctrl.Result
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1beta1.ClusterResourcePlacement{}).
-		WithEventFilter(predicate.Funcs{
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				if e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration() {
-					klog.V(4).InfoS("Ignore a clusterResourcePlacement update event with no spec change", "clusterResourcePlacement", e.ObjectNew.GetName())
-					return false
-				}
-				return true
-			},
-		}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
