@@ -200,7 +200,9 @@ var _ = BeforeSuite(func() {
 			HeartbeatPeriodSeconds: 60,
 		},
 	}
-	Expect(HubCluster.KubeClient.Create(ctx, mc)).Should(Succeed(), "Failed to create member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
+	Eventually(func() error {
+		return HubCluster.KubeClient.Create(ctx, mc)
+	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed(), "Failed to wait for member cluster %s to be created in %s cluster", mc.Name, HubCluster.ClusterName)
 
 	By("check if internal member cluster created in the hub cluster")
 	imc = &v1alpha1.InternalMemberCluster{
@@ -225,9 +227,15 @@ var _ = BeforeSuite(func() {
 		ResourceUsage: imc.Status.ResourceUsage,
 	}
 	testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
+
+	By("create cluster role binding and cluster roles for webhook e2e")
+	testutils.CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx, HubCluster)
 })
 
 var _ = AfterSuite(func() {
+	By("delete cluster role binding and cluster roles for webhook e2e")
+	testutils.DeleteClusterRoleAndClusterRoleBindingForWebHookE2E(ctx, HubCluster)
+
 	By("update member cluster in the hub cluster")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
 	mc.Spec.State = v1alpha1.ClusterStateLeave
