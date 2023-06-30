@@ -27,7 +27,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ controller.QueueKey) (ctrl
 // clusterPolicySnapshot status and work status.
 // If the error type is ErrUnexpectedBehavior, the controller will skip the reconciling.
 func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (ctrl.Result, error) {
-	latestPolicySnapshot, err := r.getOrCreateClusterPolicySnapshot(ctx, crp)
+	_, err := r.getOrCreateClusterPolicySnapshot(ctx, crp)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -36,8 +36,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		return ctrl.Result{}, err
 	}
 	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources:  selectedResources,
-		PolicySnapshotName: latestPolicySnapshot.Name,
+		SelectedResources: selectedResources,
 	}
 	_, err = r.getOrCreateClusterResourceSnapshot(ctx, crp, &resourceSnapshotSpec)
 	if err != nil {
