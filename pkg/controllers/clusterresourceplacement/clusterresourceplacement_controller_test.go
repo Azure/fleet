@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -30,6 +31,9 @@ const (
 
 var (
 	fleetAPIVersion = fleetv1beta1.GroupVersion.String()
+	cmpOptions      = []cmp.Option{
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+	}
 )
 
 func serviceScheme(t *testing.T) *runtime.Scheme {
@@ -665,7 +669,7 @@ func TestGetOrCreateClusterPolicySnapshot(t *testing.T) {
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}
-			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, options...); diff != "" {
+			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, cmpOptions...); diff != "" {
 				t.Errorf("clusterPolicysnapShot List() mismatch (-want, +got):\n%s", diff)
 			}
 		})
@@ -1763,17 +1767,14 @@ func TestHandleDelete(t *testing.T) {
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}
-			options := []cmp.Option{
-				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
-			}
-			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, options...); diff != "" {
+			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, cmpOptions...); diff != "" {
 				t.Errorf("clusterPolicysnapShot List() mismatch (-want, +got):\n%s", diff)
 			}
 			clusterResourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
 				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
 			}
-			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, options...); diff != "" {
+			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, cmpOptions...); diff != "" {
 				t.Errorf("clusterResourceSnapshot List() mismatch (-want, +got):\n%s", diff)
 			}
 			gotCRP := fleetv1beta1.ClusterResourcePlacement{}

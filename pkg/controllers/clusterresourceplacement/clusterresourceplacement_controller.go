@@ -26,10 +26,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ controller.QueueKey) (ctrl
 func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (ctrl.Result, error) {
 	crpKObj := klog.KObj(crp)
 	if !controllerutil.ContainsFinalizer(crp, fleetv1beta1.ClusterResourcePlacementCleanupFinalizer) {
-		klog.V(4).InfoS("clusterResourcePlacement is being deleted", "clusterResourcePlacement", crpKObj)
+		klog.V(4).InfoS("clusterResourcePlacement is being deleted and no cleanup work needs to be done", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{}, nil
 	}
-	klog.V(2).InfoS("Removing clusterResourcePlacement", "clusterResourcePlacement", crpKObj)
+	klog.V(2).InfoS("Removing snapshots created by clusterResourcePlacement", "clusterResourcePlacement", crpKObj)
 	if err := r.deleteClusterPolicySnapshots(ctx, crp); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -47,31 +47,35 @@ func (r *Reconciler) handleDelete(ctx context.Context, crp *fleetv1beta1.Cluster
 
 func (r *Reconciler) deleteClusterPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
 	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
+	crpKObj := klog.KObj(crp)
 	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
-		klog.ErrorS(err, "Failed to list all clusterPolicySnapshots", "clusterResourcePlacement", klog.KObj(crp))
+		klog.ErrorS(err, "Failed to list all clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
 		return controller.NewAPIServerError(false, err)
 	}
 	for i := range snapshotList.Items {
 		if err := r.Client.Delete(ctx, &snapshotList.Items[i]); err != nil && !errors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to delete clusterPolicySnapshot", "clusterPolicySnapshot", klog.KObj(&snapshotList.Items[i]))
+			klog.ErrorS(err, "Failed to delete clusterPolicySnapshot", "clusterResourcePlacement", crpKObj, "clusterPolicySnapshot", klog.KObj(&snapshotList.Items[i]))
 			return controller.NewAPIServerError(false, err)
 		}
 	}
+	klog.V(2).InfoS("Deleted clusterSchedulingPolicySnapshots", "clusterResourcePlacement", crpKObj, "numberOfSnapshots", len(snapshotList.Items))
 	return nil
 }
 
 func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
 	snapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+	crpKObj := klog.KObj(crp)
 	if err := r.UncachedReader.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
-		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", klog.KObj(crp))
+		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", crpKObj)
 		return controller.NewAPIServerError(false, err)
 	}
 	for i := range snapshotList.Items {
 		if err := r.Client.Delete(ctx, &snapshotList.Items[i]); err != nil && !errors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to delete clusterResourceSnapshots", "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[i]))
+			klog.ErrorS(err, "Failed to delete clusterResourceSnapshots", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[i]))
 			return controller.NewAPIServerError(false, err)
 		}
 	}
+	klog.V(2).InfoS("Deleted clusterResourceSnapshots", "clusterResourcePlacement", crpKObj, "numberOfSnapshots", len(snapshotList.Items))
 	return nil
 }
 
