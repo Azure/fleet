@@ -73,7 +73,7 @@ func TestNonNilStatusMethods(t *testing.T) {
 				status.IsSuccess,
 				status.IsInteralError,
 				status.IsClusterUnschedulable,
-				status.IsPreSkip,
+				status.IsSkip,
 			}
 			for idx, checkFunc := range checkFuncs {
 				if wantCheckOutputs[idx] != checkFunc() {
@@ -114,7 +114,7 @@ func TestNilStatusMethods(t *testing.T) {
 		status.IsSuccess,
 		status.IsInteralError,
 		status.IsClusterUnschedulable,
-		status.IsPreSkip,
+		status.IsSkip,
 	}
 	for idx, checkFunc := range checkFuncs {
 		if wantCheckOutputs[idx] != checkFunc() {

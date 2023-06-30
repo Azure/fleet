@@ -11,6 +11,10 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+const (
+	dummyAllPurposePluginNameFormat = "dummyAllPurposePlugin-%d"
+)
+
 // A no-op, dummy plugin which connects to all extension points.
 type DummyAllPurposePlugin struct {
 	name            string
