@@ -26,7 +26,7 @@ func minInt(a, b int) int {
 	return b
 }
 
-// ClusterResourceBindingUniqueName returns a unique name for a cluster resource binding in the
+// NewlusterResourceBindingName returns a unique name for a cluster resource binding in the
 // format of DNS subdomain names (RFC 1123).
 //
 // The name is generated using the following format:
@@ -39,7 +39,7 @@ func minInt(a, b int) int {
 //
 // In addition, note that this function assumes that both the CRP name and the cluster name
 // are valid DNS subdomain names (RFC 1123).
-func ClusterResourceBindingUniqueName(CRPName string, clusterName string) (string, error) {
+func NewlusterResourceBindingName(CRPName string, clusterName string) (string, error) {
 	reservedSlots := 2 + uuidLength // 2 dashs + 6 character UUID string
 
 	slotsPerSeg := (validation.DNS1123SubdomainMaxLength - reservedSlots) / 2
@@ -50,6 +50,7 @@ func ClusterResourceBindingUniqueName(CRPName string, clusterName string) (strin
 	)
 
 	if errs := validation.IsDNS1123Subdomain(uniqueName); len(errs) != 0 {
+		// Do a sanity check here; normally this would not occur.
 		return "", fmt.Errorf("failed to format a unique RFC 1123 DNS subdomain name with namespace %s, name %s: %v", CRPName, clusterName, errs)
 	}
 	return uniqueName, nil
