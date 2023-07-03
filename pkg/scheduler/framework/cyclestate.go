@@ -8,6 +8,8 @@ package framework
 import (
 	"fmt"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // StateKey is the key for a state value stored in a CycleState.
@@ -17,6 +19,9 @@ type StateKey string
 type StateValue interface{}
 
 // CycleStatePluginReadWriter is an interface through which plugins can store and retrieve data.
+//
+// TO-DO (chenyu1): Add methods which allow plugins to query for bindings of different types being
+// evaluated in the current scheduling cycle.
 type CycleStatePluginReadWriter interface {
 	Read(key StateKey) (StateValue, error)
 	Write(key StateKey, val StateValue)
@@ -32,6 +37,13 @@ type CycleStatePluginReadWriter interface {
 type CycleState struct {
 	// store is a concurrency-safe store (a map).
 	store sync.Map
+
+	// skippedFilterPlugins is a set of Filter plugins that should be skipped in the current scheduling cycle.
+	//
+	// TO-DO (chenyu1): the sets package has added support for Go generic types in 1.26, and
+	// the String set has been deprecated; transition to the generic set when the new version
+	// becomes available.
+	skippedFilterPlugins sets.String
 }
 
 // Read retrieves a value from CycleState by a key.
@@ -54,5 +66,8 @@ func (c *CycleState) Delete(key StateKey) {
 
 // NewCycleState creates a CycleState.
 func NewCycleState() *CycleState {
-	return &CycleState{}
+	return &CycleState{
+		store:                sync.Map{},
+		skippedFilterPlugins: sets.NewString(),
+	}
 }
