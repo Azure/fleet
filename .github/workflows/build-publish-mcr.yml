@@ -35,7 +35,7 @@ jobs:
             RELEASE_TAG=`git describe --tags $(git rev-list --tags --max-count=1)`
             echo "The user input release tag is empty, will use the latest tag $RELEASE_TAG."
           fi
-          echo "::set-output name=release_tag::$RELEASE_TAG"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
           # NOTE: As exporting a variable from a secret is not possible, the shared variable registry obtained
           # from AZURE_REGISTRY secret is not exported from here.

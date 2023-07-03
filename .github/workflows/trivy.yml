@@ -30,7 +30,7 @@ jobs:
           # registry must be in lowercase
           # store the images under dev
           # TODO: need to cleanup dev images periodically 
-          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
+          echo "registry=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"  >> $GITHUB_OUTPUT
   scan-images:
     needs: export-registry
     env:
