@@ -15,6 +15,9 @@ const (
 	// ClusterResourcePlacementCleanupFinalizer is a finalizer added by the CRP controller to all CRPs, to make sure
 	// that the CRP controller can react to CRP deletions if necessary.
 	ClusterResourcePlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
+
+	// RevisionHistoryLimitDefaultValue is the default value of RevisionHistoryLimit.
+	RevisionHistoryLimitDefaultValue = int32(10)
 )
 
 // +genclient
