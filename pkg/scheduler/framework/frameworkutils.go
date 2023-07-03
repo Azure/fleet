@@ -7,6 +7,7 @@ package framework
 
 import (
 	"fmt"
+	"reflect"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -197,4 +198,68 @@ func crossReferencePickedCustersAndObsoleteBindings(
 	}
 
 	return toCreate, toDelete, toPatch, nil
+}
+
+// newSchedulingDecisionsFrom returns a list of scheduling decisions, based on the newly manipulated list of
+// bindings and (if applicable) a list of filtered clusters.
+func newSchedulingDecisionsFrom(maxClusterDecisionCount int, filtered []*filteredClusterWithStatus, existing ...[]*fleetv1beta1.ClusterResourceBinding) []fleetv1beta1.ClusterDecision {
+	// Pre-allocate with a reasonable capacity.
+	newDecisions := make([]fleetv1beta1.ClusterDecision, 0, maxClusterDecisionCount)
+
+	// Build new scheduling decisions.
+	for _, bindingSet := range existing {
+		for _, binding := range bindingSet {
+			newDecisions = append(newDecisions, binding.Spec.ClusterDecision)
+		}
+	}
+
+	// Move some decisions from unbound clusters, if there are still enough room.
+	if diff := maxClusterDecisionCount - len(newDecisions); diff > 0 {
+		for i := 0; i < diff && i < len(filtered); i++ {
+			clusterWithStatus := filtered[i]
+			newDecisions = append(newDecisions, fleetv1beta1.ClusterDecision{
+				ClusterName: clusterWithStatus.cluster.Name,
+				Selected:    false,
+				Reason:      clusterWithStatus.status.String(),
+			})
+		}
+	}
+
+	return newDecisions
+}
+
+// fullySchedulingCondition returns a condition for fully scheduled policy snapshot.
+func fullyScheduledCondition(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) metav1.Condition {
+	return metav1.Condition{
+		Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: policy.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             fullyScheduledReason,
+		Message:            fullyScheduledMessage,
+	}
+}
+
+// equalDecisions returns if two arrays of ClusterDecisions are equal; it returns true if
+// every decision in one array is also present in the other array regardless of their indexes,
+// and vice versa.
+func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
+	desiredDecisionByCluster := make(map[string]fleetv1beta1.ClusterDecision, len(desired))
+	for _, decision := range desired {
+		desiredDecisionByCluster[decision.ClusterName] = decision
+	}
+
+	for _, decision := range current {
+		matched, ok := desiredDecisionByCluster[decision.ClusterName]
+		if !ok {
+			// No matching decision can be found.
+			return false
+		}
+		if !reflect.DeepEqual(decision, matched) {
+			// A matched decision is found but the two decisions are not equal.
+			return false
+		}
+	}
+
+	return len(current) == len(desired)
 }

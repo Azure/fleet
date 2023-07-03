@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -43,7 +44,11 @@ var (
 	ignoreObjectMetaNameField            = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
 	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
 	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+<<<<<<< HEAD
 	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
+=======
+	ignoredCondFields                    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+>>>>>>> 5ba64b2 (Added more scheduler logic)
 
 	lessFuncCluster = func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name

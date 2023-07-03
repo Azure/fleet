@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -22,6 +23,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -31,6 +33,10 @@ const (
 
 	// pickedByPolicyReason is the reason to use for scheduling decision when a cluster is picked.
 	pickedByPolicyReason = "picked by scheduling policy"
+
+	// The reasons and messages for scheduled conditions.
+	fullyScheduledReason  = "SchedulingCompleted"
+	fullyScheduledMessage = "all required number of bindings have been created"
 )
 
 // Handle is an interface which allows plugins to access some shared structs (e.g., client, manager)
@@ -303,10 +309,10 @@ func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*fleetv
 func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	ctx context.Context,
 	state *CycleState,
-	crpName string, //nolint: revive
+	crpName string,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 	clusters []fleetv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding, //nolint: revive
+	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
 ) (result ctrl.Result, err error) {
 	policyRef := klog.KObj(policy)
 
@@ -315,9 +321,7 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	klog.V(2).InfoS("Scheduling is always needed for CRPs of the PickAll placement type; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
 
 	// Run all plugins needed.
-	//
-	// TO-DO (chenyu1): assign variables when needed.
-	scored, _, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
+	scored, filtered, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run all plugins (pickAll placement type)", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
@@ -354,7 +358,16 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 		return ctrl.Result{}, err
 	}
 
-	// Not yet implemented.
+	// Update policy snapshot status with the latest scheduling decisions and condition.
+	klog.V(2).InfoS("Updating policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
+	if err := f.updatePolicySnapshotStatusFrom(ctx, policy, filtered, toCreate, toUpdate, scheduled, bound); err != nil {
+		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// The scheduling cycle has completed.
+	//
+	// Note that for CRPs of the PickAll type, no requeue check is needed.
 	return ctrl.Result{}, nil
 }
 
@@ -574,6 +587,37 @@ func (f *framework) patchBindings(ctx context.Context, toPatch []*bindingWithPat
 		if err := f.client.Patch(ctx, bp.updated, bp.patch); err != nil {
 			return controller.NewAPIServerError(false, fmt.Errorf("failed to patch binding %s: %w", bp.updated.Name, err))
 		}
+	}
+	return nil
+}
+
+// updatePolicySnapshotStatusFrom updates the policy snapshot status, in accordance with the list of
+// clusters filtered out by the scheduler, and the list of bindings provisioned by the scheduler.
+func (f *framework) updatePolicySnapshotStatusFrom(
+	ctx context.Context,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	filtered []*filteredClusterWithStatus,
+	existing ...[]*fleetv1beta1.ClusterResourceBinding,
+) error {
+	policyRef := klog.KObj(policy)
+
+	// Prepare new scheduling decisions.
+	newDecisions := newSchedulingDecisionsFrom(f.maxClusterDecisionCount, filtered, existing...)
+	// Prepare new scheduling condition.
+	newCondition := fullyScheduledCondition(policy)
+
+	currentDecisions := policy.Status.ClusterDecisions
+	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
+	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
+		// Skip if there is no change in decisions and conditions.
+		return nil
+	}
+
+	policy.Status.ClusterDecisions = newDecisions
+	meta.SetStatusCondition(&policy.Status.Conditions, newCondition)
+	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
+		klog.ErrorS(err, "failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewAPIServerError(false, err)
 	}
 	return nil
 }
