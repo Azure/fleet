@@ -36,6 +36,7 @@ const (
 
 var (
 	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
+	ignoreObjectMetaNameField            = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
 	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
 	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
 
@@ -276,8 +277,8 @@ func TestClassifyBindings(t *testing.T) {
 	}
 }
 
-// TestMarkAsUnscheduled tests the markAsUnscheduled method.
-func TestMarkAsUnscheduled(t *testing.T) {
+// TestMarkAsUnscheduledFor tests the markAsUnscheduledFor method.
+func TestMarkAsUnscheduledFor(t *testing.T) {
 	binding := fleetv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
