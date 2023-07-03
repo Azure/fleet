@@ -546,6 +546,8 @@ func TestRunFilterPlugins(t *testing.T) {
 	testCases := []struct {
 		name                     string
 		filterPlugins            []FilterPlugin
+		wantClusters             []*fleetv1beta1.MemberCluster
+		wantFiltered             []*filteredClusterWithStatus
 		wantPassedClusterNames   []string
 		wantFilteredClusterNames []string
 		expectedToFail           bool
@@ -566,7 +568,24 @@ func TestRunFilterPlugins(t *testing.T) {
 					},
 				},
 			},
-			wantPassedClusterNames: []string{clusterName, altClusterName, anotherClusterName},
+			wantClusters: []*fleetv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: altClusterName,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: anotherClusterName,
+					},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{},
 		},
 		{
 			name: "three clusters, two filter plugins, two filtered",
@@ -590,8 +609,31 @@ func TestRunFilterPlugins(t *testing.T) {
 					},
 				},
 			},
-			wantPassedClusterNames:   []string{altClusterName},
-			wantFilteredClusterNames: []string{clusterName, anotherClusterName},
+			wantClusters: []*fleetv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: altClusterName,
+					},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{
+				{
+					cluster: &fleetv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: clusterName,
+						},
+					},
+					status: NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+				},
+				{
+					cluster: &fleetv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					status: NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
+				},
+			},
 		},
 		{
 			name: "three clusters, two filter plugins, one success, one internal error on specific cluster",
@@ -644,34 +686,19 @@ func TestRunFilterPlugins(t *testing.T) {
 			}
 
 			// The method runs in parallel; as a result the order cannot be guaranteed.
-			// Organize the results into maps for easier comparison.
-			passedMap := make(map[string]bool)
-			for _, cluster := range passed {
-				passedMap[cluster.Name] = true
+			// Sort the results by cluster name for comparison.
+			lessFuncCluster := func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
+				return cluster1.Name < cluster2.Name
 			}
-			wantPassedMap := make(map[string]bool)
-			for _, name := range tc.wantPassedClusterNames {
-				wantPassedMap[name] = true
+			lessFuncFilteredCluster := func(filtered1, filtered2 *filteredClusterWithStatus) bool {
+				return filtered1.cluster.Name < filtered2.cluster.Name
 			}
 
-			if diff := cmp.Diff(passedMap, wantPassedMap); diff != "" {
+			if diff := cmp.Diff(passed, tc.wantClusters, cmpopts.SortSlices(lessFuncCluster)); diff != "" {
 				t.Errorf("passed clusters diff (-got, +want): %s", diff)
 			}
 
-			filteredMap := make(map[string]bool)
-			for _, item := range filtered {
-				filteredMap[item.cluster.Name] = true
-				// As a sanity check, verify if all status are of the ClusterUnschedulable status code.
-				if !item.status.IsClusterUnschedulable() {
-					t.Errorf("filtered cluster %s status, got %v, want status code ClusterUnschedulable", item.cluster.Name, item.status)
-				}
-			}
-			wantFilteredMap := make(map[string]bool)
-			for _, name := range tc.wantFilteredClusterNames {
-				wantFilteredMap[name] = true
-			}
-
-			if diff := cmp.Diff(filteredMap, wantFilteredMap); diff != "" {
+			if diff := cmp.Diff(filtered, tc.wantFiltered, cmpopts.SortSlices(lessFuncFilteredCluster), cmp.AllowUnexported(filteredClusterWithStatus{}, Status{})); diff != "" {
 				t.Errorf("filtered clusters diff (-got, +want): %s", diff)
 			}
 		})
