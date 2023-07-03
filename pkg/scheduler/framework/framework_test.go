@@ -38,6 +38,16 @@ var (
 	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
 	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
 	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+
+	lessFuncCluster = func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
+		return cluster1.Name < cluster2.Name
+	}
+	lessFuncScoredCluster = func(scored1, scored2 ScoredCluster) bool {
+		return scored1.Cluster.Name < scored2.Cluster.Name
+	}
+	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
+		return filtered1.cluster.Name < filtered2.cluster.Name
+	}
 )
 
 // TO-DO (chenyu1): expand the test cases as development stablizes.
@@ -685,13 +695,6 @@ func TestRunFilterPlugins(t *testing.T) {
 
 			// The method runs in parallel; as a result the order cannot be guaranteed.
 			// Sort the results by cluster name for comparison.
-			lessFuncCluster := func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
-				return cluster1.Name < cluster2.Name
-			}
-			lessFuncFilteredCluster := func(filtered1, filtered2 *filteredClusterWithStatus) bool {
-				return filtered1.cluster.Name < filtered2.cluster.Name
-			}
-
 			if diff := cmp.Diff(passed, tc.wantClusters, cmpopts.SortSlices(lessFuncCluster)); diff != "" {
 				t.Errorf("passed clusters diff (-got, +want): %s", diff)
 			}
@@ -989,13 +992,6 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 
 			// The method runs in parallel; as a result the order cannot be guaranteed.
 			// Sort the results by cluster name for comparison.
-			lessFuncScoredCluster := func(scored1, scored2 ScoredCluster) bool {
-				return scored1.Cluster.Name < scored2.Cluster.Name
-			}
-			lessFuncFilteredCluster := func(filtered1, filtered2 *filteredClusterWithStatus) bool {
-				return filtered1.cluster.Name < filtered2.cluster.Name
-			}
-
 			if diff := cmp.Diff(scored, tc.wantScored, cmpopts.SortSlices(lessFuncScoredCluster), cmp.AllowUnexported(ScoredCluster{})); diff != "" {
 				t.Errorf("runAllPluginsForPickAllPlacementType() scored (-got, +want): %s", diff)
 			}
