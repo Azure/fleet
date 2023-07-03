@@ -18,22 +18,22 @@ import (
 // TestClusterScoreToAdd tests the Add() method of ClusterScore.
 func TestClusterScoreAdd(t *testing.T) {
 	s1 := &ClusterScore{
-		TopologySpreadScore:          0,
-		AffinityScore:                0,
-		ActiveOrCreatingBindingScore: 0,
+		TopologySpreadScore:   0,
+		AffinityScore:         0,
+		BoundOrScheduledScore: 0,
 	}
 
 	s2 := &ClusterScore{
-		TopologySpreadScore:          1,
-		AffinityScore:                5,
-		ActiveOrCreatingBindingScore: 1,
+		TopologySpreadScore:   1,
+		AffinityScore:         5,
+		BoundOrScheduledScore: 1,
 	}
 
 	s1.Add(s2)
 	want := &ClusterScore{
-		TopologySpreadScore:          1,
-		AffinityScore:                5,
-		ActiveOrCreatingBindingScore: 1,
+		TopologySpreadScore:   1,
+		AffinityScore:         5,
+		BoundOrScheduledScore: 1,
 	}
 	if diff := cmp.Diff(s1, want); diff != "" {
 		t.Fatalf("Add() diff (-got, +want): %s", diff)
@@ -51,28 +51,28 @@ func TestClusterScoreEqual(t *testing.T) {
 		{
 			name: "s1 is equal to s2",
 			s1: &ClusterScore{
-				TopologySpreadScore:          1,
-				AffinityScore:                5,
-				ActiveOrCreatingBindingScore: 1,
+				TopologySpreadScore:   1,
+				AffinityScore:         5,
+				BoundOrScheduledScore: 1,
 			},
 			s2: &ClusterScore{
-				TopologySpreadScore:          1,
-				AffinityScore:                5,
-				ActiveOrCreatingBindingScore: 1,
+				TopologySpreadScore:   1,
+				AffinityScore:         5,
+				BoundOrScheduledScore: 1,
 			},
 			want: true,
 		},
 		{
 			name: "s1 is not equal to s2",
 			s1: &ClusterScore{
-				TopologySpreadScore:          2,
-				AffinityScore:                5,
-				ActiveOrCreatingBindingScore: 1,
+				TopologySpreadScore:   2,
+				AffinityScore:         5,
+				BoundOrScheduledScore: 1,
 			},
 			s2: &ClusterScore{
-				TopologySpreadScore:          1,
-				AffinityScore:                7,
-				ActiveOrCreatingBindingScore: 0,
+				TopologySpreadScore:   1,
+				AffinityScore:         7,
+				BoundOrScheduledScore: 0,
 			},
 		},
 	}
@@ -120,14 +120,14 @@ func TestClusterScoreLess(t *testing.T) {
 		{
 			name: "s1 is less than s2 in active or creating binding score",
 			s1: &ClusterScore{
-				TopologySpreadScore:          1,
-				AffinityScore:                10,
-				ActiveOrCreatingBindingScore: 0,
+				TopologySpreadScore:   1,
+				AffinityScore:         10,
+				BoundOrScheduledScore: 0,
 			},
 			s2: &ClusterScore{
-				TopologySpreadScore:          1,
-				AffinityScore:                10,
-				ActiveOrCreatingBindingScore: 1,
+				TopologySpreadScore:   1,
+				AffinityScore:         10,
+				BoundOrScheduledScore: 1,
 			},
 			want: true,
 		},
@@ -146,17 +146,17 @@ func TestClusterScoreLess(t *testing.T) {
 	}
 }
 
-func TestClusterScoreEqualWhenLess(t *testing.T) {
+func TestClusterScoreLessWhenEqual(t *testing.T) {
 	s1 := &ClusterScore{
-		TopologySpreadScore:          0,
-		AffinityScore:                0,
-		ActiveOrCreatingBindingScore: 0,
+		TopologySpreadScore:   0,
+		AffinityScore:         0,
+		BoundOrScheduledScore: 0,
 	}
 
 	s2 := &ClusterScore{
-		TopologySpreadScore:          0,
-		AffinityScore:                0,
-		ActiveOrCreatingBindingScore: 0,
+		TopologySpreadScore:   0,
+		AffinityScore:         0,
+		BoundOrScheduledScore: 0,
 	}
 
 	if s1.Less(s2) || s2.Less(s1) {
@@ -202,41 +202,41 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterB,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterA,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   1,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                20,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterE,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 0,
 					},
 				},
 			},
@@ -244,41 +244,41 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterE,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                20,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   1,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterA,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterB,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 0,
 					},
 				},
 			},
@@ -289,41 +289,41 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterE,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                20,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterB,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   1,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterA,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 			},
@@ -331,41 +331,41 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterE,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                20,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterB,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   1,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterA,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 			},
@@ -376,41 +376,41 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                20,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterA,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterE,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterB,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   1,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 			},
@@ -418,41 +418,41 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          2,
-						AffinityScore:                30,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   2,
+						AffinityScore:         30,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                20,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterB,
 					Score: &ClusterScore{
-						TopologySpreadScore:          1,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   1,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterE,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 1,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
 					},
 				},
 				{
 					Cluster: clusterA,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                10,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 0,
 					},
 				},
 			},
@@ -463,17 +463,17 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                0,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         0,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                0,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         0,
+						BoundOrScheduledScore: 0,
 					},
 				},
 			},
@@ -481,17 +481,17 @@ func TestScoredClustersSort(t *testing.T) {
 				{
 					Cluster: clusterD,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                0,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         0,
+						BoundOrScheduledScore: 0,
 					},
 				},
 				{
 					Cluster: clusterC,
 					Score: &ClusterScore{
-						TopologySpreadScore:          0,
-						AffinityScore:                0,
-						ActiveOrCreatingBindingScore: 0,
+						TopologySpreadScore:   0,
+						AffinityScore:         0,
+						BoundOrScheduledScore: 0,
 					},
 				},
 			},

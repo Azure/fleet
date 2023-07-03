@@ -112,31 +112,34 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		scored, ok := pickedMap[binding.Spec.TargetCluster]
 		checked[binding.Spec.TargetCluster] = true
 
-		if ok {
-			// The binding's target cluster is picked again in the current run; yet the binding
-			// is originally created/updated in accordance with an out-of-date scheduling policy.
-
-			// Update the binding so that it is associated with the latest score.
-			affinityScore := int32(scored.Score.AffinityScore)
-			topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-			binding.Spec.ClusterDecision = fleetv1beta1.ClusterDecision{
-				ClusterName: scored.Cluster.Name,
-				Selected:    true,
-				ClusterScore: &fleetv1beta1.ClusterScore{
-					AffinityScore:       &affinityScore,
-					TopologySpreadScore: &topologySpreadScore,
-				},
-				Reason: pickedByPolicyReason,
-			}
-
-			// Update the binding so that it is associated with the lastest scheduling policy.
-			binding.Spec.SchedulingPolicySnapshotName = policy.Name
-
-			// Add the binding to the toUpdate list.
-			toUpdate = append(toUpdate, binding)
-		} else {
+		if !ok {
+			// The binding's target cluster is no longer picked in the current run; mark the
+			// binding as unscheduled.
 			toDelete = append(toDelete, binding)
+			continue
 		}
+
+		// The binding's target cluster is picked again in the current run; yet the binding
+		// is originally created/updated in accordance with an out-of-date scheduling policy.
+
+		// Update the binding so that it is associated with the latest score.
+		affinityScore := int32(scored.Score.AffinityScore)
+		topologySpreadScore := int32(scored.Score.TopologySpreadScore)
+		binding.Spec.ClusterDecision = fleetv1beta1.ClusterDecision{
+			ClusterName: scored.Cluster.Name,
+			Selected:    true,
+			ClusterScore: &fleetv1beta1.ClusterScore{
+				AffinityScore:       &affinityScore,
+				TopologySpreadScore: &topologySpreadScore,
+			},
+			Reason: pickedByPolicyReason,
+		}
+
+		// Update the binding so that it is associated with the lastest scheduling policy.
+		binding.Spec.SchedulingPolicySnapshotName = policy.Name
+
+		// Add the binding to the toUpdate list.
+		toUpdate = append(toUpdate, binding)
 	}
 
 	for _, scored := range picked {
@@ -149,8 +152,7 @@ func crossReferencePickedCustersAndObsoleteBindings(
 			}
 			affinityScore := int32(scored.Score.AffinityScore)
 			topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-
-			toCreate = append(toCreate, &fleetv1beta1.ClusterResourceBinding{
+			binding := &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Labels: map[string]string{
@@ -173,7 +175,9 @@ func crossReferencePickedCustersAndObsoleteBindings(
 						Reason: pickedByPolicyReason,
 					},
 				},
-			})
+			}
+
+			toCreate = append(toCreate, binding)
 		}
 	}
 
