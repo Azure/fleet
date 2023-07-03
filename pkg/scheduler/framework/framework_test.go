@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -999,6 +1000,395 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 
 			if diff := cmp.Diff(filtered, tc.wantFiltered, cmpopts.SortSlices(lessFuncFilteredCluster), cmp.AllowUnexported(filteredClusterWithStatus{}, Status{})); diff != "" {
 				t.Errorf("runAllPluginsForPickAllPlacementType() filtered (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+// TestCrossReferencePickedClustersAndObsoleteBindings tests the crossReferencePickedClustersAndObsoleteBindings function.
+func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
+	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
+
+	clusterName1 := "cluster-1"
+	clusterName2 := "cluster-2"
+	clusterName3 := "cluster-3"
+	clusterName4 := "cluster-4"
+
+	affinityScore1 := int32(10)
+	topologySpreadScore1 := int32(2)
+	affinityScore2 := int32(20)
+	topologySpreadScore2 := int32(1)
+	affinityScore3 := int32(30)
+	topologySpreadScore3 := int32(0)
+
+	sorted := ScoredClusters{
+		{
+			Cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+			},
+			Score: &ClusterScore{
+				TopologySpreadScore:   int(topologySpreadScore1),
+				AffinityScore:         int(affinityScore1),
+				BoundOrScheduledScore: 1,
+			},
+		},
+		{
+			Cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName2,
+				},
+			},
+			Score: &ClusterScore{
+				TopologySpreadScore:   int(topologySpreadScore2),
+				AffinityScore:         int(affinityScore2),
+				BoundOrScheduledScore: 0,
+			},
+		},
+		{
+			Cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName3,
+				},
+			},
+			Score: &ClusterScore{
+				TopologySpreadScore:   int(topologySpreadScore3),
+				AffinityScore:         int(affinityScore3),
+				BoundOrScheduledScore: 1,
+			},
+		},
+	}
+
+	// Note that these names are placeholders only; actual names should be generated one.
+	bindingName1 := "binding-1"
+	bindingName2 := "binding-2"
+	bindingName3 := "binding-3"
+	bindingName4 := "binding-4"
+
+	testCases := []struct {
+		name         string
+		picked       ScoredClusters
+		obsolete     []*fleetv1beta1.ClusterResourceBinding
+		wantToCreate []*fleetv1beta1.ClusterResourceBinding
+		wantToUpdate []*fleetv1beta1.ClusterResourceBinding
+		wantToDelete []*fleetv1beta1.ClusterResourceBinding
+	}{
+		{
+			name:   "no matching obsolete bindings",
+			picked: sorted,
+			obsolete: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName4,
+					},
+				},
+			},
+			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                        fleetv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore1,
+								TopologySpreadScore: &topologySpreadScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                        fleetv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore2,
+								TopologySpreadScore: &topologySpreadScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                        fleetv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore3,
+								TopologySpreadScore: &topologySpreadScore3,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToUpdate: []*fleetv1beta1.ClusterResourceBinding{},
+			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName4,
+					},
+				},
+			},
+		},
+		{
+			name:   "all matching obsolete bindings",
+			picked: sorted,
+			obsolete: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName1,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName2,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName3,
+					},
+				},
+			},
+			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{},
+			wantToUpdate: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster:                clusterName1,
+						SchedulingPolicySnapshotName: policyName,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore1,
+								TopologySpreadScore: &topologySpreadScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster:                clusterName2,
+						SchedulingPolicySnapshotName: policyName,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore2,
+								TopologySpreadScore: &topologySpreadScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster:                clusterName3,
+						SchedulingPolicySnapshotName: policyName,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore3,
+								TopologySpreadScore: &topologySpreadScore3,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{},
+		},
+		{
+			name:   "mixed",
+			picked: sorted,
+			obsolete: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName1,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName2,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName4,
+					},
+				},
+			},
+			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:                        fleetv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore3,
+								TopologySpreadScore: &topologySpreadScore3,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToUpdate: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster:                clusterName1,
+						SchedulingPolicySnapshotName: policyName,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore1,
+								TopologySpreadScore: &topologySpreadScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster:                clusterName2,
+						SchedulingPolicySnapshotName: policyName,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore2,
+								TopologySpreadScore: &topologySpreadScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName4,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			toCreate, toUpdate, toDelete, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, tc.picked, tc.obsolete)
+			if err != nil {
+				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() = %v, want no error", err)
+				return
+			}
+
+			if diff := cmp.Diff(toCreate, tc.wantToCreate, ignoreObjectMetaNameField); diff != "" {
+				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toCreate diff (-got, +want) = %s", diff)
+			}
+
+			// Verify names separately.
+			for _, binding := range toCreate {
+				prefix := fmt.Sprintf("%s-%s-", crpName, binding.Spec.TargetCluster)
+				if !strings.HasPrefix(binding.Name, prefix) {
+					t.Errorf("toCreate binding name, got %s, want prefix %s", binding.Name, prefix)
+				}
+			}
+
+			if diff := cmp.Diff(toUpdate, tc.wantToUpdate); diff != "" {
+				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toUpdate diff (-got, +want): %s", diff)
+			}
+
+			if diff := cmp.Diff(toDelete, tc.wantToDelete); diff != "" {
+				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toDelete diff (-got, +want): %s", diff)
 			}
 		})
 	}
