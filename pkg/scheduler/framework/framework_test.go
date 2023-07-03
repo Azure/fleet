@@ -544,13 +544,11 @@ func TestRunFilterPlugins(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                     string
-		filterPlugins            []FilterPlugin
-		wantClusters             []*fleetv1beta1.MemberCluster
-		wantFiltered             []*filteredClusterWithStatus
-		wantPassedClusterNames   []string
-		wantFilteredClusterNames []string
-		expectedToFail           bool
+		name           string
+		filterPlugins  []FilterPlugin
+		wantClusters   []*fleetv1beta1.MemberCluster
+		wantFiltered   []*filteredClusterWithStatus
+		expectedToFail bool
 	}{
 		{
 			name: "three clusters, two filter plugins, all passed",
