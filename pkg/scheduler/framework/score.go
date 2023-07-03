@@ -28,6 +28,8 @@ type ClusterScore struct {
 }
 
 // Add adds a ClusterScore to another ClusterScore.
+//
+// Note that this will panic if either score is nil.
 func (s1 *ClusterScore) Add(s2 *ClusterScore) {
 	s1.TopologySpreadScore += s2.TopologySpreadScore
 	s1.AffinityScore += s2.AffinityScore
@@ -35,6 +37,8 @@ func (s1 *ClusterScore) Add(s2 *ClusterScore) {
 }
 
 // Equal returns true if a ClusterScore is equal to another.
+//
+// Note that this will panic if either score is nil.
 func (s1 *ClusterScore) Equal(s2 *ClusterScore) bool {
 	return s1.TopologySpreadScore == s2.TopologySpreadScore &&
 		s1.AffinityScore == s2.AffinityScore &&
@@ -42,6 +46,8 @@ func (s1 *ClusterScore) Equal(s2 *ClusterScore) bool {
 }
 
 // Less returns true if a ClusterScore is less than another.
+//
+// Note that this will panic if either score is nil.
 func (s1 *ClusterScore) Less(s2 *ClusterScore) bool {
 	if s1.TopologySpreadScore != s2.TopologySpreadScore {
 		return s1.TopologySpreadScore < s2.TopologySpreadScore
@@ -71,6 +77,9 @@ func (sc ScoredClusters) Len() int { return len(sc) }
 // smaller one.
 //
 // It implemented sort.Interface.Less().
+//
+// Note that this will panic if there is a reference to nil scores and/or clusters; caller
+// should verify if the list is valid.
 func (sc ScoredClusters) Less(i, j int) bool {
 	if sc[i].Score.Equal(sc[j].Score) {
 		return sc[i].Cluster.Name < sc[j].Cluster.Name
