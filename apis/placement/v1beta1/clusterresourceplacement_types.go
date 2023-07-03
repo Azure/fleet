@@ -11,6 +11,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+const (
+	// ClusterResourcePlacementCleanupFinalizer is a finalizer added by the CRP controller to all CRPs, to make sure
+	// that the CRP controller can react to CRP deletions if necessary.
+	ClusterResourcePlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true

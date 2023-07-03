@@ -12,9 +12,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -28,6 +31,9 @@ const (
 
 var (
 	fleetAPIVersion = fleetv1beta1.GroupVersion.String()
+	cmpOptions      = []cmp.Option{
+		cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
+	}
 )
 
 func serviceScheme(t *testing.T) *runtime.Scheme {
@@ -663,7 +669,7 @@ func TestGetOrCreateClusterPolicySnapshot(t *testing.T) {
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
 				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
 			}
-			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, options...); diff != "" {
+			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, cmpOptions...); diff != "" {
 				t.Errorf("clusterPolicysnapShot List() mismatch (-want, +got):\n%s", diff)
 			}
 		})
@@ -1512,6 +1518,268 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 			}
 			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
 				t.Errorf("getOrCreateClusterResourceSnapshot() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
+			}
+		})
+	}
+}
+
+func TestHandleDelete(t *testing.T) {
+	tests := []struct {
+		name                  string
+		policySnapshots       []fleetv1beta1.ClusterSchedulingPolicySnapshot
+		resourceSnapshots     []fleetv1beta1.ClusterResourceSnapshot
+		wantPolicySnapshots   []fleetv1beta1.ClusterSchedulingPolicySnapshot
+		wantResourceSnapshots []fleetv1beta1.ClusterResourceSnapshot
+	}{
+		{
+			name: "have active snapshots",
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+						},
+					},
+				},
+			},
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+					},
+				},
+			},
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "have no active snapshots",
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel: testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+						},
+					},
+				},
+			},
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+					},
+				},
+			},
+			wantPolicySnapshots:   []fleetv1beta1.ClusterSchedulingPolicySnapshot{},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{},
+		},
+		{
+			name: "have no snapshots",
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+			},
+			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+			},
+			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel:    "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			crp := clusterResourcePlacementForTest()
+			crp.Finalizers = []string{fleetv1beta1.ClusterResourcePlacementCleanupFinalizer}
+			now := metav1.Now()
+			crp.DeletionTimestamp = &now
+			objects := []client.Object{crp}
+			for i := range tc.policySnapshots {
+				objects = append(objects, &tc.policySnapshots[i])
+			}
+			for i := range tc.resourceSnapshots {
+				objects = append(objects, &tc.resourceSnapshots[i])
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+			r := Reconciler{Client: fakeClient, Scheme: scheme, UncachedReader: fakeClient}
+			got, err := r.handleDelete(ctx, crp)
+			if err != nil {
+				t.Fatalf("failed to handle delete: %v", err)
+			}
+			want := ctrl.Result{}
+			if !cmp.Equal(got, want) {
+				t.Errorf("handleDelete() = %+v, want %+v", got, want)
+			}
+			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
+			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
+				t.Fatalf("clusterPolicySnapshot List() got error %v, want no error", err)
+			}
+			if diff := cmp.Diff(tc.wantPolicySnapshots, clusterPolicySnapshotList.Items, cmpOptions...); diff != "" {
+				t.Errorf("clusterPolicysnapShot List() mismatch (-want, +got):\n%s", diff)
+			}
+			clusterResourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
+				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
+			}
+			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, cmpOptions...); diff != "" {
+				t.Errorf("clusterResourceSnapshot List() mismatch (-want, +got):\n%s", diff)
+			}
+			gotCRP := fleetv1beta1.ClusterResourcePlacement{}
+			if err := fakeClient.Get(ctx, types.NamespacedName{Name: crp.GetName()}, &gotCRP); !apierrors.IsNotFound(err) {
+				t.Errorf("clusterResourcePlacement Get() = %+v, got error %v, want not found error", gotCRP, err)
 			}
 		})
 	}
