@@ -598,20 +598,10 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 		})
 
 		It("should deny UPDATE operation on member cluster CR for user not in system:masters group", func() {
-			mc := fleetv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-member-cluster",
-				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
-					Identity: rbacv1.Subject{
-						Kind:      "User",
-						APIGroup:  "",
-						Name:      "test-subject",
-						Namespace: "fleet-system",
-					},
-				},
-			}
+			var mc fleetv1beta1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-member-cluster"}, &mc)).Should(Succeed())
+
+			mc.Spec.State = fleetv1beta1.ClusterStateLeave
 			Eventually(func() error {
 				return HubCluster.KubeClient.Update(ctx, &mc)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
@@ -629,7 +619,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 		It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
 			mc := fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: MemberCluster.ClusterName,
+					Name: "test-member-cluster",
 				},
 			}
 
@@ -641,8 +631,8 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 		})
 
 		It("should allow update operation on member cluster CR for user in system:masters group", func() {
-			var mc fleetv1alpha1.MemberCluster
-			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+			var mc fleetv1beta1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-member-cluster"}, &mc)).Should(Succeed())
 
 			By("update labels in CRD")
 			labels := make(map[string]string)

@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -196,7 +197,26 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	return obj, gvk, mapping.Resource
 }
 
-func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+	mc := fleetv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-member-cluster",
+		},
+		Spec: fleetv1beta1.MemberClusterSpec{
+			State: fleetv1beta1.ClusterStateJoin,
+			Identity: rbacv1.Subject{
+				Kind:      "User",
+				APIGroup:  "",
+				Name:      "test-subject",
+				Namespace: "fleet-system",
+			},
+		},
+	}
+
+	gomega.Eventually(func() error {
+		return hubCluster.KubeClient.Create(ctx, &mc)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create member cluster %s", mc.Name)
+
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crdClusterRole,
@@ -241,7 +261,7 @@ func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, h
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
-				APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+				APIGroups: []string{fleetv1beta1.GroupVersion.Group},
 				Verbs:     []string{"*"},
 				Resources: []string{"*"},
 			},
@@ -273,7 +293,7 @@ func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, h
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s to modify CRDs", crb.Name)
 }
 
-func DeleteClusterRoleAndClusterRoleBindingForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crClusterRoleBinding,
@@ -301,4 +321,11 @@ func DeleteClusterRoleAndClusterRoleBindingForWebHookE2E(ctx context.Context, hu
 		},
 	}
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
+
+	mc := fleetv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-member-cluster",
+		},
+	}
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &mc)).Should(gomega.Succeed())
 }

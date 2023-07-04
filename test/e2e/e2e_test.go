@@ -230,13 +230,13 @@ var _ = BeforeSuite(func() {
 	}
 	testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
-	By("create cluster role binding and cluster roles for webhook e2e")
-	testutils.CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx, HubCluster)
+	By("create member cluster, cluster role binding, cluster roles for webhook e2e")
+	testutils.CreateResourcesForWebHookE2E(ctx, HubCluster)
 })
 
 var _ = AfterSuite(func() {
-	By("delete cluster role binding and cluster roles for webhook e2e")
-	testutils.DeleteClusterRoleAndClusterRoleBindingForWebHookE2E(ctx, HubCluster)
+	By("delete member cluster, cluster role binding and cluster roles for webhook e2e")
+	testutils.DeleteResourcesForWebHookE2E(ctx, HubCluster)
 
 	By("update member cluster in the hub cluster")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)

@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: memberclusters.placement.karavel.io
+  name: memberclusters.placement.azure.com
 spec:
-  group: placement.karavel.io
+  group: placement.azure.com
   names:
     categories:
     - fleet
