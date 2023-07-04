@@ -17,21 +17,47 @@ type ClusterScore struct {
 	// AffinityScore determines how much a binding would satisfy the affinity terms
 	// specified by the user.
 	AffinityScore int
+	// BoundOrScheduledScore reflects if there has already been an active/creating binding from
+	// the same cluster resource placement associated with the cluster; it value range should
+	// be [0, 1], where 1 signals that an active/creating binding is present.
+	//
+	// Note that this score is for internal usage only; it serves the purpose of implementing
+	// a preference for already selected clusters when all the other conditions are the same,
+	// so as to minimize interruption between different scheduling runs.
+	BoundOrScheduledScore int
 }
 
 // Add adds a ClusterScore to another ClusterScore.
-func (s1 *ClusterScore) Add(s2 ClusterScore) {
+//
+// Note that this will panic if either score is nil.
+func (s1 *ClusterScore) Add(s2 *ClusterScore) {
 	s1.TopologySpreadScore += s2.TopologySpreadScore
 	s1.AffinityScore += s2.AffinityScore
+	s1.BoundOrScheduledScore += s2.BoundOrScheduledScore
+}
+
+// Equal returns true if a ClusterScore is equal to another.
+//
+// Note that this will panic if either score is nil.
+func (s1 *ClusterScore) Equal(s2 *ClusterScore) bool {
+	return s1.TopologySpreadScore == s2.TopologySpreadScore &&
+		s1.AffinityScore == s2.AffinityScore &&
+		s1.BoundOrScheduledScore == s2.BoundOrScheduledScore
 }
 
 // Less returns true if a ClusterScore is less than another.
+//
+// Note that this will panic if either score is nil.
 func (s1 *ClusterScore) Less(s2 *ClusterScore) bool {
 	if s1.TopologySpreadScore != s2.TopologySpreadScore {
 		return s1.TopologySpreadScore < s2.TopologySpreadScore
 	}
 
-	return s1.AffinityScore < s2.AffinityScore
+	if s1.AffinityScore != s2.AffinityScore {
+		return s1.AffinityScore < s2.AffinityScore
+	}
+
+	return s1.BoundOrScheduledScore < s2.BoundOrScheduledScore
 }
 
 // ScoredCluster is a cluster with a score.
@@ -46,8 +72,19 @@ type ScoredClusters []*ScoredCluster
 // Len returns the length of a ScoredClusters; it implemented sort.Interface.Len().
 func (sc ScoredClusters) Len() int { return len(sc) }
 
-// Less returns true if a ScoredCluster is of a lower score than another; it implemented sort.Interface.Less().
+// Less returns true if a ScoredCluster is of a lower score than another; when two clusters have
+// the same score, the one with a name that is lexicographically smaller is considered to be the
+// smaller one.
+//
+// It implemented sort.Interface.Less().
+//
+// Note that this will panic if there is a reference to nil scores and/or clusters; caller
+// should verify if the list is valid.
 func (sc ScoredClusters) Less(i, j int) bool {
+	if sc[i].Score.Equal(sc[j].Score) {
+		return sc[i].Cluster.Name < sc[j].Cluster.Name
+	}
+
 	return sc[i].Score.Less(sc[j].Score)
 }
 
