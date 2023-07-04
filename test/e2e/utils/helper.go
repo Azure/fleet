@@ -198,6 +198,7 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 }
 
 func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+	// create v1beta1 member cluster CR
 	mc := fleetv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-member-cluster",
@@ -299,33 +300,34 @@ func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 			Name: crClusterRoleBinding,
 		},
 	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &crb)).Should(gomega.Succeed())
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &crb)).Should(gomega.Succeed(), "failed to delete CR cluster role binding %s", crb.Name)
 
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crClusterRole,
 		},
 	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed(), "failed to delete CR cluster role %s", cr.Name)
 
 	crb = rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crdClusterRoleBinding,
 		},
 	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &crb)).Should(gomega.Succeed())
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &crb)).Should(gomega.Succeed(), "failed to delete CRD cluster role binding %s", crb.Name)
 
 	cr = rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crdClusterRole,
 		},
 	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed(), "failed to delete CRD cluster role %s", cr.Name)
 
+	// delete v1beta1 member cluster CR
 	mc := fleetv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-member-cluster",
 		},
 	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &mc)).Should(gomega.Succeed())
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &mc)).Should(gomega.Succeed(), "failed to delete member cluster %s", mc.Name)
 }
