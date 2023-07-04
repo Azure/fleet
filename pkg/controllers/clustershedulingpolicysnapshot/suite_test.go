@@ -56,7 +56,7 @@ var _ = BeforeSuite(func() {
 
 	var err error
 	cfg, err = testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
 	err = fleetv1beta1.AddToScheme(scheme.Scheme)
@@ -65,7 +65,7 @@ var _ = BeforeSuite(func() {
 	//+kubebuilder:scaffold:scheme
 	By("construct the k8s client")
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).Should(Succeed())
 	Expect(k8sClient).NotTo(BeNil())
 
 	By("starting the controller manager")
@@ -76,9 +76,8 @@ var _ = BeforeSuite(func() {
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: "0",
 		Logger:             klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)),
-		Port:               4848,
 	})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).Should(Succeed())
 
 	fakePlacementController = &controller.FakeController{}
 
@@ -86,12 +85,12 @@ var _ = BeforeSuite(func() {
 		Client:              mgr.GetClient(),
 		PlacementController: fakePlacementController,
 	}).SetupWithManager(mgr)
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).Should(Succeed())
 
 	go func() {
 		defer GinkgoRecover()
 		err = mgr.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
+		Expect(err).Should(Succeed(), "failed to run manager")
 	}()
 })
 
@@ -101,5 +100,5 @@ var _ = AfterSuite(func() {
 	cancel()
 	By("tearing down the test environment")
 	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).Should(Succeed())
 })
