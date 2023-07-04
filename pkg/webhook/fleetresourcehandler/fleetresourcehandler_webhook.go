@@ -49,6 +49,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			klog.V(2).InfoS("handling CRD resource", "GVK", createCRDGVK())
 			response = v.handleCRD(req)
 		case createV1beta1MemberClusterGVK():
+			klog.V(2).InfoS("handling Member cluster resource", "GVK", createV1beta1MemberClusterGVK())
 			response = v.handleMemberCluster(ctx, req)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String())
