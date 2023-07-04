@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -30,9 +31,11 @@ const (
 	altPolicyName      = "another-test-policy"
 	bindingName        = "test-binding"
 	altBindingName     = "another-test-binding"
+	anotherBindingName = "yet-another-test-binding"
 	clusterName        = "bravelion"
 	altClusterName     = "smartcat"
 	anotherClusterName = "singingbutterfly"
+	resourceVersion    = "1"
 )
 
 var (
@@ -40,6 +43,7 @@ var (
 	ignoreObjectMetaNameField            = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
 	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
 	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
 
 	lessFuncCluster = func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name
@@ -1075,7 +1079,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 		picked       ScoredClusters
 		obsolete     []*fleetv1beta1.ClusterResourceBinding
 		wantToCreate []*fleetv1beta1.ClusterResourceBinding
-		wantToUpdate []*fleetv1beta1.ClusterResourceBinding
+		wantToPatch  []*bindingWithPatch
 		wantToDelete []*fleetv1beta1.ClusterResourceBinding
 	}{
 		{
@@ -1159,7 +1163,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToUpdate: []*fleetv1beta1.ClusterResourceBinding{},
+			wantToPatch: []*bindingWithPatch{},
 			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1201,60 +1205,90 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				},
 			},
 			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{},
-			wantToUpdate: []*fleetv1beta1.ClusterResourceBinding{
+			wantToPatch: []*bindingWithPatch{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: bindingName1,
-					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						TargetCluster:                clusterName1,
-						SchedulingPolicySnapshotName: policyName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterName: clusterName1,
-							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
-								AffinityScore:       &affinityScore1,
-								TopologySpreadScore: &topologySpreadScore1,
+					updated: &fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName1,
+							SchedulingPolicySnapshotName: policyName,
+							ClusterDecision: fleetv1beta1.ClusterDecision{
+								ClusterName: clusterName1,
+								Selected:    true,
+								ClusterScore: &fleetv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
 							},
-							Reason: pickedByPolicyReason,
 						},
 					},
+					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName1,
+						},
+					}),
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: bindingName2,
-					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						TargetCluster:                clusterName2,
-						SchedulingPolicySnapshotName: policyName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterName: clusterName2,
-							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
-								AffinityScore:       &affinityScore2,
-								TopologySpreadScore: &topologySpreadScore2,
+					updated: &fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName2,
+							SchedulingPolicySnapshotName: policyName,
+							ClusterDecision: fleetv1beta1.ClusterDecision{
+								ClusterName: clusterName2,
+								Selected:    true,
+								ClusterScore: &fleetv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
 							},
-							Reason: pickedByPolicyReason,
 						},
 					},
+					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName2,
+						},
+					}),
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: bindingName3,
-					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						TargetCluster:                clusterName3,
-						SchedulingPolicySnapshotName: policyName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterName: clusterName3,
-							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
-								AffinityScore:       &affinityScore3,
-								TopologySpreadScore: &topologySpreadScore3,
+					updated: &fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName3,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName3,
+							SchedulingPolicySnapshotName: policyName,
+							ClusterDecision: fleetv1beta1.ClusterDecision{
+								ClusterName: clusterName3,
+								Selected:    true,
+								ClusterScore: &fleetv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore3,
+									TopologySpreadScore: &topologySpreadScore3,
+								},
+								Reason: pickedByPolicyReason,
 							},
-							Reason: pickedByPolicyReason,
 						},
 					},
+					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName3,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName3,
+						},
+					}),
 				},
 			},
 			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{},
@@ -1312,42 +1346,62 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					},
 				},
 			},
-			wantToUpdate: []*fleetv1beta1.ClusterResourceBinding{
+			wantToPatch: []*bindingWithPatch{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: bindingName1,
-					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						TargetCluster:                clusterName1,
-						SchedulingPolicySnapshotName: policyName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterName: clusterName1,
-							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
-								AffinityScore:       &affinityScore1,
-								TopologySpreadScore: &topologySpreadScore1,
+					updated: &fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName1,
+							SchedulingPolicySnapshotName: policyName,
+							ClusterDecision: fleetv1beta1.ClusterDecision{
+								ClusterName: clusterName1,
+								Selected:    true,
+								ClusterScore: &fleetv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
 							},
-							Reason: pickedByPolicyReason,
 						},
 					},
+					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName1,
+						},
+					}),
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: bindingName2,
-					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						TargetCluster:                clusterName2,
-						SchedulingPolicySnapshotName: policyName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterName: clusterName2,
-							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
-								AffinityScore:       &affinityScore2,
-								TopologySpreadScore: &topologySpreadScore2,
+					updated: &fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName2,
+							SchedulingPolicySnapshotName: policyName,
+							ClusterDecision: fleetv1beta1.ClusterDecision{
+								ClusterName: clusterName2,
+								Selected:    true,
+								ClusterScore: &fleetv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
 							},
-							Reason: pickedByPolicyReason,
 						},
 					},
+					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+						Spec: fleetv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName2,
+						},
+					}),
 				},
 			},
 			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{
@@ -1365,7 +1419,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			toCreate, toUpdate, toDelete, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, tc.picked, tc.obsolete)
+			toCreate, toDelete, toPatch, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, tc.picked, tc.obsolete)
 			if err != nil {
 				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() = %v, want no error", err)
 				return
@@ -1383,13 +1437,216 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				}
 			}
 
-			if diff := cmp.Diff(toUpdate, tc.wantToUpdate); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toUpdate diff (-got, +want): %s", diff)
+			// Ignore the patch field (not exported in local package).
+			if diff := cmp.Diff(toPatch, tc.wantToPatch, cmp.AllowUnexported(bindingWithPatch{}), ignoredBindingWithPatchFields); diff != "" {
+				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toPatch diff (-got, +want): %s", diff)
 			}
 
 			if diff := cmp.Diff(toDelete, tc.wantToDelete); diff != "" {
 				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toDelete diff (-got, +want): %s", diff)
 			}
 		})
+	}
+}
+
+// TestCreateBindings tests the createBindings method.
+func TestCreateBindings(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+
+	toCreate := []*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bindingName,
+			},
+		},
+	}
+
+	ctx := context.Background()
+	if err := f.createBindings(ctx, toCreate); err != nil {
+		t.Fatalf("createBindings() = %v, want no error", err)
+	}
+
+	binding := &fleetv1beta1.ClusterResourceBinding{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, binding); err != nil {
+		t.Fatalf("Get binding (%s) = %v, want no error", bindingName, err)
+	}
+
+	if diff := cmp.Diff(binding, toCreate[0], ignoreTypeMetaAPIVersionKindFields); diff != "" {
+		t.Fatalf("created binding diff (-got, +want) = %s", diff)
+	}
+}
+
+// TestUpdateBindings tests the updateBindings method.
+func TestPatchBindings(t *testing.T) {
+	binding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+			// Set the resource version; this is needed so that the calculated patch will not
+			// include the resource version field.
+			ResourceVersion: resourceVersion,
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			TargetCluster: clusterName,
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(binding).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+
+	topologySpreadScore := int32(0)
+	affinityScore := int32(1)
+	updated := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+			// Set the resource version; this is needed so that the calculated patch will not
+			// include the resource version field.
+			ResourceVersion: resourceVersion,
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			TargetCluster:                clusterName,
+			SchedulingPolicySnapshotName: policyName,
+			ClusterDecision: fleetv1beta1.ClusterDecision{
+				ClusterName: clusterName,
+				Selected:    true,
+				ClusterScore: &fleetv1beta1.ClusterScore{
+					TopologySpreadScore: &topologySpreadScore,
+					AffinityScore:       &affinityScore,
+				},
+				Reason: pickedByPolicyReason,
+			},
+		},
+	}
+
+	toPatch := []*bindingWithPatch{
+		{
+			updated: updated,
+			patch:   client.MergeFrom(binding),
+		},
+	}
+
+	ctx := context.Background()
+	if err := f.patchBindings(ctx, toPatch); err != nil {
+		t.Fatalf("patchBindings() = %v, want no error", err)
+	}
+
+	current := &fleetv1beta1.ClusterResourceBinding{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, current); err != nil {
+		t.Fatalf("Get binding (%s) = %v, want no error", bindingName, err)
+	}
+
+	if diff := cmp.Diff(current, updated, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+		t.Fatalf("patched binding diff (-got, +want) = %s", diff)
+	}
+}
+
+// TestManipulateBindings tests the manipulateBindings method.
+func TestManipulateBindings(t *testing.T) {
+	toCreateBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: bindingName,
+		},
+	}
+	toPatchBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            altBindingName,
+			ResourceVersion: resourceVersion,
+		},
+	}
+	toDeleteBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: anotherBindingName,
+		},
+	}
+
+	topologySpreadScore := int32(0)
+	affinityScore := int32(1)
+	updatedBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: altBindingName,
+			// Set the resource version; this is needed so that the calculated patch will not
+			// include the resource version field.
+			ResourceVersion: resourceVersion,
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			TargetCluster:                clusterName,
+			SchedulingPolicySnapshotName: policyName,
+			ClusterDecision: fleetv1beta1.ClusterDecision{
+				ClusterName: clusterName,
+				Selected:    true,
+				ClusterScore: &fleetv1beta1.ClusterScore{
+					TopologySpreadScore: &topologySpreadScore,
+					AffinityScore:       &affinityScore,
+				},
+				Reason: pickedByPolicyReason,
+			},
+		},
+	}
+
+	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(toPatchBinding, toDeleteBinding).
+		Build()
+	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+	f := &framework{
+		client: fakeClient,
+	}
+
+	ctx := context.Background()
+
+	toCreate := []*fleetv1beta1.ClusterResourceBinding{toCreateBinding}
+	toPatch := []*bindingWithPatch{
+		{
+			updated: updatedBinding,
+			patch:   client.MergeFrom(toPatchBinding),
+		},
+	}
+	toDelete := []*fleetv1beta1.ClusterResourceBinding{toDeleteBinding}
+	if err := f.manipulateBindings(ctx, policy, toCreate, toDelete, toPatch); err != nil {
+		t.Fatalf("manipulateBindings() = %v, want no error", err)
+	}
+
+	// Check if the requested binding has been created.
+	createdBinding := &fleetv1beta1.ClusterResourceBinding{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, createdBinding); err != nil {
+		t.Errorf("Get() binding %s = %v, want no error", bindingName, err)
+	}
+	if diff := cmp.Diff(createdBinding, toCreateBinding, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+		t.Errorf("created binding %s diff (-got, +want): %s", bindingName, diff)
+	}
+
+	// Check if the requested binding has been patched.
+	patchedBinding := &fleetv1beta1.ClusterResourceBinding{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: altBindingName}, patchedBinding); err != nil {
+		t.Errorf("Get() binding %s = %v, want no error", altBindingName, err)
+	}
+	if diff := cmp.Diff(patchedBinding, updatedBinding, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+		t.Errorf("patched binding %s diff (-got, +want): %s", altBindingName, diff)
+	}
+
+	// Check if the requested binding has been deleted.
+	deletedBinding := &fleetv1beta1.ClusterResourceBinding{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: anotherBindingName}, deletedBinding); err != nil {
+		t.Errorf("Get() binding %s = %v, want no error", anotherBindingName, err)
+	}
+	if deletedBinding.Spec.State != fleetv1beta1.BindingStateUnscheduled {
+		t.Errorf("binding %s state = %s, want unscheduled", anotherBindingName, deletedBinding.Spec.State)
 	}
 }

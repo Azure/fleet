@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/uniquename"
@@ -77,12 +78,21 @@ func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bind
 	return bound, scheduled, obsolete, dangling
 }
 
+// bindingWithPatch is a helper struct that includes a binding that needs to be patched and the
+// patch itself.
+type bindingWithPatch struct {
+	// updated is the modified binding.
+	updated *fleetv1beta1.ClusterResourceBinding
+	// patch is the patch that will be applied to the binding object.
+	patch client.Patch
+}
+
 // crossReferencePickedCustersAndBindings cross references picked clusters in the current scheduling
 // run and existing bindings to find out:
 //
 //   - bindings that should be created, i.e., create a binding in the state of Scheduled for every
 //     cluster that is newly picked and does not have a binding associated with;
-//   - bindings that should be updated, i.e., associate a binding, whose target cluster is picked again
+//   - bindings that should be patched, i.e., associate a binding, whose target cluster is picked again
 //     in the current run, with the latest score and the latest scheduling policy snapshot (if applicable);
 //   - bindings that should be deleted, i.e., mark a binding as unschedulable if its target cluster is no
 //     longer picked in the current run.
@@ -93,10 +103,10 @@ func crossReferencePickedCustersAndObsoleteBindings(
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 	picked ScoredClusters,
 	obsolete []*fleetv1beta1.ClusterResourceBinding,
-) (toCreate, toUpdate, toDelete []*fleetv1beta1.ClusterResourceBinding, err error) {
+) (toCreate, toDelete []*fleetv1beta1.ClusterResourceBinding, toPatch []*bindingWithPatch, err error) {
 	// Pre-allocate with a reasonable capacity.
 	toCreate = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(picked))
-	toUpdate = make([]*fleetv1beta1.ClusterResourceBinding, 0, 20)
+	toPatch = make([]*bindingWithPatch, 0, 20)
 	toDelete = make([]*fleetv1beta1.ClusterResourceBinding, 0, 20)
 
 	// Build a map of picked scored clusters for quick lookup.
@@ -122,10 +132,14 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		// The binding's target cluster is picked again in the current run; yet the binding
 		// is originally created/updated in accordance with an out-of-date scheduling policy.
 
+		// Prepare the patch.
+		patch := client.MergeFrom(binding)
+
 		// Update the binding so that it is associated with the latest score.
+		updated := binding.DeepCopy()
 		affinityScore := int32(scored.Score.AffinityScore)
 		topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-		binding.Spec.ClusterDecision = fleetv1beta1.ClusterDecision{
+		updated.Spec.ClusterDecision = fleetv1beta1.ClusterDecision{
 			ClusterName: scored.Cluster.Name,
 			Selected:    true,
 			ClusterScore: &fleetv1beta1.ClusterScore{
@@ -136,10 +150,13 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		}
 
 		// Update the binding so that it is associated with the lastest scheduling policy.
-		binding.Spec.SchedulingPolicySnapshotName = policy.Name
+		updated.Spec.SchedulingPolicySnapshotName = policy.Name
 
 		// Add the binding to the toUpdate list.
-		toUpdate = append(toUpdate, binding)
+		toPatch = append(toPatch, &bindingWithPatch{
+			updated: updated,
+			patch:   patch,
+		})
 	}
 
 	for _, scored := range picked {
@@ -181,5 +198,5 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		}
 	}
 
-	return toCreate, toUpdate, toDelete, nil
+	return toCreate, toDelete, toPatch, nil
 }
