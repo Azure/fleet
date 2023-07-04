@@ -51,12 +51,6 @@ const (
 	memberClusterResourceName = "memberclusters"
 	replicaSetResourceName    = "replicasets"
 	podResourceName           = "pods"
-
-	crdKind        = "CustomResourceDefinition"
-	mcKind         = "MemberCluster"
-	replicaSetKind = "ReplicaSet"
-	podKind        = "Pod"
-	crpKind        = "ClusterResourcePlacement"
 )
 
 var (
@@ -136,7 +130,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 		Webhooks: []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.pod.validating",
-				ClientConfig:            w.createClientConfig(podKind),
+				ClientConfig:            w.createClientConfig(corev1.Pod{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -157,7 +151,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.clusterresourceplacement.validating",
-				ClientConfig:            w.createClientConfig(crpKind),
+				ClientConfig:            w.createClientConfig(fleetv1alpha1.ClusterResourcePlacement{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -179,7 +173,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.replicaset.validating",
-				ClientConfig:            w.createClientConfig(replicaSetKind),
+				ClientConfig:            w.createClientConfig(appsv1.ReplicaSet{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -199,7 +193,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.customresourcedefinition.validating",
-				ClientConfig:            w.createClientConfig(crdKind),
+				ClientConfig:            w.createClientConfig(v1.CustomResourceDefinition{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -221,7 +215,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			},
 			{
 				Name:                    "fleet.membercluster.validating",
-				ClientConfig:            w.createClientConfig(mcKind),
+				ClientConfig:            w.createClientConfig(fleetv1beta1.MemberCluster{}),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
@@ -233,8 +227,8 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 							admv1.Delete,
 						},
 						Rule: admv1.Rule{
-							APIGroups:   []string{fleetv1alpha1.GroupVersion.Group, fleetv1beta1.GroupVersion.Group},
-							APIVersions: []string{fleetv1alpha1.GroupVersion.Version, fleetv1beta1.GroupVersion.Version},
+							APIGroups:   []string{fleetv1beta1.GroupVersion.Group},
+							APIVersions: []string{fleetv1beta1.GroupVersion.Version},
 							Resources:   []string{memberClusterResourceName},
 							Scope:       &clusterScope,
 						},
@@ -271,27 +265,27 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 }
 
 // createClientConfig generates the client configuration with either service ref or URL for the argued interface.
-func (w *Config) createClientConfig(kind string) admv1.WebhookClientConfig {
+func (w *Config) createClientConfig(webhookInterface interface{}) admv1.WebhookClientConfig {
 	serviceRef := admv1.ServiceReference{
 		Namespace: w.serviceNamespace,
 		Name:      FleetWebhookSvcName,
 		Port:      pointer.Int32(w.servicePort),
 	}
 	var serviceEndpoint string
-	switch kind {
-	case podKind:
+	switch webhookInterface.(type) {
+	case corev1.Pod:
 		serviceEndpoint = w.serviceURL + pod.ValidationPath
 		serviceRef.Path = pointer.String(pod.ValidationPath)
-	case crpKind:
+	case fleetv1alpha1.ClusterResourcePlacement:
 		serviceEndpoint = w.serviceURL + clusterresourceplacement.ValidationPath
 		serviceRef.Path = pointer.String(clusterresourceplacement.ValidationPath)
-	case replicaSetKind:
+	case appsv1.ReplicaSet:
 		serviceEndpoint = w.serviceURL + replicaset.ValidationPath
 		serviceRef.Path = pointer.String(replicaset.ValidationPath)
-	case crdKind:
+	case v1.CustomResourceDefinition:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
-	case mcKind:
+	case fleetv1beta1.MemberCluster:
 		serviceEndpoint = w.serviceURL + fleetresourcehandler.ValidationPath
 		serviceRef.Path = pointer.String(fleetresourcehandler.ValidationPath)
 	}

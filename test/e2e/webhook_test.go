@@ -551,13 +551,13 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 	Context("CR validation webhook", func() {
-		It("should deny CREATE operation on v1alpha1 member cluster CR for user not in system:masters group", func() {
-			mc := fleetv1alpha1.MemberCluster{
+		It("should deny CREATE operation member cluster CR for user not in system:masters group", func() {
+			mc := fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-member-cluster",
 				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
+				Spec: fleetv1beta1.MemberClusterSpec{
+					State: fleetv1beta1.ClusterStateJoin,
 					Identity: rbacv1.Subject{
 						Kind:      "User",
 						APIGroup:  "",
@@ -597,12 +597,27 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
 		})
 
-		It("should deny UPDATE operation on v1alpha1 member cluster CR for user not in system:masters group", func() {
-			var mc fleetv1alpha1.MemberCluster
-			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+		It("should deny UPDATE operation on member cluster CR for user not in system:masters group", func() {
+			mc := fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-member-cluster",
+				},
+				Spec: fleetv1beta1.MemberClusterSpec{
+					State: fleetv1beta1.ClusterStateJoin,
+					Identity: rbacv1.Subject{
+						Kind:      "User",
+						APIGroup:  "",
+						Name:      "test-subject",
+						Namespace: "fleet-system",
+					},
+				},
+			}
+			Eventually(func() error {
+				return HubCluster.KubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 
 			By("update member cluster spec")
-			mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+			mc.Spec.State = fleetv1beta1.ClusterStateLeave
 
 			By("expecting denial of operation UPDATE of member cluster")
 			err := HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
@@ -611,8 +626,8 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
 		})
 
-		It("should deny DELETE operation on v1alpha1 member cluster CR for user not in system:masters group", func() {
-			mc := fleetv1alpha1.MemberCluster{
+		It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
+			mc := fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: MemberCluster.ClusterName,
 				},
