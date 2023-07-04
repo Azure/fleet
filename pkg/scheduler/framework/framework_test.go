@@ -38,6 +38,16 @@ var (
 	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
 	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
 	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+
+	lessFuncCluster = func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
+		return cluster1.Name < cluster2.Name
+	}
+	lessFuncScoredCluster = func(scored1, scored2 ScoredCluster) bool {
+		return scored1.Cluster.Name < scored2.Cluster.Name
+	}
+	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
+		return filtered1.cluster.Name < filtered2.cluster.Name
+	}
 )
 
 // TO-DO (chenyu1): expand the test cases as development stablizes.
@@ -685,19 +695,309 @@ func TestRunFilterPlugins(t *testing.T) {
 
 			// The method runs in parallel; as a result the order cannot be guaranteed.
 			// Sort the results by cluster name for comparison.
-			lessFuncCluster := func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
-				return cluster1.Name < cluster2.Name
-			}
-			lessFuncFilteredCluster := func(filtered1, filtered2 *filteredClusterWithStatus) bool {
-				return filtered1.cluster.Name < filtered2.cluster.Name
-			}
-
 			if diff := cmp.Diff(passed, tc.wantClusters, cmpopts.SortSlices(lessFuncCluster)); diff != "" {
 				t.Errorf("passed clusters diff (-got, +want): %s", diff)
 			}
 
 			if diff := cmp.Diff(filtered, tc.wantFiltered, cmpopts.SortSlices(lessFuncFilteredCluster), cmp.AllowUnexported(filteredClusterWithStatus{}, Status{})); diff != "" {
 				t.Errorf("filtered clusters diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+// TestRunAllPluginsForPickAllPlacementType tests the runAllPluginsForPickAllPlacementType method.
+func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
+	dummyPreFilterPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyPreFilterPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	dummyFilterPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyFilterPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	clusters := []fleetv1beta1.MemberCluster{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altClusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherClusterName,
+			},
+		},
+	}
+
+	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
+
+	testCases := []struct {
+		name             string
+		preFilterPlugins []PreFilterPlugin
+		filterPlugins    []FilterPlugin
+		wantScored       ScoredClusters
+		wantFiltered     []*filteredClusterWithStatus
+		expectedToFail   bool
+	}{
+		{
+			name: "a prefilter plugin returns error",
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameB,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameB)
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name: "a filter plugin returns error",
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameB,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == altClusterName {
+							return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name: "all clusters scored",
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameB,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+			},
+			wantScored: ScoredClusters{
+				{
+					Cluster: &clusters[0],
+					Score:   &ClusterScore{},
+				},
+				{
+					Cluster: &clusters[1],
+					Score:   &ClusterScore{},
+				},
+				{
+					Cluster: &clusters[2],
+					Score:   &ClusterScore{},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{},
+		},
+		{
+			name: "all clusters filtered out",
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameB,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == clusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+						}
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name != clusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			wantScored: ScoredClusters{},
+			wantFiltered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusters[0],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+				},
+				{
+					cluster: &clusters[1],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
+				},
+				{
+					cluster: &clusters[2],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
+				},
+			},
+		},
+		{
+			name: "mixed",
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameB,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == altClusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+						}
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == anotherClusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			wantScored: ScoredClusters{
+				{
+					Cluster: &clusters[0],
+					Score:   &ClusterScore{},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusters[1],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+				},
+				{
+					cluster: &clusters[2],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.preFilterPlugins {
+				profile.WithPreFilterPlugin(p)
+			}
+			for _, p := range tc.filterPlugins {
+				profile.WithFilterPlugin(p)
+			}
+			f := &framework{
+				profile:      profile,
+				parallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			scored, filtered, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Errorf("runAllPluginsForPickAllPlacementType(), want error")
+				}
+				return
+			}
+
+			// The method runs in parallel; as a result the order cannot be guaranteed.
+			// Sort the results by cluster name for comparison.
+			if diff := cmp.Diff(scored, tc.wantScored, cmpopts.SortSlices(lessFuncScoredCluster), cmp.AllowUnexported(ScoredCluster{})); diff != "" {
+				t.Errorf("runAllPluginsForPickAllPlacementType() scored (-got, +want): %s", diff)
+			}
+
+			if diff := cmp.Diff(filtered, tc.wantFiltered, cmpopts.SortSlices(lessFuncFilteredCluster), cmp.AllowUnexported(filteredClusterWithStatus{}, Status{})); diff != "" {
+				t.Errorf("runAllPluginsForPickAllPlacementType() filtered (-got, +want): %s", diff)
 			}
 		})
 	}

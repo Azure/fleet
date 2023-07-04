@@ -364,7 +364,7 @@ func (f *framework) runAllPluginsForPickAllPlacementType(
 	}
 
 	// Wrap all clusters that have passed the Filter stage as scored clusters.
-	scored = make(ScoredClusters, len(passed))
+	scored = make(ScoredClusters, 0, len(passed))
 	for _, cluster := range passed {
 		scored = append(scored, &ScoredCluster{
 			Cluster: cluster,
