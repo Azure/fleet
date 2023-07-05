@@ -10,6 +10,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// WorkFinalizer is used to make sure that the binding is not deleted until the work objects it generates are all deleted.
+	WorkFinalizer = fleetPrefix + "overrider-finalizer"
+
+	// ParentBindingLabel is the label that contains the name of the binding that generates the work.
+	ParentBindingLabel = fleetPrefix + "resourceHash"
+)
+
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=rb
 // +kubebuilder:subresource:status
@@ -18,6 +26,7 @@ import (
 
 // ClusterResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
 // It MUST have a label named `CRPTrackingLabel` that points to the cluster resource policy that creates it.
+// It MUST have a label named `CRPTrackingLabel` that points to the resource binding that creates it.
 type ClusterResourceBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
