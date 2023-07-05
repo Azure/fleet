@@ -160,6 +160,8 @@ spec:
                                     corresponding clusterSelectorTerm, in the range
                                     [-100, 100].
                                   format: int32
+                                  maximum: 100
+                                  minimum: -100
                                   type: integer
                               required:
                               - preference
@@ -259,10 +261,15 @@ spec:
                     description: NumberOfClusters of placement. Only valid if the
                       placement type is "PickN".
                     format: int32
+                    minimum: 0
                     type: integer
                   placementType:
+                    default: PickAll
                     description: Type of placement. Can be "PickAll" or "PickN". Default
                       is PickAll.
+                    enum:
+                    - PickAll
+                    - PickN
                     type: string
                   topologySpreadConstraints:
                     description: TopologySpreadConstraints describes how a group of
@@ -274,6 +281,7 @@ spec:
                         resources among the given cluster topology.
                       properties:
                         maxSkew:
+                          default: 1
                           description: MaxSkew describes the degree to which resources
                             may be unevenly distributed. When `whenUnsatisfiable=DoNotSchedule`,
                             it is the maximum permitted difference between the number
@@ -390,11 +398,14 @@ spec:
                 minItems: 1
                 type: array
               revisionHistoryLimit:
+                default: 10
                 description: The number of old ClusterSchedulingPolicySnapshot or
                   ClusterResourceSnapshot resources to retain to allow rollback. This
                   is a pointer to distinguish between explicit zero and not specified.
                   Defaults to 10.
                 format: int32
+                maximum: 20
+                minimum: 1
                 type: integer
               strategy:
                 description: The rollout strategy to use to replace existing placement
@@ -408,6 +419,7 @@ spec:
                         anyOf:
                         - type: integer
                         - type: string
+                        default: 25%
                         description: 'The maximum number of clusters that can be scheduled
                           above the desired number of clusters. The desired number
                           equals to the `NumberOfClusters` field when the placement
@@ -419,11 +431,13 @@ spec:
                           case that we do in-place upgrade of resources on the same
                           cluster. This can not be 0 if MaxUnavailable is 0. Defaults
                           to 25%.'
+                        pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                         x-kubernetes-int-or-string: true
                       maxUnavailable:
                         anyOf:
                         - type: integer
                         - type: string
+                        default: 25%
                         description: 'The maximum number of clusters that can be unavailable
                           during the rolling update comparing to the desired number
                           of clusters. The desired number equals to the `NumberOfClusters`
@@ -436,8 +450,10 @@ spec:
                           we either remove it from a cluster or in-place upgrade the
                           resources content on the same cluster. This can not be 0
                           if MaxSurge is 0. Defaults to 25%.'
+                        pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                         x-kubernetes-int-or-string: true
                       unavailablePeriodSeconds:
+                        default: 60
                         description: UnavailablePeriodSeconds is used to config the
                           time to wait between rolling out phases. A resource placement
                           is considered available after `UnavailablePeriodSeconds`
@@ -446,8 +462,11 @@ spec:
                         type: integer
                     type: object
                   type:
+                    default: RollingUpdate
                     description: Type of rollout. The only supported type is "RollingUpdate".
                       Default is "RollingUpdate".
+                    enum:
+                    - RollingUpdate
                     type: string
                 type: object
             required:
@@ -543,8 +562,7 @@ spec:
                   properties:
                     clusterName:
                       description: ClusterName is the name of the cluster this resource
-                        is assigned to. If it is not empty, its value should be unique
-                        cross all placement decisions for the Placement.
+                        is assigned to.
                       type: string
                     conditions:
                       description: Conditions is an array of current observed conditions
@@ -631,10 +649,6 @@ spec:
                         description: FailedResourcePlacement contains the failure
                           details of a failed resource placement.
                         properties:
-                          clusterName:
-                            description: Name of the member cluster that the resource
-                              is placed to.
-                            type: string
                           condition:
                             description: The failed condition status.
                             properties:
@@ -717,7 +731,6 @@ spec:
                             description: Version is the version of the selected resource.
                             type: string
                         required:
-                        - clusterName
                         - condition
                         - kind
                         - name
@@ -725,6 +738,8 @@ spec:
                         type: object
                       maxItems: 100
                       type: array
+                  required:
+                  - clusterName
                   type: object
                 type: array
               selectedResources:
