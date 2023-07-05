@@ -2214,3 +2214,786 @@ func TestHandleDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildPlacementStatus(t *testing.T) {
+	snapshotPolicy := placementPolicyForTest()
+	snapshotPolicy.NumberOfClusters = nil
+	jsonBytes, err := json.Marshal(snapshotPolicy)
+	if err != nil {
+		t.Fatalf("failed to create the policy hash: %v", err)
+	}
+	policyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
+	selectedResources := []fleetv1beta1.ResourceContent{
+		*serviceResourceContentForTest(t),
+	}
+	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: selectedResources,
+	}
+	jsonBytes, err = json.Marshal(resourceSnapshotSpecA)
+	if err != nil {
+		t.Fatalf("failed to create the resourceSnapshotSpecA hash: %v", err)
+	}
+	resourceSnapshotAHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	crpGeneration := int64(25)
+	tests := []struct {
+		name                   string
+		latestPolicySnapshot   *fleetv1beta1.ClusterSchedulingPolicySnapshot
+		latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
+		wantStatus             *fleetv1beta1.ClusterResourcePlacementStatus
+	}{
+		{
+			name: "empty policy and resource status",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: *resourceSnapshotSpecA,
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{
+					{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             ApplyPendingReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduling",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{},
+			},
+		},
+		{
+			name: "unknown status of policy snapshot",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionUnknown,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Pending",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: nil,
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: *resourceSnapshotSpecA,
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{
+					{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             ApplyPendingReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduling",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{},
+			},
+		},
+		{
+			name: "scheduler does not report the latest status for policy snapshot (annotation change)",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration - 1,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: nil,
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: *resourceSnapshotSpecA,
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{
+					{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             ApplyPendingReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduling",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{},
+			},
+		},
+		{
+			// should not happen in the production as the policySnapshot is immutable
+			name: "scheduler does not report the latest status for policy snapshot and snapshot observation does not match",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+					Generation: 2,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: nil,
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: *resourceSnapshotSpecA,
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{
+					{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             ApplyPendingReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduling",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{},
+			},
+		},
+		{
+			name: "the placement has been scheduled",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: []fleetv1beta1.ClusterDecision{
+						{
+							ClusterName: "member-1",
+							Selected:    true,
+							Reason:      "success",
+						},
+						{
+							ClusterName: "member-2",
+							Selected:    true,
+							Reason:      "success",
+						},
+						{
+							ClusterName: "member-3",
+							Selected:    true,
+							Reason:      "success",
+						},
+					},
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: *resourceSnapshotSpecA,
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{
+					{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: "member-1",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleSucceeded",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+					{
+						ClusterName: "member-2",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleSucceeded",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+					{
+						ClusterName: "member-3",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleSucceeded",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "the placement has been scheduled for pickAll and none of clusters are selected",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: []fleetv1beta1.ClusterDecision{
+						{
+							ClusterName: "member-1",
+							Reason:      "failed",
+						},
+						{
+							ClusterName: "member-2",
+							Reason:      "failed",
+						},
+					},
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: *resourceSnapshotSpecA,
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{
+					{
+						Group:     "",
+						Version:   "v1",
+						Kind:      "Service",
+						Name:      "svc-name",
+						Namespace: "svc-namespace",
+					},
+				},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleFailed",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+					{
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleFailed",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "the placement scheduling failed",
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+					},
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionFalse,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "SchedulingFailed",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: []fleetv1beta1.ClusterDecision{
+						{
+							ClusterName: "member-1",
+							Selected:    true,
+							Reason:      "success",
+						},
+						{
+							ClusterName: "member-2",
+							Selected:    false,
+							Reason:      "score is low",
+						},
+						{
+							ClusterName: "member-3",
+							Selected:    false,
+							Reason:      "score is low",
+						},
+					},
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionFalse,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "SchedulingFailed",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
+					{
+						ClusterName: "member-1",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleSucceeded",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+					{
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleFailed",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+					{
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Reason:             "ScheduleFailed",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			crp := clusterResourcePlacementForTest()
+			crp.Generation = crpGeneration
+			r := Reconciler{}
+			got, err := r.buildPlacementStatus(crp, tc.latestPolicySnapshot, tc.latestResourceSnapshot)
+			if err != nil {
+				t.Fatalf("buildPlacementStatus() failed: %v", err)
+			}
+			statusCmpOptions := []cmp.Option{
+				// ignore the message as we may change the message in the future
+				cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime"),
+				cmpopts.SortSlices(func(c1, c2 metav1.Condition) bool {
+					return c1.Type < c2.Type
+				}),
+			}
+			if diff := cmp.Diff(tc.wantStatus, got, statusCmpOptions...); diff != "" {
+				t.Errorf("buildPlacementStatus() status mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}

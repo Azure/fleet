@@ -14,7 +14,9 @@ import (
 	"strconv"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog/v2"
@@ -25,6 +27,17 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+)
+
+const (
+	// ApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
+	ApplyFailedReason = "ApplyFailed"
+	// ApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
+	ApplyPendingReason = "ApplyPending"
+	// ApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
+	ApplySucceededReason = "ApplySucceeded"
+
+	resourcePlacementConditionMessageFormat = "%s is not seleted: %s"
 )
 
 func (r *Reconciler) Reconcile(ctx context.Context, _ controller.QueueKey) (ctrl.Result, error) {
@@ -659,4 +672,115 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 		return "", fmt.Errorf("ResourceGroupHashAnnotation is not set")
 	}
 	return v, nil
+}
+
+// TODO: handle multiple resourceSnapshots
+func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (*fleetv1beta1.ClusterResourcePlacementStatus, error) {
+	status := &fleetv1beta1.ClusterResourcePlacementStatus{
+		SelectedResources: make([]fleetv1beta1.ResourceIdentifier, 0, len(latestResourceSnapshot.Spec.SelectedResources)),
+		PlacementStatuses: make([]fleetv1beta1.ResourcePlacementStatus, 0, 20), // pre-allocate with a reasonable capacity
+		Conditions:        []metav1.Condition{},
+	}
+	// TODO query the sub resourceSnapshots by using latestResourceSnapshot and then update the status.
+	for i := range latestResourceSnapshot.Spec.SelectedResources {
+		obj, err := r.decodeResourceContent(&latestResourceSnapshot.Spec.SelectedResources[i])
+		if err != nil {
+			klog.ErrorS(err, "Failed to encode resourceContent of clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
+			return nil, controller.NewUnexpectedBehaviorError(err)
+		}
+		ri := fleetv1beta1.ResourceIdentifier{
+			Group:     obj.GroupVersionKind().Group,
+			Version:   obj.GroupVersionKind().Version,
+			Kind:      obj.GroupVersionKind().Kind,
+			Name:      obj.GetName(),
+			Namespace: obj.GetNamespace(),
+		}
+		status.SelectedResources = append(status.SelectedResources, ri)
+	}
+	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
+	meta.SetStatusCondition(&status.Conditions, scheduledCondition)
+
+	if scheduledCondition.Status == metav1.ConditionUnknown {
+		appliedCondition := metav1.Condition{
+			Status:             metav1.ConditionUnknown,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+			Reason:             ApplyPendingReason,
+			Message:            "Scheduling has not completed",
+			ObservedGeneration: crp.Generation,
+		}
+		meta.SetStatusCondition(&status.Conditions, appliedCondition)
+		// skip populating detailed resourcePlacementStatus
+		return status, nil
+	}
+
+	// TODO collect work status and build appliedCondition & resourcePlacementStatus
+	status.PlacementStatuses = buildResourcePlacementStatus(crp, latestSchedulingPolicySnapshot)
+	return status, nil
+}
+
+func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) metav1.Condition {
+	scheduledCondition := latestSchedulingPolicySnapshot.GetCondition(string(fleetv1beta1.PolicySnapshotScheduled))
+
+	if scheduledCondition == nil ||
+		scheduledCondition.ObservedGeneration < latestSchedulingPolicySnapshot.Generation ||
+		// We have numberOfCluster annotation added on the CRP and it won't change the CRP generation.
+		// So that we need to compare the CRP observedCRPGeneration reported by the scheduler.
+		latestSchedulingPolicySnapshot.Status.ObservedCRPGeneration < crp.Generation ||
+		scheduledCondition.Status == metav1.ConditionUnknown {
+		return metav1.Condition{
+			Status:             metav1.ConditionUnknown,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+			Reason:             "Scheduling",
+			Message:            "Record the intermediate status of the scheduling",
+			ObservedGeneration: crp.Generation,
+		}
+	}
+	return metav1.Condition{
+		Status:             scheduledCondition.Status,
+		Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+		Reason:             scheduledCondition.Reason,
+		Message:            scheduledCondition.Message,
+		ObservedGeneration: crp.Generation,
+	}
+}
+
+func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) []fleetv1beta1.ResourcePlacementStatus {
+	res := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
+	for i, c := range latestSchedulingPolicySnapshot.Status.ClusterDecisions {
+		scheduledCondition := metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+			Reason:             "ScheduleSucceeded",
+			Message:            "Successfully scheduled resources for placement",
+			ObservedGeneration: crp.Generation,
+		}
+		var rp fleetv1beta1.ResourcePlacementStatus
+		if !latestSchedulingPolicySnapshot.Status.ClusterDecisions[i].Selected {
+			// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
+			// For now, it starts from adding some sample failures of unselected clusters.
+			scheduledCondition.Status = metav1.ConditionFalse
+			scheduledCondition = metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+				Reason:             "ScheduleFailed",
+				Message:            fmt.Sprintf(resourcePlacementConditionMessageFormat, c.ClusterName, c.Reason),
+				ObservedGeneration: crp.Generation,
+			}
+		} else {
+			rp.ClusterName = c.ClusterName
+			// TODO populate the work status
+		}
+		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
+		res = append(res, rp)
+	}
+	return res
+}
+
+// decodeResourceContent decodes the resourceContent into usable structs.
+func (r *Reconciler) decodeResourceContent(resourceContent *fleetv1beta1.ResourceContent) (*unstructured.Unstructured, error) {
+	unstructuredObj := &unstructured.Unstructured{}
+	if err := unstructuredObj.UnmarshalJSON(resourceContent.Raw); err != nil {
+		return nil, fmt.Errorf("failed to decode object: %w", err)
+	}
+	return unstructuredObj, nil
 }
