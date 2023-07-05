@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -117,7 +118,7 @@ func (r *Reconciler) getOrCreateClusterPolicySnapshot(ctx context.Context, crp *
 	}
 
 	// latestPolicySnapshotIndex should be -1 when there is no snapshot.
-	latestPolicySnapshot, latestPolicySnapshotIndex, sortedList, err := r.lookupLatestClusterPolicySnapshot(ctx, crp)
+	latestPolicySnapshot, latestPolicySnapshotIndex, err := r.lookupLatestClusterPolicySnapshot(ctx, crp)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +145,7 @@ func (r *Reconciler) getOrCreateClusterPolicySnapshot(ctx context.Context, crp *
 
 	// delete redundant snapshot revisions before creating a new snapshot to guarantee that the number of snapshots
 	// won't exceed the limit.
-	if err := r.deleteRedundantSchedulingPolicySnapshots(ctx, crp, sortedList); err != nil {
+	if err := r.deleteRedundantSchedulingPolicySnapshots(ctx, crp); err != nil {
 		return nil, err
 	}
 
@@ -186,14 +187,12 @@ func (r *Reconciler) getOrCreateClusterPolicySnapshot(ctx context.Context, crp *
 	return latestPolicySnapshot, nil
 }
 
-func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, sortedList *fleetv1beta1.ClusterSchedulingPolicySnapshotList) error {
-	var err error
-	if sortedList == nil {
-		sortedList, err = r.listSortedClusterSchedulingPolicySnapshots(ctx, crp)
-		if err != nil {
-			return err
-		}
+func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
+	sortedList, err := r.listSortedClusterSchedulingPolicySnapshots(ctx, crp)
+	if err != nil {
+		return err
 	}
+
 	crpKObj := klog.KObj(crp)
 	// respect the revisionHistoryLimit field
 	revisionLimit := fleetv1beta1.RevisionHistoryLimitDefaultValue
@@ -201,8 +200,9 @@ func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Contex
 		revisionLimit = *crp.Spec.RevisionHistoryLimit
 		if revisionLimit <= 0 {
 			err := fmt.Errorf("invalid clusterResourcePlacement %s: invalid revisionHistoryLimit %d", crpKObj, revisionLimit)
-			klog.ErrorS(err, "Invalid revisionHistoryLimit value", "clusterResourcePlacement", crpKObj)
-			return controller.NewUnexpectedBehaviorError(err) // webhook should block this user error
+			klog.ErrorS(controller.NewExpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "clusterResourcePlacement", crpKObj)
+			// use the default value instead
+			revisionLimit = fleetv1beta1.RevisionHistoryLimitDefaultValue
 		}
 	}
 	if len(sortedList.Items) < int(revisionLimit) {
@@ -346,7 +346,6 @@ func (r *Reconciler) ensureLatestResourceSnapshot(ctx context.Context, latest *f
 }
 
 // lookupLatestClusterPolicySnapshot finds the latest snapshots and its policy index.
-// It will return the sorted policy snapshots if it needs to list all the snapshots.
 // There will be only one active policy snapshot if exists.
 // It first checks whether there is an active policy snapshot.
 // If not, it finds the one whose policyIndex label is the largest.
@@ -354,7 +353,7 @@ func (r *Reconciler) ensureLatestResourceSnapshot(ctx context.Context, latest *f
 // Return error when 1) cannot list the snapshots 2) there are more than one active policy snapshots 3) snapshot has the
 // invalid label value.
 // 2 & 3 should never happen.
-func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, int, *fleetv1beta1.ClusterSchedulingPolicySnapshotList, error) {
+func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, int, error) {
 	snapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 	latestSnapshotLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel:      crp.Name,
@@ -365,38 +364,39 @@ func (r *Reconciler) lookupLatestClusterPolicySnapshot(ctx context.Context, crp 
 		klog.ErrorS(err, "Failed to list active clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
 		// CRP controller needs a scheduling policy snapshot watcher to enqueue the CRP request.
 		// So the snapshots should be read from cache.
-		return nil, -1, nil, controller.NewAPIServerError(true, err)
+		return nil, -1, controller.NewAPIServerError(true, err)
 	}
 	if len(snapshotList.Items) == 1 {
 		policyIndex, err := parsePolicyIndexFromLabel(&snapshotList.Items[0])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the policy index label", "clusterResourcePlacement", crpKObj, "clusterPolicySnapshot", klog.KObj(&snapshotList.Items[0]))
-			return nil, -1, nil, controller.NewUnexpectedBehaviorError(err)
+			return nil, -1, controller.NewUnexpectedBehaviorError(err)
 		}
-		return &snapshotList.Items[0], policyIndex, nil, nil
+		return &snapshotList.Items[0], policyIndex, nil
 	} else if len(snapshotList.Items) > 1 {
 		// It means there are multiple active snapshots and should never happen.
 		err := fmt.Errorf("there are %d active clusterPolicySnapshots owned by clusterResourcePlacement %v", len(snapshotList.Items), crp.Name)
 		klog.ErrorS(err, "Invalid clusterPolicySnapshots", "clusterResourcePlacement", crpKObj)
-		return nil, -1, nil, controller.NewUnexpectedBehaviorError(err)
+		return nil, -1, controller.NewUnexpectedBehaviorError(err)
 	}
 	// When there are no active snapshots, find the one who has the largest policy index.
+	// It should be rare only when CRP is crashed before creating the new active snapshot.
 	sortedList, err := r.listSortedClusterSchedulingPolicySnapshots(ctx, crp)
 	if err != nil {
-		return nil, -1, nil, err
+		return nil, -1, err
 	}
 
 	if len(sortedList.Items) == 0 {
 		// The policy index of the first snapshot will start from 0.
-		return nil, -1, sortedList, nil
+		return nil, -1, nil
 	}
 	latestSnapshot := &sortedList.Items[len(sortedList.Items)-1]
 	policyIndex, err := parsePolicyIndexFromLabel(latestSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to parse the policy index label", "clusterResourcePlacement", crpKObj, "clusterPolicySnapshot", klog.KObj(latestSnapshot))
-		return nil, -1, nil, controller.NewUnexpectedBehaviorError(err)
+		return nil, -1, controller.NewUnexpectedBehaviorError(err)
 	}
-	return latestSnapshot, policyIndex, sortedList, nil
+	return latestSnapshot, policyIndex, nil
 }
 
 // listSortedClusterSchedulingPolicySnapshots returns the policy snapshots sorted by the policy index.
@@ -409,17 +409,25 @@ func (r *Reconciler) listSortedClusterSchedulingPolicySnapshots(ctx context.Cont
 		// So the snapshots should be read from cache.
 		return nil, controller.NewAPIServerError(true, err)
 	}
+	var errs []error
 	sort.Slice(snapshotList.Items, func(i, j int) bool {
 		ii, err := parsePolicyIndexFromLabel(&snapshotList.Items[i])
 		if err != nil {
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Failed to parse the policy index label", "clusterSchedulingPolicySnapshot", klog.KObj(&snapshotList.Items[i]))
+			klog.ErrorS(err, "Failed to parse the policy index label", "clusterResourcePlacement", crpKObj, "clusterSchedulingPolicySnapshot", klog.KObj(&snapshotList.Items[i]))
+			errs = append(errs, err)
 		}
 		ji, err := parsePolicyIndexFromLabel(&snapshotList.Items[j])
 		if err != nil {
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Failed to parse the policy index label", "clusterSchedulingPolicySnapshot", klog.KObj(&snapshotList.Items[j]))
+			klog.ErrorS(err, "Failed to parse the policy index label", "clusterResourcePlacement", crpKObj, "clusterSchedulingPolicySnapshot", klog.KObj(&snapshotList.Items[j]))
+			errs = append(errs, err)
 		}
 		return ii < ji
 	})
+
+	if len(errs) > 0 {
+		return nil, controller.NewUnexpectedBehaviorError(utilerrors.NewAggregate(errs))
+	}
+
 	return snapshotList, nil
 }
 

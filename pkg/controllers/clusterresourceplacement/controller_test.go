@@ -102,6 +102,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 	unspecifiedPolicyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
 	singleRevisionLimit := int32(1)
 	multipleRevisionLimit := int32(2)
+	invalidRevisionLimit := int32(0)
 	tests := []struct {
 		name                    string
 		revisionHistoryLimit    *int32
@@ -111,6 +112,62 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 	}{
 		{
 			name: "new clusterResourcePolicy and no existing policy snapshots owned by my-crp",
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+			},
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+				// new policy snapshot owned by the my-crp
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+						},
+					},
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+						Policy:     wantPolicy,
+						PolicyHash: policyHash,
+					},
+				},
+			},
+			wantLatestSnapshotIndex: 1,
+		},
+		{
+			name:                 "new clusterResourcePolicy with invalidRevisionLimit and no existing policy snapshots owned by my-crp",
+			revisionHistoryLimit: &invalidRevisionLimit,
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -647,7 +704,6 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 		t.Fatalf("failed to create the policy hash: %v", err)
 	}
 	policyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
-	invalidRevisionLimit := int32(0)
 	tests := []struct {
 		name                 string
 		revisionHistoryLimit *int32
@@ -861,16 +917,11 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 				},
 			},
 		},
-		{
-			name:                 "invalid revision limit",
-			revisionHistoryLimit: &invalidRevisionLimit,
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			crp := clusterResourcePlacementForTest()
-			crp.Spec.RevisionHistoryLimit = tc.revisionHistoryLimit
 			objects := []client.Object{crp}
 			for i := range tc.policySnapshots {
 				objects = append(objects, &tc.policySnapshots[i])
