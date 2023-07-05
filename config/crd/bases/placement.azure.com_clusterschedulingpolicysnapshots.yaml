@@ -276,6 +276,7 @@ spec:
                             satisfy it. It's an optional field. Default value is 1
                             and 0 is not allowed.
                           format: int32
+                          minimum: 1
                           type: integer
                         topologyKey:
                           description: TopologyKey is the key of cluster labels. Clusters

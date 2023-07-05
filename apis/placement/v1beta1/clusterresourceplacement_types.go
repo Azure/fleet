@@ -218,6 +218,7 @@ type TopologySpreadConstraint struct {
 	// to topologies that satisfy it.
 	// It's an optional field. Default value is 1 and 0 is not allowed.
 	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxSkew *int32 `json:"maxSkew,omitempty"`
 
@@ -365,6 +366,7 @@ type ResourceIdentifier struct {
 // ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
 type ResourcePlacementStatus struct {
 	// ClusterName is the name of the cluster this resource is assigned to.
+	// +required
 	ClusterName string `json:"clusterName"`
 
 	// +kubebuilder:validation:MaxItems=100
