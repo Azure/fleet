@@ -23,6 +23,9 @@ const (
 
 	// IsLatestSnapshotLabel tells if the snapshot is the latest one.
 	IsLatestSnapshotLabel = fleetPrefix + "isLatestSnapshot"
+
+	// FleetResourceLabelKey is that label that indicates the resource is a fleet resource.
+	FleetResourceLabelKey = fleetPrefix + "isFleetResource"
 )
 
 const (

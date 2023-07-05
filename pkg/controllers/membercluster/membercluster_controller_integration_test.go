@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -200,6 +201,24 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				AgentStatus:   imc.Status.AgentStatus,
 			}
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
+		})
+
+		It("remove label from namespace and trigger reconcile to patch the namespace with the new label", func() {
+			By("remove fleet resource label from namespace")
+			var mcNamespace corev1.Namespace
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &mcNamespace)).Should(Succeed())
+			delete(mcNamespace.Labels, fleetv1beta1.FleetResourceLabelKey)
+			Expect(k8sClient.Update(ctx, &mcNamespace)).Should(Succeed())
+
+			By("trigger reconcile again to patch member cluster namespace with fleet resource label")
+			result, err := r.Reconcile(ctx, ctrl.Request{
+				NamespacedName: memberClusterNamespacedName,
+			})
+			Expect(result).Should(Equal(ctrl.Result{}))
+			Expect(err).Should(Succeed())
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &mcNamespace)).Should(Succeed())
+			Expect(mcNamespace.Labels[fleetv1beta1.FleetResourceLabelKey]).Should(Equal("true"))
 		})
 	})
 

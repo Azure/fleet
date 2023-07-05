@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -42,22 +43,6 @@ func TestSyncNamespace(t *testing.T) {
 		wantedEvent         string
 		wantedError         string
 	}{
-		"namespace exists": {
-			r: &Reconciler{
-				Client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						o := obj.(*corev1.Namespace)
-						*o = corev1.Namespace{
-							ObjectMeta: metav1.ObjectMeta{Name: namespace1},
-						}
-						return nil
-					},
-				},
-			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
-			wantedNamespaceName: namespace1,
-			wantedError:         "",
-		},
 		"namespace doesn't exist": {
 			r: &Reconciler{
 				Client: &test.MockClient{
@@ -70,9 +55,52 @@ func TestSyncNamespace(t *testing.T) {
 				},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}},
-			wantedNamespaceName: namespace2,
-			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			wantedNamespaceName: namespace1,
+			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
+			wantedError:         "",
+		},
+		"namespace exists without label": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*corev1.Namespace)
+						*o = corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:   namespace1,
+								Labels: map[string]string{},
+							},
+						}
+						return nil
+					},
+					MockPatch: func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+						return nil
+					},
+				},
+				recorder: utils.NewFakeRecorder(1),
+			},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			wantedNamespaceName: namespace1,
+			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched"),
+			wantedError:         "",
+		},
+		"namespace exists with label": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*corev1.Namespace)
+						*o = corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:   namespace1,
+								Labels: map[string]string{fleetv1beta1.FleetResourceLabelKey: "true"},
+							},
+						}
+						return nil
+					},
+				},
+			},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			wantedNamespaceName: namespace1,
 			wantedError:         "",
 		},
 		"namespace create error": {
@@ -101,6 +129,28 @@ func TestSyncNamespace(t *testing.T) {
 			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			wantedNamespaceName: "",
 			wantedError:         "namespace cannot be retrieved",
+		},
+		"namespace patch error": {
+			r: &Reconciler{
+				Client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o := obj.(*corev1.Namespace)
+						*o = corev1.Namespace{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:   namespace1,
+								Labels: map[string]string{},
+							},
+						}
+						return nil
+					},
+					MockPatch: func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+						return errors.New("namespace cannot be patched")
+					},
+				},
+			},
+			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			wantedNamespaceName: "",
+			wantedError:         "namespace cannot be patched",
 		},
 	}
 
