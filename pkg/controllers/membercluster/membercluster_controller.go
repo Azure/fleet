@@ -256,14 +256,16 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 	}
 
 	// migration: To add new label to all existing member cluster namespaces.
-	klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
-	patch := client.MergeFrom(currentNS.DeepCopy())
-	currentNS.ObjectMeta.Labels[fleetv1beta1.FleetResourceLabelKey] = fleetNamespaceLabelValue
-	if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
-		return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
+	if currentNS.GetLabels()[fleetv1beta1.FleetResourceLabelKey] == "" {
+		klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
+		patch := client.MergeFrom(currentNS.DeepCopy())
+		currentNS.ObjectMeta.Labels[fleetv1beta1.FleetResourceLabelKey] = fleetNamespaceLabelValue
+		if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
+			return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
+		}
+		r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched")
+		klog.V(2).InfoS("patched namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	}
-	r.recorder.Event(mc, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched")
-	klog.V(2).InfoS("patched namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 	return namespaceName, nil
 }
 
