@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -40,9 +41,9 @@ func policySnapshot() *fleetv1beta1.ClusterSchedulingPolicySnapshot {
 
 var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 	const (
-		timeout  = time.Second * 10
-		duration = time.Second * 10
-		interval = time.Millisecond * 250
+		eventuallyTimeout    = time.Second * 10
+		consistentlyDuration = time.Second * 10
+		interval             = time.Millisecond * 250
 	)
 
 	var (
@@ -59,65 +60,94 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 	Context("When creating new clusterSchedulingPolicySnapshot", func() {
 		AfterEach(func() {
 			By("By deleting snapshot")
-			createdSnapshot := policySnapshot()
+			createdSnapshot = policySnapshot()
 			Expect(k8sClient.Delete(ctx, createdSnapshot)).Should(Succeed())
 
 			By("By checking snapshot")
 			Eventually(func() bool {
 				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: testSnapshotName}, createdSnapshot))
-			}, duration, interval).Should(BeTrue(), "snapshot should be deleted")
+			}, eventuallyTimeout, interval).Should(BeTrue(), "snapshot should be deleted")
 		})
 
 		It("Should ignore the event", func() {
 			By("By checking placement controller queue")
 			Consistently(func() bool {
 				return fakePlacementController.Key() == ""
-			}, duration, interval).Should(BeTrue(), "controller should ignore the create event and not enqueue the request into the placementController queue")
+			}, consistentlyDuration, interval).Should(BeTrue(), "controller should ignore the create event and not enqueue the request into the placementController queue")
 
 		})
 	})
 
 	Context("When updating clusterSchedulingPolicySnapshot", func() {
+		BeforeEach(func() {
+			By("By resetting the placement queue")
+			fakePlacementController.ResetQueue()
+		})
+
 		AfterEach(func() {
 			By("By deleting snapshot")
-			createdSnapshot := policySnapshot()
+			createdSnapshot = policySnapshot()
 			Expect(k8sClient.Delete(ctx, createdSnapshot)).Should(Succeed())
 
 			By("By checking snapshot")
 			Eventually(func() bool {
 				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: testSnapshotName}, createdSnapshot))
-			}, duration, interval).Should(BeTrue(), "snapshot should be deleted")
+			}, eventuallyTimeout, interval).Should(BeTrue(), "snapshot should be deleted")
 		})
 
-		It("Should enqueue the event", func() {
+		It("Updating the spec and should enqueue the event", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testSnapshotName}, createdSnapshot)).Should(Succeed())
 
-			By("By updating the clusterSchedulingPolicySnapshot")
+			By("By updating the clusterSchedulingPolicySnapshot spec")
 			createdSnapshot.Spec.PolicyHash = []byte("modified-hash")
 			Expect(k8sClient.Update(ctx, createdSnapshot)).Should(Succeed())
 
 			By("By checking placement controller queue")
 			Eventually(func() bool {
 				return fakePlacementController.Key() == testCRPName
-			}, timeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
+			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
+		})
+
+		It("Updating the status and should enqueue the event", func() {
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testSnapshotName}, createdSnapshot)).Should(Succeed())
+
+			By("By updating the clusterSchedulingPolicySnapshot status")
+			newCondition := metav1.Condition{
+				Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+				Status:             metav1.ConditionTrue,
+				Reason:             "scheduled",
+				ObservedGeneration: createdSnapshot.GetGeneration(),
+			}
+			meta.SetStatusCondition(&createdSnapshot.Status.Conditions, newCondition)
+			Expect(k8sClient.Status().Update(ctx, createdSnapshot)).Should(Succeed())
+
+			By("By checking placement controller queue")
+			Eventually(func() bool {
+				return fakePlacementController.Key() == testCRPName
+			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
 		})
 	})
 
 	Context("When deleting clusterSchedulingPolicySnapshot", func() {
+		BeforeEach(func() {
+			By("By resetting the placement queue")
+			fakePlacementController.ResetQueue()
+		})
+
 		It("Should ignore the event", func() {
 			By("By deleting snapshot")
-			createdSnapshot := policySnapshot()
+			createdSnapshot = policySnapshot()
 			Expect(k8sClient.Delete(ctx, createdSnapshot)).Should(Succeed())
 
 			By("By checking snapshot")
 			Eventually(func() bool {
 				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: testSnapshotName}, createdSnapshot))
-			}, duration, interval).Should(BeTrue(), "snapshot should be deleted")
+			}, eventuallyTimeout, interval).Should(BeTrue(), "snapshot should be deleted")
 
 			By("By checking placement controller queue")
 			Consistently(func() bool {
 				return fakePlacementController.Key() == ""
-			}, duration, interval).Should(BeTrue(), "controller should ignore the delete event and not enqueue the request into the placementController queue")
+			}, consistentlyDuration, interval).Should(BeTrue(), "controller should ignore the delete event and not enqueue the request into the placementController queue")
 		})
 	})
 })
