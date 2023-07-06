@@ -150,20 +150,35 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	}
 
 	// create/update the corresponding work for each snapshot
+	activeWork := make(map[string]bool, len(resourceSnapshots))
 	for _, snapshot := range resourceSnapshots {
-		// TODO(RZ): issue those requests in parallel
+		activeWork[snapshot.Name] = true
+		// TODO(RZ): issue those requests in parallel to speed up the process
 		err = r.upsertWork(ctx, works[snapshot.Name], snapshot, resourceBinding)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 	}
+
+	//  delete the works that are not associated with any resource snapshot
+	for _, work := range works {
+		if activeWork[work.Name] {
+			continue
+		}
+		klog.V(2).InfoS("delete the work that is not associated with any resource snapshot", "work", klog.KObj(work))
+		if err := r.Client.Delete(ctx, work); err != nil {
+			klog.ErrorS(err, "failed to delete the no longer needed work", "work", klog.KObj(work))
+			return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		}
+	}
+
 	klog.V(2).InfoS("successfully synced all the work associated with the resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
 	return ctrl.Result{}, nil
 }
 
 // fetchAllResourceSnapshots gathers all the resource snapshots for the resource binding
 func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) ([]*fleetv1beta1.ClusterResourceSnapshot, error) {
-	resourceSnapshots := make([]*fleetv1beta1.ClusterResourceSnapshot, 0, 1)
+	resourceSnapshots := make([]*fleetv1beta1.ClusterResourceSnapshot, 1)
 	resourceSnapshot := fleetv1beta1.ClusterResourceSnapshot{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &resourceSnapshot); err != nil {
 		klog.ErrorS(err, "failed to get the resource snapshot from resource resourceBinding",
@@ -173,7 +188,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	resourceSnapshots[0] = &resourceSnapshot
 
 	// check if there are more snapshot in the same index group
-	countAnnotation := resourceSnapshot.Labels[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
+	countAnnotation := resourceSnapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
 	snapshotCount, err := strconv.Atoi(countAnnotation)
 	if err != nil {
 		return nil, controller.NewUnexpectedBehaviorError(err)
@@ -250,7 +265,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, re
 	}
 
 	klog.V(4).InfoS("upsert the work associated with the resourceBinding", "create", needCreate, "resourceBinding", resourceBindingObj,
-		"resource snapshot", workObj)
+		"work", workObj)
 	return nil
 }
 
