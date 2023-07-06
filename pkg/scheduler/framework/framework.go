@@ -37,6 +37,10 @@ const (
 	// The reasons and messages for scheduled conditions.
 	fullyScheduledReason  = "SchedulingCompleted"
 	fullyScheduledMessage = "all required number of bindings have been created"
+
+	// The array length limit of the cluster decision array in the scheduling policy snapshot
+	// status API.
+	clustersDecisionArrayLengthLimitInAPI = 1000
 )
 
 // Handle is an interface which allows plugins to access some shared structs (e.g., client, manager)
@@ -83,13 +87,14 @@ type framework struct {
 	// parallelizer is a utility which helps run tasks in parallel.
 	parallelizer *parallelizer.Parallerlizer
 
-	// maxClusterDecisionCount controls the maximum number of decisions added to the policy snapshot status.
+	// maxUnselectedClusterDecisionCount controls the maximum number of decisions for unselected clusters
+	// added to the policy snapshot status.
 	//
-	// Note that all picked clusters will have their associated decisions written to the status, regardless
-	// of this limit. When the number of picked clusters is below this limit, the scheduler will use the
+	// Note that all picked clusters will always have their associated decisions written to the status;
+	// when the number of picked clusters is below this limit, the scheduler will use the
 	// remaining slots to fill up the status with explanations on why a specific cluster is not picked
 	// by scheduler (if applicable), so that user are better informed on how the scheduler functions.
-	maxClusterDecisionCount int
+	maxUnselectedClusterDecisionCount int
 }
 
 var (
@@ -103,8 +108,9 @@ type frameworkOptions struct {
 	// e.g., calling plugins.
 	numOfWorkers int
 
-	// maxClusterDecisionCount controls the maximum number of decisions added to the policy snapshot status.
-	maxClusterDecisionCount int
+	// maxUnselectedClusterDecisionCount controls the maximum number of decisions for
+	// unselected clusters added to the policy snapshot status.
+	maxUnselectedClusterDecisionCount int
 }
 
 // Option is the function for configuring a scheduler framework.
@@ -112,8 +118,8 @@ type Option func(*frameworkOptions)
 
 // defaultFrameworkOptions is the default options for a scheduler framework.
 var defaultFrameworkOptions = frameworkOptions{
-	numOfWorkers:            parallelizer.DefaultNumOfWorkers,
-	maxClusterDecisionCount: 20,
+	numOfWorkers:                      parallelizer.DefaultNumOfWorkers,
+	maxUnselectedClusterDecisionCount: 20,
 }
 
 // WithNumOfWorkers sets the number of workers to use for a scheduler framework.
@@ -123,10 +129,10 @@ func WithNumOfWorkers(numOfWorkers int) Option {
 	}
 }
 
-// WithMaxClusterDecisionCount sets the maximum number of decisions added to the policy snapshot status.
-func WithMaxClusterDecisionCount(maxClusterDecisionCount int) Option {
+// WithMaxUnselectedClusterDecisionCount sets the maximum number of decisions added to the policy snapshot status.
+func WithMaxClusterDecisionCount(maxUnselectedClusterDecisionCount int) Option {
 	return func(fo *frameworkOptions) {
-		fo.maxClusterDecisionCount = maxClusterDecisionCount
+		fo.maxUnselectedClusterDecisionCount = maxUnselectedClusterDecisionCount
 	}
 }
 
@@ -151,13 +157,13 @@ func NewFramework(profile *Profile, manager ctrl.Manager, opts ...Option) Framew
 	// Also note that an indexer might need to be set up for improved performance.
 
 	return &framework{
-		profile:                 profile,
-		client:                  manager.GetClient(),
-		uncachedReader:          manager.GetAPIReader(),
-		manager:                 manager,
-		eventRecorder:           manager.GetEventRecorderFor(fmt.Sprintf(eventRecorderNameTemplate, profile.Name())),
-		parallelizer:            parallelizer.NewParallelizer(options.numOfWorkers),
-		maxClusterDecisionCount: options.maxClusterDecisionCount,
+		profile:                           profile,
+		client:                            manager.GetClient(),
+		uncachedReader:                    manager.GetAPIReader(),
+		manager:                           manager,
+		eventRecorder:                     manager.GetEventRecorderFor(fmt.Sprintf(eventRecorderNameTemplate, profile.Name())),
+		parallelizer:                      parallelizer.NewParallelizer(options.numOfWorkers),
+		maxUnselectedClusterDecisionCount: options.maxUnselectedClusterDecisionCount,
 	}
 }
 
@@ -602,7 +608,7 @@ func (f *framework) updatePolicySnapshotStatusFrom(
 	policyRef := klog.KObj(policy)
 
 	// Prepare new scheduling decisions.
-	newDecisions := newSchedulingDecisionsFrom(f.maxClusterDecisionCount, filtered, existing...)
+	newDecisions := newSchedulingDecisionsFrom(f.maxUnselectedClusterDecisionCount, filtered, existing...)
 	// Prepare new scheduling condition.
 	newCondition := fullyScheduledCondition(policy)
 

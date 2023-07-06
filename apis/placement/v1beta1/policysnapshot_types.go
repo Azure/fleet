@@ -74,7 +74,7 @@ type SchedulingPolicySnapshotStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// +kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:MaxItems=1000
 	// ClusterDecisions contains a list of names of member clusters considered by the scheduler.
 	// Note that all the selected clusters must present in the list while not all the
 	// member clusters are guaranteed to be listed due to the size limit. We will try to

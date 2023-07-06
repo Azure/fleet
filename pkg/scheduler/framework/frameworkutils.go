@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -202,19 +203,27 @@ func crossReferencePickedCustersAndObsoleteBindings(
 
 // newSchedulingDecisionsFrom returns a list of scheduling decisions, based on the newly manipulated list of
 // bindings and (if applicable) a list of filtered clusters.
-func newSchedulingDecisionsFrom(maxClusterDecisionCount int, filtered []*filteredClusterWithStatus, existing ...[]*fleetv1beta1.ClusterResourceBinding) []fleetv1beta1.ClusterDecision {
+func newSchedulingDecisionsFrom(maxUnselectedClusterDecisionCount int, filtered []*filteredClusterWithStatus, existing ...[]*fleetv1beta1.ClusterResourceBinding) []fleetv1beta1.ClusterDecision {
 	// Pre-allocate with a reasonable capacity.
-	newDecisions := make([]fleetv1beta1.ClusterDecision, 0, maxClusterDecisionCount)
+	newDecisions := make([]fleetv1beta1.ClusterDecision, 0, maxUnselectedClusterDecisionCount)
 
 	// Build new scheduling decisions.
+	slotsLeft := clustersDecisionArrayLengthLimitInAPI
 	for _, bindingSet := range existing {
-		for _, binding := range bindingSet {
-			newDecisions = append(newDecisions, binding.Spec.ClusterDecision)
+		setLength := len(bindingSet)
+		for i := 0; i < setLength && i < slotsLeft; i++ {
+			newDecisions = append(newDecisions, bindingSet[i].Spec.ClusterDecision)
+			slotsLeft--
+		}
+
+		if slotsLeft <= 0 {
+			klog.V(2).InfoS("Reached API limit of cluster decision count; decisions off the limit will be discarded")
+			break
 		}
 	}
 
 	// Move some decisions from unbound clusters, if there are still enough room.
-	if diff := maxClusterDecisionCount - len(newDecisions); diff > 0 {
+	if diff := maxUnselectedClusterDecisionCount - len(newDecisions); diff > 0 {
 		for i := 0; i < diff && i < len(filtered); i++ {
 			clusterWithStatus := filtered[i]
 			newDecisions = append(newDecisions, fleetv1beta1.ClusterDecision{
