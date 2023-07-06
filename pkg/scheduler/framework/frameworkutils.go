@@ -234,7 +234,6 @@ func fullyScheduledCondition(policy *fleetv1beta1.ClusterSchedulingPolicySnapsho
 		Type:               string(fleetv1beta1.PolicySnapshotScheduled),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: policy.Generation,
-		LastTransitionTime: metav1.Now(),
 		Reason:             fullyScheduledReason,
 		Message:            fullyScheduledMessage,
 	}
