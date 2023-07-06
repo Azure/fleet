@@ -213,9 +213,9 @@ func newSchedulingDecisionsFrom(maxUnselectedClusterDecisionCount int, filtered 
 		setLength := len(bindingSet)
 		for i := 0; i < setLength && i < slotsLeft; i++ {
 			newDecisions = append(newDecisions, bindingSet[i].Spec.ClusterDecision)
-			slotsLeft--
 		}
 
+		slotsLeft -= setLength
 		if slotsLeft <= 0 {
 			klog.V(2).InfoS("Reached API limit of cluster decision count; decisions off the limit will be discarded")
 			break
