@@ -366,8 +366,9 @@ type ResourceIdentifier struct {
 // ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
 type ResourcePlacementStatus struct {
 	// ClusterName is the name of the cluster this resource is assigned to.
-	// +required
-	ClusterName string `json:"clusterName"`
+	// If it is not empty, its value should be unique cross all placement decisions for the Placement.
+	// +optional
+	ClusterName string `json:"clusterName,omitempty"`
 
 	// +kubebuilder:validation:MaxItems=100
 
