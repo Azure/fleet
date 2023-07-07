@@ -405,7 +405,7 @@ spec:
                   is a pointer to distinguish between explicit zero and not specified.
                   Defaults to 10.
                 format: int32
-                maximum: 20
+                maximum: 1000
                 minimum: 1
                 type: integer
               strategy:

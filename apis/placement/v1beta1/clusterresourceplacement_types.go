@@ -79,7 +79,7 @@ type ClusterResourcePlacementSpec struct {
 	// This is a pointer to distinguish between explicit zero and not specified.
 	// Defaults to 10.
 	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=20
+	// +kubebuilder:validation:Maximum=1000
 	// +kubebuilder:default=10
 	// +optional
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
