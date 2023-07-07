@@ -82,6 +82,13 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 
 	Context("When updating clusterResourcePlacement", func() {
 		BeforeEach(func() {
+			By("By checking the placement queue before resetting")
+			// The event could arrive after the resetting, which causes the flakiness.
+			// It makes sure the queue is clear before proceed.
+			Eventually(func() bool {
+				return fakePlacementController.Key() == testCRPName
+			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
+
 			By("By resetting the placement queue")
 			fakePlacementController.ResetQueue()
 		})
@@ -132,6 +139,13 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 
 	Context("When deleting clusterResourcePlacement", func() {
 		BeforeEach(func() {
+			By("By checking the placement queue before resetting")
+			// The event could arrive after the resetting, which causes the flakiness.
+			// It makes sure the queue is clear before proceed.
+			Eventually(func() bool {
+				return fakePlacementController.Key() == testCRPName
+			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
+
 			By("By resetting the placement queue")
 			fakePlacementController.ResetQueue()
 		})
