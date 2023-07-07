@@ -86,6 +86,24 @@ func NewUserError(err error) error {
 	return nil
 }
 
+// NewCreateIgnoreAlreadyExistError returns ErrExpectedBehavior type error if the error is already exist.
+// Otherwise, returns ErrAPIServerError type error.
+func NewCreateIgnoreAlreadyExistError(err error) error {
+	if !apierrors.IsAlreadyExists(err) {
+		return NewAPIServerError(false, err)
+	}
+	return NewExpectedBehaviorError(err)
+}
+
+// NewUpdateIgnoreConflictError returns ErrExpectedBehavior type error if the error is conflict.
+// Otherwise, returns ErrAPIServerError type error.
+func NewUpdateIgnoreConflictError(err error) error {
+	if !apierrors.IsConflict(err) {
+		return NewAPIServerError(false, err)
+	}
+	return NewExpectedBehaviorError(err)
+}
+
 // Controller maintains a rate limiting queue and the items in the queue will be reconciled by a "ReconcileFunc".
 // The item will be re-queued if "ReconcileFunc" returns an error, maximum re-queue times defined by "maxRetries" above,
 // after that the item will be discarded from the queue.

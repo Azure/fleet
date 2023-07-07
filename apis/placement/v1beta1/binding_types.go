@@ -12,7 +12,7 @@ import (
 
 const (
 	// WorkFinalizer is used to make sure that the binding is not deleted until the work objects it generates are all deleted.
-	WorkFinalizer = fleetPrefix + "overrider-finalizer"
+	WorkFinalizer = fleetPrefix + "work-cleanup"
 
 	// ParentBindingLabel is the label that contains the name of the binding that generates the work.
 	ParentBindingLabel = fleetPrefix + "resourceHash"
