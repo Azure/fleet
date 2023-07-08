@@ -72,7 +72,9 @@ const (
 	// BindingStateBound means the binding is bound to the target cluster.
 	BindingStateBound BindingState = "Bound"
 
-	// BindingStateUnScheduled means the binding is not scheduled on to the target cluster anymore.
+	// BindingStateUnscheduled means the binding is not scheduled on to the target cluster anymore.
+	// This is a state that rollout controller cares about.
+	// The work generator still treat this as bound until rollout controller deletes the binding.
 	BindingStateUnscheduled BindingState = "Unscheduled"
 )
 
