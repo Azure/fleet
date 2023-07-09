@@ -364,9 +364,15 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 		return ctrl.Result{}, err
 	}
 
+	// Extract the patched bindings.
+	patched := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(toPatch))
+	for _, p := range toPatch {
+		patched = append(patched, p.updated)
+	}
+
 	// Update policy snapshot status with the latest scheduling decisions and condition.
 	klog.V(2).InfoS("Updating policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
-	if err := f.updatePolicySnapshotStatusFrom(ctx, policy, filtered, toCreate, toUpdate, scheduled, bound); err != nil {
+	if err := f.updatePolicySnapshotStatusFrom(ctx, policy, filtered, toCreate, patched, scheduled, bound); err != nil {
 		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
