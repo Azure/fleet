@@ -1594,6 +1594,15 @@ func TestManipulateBindings(t *testing.T) {
 		},
 	}
 
+	unscheduledBinding := &fleetv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: anotherBindingName,
+		},
+		Spec: fleetv1beta1.ResourceBindingSpec{
+			State: fleetv1beta1.BindingStateUnscheduled,
+		},
+	}
+
 	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
@@ -1646,7 +1655,7 @@ func TestManipulateBindings(t *testing.T) {
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: anotherBindingName}, deletedBinding); err != nil {
 		t.Errorf("Get() binding %s = %v, want no error", anotherBindingName, err)
 	}
-	if deletedBinding.Spec.State != fleetv1beta1.BindingStateUnscheduled {
-		t.Errorf("binding %s state = %s, want unscheduled", anotherBindingName, deletedBinding.Spec.State)
+	if diff := cmp.Diff(deletedBinding, unscheduledBinding, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
+		t.Errorf("unscheduled binding %s diff (-got, +want): %s", anotherBindingName, diff)
 	}
 }

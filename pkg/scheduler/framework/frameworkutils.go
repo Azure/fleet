@@ -132,9 +132,6 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		// The binding's target cluster is picked again in the current run; yet the binding
 		// is originally created/updated in accordance with an out-of-date scheduling policy.
 
-		// Prepare the patch.
-		patch := client.MergeFrom(binding)
-
 		// Update the binding so that it is associated with the latest score.
 		updated := binding.DeepCopy()
 		affinityScore := int32(scored.Score.AffinityScore)
@@ -155,7 +152,8 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		// Add the binding to the toUpdate list.
 		toPatch = append(toPatch, &bindingWithPatch{
 			updated: updated,
-			patch:   patch,
+			// Prepare the patch.
+			patch: client.MergeFrom(binding),
 		})
 	}
 
