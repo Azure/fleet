@@ -81,6 +81,9 @@ type ClusterResourcePlacementSpec struct {
 	// The number of old ClusterSchedulingPolicySnapshot or ClusterResourceSnapshot resources to retain to allow rollback.
 	// This is a pointer to distinguish between explicit zero and not specified.
 	// Defaults to 10.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=1000
+	// +kubebuilder:default=10
 	// +optional
 	RevisionHistoryLimit *int32 `json:"revisionHistoryLimit,omitempty"`
 }
@@ -130,10 +133,13 @@ type PlacementPolicy struct {
 	ClusterNames []string `json:"clusterNames,omitempty"`
 
 	// Type of placement. Can be "PickAll" or "PickN". Default is PickAll.
+	// +kubebuilder:validation:Enum=PickAll;PickN
+	// +kubebuilder:default=PickAll
 	// +optional
 	PlacementType PlacementType `json:"placementType,omitempty"`
 
 	// NumberOfClusters of placement. Only valid if the placement type is "PickN".
+	// +kubebuilder:validation:Minimum=0
 	// +optional
 	NumberOfClusters *int32 `json:"numberOfClusters,omitempty"`
 
@@ -189,6 +195,8 @@ type ClusterSelector struct {
 type PreferredClusterSelector struct {
 	// Weight associated with matching the corresponding clusterSelectorTerm, in the range [-100, 100].
 	// +required
+	// +kubebuilder:validation:Minimum=-100
+	// +kubebuilder:validation:Maximum=100
 	Weight int32 `json:"weight"`
 
 	// A cluster selector term, associated with the corresponding weight.
@@ -212,6 +220,8 @@ type TopologySpreadConstraint struct {
 	// When `whenUnsatisfiable=ScheduleAnyway`, it is used to give higher precedence
 	// to topologies that satisfy it.
 	// It's an optional field. Default value is 1 and 0 is not allowed.
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxSkew *int32 `json:"maxSkew,omitempty"`
 
@@ -251,6 +261,8 @@ const (
 type RolloutStrategy struct {
 	// Type of rollout. The only supported type is "RollingUpdate". Default is "RollingUpdate".
 	// +optional
+	// +kubebuilder:validation:Enum=RollingUpdate
+	// +kubebuilder:default=RollingUpdate
 	Type RolloutStrategyType `json:"type,omitempty"`
 
 	// Rolling update config params. Present only if RolloutStrategyType = RollingUpdate.
@@ -279,6 +291,9 @@ type RollingUpdateConfig struct {
 	// upgrade the resources content on the same cluster.
 	// This can not be 0 if MaxSurge is 0.
 	// Defaults to 25%.
+	// +kubebuilder:default="25%"
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
 	// +optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
@@ -290,6 +305,9 @@ type RollingUpdateConfig struct {
 	// This does not apply to the case that we do in-place upgrade of resources on the same cluster.
 	// This can not be 0 if MaxUnavailable is 0.
 	// Defaults to 25%.
+	// +kubebuilder:default="25%"
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
 	// +optional
 	MaxSurge *intstr.IntOrString `json:"maxSurge,omitempty"`
 
@@ -297,6 +315,7 @@ type RollingUpdateConfig struct {
 	// A resource placement is considered available after `UnavailablePeriodSeconds` seconds
 	// has passed after the resources are applied to the target cluster successfully.
 	// Default is 60.
+	// +kubebuilder:default=60
 	// +optional
 	UnavailablePeriodSeconds *int `json:"unavailablePeriodSeconds,omitempty"`
 }
@@ -352,7 +371,7 @@ type ResourcePlacementStatus struct {
 	// ClusterName is the name of the cluster this resource is assigned to.
 	// If it is not empty, its value should be unique cross all placement decisions for the Placement.
 	// +optional
-	ClusterName string `json:"clusterName"`
+	ClusterName string `json:"clusterName,omitempty"`
 
 	// +kubebuilder:validation:MaxItems=100
 
@@ -372,10 +391,6 @@ type FailedResourcePlacement struct {
 	// The resource failed to be placed.
 	// +required
 	ResourceIdentifier `json:",inline"`
-
-	// Name of the member cluster that the resource is placed to.
-	// +required
-	ClusterName string `json:"clusterName"`
 
 	// The failed condition status.
 	// +required

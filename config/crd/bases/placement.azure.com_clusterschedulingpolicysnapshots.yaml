@@ -144,6 +144,8 @@ spec:
                                     corresponding clusterSelectorTerm, in the range
                                     [-100, 100].
                                   format: int32
+                                  maximum: 100
+                                  minimum: -100
                                   type: integer
                               required:
                               - preference
@@ -243,10 +245,15 @@ spec:
                     description: NumberOfClusters of placement. Only valid if the
                       placement type is "PickN".
                     format: int32
+                    minimum: 0
                     type: integer
                   placementType:
+                    default: PickAll
                     description: Type of placement. Can be "PickAll" or "PickN". Default
                       is PickAll.
+                    enum:
+                    - PickAll
+                    - PickN
                     type: string
                   topologySpreadConstraints:
                     description: TopologySpreadConstraints describes how a group of
@@ -258,6 +265,7 @@ spec:
                         resources among the given cluster topology.
                       properties:
                         maxSkew:
+                          default: 1
                           description: MaxSkew describes the degree to which resources
                             may be unevenly distributed. When `whenUnsatisfiable=DoNotSchedule`,
                             it is the maximum permitted difference between the number
@@ -268,6 +276,7 @@ spec:
                             satisfy it. It's an optional field. Default value is 1
                             and 0 is not allowed.
                           format: int32
+                          minimum: 1
                           type: integer
                         topologyKey:
                           description: TopologyKey is the key of cluster labels. Clusters
