@@ -334,14 +334,14 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	//
 	// * bindings that should be created, i.e., create a binding for every cluster that is newly picked
 	//   and does not have a binding associated with;
-	// * bindings that should be updated, i.e., associate a binding whose target cluster is picked again
+	// * bindings that should be patched, i.e., associate a binding whose target cluster is picked again
 	//   in the current run with the latest score and the latest scheduling policy snapshot;
 	// * bindings that should be deleted, i.e., mark a binding as unschedulable if its target cluster is no
 	//   longer picked in the current run.
 	//
 	// Fields in the returned bindings are fulfilled and/or refreshed as applicable.
 	klog.V(2).InfoS("Cross-referencing bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef)
-	toCreate, toUpdate, toDelete, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, scored, obsolete)
+	toCreate, toDelete, toPatch, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, scored, obsolete)
 	if err != nil {
 		klog.ErrorS(err, "Failed to cross-reference bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
@@ -349,7 +349,7 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 
 	// Manipulate bindings accordingly.
 	klog.V(2).InfoS("Manipulating bindings", "clusterSchedulingPolicySnapshot", policyRef)
-	if err := f.manipulateBindings(ctx, policy, toCreate, toUpdate, toDelete); err != nil {
+	if err := f.manipulateBindings(ctx, policy, toCreate, toDelete, toPatch); err != nil {
 		klog.ErrorS(err, "Failed to manipulate bindings", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
@@ -512,8 +512,13 @@ func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, pol
 	return passed, filtered, nil
 }
 
-// manipulateBindings creates, updates, and deletes bindings.
-func (f *framework) manipulateBindings(ctx context.Context, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, toCreate, toUpdate, toDelete []*fleetv1beta1.ClusterResourceBinding) error {
+// manipulateBindings creates, patches, and deletes bindings.
+func (f *framework) manipulateBindings(
+	ctx context.Context,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	toCreate, toDelete []*fleetv1beta1.ClusterResourceBinding,
+	toPatch []*bindingWithPatch,
+) error {
 	policyRef := klog.KObj(policy)
 
 	// Create new bindings; these bindings will be of the Scheduled state.
@@ -522,12 +527,12 @@ func (f *framework) manipulateBindings(ctx context.Context, policy *fleetv1beta1
 		return err
 	}
 
-	// Update existing bindings.
+	// Patch existing bindings.
 	//
 	// A race condition may arise here, when a rollout controller attempts to update bindings
 	// at the same time with the scheduler, e.g., marking a binding as bound (from the scheduled
-	// state)
-	if err := f.updateBindings(ctx, toUpdate); err != nil {
+	// state). To avoid such races, the method performs a JSON patch rather than a regular update.
+	if err := f.patchBindings(ctx, toPatch); err != nil {
 		klog.ErrorS(err, "Failed to update old bindings", "clusterSchedulingPolicySnapshot", policyRef)
 		return err
 	}
@@ -559,13 +564,15 @@ func (f *framework) createBindings(ctx context.Context, toCreate []*fleetv1beta1
 	return nil
 }
 
-// updateBindings updates a list of existing bindings.
-func (f *framework) updateBindings(ctx context.Context, toUpdate []*fleetv1beta1.ClusterResourceBinding) error {
-	for _, binding := range toUpdate {
+// patchBindings patches a list of existing bindings using JSON patch.
+func (f *framework) patchBindings(ctx context.Context, toPatch []*bindingWithPatch) error {
+	for _, bp := range toPatch {
 		// TO-DO (chenyu1): Add some jitters here to avoid swarming the API when there is a large number of
-		// bindings to create.
-		if err := f.client.Update(ctx, binding); err != nil {
-			return controller.NewAPIServerError(false, fmt.Errorf("failed to update binding %s: %w", binding.Name, err))
+		// bindings to patch.
+
+		// Use JSON patch to avoid races.
+		if err := f.client.Patch(ctx, bp.updated, bp.patch); err != nil {
+			return controller.NewAPIServerError(false, fmt.Errorf("failed to patch binding %s: %w", bp.updated.Name, err))
 		}
 	}
 	return nil
