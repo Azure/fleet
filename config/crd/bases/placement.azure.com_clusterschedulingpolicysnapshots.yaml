@@ -432,7 +432,7 @@ spec:
                   - reason
                   - selected
                   type: object
-                maxItems: 100
+                maxItems: 1000
                 type: array
             type: object
         required:
