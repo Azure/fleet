@@ -2314,7 +2314,7 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sorted := sortByClusterScoreAndName(tc.bindings)
 			if diff := cmp.Diff(sorted, tc.want); diff != "" {
-				t.Errorf("sorted diff (-got, +want): %s", diff)
+				t.Errorf("sortByClusterScoreAndName() diff (-got, +want): %s", diff)
 			}
 		})
 	}

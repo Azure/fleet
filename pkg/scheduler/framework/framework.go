@@ -629,7 +629,7 @@ func (f *framework) updatePolicySnapshotStatusFrom(
 	policy.Status.ClusterDecisions = newDecisions
 	meta.SetStatusCondition(&policy.Status.Conditions, newCondition)
 	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
-		klog.ErrorS(err, "failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewAPIServerError(false, err)
 	}
 	return nil
@@ -658,7 +658,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 	}
 
-	// Check if the scheduler should downscale, i.e., mark some creating/active bindings as deleting and/or
+	// Check if the scheduler should downscale, i.e., mark some scheduled/bound bindings as unscheduled and/or
 	// clean up all obsolete bindings right away.
 	//
 	// Normally obsolete bindings are kept for cross-referencing at the end of the scheduling cycle to minimize
@@ -668,7 +668,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	// To summarize, the scheduler will only downscale when
 	//
 	// * the scheduling policy is of the PickN type; and
-	// * currently there are too many selected clusters, or more specifically too many creating and active bindings
+	// * currently there are too many selected clusters, or more specifically too many scheduled/bound bindings
 	//   in the system; or there are exactly the right number of selected clusters, but some obsolete bindings still linger
 	//   in the system.
 	if act, downscaleCount := shouldDownscale(policy, numOfClusters, len(scheduled)+len(bound), len(obsolete)); act {
