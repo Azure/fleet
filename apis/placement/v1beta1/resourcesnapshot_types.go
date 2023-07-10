@@ -22,7 +22,7 @@ const (
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
 	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
 
-	// SubindexOfResourceSnapshotAnnotation is the annotation to store the index of resource snapshot in the group.
+	// SubindexOfResourceSnapshotAnnotation is the annotation to store the subindex of resource snapshot in the group.
 	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindexOfResourceSnapshot"
 
 	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}.
