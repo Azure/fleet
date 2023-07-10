@@ -250,7 +250,8 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 	// Also note that for deleted CRPs, derived bindings are deleted right away by the scheduler;
 	// the scheduler no longer marks them as deleting and waits for another controller to actually
 	// run the deletion.
-	for _, binding := range bindingList.Items {
+	for idx := range bindingList.Items {
+		binding := bindingList.Items[idx]
 		// Delete the binding if it has not been marked for deletion yet.
 		if binding.DeletionTimestamp == nil {
 			if err := s.client.Delete(ctx, &binding); err != nil {
