@@ -1,0 +1,121 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+package topologyspreadconstraints
+
+import (
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+// domainName is the name of a topology domain.
+type domainName string
+
+// count is the number of bindings in a topology domain.
+type count int
+
+// bindingCounter is an interface which allows counting the number of bindings in each
+// topology domain.
+type bindingCounter interface {
+	// Count returns the number of bindings in a topology domain.
+	//
+	// It returns false if the domain does not exist, or the counter has not been initialized
+	// (i.e. no domain has been registered).
+	Count(domainName) (count, bool)
+
+	// Smallest returns the smallest count in the counter.
+	//
+	// It returns false if the counter has not been initialized (i.e. no domain has been registered).
+	Smallest() (count, bool)
+	// SecondSmallest returns the second smallest count in the counter.
+	//
+	// It returns false if the counter has not been initialized (i.e. no domain has been registered).
+	SecondSmallest() (count, bool)
+	// Largest returns the largest count in the counter.
+	//
+	// It returns false if the counter has not been initialized (i.e. no domain has been registered).
+	Largest() (count, bool)
+}
+
+// bindingCounterByDomain implements the bindingCounter interface, counting the number of
+// bindings in each topology domain.
+type bindingCounterByDomain struct {
+	// counter tracks the number of bindings in each domain.
+	counter map[domainName]count
+
+	// smallest is the smallest count in the counter.
+	smallest count
+	// secondSmallest is the second smallest count in the counter.
+	//
+	// Note that the second smallest count might be the same as the smallest count.
+	secondSmallest count
+	// largest is the largest count in the counter.
+	//
+	// Note that the largest count might be the same as the second smallest (and consequently
+	// the smallest) count.
+	largest count
+}
+
+var (
+	// Verify that bindingCounterByDomain implements the bindingCounter interface at compile time.
+	_ bindingCounter = &bindingCounterByDomain{}
+)
+
+// Count returns the number of bindings in a topology domain.
+func (c *bindingCounterByDomain) Count(name domainName) (count, bool) {
+	if len(c.counter) == 0 {
+		return 0, false
+	}
+
+	val, ok := c.counter[name]
+	return val, ok
+}
+
+// Smallest returns the smallest count in the counter.
+func (c *bindingCounterByDomain) Smallest() (count, bool) {
+	if len(c.counter) == 0 {
+		return 0, false
+	}
+
+	return c.smallest, true
+}
+
+// SecondSmallest returns the second smallest count in the counter.
+func (c *bindingCounterByDomain) SecondSmallest() (count, bool) {
+	if len(c.counter) == 0 {
+		return 0, false
+	}
+
+	return c.secondSmallest, true
+}
+
+// Largest returns the largest count in the counter.
+func (c *bindingCounterByDomain) Largest() (count, bool) {
+	if len(c.counter) == 0 {
+		return 0, false
+	}
+
+	return c.largest, true
+}
+
+type clusterName string
+type violationReasons []string
+type doNotScheduleViolations map[clusterName]violationReasons
+type topologySpreadScores map[clusterName]int
+
+type pluginState struct {
+	// doNotScheduleConstraints is a list of topology spread constraints with a DoNotSchedule
+	// requirement.
+	doNotScheduleConstraints []*fleetv1beta1.TopologySpreadConstraint
+
+	// scheduleAnywayConstraints is a list of topology spread constraints with a ScheduleAnyway
+	// requirement.
+	scheduleAnywayConstraints []*fleetv1beta1.TopologySpreadConstraint
+
+	// violations
+	violations doNotScheduleViolations
+
+	// scores
+	scores topologySpreadScores
+}
