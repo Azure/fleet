@@ -8,6 +8,7 @@ package framework
 import (
 	"fmt"
 	"reflect"
+	"sort"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -270,4 +271,69 @@ func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
 	}
 
 	return len(current) == len(desired)
+}
+
+// shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how
+// many active or creating bindings it should remove.
+func shouldDownscale(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, desired, present, obsolete int) (act bool, count int) {
+	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && desired <= present {
+		// Downscale only applies to CRPs of the Pick N placement type; and it only applies when the number of
+		// clusters requested by the user is less than the number of currently active + creating bindings combined;
+		// or there are the right number of active + creating bindings, yet some obsolete bindings still linger
+		// in the system.
+		if count := present - desired + obsolete; count > 0 {
+			// Note that in the case of downscaling, obsolete bindings are always removed; they
+			// are counted towards the returned downscale count value.
+			return true, present - desired
+		}
+	}
+	return false, 0
+}
+
+// sortByClusterScoreAndName sorts a list of ClusterResourceBindings by their cluster scores and
+// target cluster names.
+func sortByClusterScoreAndName(bindings []*fleetv1beta1.ClusterResourceBinding) (sorted []*fleetv1beta1.ClusterResourceBinding) {
+	lessFunc := func(i, j int) bool {
+		bindingA := bindings[i]
+		bindingB := bindings[j]
+
+		scoreA := bindingA.Spec.ClusterDecision.ClusterScore
+		scoreB := bindingB.Spec.ClusterDecision.ClusterScore
+
+		switch {
+		case scoreA == nil && scoreB == nil:
+			// Both bindings have no assigned cluster scores; normally this will never happen,
+			// as for CRPs of the PickN type, the scheduler will always assign cluster scores
+			// to bindings.
+			//
+			// In this case, compare their target cluster names instead.
+			return bindingA.Spec.TargetCluster < bindingB.Spec.TargetCluster
+		case scoreA == nil:
+			// If only one binding has no assigned cluster score, prefer trimming it first.
+			return true
+		case scoreB == nil:
+			// If only one binding has no assigned cluster score, prefer trimming it first.
+			return false
+		default:
+			// Both clusters have assigned cluster scores; compare their scores first.
+			clusterScoreA := ClusterScore{
+				AffinityScore:       int(*scoreA.AffinityScore),
+				TopologySpreadScore: int(*scoreA.TopologySpreadScore),
+			}
+			clusterScoreB := ClusterScore{
+				AffinityScore:       int(*scoreB.AffinityScore),
+				TopologySpreadScore: int(*scoreB.TopologySpreadScore),
+			}
+
+			if clusterScoreA.Equal(&clusterScoreB) {
+				// Two clusters have the same scores; compare their names instead.
+				return bindingA.Spec.TargetCluster < bindingB.Spec.TargetCluster
+			}
+
+			return clusterScoreA.Less(&clusterScoreB)
+		}
+	}
+	sort.Slice(bindings, lessFunc)
+
+	return bindings
 }

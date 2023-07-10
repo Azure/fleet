@@ -23,6 +23,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -646,6 +647,118 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	clusters []fleetv1beta1.MemberCluster, //nolint: revive
 	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding, //nolint: revive
 ) (result ctrl.Result, err error) {
+	policyRef := klog.KObj(policy)
+
+	// Retrieve the desired number of clusters from the policy.
+	//
+	// Note that for scheduling policies of the PickN type, this annotation is expected to be present.
+	numOfClusters, err := utils.ExtractNumOfClustersFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to extract number of clusters required from policy snapshot", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Check if the scheduler should downscale, i.e., mark some creating/active bindings as deleting and/or
+	// clean up all obsolete bindings right away.
+	//
+	// Normally obsolete bindings are kept for cross-referencing at the end of the scheduling cycle to minimize
+	// interruptions caused by scheduling policy change; however, in the case of downscaling, they can be removed
+	// right away.
+	//
+	// To summarize, the scheduler will only downscale when
+	//
+	// * the scheduling policy is of the PickN type; and
+	// * currently there are too many selected clusters, or more specifically too many creating and active bindings
+	//   in the system; or there are exactly the right number of selected clusters, but some obsolete bindings still linger
+	//   in the system.
+	if act, downscaleCount := shouldDownscale(policy, numOfClusters, len(scheduled)+len(bound), len(obsolete)); act {
+		// Downscale if needed.
+		//
+		// To minimize interruptions, the scheduler picks scheduled bindings first, and then
+		// bound bindings; when processing bound bindings, the logic prioritizes bindings that
+		//
+		//
+		// This step will also mark all obsolete bindings (if any) as deleting right away.
+		klog.V(2).InfoS("Downscaling is needed", "clusterSchedulingPolicySnapshot", policyRef, "downscaleCount", downscaleCount)
+
+		// Mark all obsolete bindings as deleting first.
+		if err := f.markAsUnscheduledFor(ctx, obsolete); err != nil {
+			klog.ErrorS(err, "Failed to mark obsolete bindings as deleting", "clusterSchedulingPolicySnapshot", policyRef)
+			return ctrl.Result{}, err
+		}
+
+		// Perform actual downscaling; this will be skipped if the downscale count is zero.
+		scheduled, bound, err = f.downscale(ctx, scheduled, bound, downscaleCount)
+		if err != nil {
+			klog.ErrorS(err, "failed to downscale", "schedulingPolicySnapshot", policyRef)
+			return ctrl.Result{}, err
+		}
+
+		// Update the policy snapshot status with the latest scheduling decisions and condition.
+		//
+		// Note that since there is no reliable way to determine the validity of old decisions added
+		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
+		// the clusters that are currently selected.
+		if err := f.updatePolicySnapshotStatusFrom(ctx, policy, nil, scheduled, bound); err != nil {
+			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when downscaling", "clusterSchedulingPolicySnapshot", policyRef)
+			return ctrl.Result{}, err
+		}
+
+		// Return immediately as there are no more bindings for the scheduler to scheduler at this moment.
+		return ctrl.Result{}, nil
+	}
+
 	// Not yet implemented.
 	return ctrl.Result{}, nil
+}
+
+// downscale performs downscaling on scheduled and bound bindings, i.e., marks some of them as unscheduled.
+//
+// To minimize interruptions, the scheduler picks scheduled bindings first (in any order); if there
+// are still more bindings to trim, the scheduler will move onto bound bindings, and it prefers
+// ones with a lower cluster score and a smaller name (in alphabetical order) .
+func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1beta1.ClusterResourceBinding, count int) (updatedScheduled, updatedBound []*fleetv1beta1.ClusterResourceBinding, err error) {
+	if count == 0 {
+		// Skip if the downscale count is zero.
+		return scheduled, bound, nil
+	}
+
+	// A sanity check is added here to avoid index errors; normally the downscale count is guaranteed
+	// to be no greater than the sum of the number of scheduled and bound bindings.
+	if count > len(scheduled)+len(bound) {
+		err := fmt.Errorf("received an invalid downscale count %d (scheduled count: %d, bound count: %d)", count, len(scheduled), len(bound))
+		return scheduled, bound, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Trim scheduled bindings.
+	bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+	for i := 0; i < len(scheduled) && i < count; i++ {
+		binding := scheduled[i]
+		bindingsToDelete = append(bindingsToDelete, binding)
+	}
+
+	if len(bindingsToDelete) == count {
+		// Trimming scheduled bindings alone would suffice.
+		return scheduled[count:], bound, f.markAsUnscheduledFor(ctx, bindingsToDelete)
+	}
+
+	// Trimming scheduled bindings alone is not enough, move on to bound bindings.
+
+	// Sort the bindings by their cluster scores (and secondly, their names).
+	//
+	// The scheduler will attempt to trim first bindings that less fitting to the scheduling
+	// policy; for any two clusters with the same score, prefer the one with a smaller name
+	// (in alphabetical order).
+	//
+	// Note that this is at best an approximation, as the cluster score assigned earlier might
+	// no longer apply, due to the ever-changing state in the fleet.
+	sorted := sortByClusterScoreAndName(bound)
+
+	// Trim bound bindings by their cluster scores and target cluster names.
+	left := count - len(bindingsToDelete)
+	for i := 0; i < left && i < len(sorted); i++ {
+		bindingsToDelete = append(bindingsToDelete, sorted[i])
+	}
+
+	return nil, sorted[left:], f.markAsUnscheduledFor(ctx, bindingsToDelete)
 }
