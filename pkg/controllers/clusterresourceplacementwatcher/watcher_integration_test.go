@@ -58,40 +58,19 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 		By("By creating a new clusterResourcePlacement")
 		crp := clusterResourcePlacementForTest()
 		Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
-	})
 
-	Context("When creating new clusterResourcePlacement", func() {
-		AfterEach(func() {
-			By("By deleting crp")
-			createdCRP = clusterResourcePlacementForTest()
-			Expect(k8sClient.Delete(ctx, createdCRP)).Should(Succeed())
+		By("By checking the placement queue before resetting")
+		// The event could arrive after the resetting, which causes the flakiness.
+		// It makes sure the queue is clear before proceed.
+		Eventually(func() bool {
+			return fakePlacementController.Key() == testCRPName
+		}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name when creating CRP")
 
-			By("By checking crp")
-			Eventually(func() bool {
-				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName}, createdCRP))
-			}, eventuallyTimeout, interval).Should(BeTrue(), "crp should be deleted")
-		})
-
-		It("Should enqueue the event", func() {
-			By("By checking placement controller queue")
-			Eventually(func() bool {
-				return fakePlacementController.Key() == testCRPName
-			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
-		})
+		By("By resetting the placement queue")
+		fakePlacementController.ResetQueue()
 	})
 
 	Context("When updating clusterResourcePlacement", func() {
-		BeforeEach(func() {
-			By("By checking the placement queue before resetting")
-			// The event could arrive after the resetting, which causes the flakiness.
-			// It makes sure the queue is clear before proceed.
-			Eventually(func() bool {
-				return fakePlacementController.Key() == testCRPName
-			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
-
-			By("By resetting the placement queue")
-			fakePlacementController.ResetQueue()
-		})
 		AfterEach(func() {
 			By("By deleting crp")
 			createdCRP = clusterResourcePlacementForTest()
@@ -138,18 +117,6 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 	})
 
 	Context("When deleting clusterResourcePlacement", func() {
-		BeforeEach(func() {
-			By("By checking the placement queue before resetting")
-			// The event could arrive after the resetting, which causes the flakiness.
-			// It makes sure the queue is clear before proceed.
-			Eventually(func() bool {
-				return fakePlacementController.Key() == testCRPName
-			}, eventuallyTimeout, interval).Should(BeTrue(), "placementController should receive the CRP name")
-
-			By("By resetting the placement queue")
-			fakePlacementController.ResetQueue()
-		})
-
 		It("Should enqueue the event", func() {
 			By("By deleting crp")
 			createdCRP = clusterResourcePlacementForTest()
