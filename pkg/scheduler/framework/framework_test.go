@@ -37,6 +37,9 @@ const (
 	altClusterName     = "smartcat"
 	anotherClusterName = "singingbutterfly"
 	resourceVersion    = "1"
+
+	bindingNameTemplate = "binding-%d"
+	clusterNameTemplate = "cluster-%d"
 )
 
 var (
@@ -55,6 +58,40 @@ var (
 	}
 	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
 		return filtered1.cluster.Name < filtered2.cluster.Name
+	}
+)
+
+// A few utilities for generating a large number of objects.
+var (
+	generateResourceBindings = func(count int, startIdx int) []*fleetv1beta1.ClusterResourceBinding {
+		bindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+
+		for i := 0; i < count; i++ {
+			bindings = append(bindings, &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(bindingNameTemplate, i+startIdx),
+				},
+				Spec: fleetv1beta1.ResourceBindingSpec{
+					ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterName: fmt.Sprintf(clusterNameTemplate, i+startIdx),
+						Selected:    true,
+					},
+				},
+			})
+		}
+		return bindings
+	}
+
+	generateClusterDecisions = func(count int, startIdx int) []fleetv1beta1.ClusterDecision {
+		decisions := make([]fleetv1beta1.ClusterDecision, 0, count)
+
+		for i := 0; i < count; i++ {
+			decisions = append(decisions, fleetv1beta1.ClusterDecision{
+				ClusterName: fmt.Sprintf(clusterNameTemplate, i+startIdx),
+				Selected:    true,
+			})
+		}
+		return decisions
 	}
 )
 

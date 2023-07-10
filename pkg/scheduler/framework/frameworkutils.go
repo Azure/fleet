@@ -253,6 +253,11 @@ func fullyScheduledCondition(policy *fleetv1beta1.ClusterSchedulingPolicySnapsho
 // every decision in one array is also present in the other array regardless of their indexes,
 // and vice versa.
 func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
+	// As a shortcut, decisions are not equal if the two arrays are not of the same length.
+	if len(current) != len(desired) {
+		return false
+	}
+
 	desiredDecisionByCluster := make(map[string]fleetv1beta1.ClusterDecision, len(desired))
 	for _, decision := range desired {
 		desiredDecisionByCluster[decision.ClusterName] = decision
@@ -270,7 +275,8 @@ func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
 		}
 	}
 
-	return len(current) == len(desired)
+	// The two arrays have the same length and the same content.
+	return true
 }
 
 // shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how
