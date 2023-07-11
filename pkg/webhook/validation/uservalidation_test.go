@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -10,44 +11,68 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
-func TestValidateUserForCRD(t *testing.T) {
+func TestValidateUserForResource(t *testing.T) {
 	testCases := map[string]struct {
 		userInfo         v1.UserInfo
 		whiteListedUsers []string
-		wantResult       bool
+		resKind          string
+		resName          string
+		resNamespace     string
+		wantResponse     admission.Response
 	}{
 		"allow user in system:masters group": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
-				Groups:   []string{"system:masters"},
+				Groups:   []string{mastersGroup},
 			},
-			wantResult: true,
+			resKind:      "Role",
+			resName:      "test-role",
+			resNamespace: "test-namespace",
+			wantResponse: admission.Allowed(fmt.Sprintf("user: test-user in groups: [system:masters] is allowed to modify fleet resource Role: test-role/test-namespace")),
 		},
 		"allow white listed user not in system:masters group": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
+				Groups:   []string{"test-group"},
 			},
+			resKind:          "RoleBinding",
+			resName:          "test-role-binding",
+			resNamespace:     "test-namespace",
 			whiteListedUsers: []string{"test-user"},
-			wantResult:       true,
+			wantResponse:     admission.Allowed(fmt.Sprintf("user: test-user in groups: [test-group] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace")),
+		},
+		"allow valid service account": {
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{serviceAccountsGroup, serviceAccountsKubeSystemGroup, authenticatedGroup},
+			},
+			resKind:      "RoleBinding",
+			resName:      "test-role-binding",
+			resNamespace: "test-namespace",
+			wantResponse: admission.Allowed(fmt.Sprintf("user: test-user in groups: [system:serviceaccounts system:serviceaccounts:kube-system system:authenticated] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace")),
 		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResult: false,
+			resKind:      "Role",
+			resName:      "test-role",
+			resNamespace: "test-namespace",
+			wantResponse: admission.Denied(fmt.Sprintf("user: test-user in groups: [test-group] is not allowed to modify fleet resource Role: test-role/test-namespace")),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForCRD(testCase.whiteListedUsers, testCase.userInfo)
-			assert.Equal(t, testCase.wantResult, gotResult, utils.TestCaseMsg, testName)
+			gotResult := ValidateUserForResource(testCase.whiteListedUsers, testCase.userInfo, testCase.resKind, testCase.resName, testCase.resNamespace)
+			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
 }
