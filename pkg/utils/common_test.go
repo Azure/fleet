@@ -86,3 +86,80 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractSubindexFromClusterResourceSnapshot(t *testing.T) {
+	snapshotName := "test-snapshot"
+
+	testCases := []struct {
+		name         string
+		snapshot     *fleetv1beta1.ClusterResourceSnapshot
+		wantExist    bool
+		wantSubindex int
+		wantError    bool
+	}{
+		{
+			name: "valid annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+					},
+				},
+			},
+			wantExist:    true,
+			wantSubindex: 1,
+		},
+		{
+			name: "no annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+				},
+			},
+			wantExist:    false,
+			wantSubindex: -1,
+		},
+		{
+			name: "invalid annotation: not an integer",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "abc",
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid annotation: negative integer",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "-1",
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotExist, gotSubindex, err := ExtractSubindexFromClusterResourceSnapshot(tc.snapshot)
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("ExtractSubindexFromClusterResourceSnapshot() = %v, %v, want error", gotExist, gotSubindex)
+				}
+				return
+			}
+
+			if gotExist != tc.wantExist || gotSubindex != tc.wantSubindex {
+				t.Fatalf("ExtractSubindexFromClusterResourceSnapshot() = %v, %v, want %v, %v", gotExist, gotSubindex, tc.wantExist, tc.wantSubindex)
+			}
+		})
+	}
+}
+

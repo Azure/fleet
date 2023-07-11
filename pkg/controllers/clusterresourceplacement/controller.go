@@ -1,3 +1,9 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+// Package clusterresourceplacement features a controller to reconcile the clusterResourcePlacement changes.
 package clusterresourceplacement
 
 import (
@@ -17,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -192,25 +199,69 @@ func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Contex
 	if err != nil {
 		return err
 	}
-
-	crpKObj := klog.KObj(crp)
 	// respect the revisionHistoryLimit field
+	revisionLimit := parseRevisionLimit(crp)
+	if len(sortedList.Items) < revisionLimit {
+		return nil
+	}
+	for i := 0; i <= len(sortedList.Items)-revisionLimit; i++ { // need to reserve one slot for the new snapshot
+		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !errors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to delete clusterSchedulingPolicySnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterSchedulingPolicySnapshot", klog.KObj(&sortedList.Items[i]))
+			return controller.NewAPIServerError(false, err)
+		}
+	}
+	return nil
+}
+
+func parseRevisionLimit(crp *fleetv1beta1.ClusterResourcePlacement) int {
 	revisionLimit := fleetv1beta1.RevisionHistoryLimitDefaultValue
 	if crp.Spec.RevisionHistoryLimit != nil {
 		revisionLimit = *crp.Spec.RevisionHistoryLimit
 		if revisionLimit <= 0 {
-			err := fmt.Errorf("invalid clusterResourcePlacement %s: invalid revisionHistoryLimit %d", crpKObj, revisionLimit)
-			klog.ErrorS(controller.NewExpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "clusterResourcePlacement", crpKObj)
+			err := fmt.Errorf("invalid clusterResourcePlacement %s: invalid revisionHistoryLimit %d", crp.Name, revisionLimit)
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "clusterResourcePlacement", klog.KObj(crp))
 			// use the default value instead
 			revisionLimit = fleetv1beta1.RevisionHistoryLimitDefaultValue
 		}
 	}
-	if len(sortedList.Items) < int(revisionLimit) {
+	return int(revisionLimit)
+}
+
+// deleteRedundantResourceSnapshots handles multiple snapshots in a group.
+func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
+	sortedList, err := r.listSortedResourceSnapshots(ctx, crp)
+	if err != nil {
+		return err
+	}
+
+	// respect the revisionHistoryLimit field
+	revisionLimit := parseRevisionLimit(crp)
+	if len(sortedList.Items) < revisionLimit {
 		return nil
 	}
-	for i := 0; i <= len(sortedList.Items)-int(revisionLimit); i++ {
+
+	crpKObj := klog.KObj(crp)
+	lastGroupIndex := -1
+	groupCounter := 0
+
+	// delete the snapshots from the end as there are could be multiple snapshots in a group in order to keep the latest
+	// snapshots from the end.
+	for i := len(sortedList.Items) - 1; i >= 0; i-- {
+		snapshotKObj := klog.KObj(&sortedList.Items[i])
+		ii, err := parseResourceIndexFromLabel(&sortedList.Items[i])
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", snapshotKObj)
+			return controller.NewUnexpectedBehaviorError(err)
+		}
+		if ii != lastGroupIndex {
+			groupCounter++
+			lastGroupIndex = ii
+		}
+		if groupCounter < revisionLimit { // need to reserve one slot for the new snapshot
+			continue
+		}
 		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !errors.IsNotFound(err) {
-			klog.ErrorS(err, "Failed to delete clusterSchedulingPolicySnapshot", "clusterResourcePlacement", crpKObj, "clusterSchedulingPolicySnapshot", klog.KObj(&sortedList.Items[i]))
+			klog.ErrorS(err, "Failed to delete clusterResourceSnapshot", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", snapshotKObj)
 			return controller.NewAPIServerError(false, err)
 		}
 	}
@@ -259,6 +310,11 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			return nil, controller.NewAPIServerError(false, err)
 		}
 	}
+	// delete redundant snapshot revisions before creating a new snapshot to guarantee that the number of snapshots
+	// won't exceed the limit.
+	if err := r.deleteRedundantResourceSnapshots(ctx, crp); err != nil {
+		return nil, err
+	}
 
 	// create a new resource snapshot
 	latestResourceSnapshotIndex++
@@ -272,6 +328,8 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.ResourceGroupHashAnnotation: resourceHash,
+				// TODO need to updated once we support multiple snapshots
+				fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 			},
 		},
 		Spec: *resourceSnapshotSpec,
@@ -463,29 +521,76 @@ func (r *Reconciler) lookupLatestResourceSnapshot(ctx context.Context, crp *flee
 		klog.ErrorS(err, "Invalid clusterResourceSnapshots", "clusterResourcePlacement", crpKObj)
 		return nil, -1, controller.NewUnexpectedBehaviorError(err)
 	}
-	// When there are no active snapshots, find the one who has the largest resource index.
-	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
-		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", crpKObj)
-		return nil, -1, controller.NewAPIServerError(false, err)
+	// When there are no active snapshots, find the first snapshot who has the largest resource index.
+	// It should be rare only when CRP is crashed before creating the new active snapshot.
+	sortedList, err := r.listSortedResourceSnapshots(ctx, crp)
+	if err != nil {
+		return nil, -1, err
 	}
-	if len(snapshotList.Items) == 0 {
+	if len(sortedList.Items) == 0 {
 		// The resource index of the first snapshot will start from 0.
 		return nil, -1, nil
 	}
-	index := -1             // the index of the cluster resource snapshot array
-	lastResourceIndex := -1 // the assigned resource index of the cluster resource snapshot
-	for i := range snapshotList.Items {
-		resourceIndex, err := parseResourceIndexFromLabel(&snapshotList.Items[i])
-		if err != nil {
-			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[i]))
-			return nil, -1, controller.NewUnexpectedBehaviorError(err)
-		}
-		if lastResourceIndex < resourceIndex {
-			index = i
-			lastResourceIndex = resourceIndex
-		}
+	latestSnapshot := &sortedList.Items[len(sortedList.Items)-1]
+	resourceIndex, err := parseResourceIndexFromLabel(latestSnapshot)
+	if err != nil {
+		klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestSnapshot))
+		return nil, -1, controller.NewUnexpectedBehaviorError(err)
 	}
-	return &snapshotList.Items[index], lastResourceIndex, nil
+	return latestSnapshot, resourceIndex, nil
+}
+
+// listSortedResourceSnapshots returns the resource snapshots sorted by its index and its subindex.
+// The resourceSnapshot is less than the other one when resourceIndex is less.
+// When the resourceIndex is equal, then order by the subindex.
+// Note: the snapshot does not have subindex is the largest of a group and there should be only one in a group.
+func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterResourceSnapshotList, error) {
+	snapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+	crpKObj := klog.KObj(crp)
+	if err := r.Client.List(ctx, snapshotList, client.MatchingLabels{fleetv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
+		klog.ErrorS(err, "Failed to list all clusterResourceSnapshots", "clusterResourcePlacement", crpKObj)
+		return nil, controller.NewAPIServerError(false, err)
+	}
+	var errs []error
+	sort.Slice(snapshotList.Items, func(i, j int) bool {
+		ii, err := parseResourceIndexFromLabel(&snapshotList.Items[i])
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[i]))
+			errs = append(errs, err)
+		}
+		ji, err := parseResourceIndexFromLabel(&snapshotList.Items[j])
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[j]))
+			errs = append(errs, err)
+		}
+		if ii != ji {
+			return ii < ji
+		}
+
+		iDoesExist, iSubindex, err := utils.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[i])
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[j]))
+			errs = append(errs, err)
+		}
+		jDoesExist, jSubindex, err := utils.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[j])
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[j]))
+			errs = append(errs, err)
+		}
+		if !iDoesExist { // check if it's the first snapshot
+			return false
+		}
+		if !jDoesExist { // check if it's the first snapshot
+			return true
+		}
+		return iSubindex < jSubindex
+	})
+
+	if len(errs) > 0 {
+		return nil, controller.NewUnexpectedBehaviorError(utilerrors.NewAggregate(errs))
+	}
+
+	return snapshotList, nil
 }
 
 // parsePolicyIndexFromLabel returns error when parsing the label which should never return error in production.

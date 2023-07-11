@@ -275,3 +275,17 @@ func ExtractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterScheduli
 
 	return numOfClusters, nil
 }
+
+// ExtractSubindexFromClusterResourceSnapshot extracts the subindex value from the annotations from a clusterResourceSnapshot.
+func ExtractSubindexFromClusterResourceSnapshot(snapshot *fleetv1beta1.ClusterResourceSnapshot) (doesExist bool, subindex int, err error) {
+	subindexStr, ok := snapshot.Annotations[fleetv1beta1.SubindexOfResourceSnapshotAnnotation]
+	if !ok {
+		return false, -1, nil
+	}
+	subindex, err = strconv.Atoi(subindexStr)
+	if err != nil || subindex < 0 {
+		return true, -1, fmt.Errorf("invalid annotation %s: %s is invalid: %w", fleetv1beta1.SubindexOfResourceSnapshotAnnotation, subindexStr, err)
+	}
+
+	return true, subindex, nil
+}
