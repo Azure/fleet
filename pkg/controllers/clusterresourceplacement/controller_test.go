@@ -675,15 +675,15 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{Client: fakeClient, Scheme: scheme}
-			got, err := r.getOrCreateClusterPolicySnapshot(ctx, crp)
+			got, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp)
 			if err != nil {
-				t.Fatalf("failed to getOrCreateClusterPolicySnapshot: %v", err)
+				t.Fatalf("failed to getOrCreateClusterSchedulingPolicySnapshot: %v", err)
 			}
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
 			}
 			if diff := cmp.Diff(tc.wantPolicySnapshots[tc.wantLatestSnapshotIndex], *got, options...); diff != "" {
-				t.Errorf("getOrCreateClusterPolicySnapshot() mismatch (-want, +got):\n%s", diff)
+				t.Errorf("getOrCreateClusterSchedulingPolicySnapshot() mismatch (-want, +got):\n%s", diff)
 			}
 			clusterPolicySnapshotList := &fleetv1beta1.ClusterSchedulingPolicySnapshotList{}
 			if err := fakeClient.List(ctx, clusterPolicySnapshotList); err != nil {
@@ -932,7 +932,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{Client: fakeClient, Scheme: scheme}
-			_, err := r.getOrCreateClusterPolicySnapshot(ctx, crp)
+			_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}
