@@ -45,19 +45,19 @@ type Reconciler struct {
 
 // Reconcile triggers a single binding reconcile round.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("Start to reconcile a ClusterResourceBinding", "cluster resource binding", req.Name)
+	klog.V(2).InfoS("Start to reconcile a ClusterResourceBinding", "resourceBinding", req.Name)
 	startTime := time.Now()
 	bindingRef := klog.KRef(req.Namespace, req.Name)
 	// add latency log
 	defer func() {
-		klog.V(2).InfoS("ClusterResourceBinding reconciliation loop ends", "resource binding", bindingRef, "latency", time.Since(startTime).Milliseconds())
+		klog.V(2).InfoS("ClusterResourceBinding reconciliation loop ends", "resourceBinding", bindingRef, "latency", time.Since(startTime).Milliseconds())
 	}()
 	var resourceBinding fleetv1beta1.ClusterResourceBinding
 	if err := r.Client.Get(ctx, req.NamespacedName, &resourceBinding); err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		klog.ErrorS(err, "Failed to get the resource binding", "resourcebinding", bindingRef)
+		klog.ErrorS(err, "Failed to get the resource binding", "resourceBinding", bindingRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
 
@@ -66,15 +66,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.handleDelete(ctx, resourceBinding.DeepCopy())
 	}
 
-	// update the resource binding obj with finalizer
-	if err := r.ensureFinalizer(ctx, &resourceBinding); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	// we only care about the bound bindings. We treat unscheduled bindings as bound until they are deleted.
 	if resourceBinding.Spec.State != fleetv1beta1.BindingStateBound && resourceBinding.Spec.State != fleetv1beta1.BindingStateUnscheduled {
-		klog.V(2).InfoS("skip reconcile clusterResourceBinding that is not bound", "state", resourceBinding.Spec.State, "resource binding", bindingRef)
+		klog.V(2).InfoS("Skip reconcile clusterResourceBinding that is not bound", "state", resourceBinding.Spec.State, "resourceBinding", bindingRef)
 		return ctrl.Result{}, nil
+	}
+
+	// make sure that the resource binding obj has a finalizer
+	if err := r.ensureFinalizer(ctx, &resourceBinding); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// generate the works
@@ -83,7 +83,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // handleDelete handle a deleting binding
 func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (ctrl.Result, error) {
-	klog.V(4).InfoS("Start to handle deleting resource binding", "resource binding", klog.KObj(resourceBinding))
+	klog.V(4).InfoS("Start to handle deleting resource binding", "resourceBinding", klog.KObj(resourceBinding))
 	// list all the corresponding works if exist
 	works, err := r.listAllWorksAssociated(ctx, resourceBinding)
 	if err != nil {
@@ -93,13 +93,13 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 	if len(works) == 0 {
 		controllerutil.RemoveFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
 		if err = r.Client.Update(ctx, resourceBinding); err != nil {
-			klog.ErrorS(err, "failed to remove the work finalizer from resource binding", "resource binding", klog.KObj(resourceBinding))
+			klog.ErrorS(err, "Failed to remove the work finalizer from resource binding", "resourceBinding", klog.KObj(resourceBinding))
 			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(err)
 		}
-		klog.V(2).InfoS("The resource binding is deleted", "resourceSnapshot", klog.KObj(resourceBinding))
+		klog.V(2).InfoS("The resource binding is deleted", "resourceBinding", klog.KObj(resourceBinding))
 		return ctrl.Result{}, nil
 	}
-	klog.V(4).InfoS("The resource binding still has undeleted work", "resource binding", klog.KObj(resourceBinding),
+	klog.V(4).InfoS("The resource binding still has undeleted work", "resourceBinding", klog.KObj(resourceBinding),
 		"number of associated work", len(works))
 	// we watch the work objects deleting events, so we can afford to wait a bit longer here as a fallback case.
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -112,10 +112,10 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, resourceBinding client
 	}
 	controllerutil.AddFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
 	if err := r.Client.Update(ctx, resourceBinding); err != nil {
-		klog.ErrorS(err, "failed to add the work finalizer to resourceSnapshot", "resourceSnapshot", klog.KObj(resourceBinding))
+		klog.ErrorS(err, "Failed to add the work finalizer to resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
 		return controller.NewUpdateIgnoreConflictError(err)
 	}
-	klog.InfoS("Successfully add the work finalizer", "resource resourceSnapshot", klog.KObj(resourceBinding))
+	klog.V(2).InfoS("Successfully add the work finalizer", "resourceBinding", klog.KObj(resourceBinding))
 	return nil
 }
 
@@ -128,13 +128,13 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 	existingWork := make(map[string]*workv1alpha1.Work)
 	workList := &workv1alpha1.WorkList{}
 	if err := r.Client.List(ctx, workList, parentBindingLabelMatcher, namespaceMatcher); err != nil {
-		klog.ErrorS(err, "failed to list all the work associated with the resourceSnapshot", "resourceSnapshot", klog.KObj(resourceBinding))
+		klog.ErrorS(err, "Failed to list all the work associated with the resourceSnapshot", "resourceBinding", klog.KObj(resourceBinding))
 		return nil, controller.NewAPIServerError(true, err)
 	}
 	for _, work := range workList.Items {
 		existingWork[work.Name] = work.DeepCopy()
 	}
-	klog.V(4).InfoS("Get all the work associated", "numOfWork", len(existingWork), "resourceSnapshot", klog.KObj(resourceBinding))
+	klog.V(4).InfoS("Get all the work associated", "numOfWork", len(existingWork), "resourceBinding", klog.KObj(resourceBinding))
 	return existingWork, nil
 }
 
@@ -157,12 +157,11 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		// TODO(RZ): issue those requests in parallel to speed up the process
 		workName, err := getWorkNameFromSnapshotName(snapshot)
 		if err != nil {
-			klog.ErrorS(err, "Encountered a mal-formatted resource binding", "resourceSnapshot", klog.KObj(resourceBinding))
+			klog.ErrorS(err, "Encountered a mal-formatted resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
 			return ctrl.Result{}, err
 		}
 		activeWork[workName] = true
-		err = r.upsertWork(ctx, works[workName], workName, snapshot, resourceBinding)
-		if err != nil {
+		if err = r.upsertWork(ctx, works[workName], workName, snapshot, resourceBinding); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -174,38 +173,40 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		}
 		klog.V(2).InfoS("Delete the work that is not associated with any resource snapshot", "work", klog.KObj(work))
 		if err := r.Client.Delete(ctx, work); err != nil {
-			klog.ErrorS(err, "failed to delete the no longer needed work", "work", klog.KObj(work))
 			if !errors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to delete the no longer needed work", "work", klog.KObj(work))
 				return ctrl.Result{}, controller.NewAPIServerError(false, err)
 			}
 		}
 	}
-
-	klog.V(2).InfoS("Successfully synced all the work associated with the resourceSnapshot", "resourceSnapshot", klog.KObj(resourceBinding))
+	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
 	return ctrl.Result{}, nil
 }
 
 // fetchAllResourceSnapshots gathers all the resource snapshots for the resource binding.
 func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (map[string]*fleetv1beta1.ClusterResourceSnapshot, error) {
+	// fetch the master snapshot first
 	resourceSnapshots := make(map[string]*fleetv1beta1.ClusterResourceSnapshot, 1)
-	resourceSnapshot := fleetv1beta1.ClusterResourceSnapshot{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &resourceSnapshot); err != nil {
-		klog.ErrorS(err, "failed to get the resource snapshot from resource resourceSnapshot",
-			"resource resourceSnapshot", klog.KObj(resourceBinding), "resource snapshot name", resourceBinding.Spec.ResourceSnapshotName)
+	masterResourceSnapshot := fleetv1beta1.ClusterResourceSnapshot{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &masterResourceSnapshot); err != nil {
+		klog.ErrorS(err, "Failed to get the resource snapshot from resource masterResourceSnapshot",
+			"resource masterResourceSnapshot", klog.KObj(resourceBinding), "masterResourceSnapshot", resourceBinding.Spec.ResourceSnapshotName)
 		return nil, controller.NewAPIServerError(true, err)
 	}
-	resourceSnapshots[resourceSnapshot.Name] = &resourceSnapshot
+	resourceSnapshots[masterResourceSnapshot.Name] = &masterResourceSnapshot
 
 	// check if there are more snapshot in the same index group
-	countAnnotation := resourceSnapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
+	countAnnotation := masterResourceSnapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
 	snapshotCount, err := strconv.Atoi(countAnnotation)
 	if err != nil || snapshotCount < 1 {
-		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid snapshot count %d or err %w", resourceSnapshot.Name, snapshotCount, err))
+		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf(
+			"master resource snapshot %s has an invalid snapshot count %d or err %w", masterResourceSnapshot.Name, snapshotCount, err))
 	}
 	if snapshotCount > 1 {
-		index, exist := resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
+		// fetch all the resource snapshot in the same index group
+		index, exist := masterResourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
 		if !exist {
-			return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has no index label", resourceSnapshot.Name))
+			return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("master resource snapshot %s has no index label", masterResourceSnapshot.Name))
 		}
 		resourceIndexLabelMatcher := client.MatchingLabels{
 			fleetv1beta1.ResourceIndexLabel: index,
@@ -213,7 +214,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 		}
 		resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 		if err := r.Client.List(ctx, resourceSnapshotList, resourceIndexLabelMatcher); err != nil {
-			klog.ErrorS(err, "failed to list all the resource snapshot associated with the resourceSnapshot", "resourceSnapshot", klog.KObj(resourceBinding))
+			klog.ErrorS(err, "Failed to list all the resource snapshot associated with the resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
 			return nil, controller.NewAPIServerError(true, err)
 		}
 		//insert all the resource snapshot into the map
@@ -221,16 +222,16 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 			resourceSnapshots[resourceSnapshotList.Items[i].Name] = &resourceSnapshotList.Items[i]
 		}
 	}
-	// check if all the resource snapshots are created since that may take a while
+	// check if all the resource snapshots are created since that may take a while but the rollout controller may update the resource binding on master snapshot creation
 	if len(resourceSnapshots) != snapshotCount {
+		misMatchErr := fmt.Errorf("resource snapshots are still being created for the masterResourceSnapshot %s, total snapshot in the index group = %d, num Of existing snapshot in the group= %d",
+			resourceBinding.Name, snapshotCount, len(resourceSnapshots))
+		klog.ErrorS(misMatchErr, "Resource snapshot associated with the binding are not ready", "resourceBinding", klog.KObj(resourceBinding))
 		// TODO(RZ): return a specific error to allow creating works for the existing snapshots but don't delete the existing works
 		// make sure the reconcile requeue the request
-		klog.InfoS(" resource snapshot associated with the binding", "numOfSnapshot", len(resourceSnapshots), "resourceSnapshot", klog.KObj(resourceBinding))
-		return nil, controller.NewExpectedBehaviorError(
-			fmt.Errorf("resource snapshots are still being created for the resourceSnapshot %s, total snapshot count = %d, num Of existing snapshot = %d",
-				resourceBinding.Name, snapshotCount, len(resourceSnapshots)))
+		return nil, controller.NewExpectedBehaviorError(misMatchErr)
 	}
-	klog.V(4).InfoS("Get all the resource snapshot associated with the binding", "numOfSnapshot", len(resourceSnapshots), "resourceSnapshot", klog.KObj(resourceBinding))
+	klog.V(4).InfoS("Get all the resource snapshot associated with the binding", "numOfSnapshot", len(resourceSnapshots), "resourceBinding", klog.KObj(resourceBinding))
 	return resourceSnapshots, nil
 }
 
@@ -273,27 +274,27 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, wo
 	// upsert the work
 	if needCreate {
 		if err := r.Client.Create(ctx, work); err != nil {
-			klog.ErrorS(err, "failed to create the work associated with the resourceSnapshot", "resourceSnapshot", resourceBindingObj,
+			klog.ErrorS(err, "Failed to create the work associated with the resourceSnapshot", "resourceBinding", resourceBindingObj,
 				"resourceSnapshot", resourceSnapshotObj, "work", workObj)
 			return controller.NewCreateIgnoreAlreadyExistError(err)
 		}
 	} else {
 		if err := r.Client.Update(ctx, work); err != nil {
-			klog.ErrorS(err, "failed to update the work associated with the resourceSnapshot", "resourceSnapshot", resourceBindingObj,
+			klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceBinding", resourceBindingObj,
 				"resourceSnapshot", resourceSnapshotObj, "work", workObj)
 			return controller.NewUpdateIgnoreConflictError(err)
 		}
 	}
 
-	klog.V(4).InfoS("Successfully upsert the work associated with the resourceSnapshot", "create", needCreate,
-		"resourceSnapshot", resourceBindingObj, "resourceSnapshot", resourceSnapshotObj, "work", workObj)
+	klog.V(4).InfoS("Successfully upsert the work associated with the resourceSnapshot", "isCreate", needCreate,
+		"resourceBinding", resourceBindingObj, "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 	return nil
 }
 
 // getWorkNameFromSnapshotName extract the CRP and sub-index name from the corresponding resource snapshot.
-// The corresponding work name is the CRP name + sub-index if there is a sub-index. Otherwise, it is just the CRP name.
+// The corresponding work name is the CRP name + sub-index if there is a sub-index. Otherwise, it is the CRP name +"-work".
 // For example, if the resource snapshot name is "crp-1-0", the corresponding work name is "crp-0".
-// If the resource snapshot name is "crp-1", the corresponding work name is "crp".
+// If the resource snapshot name is "crp-1", the corresponding work name is "crp-work".
 func getWorkNameFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (string, error) {
 	// The validation webhook should make sure the label and annotation are valid on all resource snapshot.
 	// We are just being defensive here.
@@ -303,16 +304,14 @@ func getWorkNameFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceS
 	}
 	subIndex, exist := resourceSnapshot.Annotations[fleetv1beta1.SubindexOfResourceSnapshotAnnotation]
 	if !exist {
-		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid sub-index annotation", resourceSnapshot.Name))
+		// master snapshot doesn't have sub-index
+		return fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, crpName), nil
 	}
 	subIndexVal, err := strconv.Atoi(subIndex)
 	if err != nil || subIndexVal < 0 {
 		return "", controller.NewUnexpectedBehaviorError(fmt.Errorf("resource snapshot %s has an invalid sub-index annotation %d or err %w", resourceSnapshot.Name, subIndexVal, err))
 	}
-	if subIndexVal > 0 {
-		return fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, subIndexVal), nil
-	}
-	return crpName, nil
+	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -323,12 +322,12 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		// we only care about work delete event as we want to know when a work is deleted so that we can
 		// delete the corresponding resource binding fast.
-		// We do not care if a new work is created (by this controller) or updated by the agent.
+		// We do not care if a new work is created (by this controller) or updated by the work agent.
 		Watches(&source.Kind{Type: &workv1alpha1.Work{}}, &handler.Funcs{
 			DeleteFunc: func(evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
 				if evt.Object == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("DeleteEvent %v received with no matadata", evt)),
-						"failed to process a delete event for work object")
+						"Failed to process a delete event for work object")
 					return
 				}
 				parentBindingName, exist := evt.Object.GetLabels()[fleetv1beta1.ParentBindingLabel]

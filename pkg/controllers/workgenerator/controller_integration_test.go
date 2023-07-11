@@ -40,6 +40,8 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 	)
 
 	Context("Test Bound ClusterResourceBinding", func() {
+		var binding *fleetv1beta1.ClusterResourceBinding
+
 		BeforeEach(func() {
 			memberClusterName = "cluster-" + utils.RandStr()
 			testCRPName = "crp" + utils.RandStr()
@@ -59,6 +61,8 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 					Name: namespaceName,
 				},
 			})).Should(Succeed())
+			By("Deleting ClusterResourceBinding")
+			Expect(k8sClient.Delete(ctx, binding)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		})
 
 		It("Should wait after all the resource snapshot are created", func() {
@@ -69,39 +73,41 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 			Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 			By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
 			// create binding
-			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateBound, masterSnapshot.Name, memberClusterName)
+			binding = generateClusterResourceBinding(fleetv1beta1.BindingStateBound, masterSnapshot.Name, memberClusterName)
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			// check the work is not created since we have more resource snapshot to create
 			work := v1alpha1.Work{}
 			Consistently(func() bool {
-				err := k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				return apierrors.IsNotFound(err)
 			}, duration, interval).Should(BeTrue(), "controller should not create work in hub cluster until all resources are created")
 		})
 
-		It("Should wait after the binding state is bound", func() {
-			// create master resource snapshot with 2 number of resources
-			masterSnapshot := generateResourceSnapshot(1, 0, 0, [][]byte{
+		It("Should not handle the binding with state scheduled", func() {
+			// create master resource snapshot with 1 number of resources
+			masterSnapshot := generateResourceSnapshot(1, 1, 0, [][]byte{
 				testClonesetCRD, testNameSpace, testCloneset,
 			})
 			Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 			By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
 			// create a scheduled binding
-			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, memberClusterName)
+			binding = generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, memberClusterName)
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			// check the work is not created since the binding state is not bound
 			work := v1alpha1.Work{}
 			Consistently(func() bool {
-				err := k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				return apierrors.IsNotFound(err)
 			}, duration, interval).Should(BeTrue(), "controller should not create work in hub cluster until all resources are created")
+			// binding should not have any finalizers
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+			Expect(len(binding.Finalizers)).Should(Equal(0))
 		})
 
 		Context("Test Bound ClusterResourceBinding with a single resource snapshot", func() {
 			var masterSnapshot *fleetv1beta1.ClusterResourceSnapshot
-			var binding *fleetv1beta1.ClusterResourceBinding
 
 			BeforeEach(func() {
 				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
@@ -115,9 +121,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 			})
 
 			AfterEach(func() {
-				By("Deleting ClusterResourceBinding")
-				Expect(k8sClient.Delete(ctx, binding)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
-				By("Deleting ClusterResourceSnapshot")
+				By("Deleting master clusterResourceSnapshot")
 				Expect(k8sClient.Delete(ctx, masterSnapshot)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 			})
 
@@ -125,7 +129,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the work is created
 				work := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work manifest
@@ -161,7 +165,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the work is created
 				work := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
 				// update binding to be unscheduled
@@ -170,7 +174,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated to be unscheduled", binding.Name))
 				Consistently(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
 				//inspect the work manifest to make sure it still has the same content
 				expectedManifest := []v1alpha1.Manifest{
@@ -221,7 +225,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the work for the master resource snapshot is created
 				work := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work manifest
@@ -234,7 +238,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1), Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work manifest
@@ -269,12 +273,12 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the work for the master resource snapshot is created
 				work := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1), Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is created in %s", work.Name, work.Namespace))
 				// update the master resource snapshot with 3 resources in it
@@ -306,7 +310,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 				}
 				Eventually(func() error {
-					err := k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 					if err != nil {
 						return err
 					}
@@ -324,7 +328,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				}
 				Eventually(func() error {
 					err := k8sClient.Get(ctx, types.NamespacedName{
-						Name:      fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
+						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1),
 						Namespace: namespaceName}, &work)
 					if err != nil {
 						return err
@@ -342,7 +346,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				}
 				Eventually(func() error {
 					err := k8sClient.Get(ctx, types.NamespacedName{
-						Name:      fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 2),
+						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 2),
 						Namespace: namespaceName}, &work)
 					if err != nil {
 						return err
@@ -360,12 +364,12 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the work for the master resource snapshot is created
 				work := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1), Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is created in %s", work.Name, work.Namespace))
 				// update the master resource snapshot with only 1 resource snapshot that contains everything in it
@@ -388,7 +392,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 					{RawExtension: runtime.RawExtension{Raw: testPdb}},
 				}
 				Eventually(func() error {
-					err := k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 					if err != nil {
 						return err
 					}
@@ -402,7 +406,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the second work is removed since we have less resource snapshot now
 				Eventually(func() bool {
 					err := k8sClient.Get(ctx, types.NamespacedName{
-						Name:      fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1),
+						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1),
 						Namespace: namespaceName}, &work)
 					return apierrors.IsNotFound(err)
 				}, duration, interval).Should(BeTrue(), "controller should remove work in hub cluster that is no longer needed")
@@ -413,13 +417,13 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				// check the work for the master resource snapshot is created
 				work := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName, Namespace: namespaceName}, &work)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
 				work2 := v1alpha1.Work{}
 				Eventually(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, 1), Namespace: namespaceName}, &work2)
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &work2)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is created in %s", work2.Name, work2.Namespace))
 				// delete the binding
@@ -468,23 +472,26 @@ func generateClusterResourceBinding(state fleetv1beta1.BindingState, resourceSna
 }
 
 func generateResourceSnapshot(resourceIndex, numberResource, subIndex int, rawContents [][]byte) *fleetv1beta1.ClusterResourceSnapshot {
-	snapshotName := fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, resourceIndex)
-	if subIndex > 0 {
-		snapshotName = fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, snapshotName, subIndex)
-	}
+	var snapshotName string
 	clusterResourceSnapshot := &fleetv1beta1.ClusterResourceSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: snapshotName,
 			Labels: map[string]string{
 				fleetv1beta1.ResourceIndexLabel: strconv.Itoa(resourceIndex),
 				fleetv1beta1.CRPTrackingLabel:   testCRPName,
 			},
 			Annotations: map[string]string{
-				fleetv1beta1.NumberOfResourceSnapshotsAnnotation:  strconv.Itoa(numberResource),
-				fleetv1beta1.SubindexOfResourceSnapshotAnnotation: strconv.Itoa(subIndex),
+				fleetv1beta1.NumberOfResourceSnapshotsAnnotation: strconv.Itoa(numberResource),
 			},
 		},
 	}
+	if subIndex == 0 {
+		// master resource snapshot
+		snapshotName = fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testCRPName, resourceIndex)
+	} else {
+		snapshotName = fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testCRPName, resourceIndex, subIndex)
+		clusterResourceSnapshot.Annotations[fleetv1beta1.SubindexOfResourceSnapshotAnnotation] = strconv.Itoa(subIndex)
+	}
+	clusterResourceSnapshot.Name = snapshotName
 	for _, rawContent := range rawContents {
 		clusterResourceSnapshot.Spec.SelectedResources = append(clusterResourceSnapshot.Spec.SelectedResources, fleetv1beta1.ResourceContent{
 			RawExtension: runtime.RawExtension{Raw: rawContent},

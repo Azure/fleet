@@ -15,7 +15,7 @@ const (
 	WorkFinalizer = fleetPrefix + "work-cleanup"
 
 	// ParentBindingLabel is the label that contains the name of the binding that generates the work.
-	ParentBindingLabel = fleetPrefix + "resourceHash"
+	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
 )
 
 // +kubebuilder:object:root=true

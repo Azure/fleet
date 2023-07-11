@@ -29,7 +29,7 @@ const (
 	ResourceSnapshotNameFmt = "%s-%d-snapshot"
 
 	// ResourceSnapshotNameWithSubindexFmt is resourcePolicySnapshot name with subindex format: {CRPName}-{resourceIndex}-{subindex}.
-	ResourceSnapshotNameWithSubindexFmt = " %s-%d-%d"
+	ResourceSnapshotNameWithSubindexFmt = "%s-%d-%d"
 )
 
 // +genclient
