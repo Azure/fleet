@@ -27,6 +27,9 @@ const (
 
 	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}-snapshot.
 	ResourceSnapshotNameFmt = "%s-%d-snapshot"
+
+	// ResourceSnapshotNameWithSubindexFmt is resourcePolicySnapshot name with subindex format: {CRPName}-{resourceIndex}-{subindex}.
+	ResourceSnapshotNameWithSubindexFmt = " %s-%d-%d"
 )
 
 // +genclient
@@ -42,7 +45,7 @@ const (
 // Its spec is immutable.
 // We may need to produce more than one resourceSnapshot for all the resources a ResourcePlacement selected to get around the 1MB size limit of k8s objects.
 // We assign an ever-increasing index for each such group of resourceSnapshots.
-// The name convention of a clusterResourceSnapshot is {CRPName}-{resourceIndex}-{snapshot|-{subindex}}
+// The naming convention of a clusterResourceSnapshot is {CRPName}-{resourceIndex}-{subindex}
 // where the name of the first snapshot of a group has no subindex part so its name is {CRPName}-{resourceIndex}-snapshot.
 // resourceIndex will begin with 0.
 // Each snapshot MUST have the following labels:
