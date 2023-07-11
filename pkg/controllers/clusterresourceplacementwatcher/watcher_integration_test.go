@@ -56,8 +56,8 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 	BeforeEach(func() {
 		fakePlacementController.ResetQueue()
 		By("By creating a new clusterResourcePlacement")
-		crp := clusterResourcePlacementForTest()
-		Expect(k8sClient.Create(ctx, crp)).Should(Succeed())
+		createdCRP = clusterResourcePlacementForTest()
+		Expect(k8sClient.Create(ctx, createdCRP)).Should(Succeed())
 
 		By("By checking the placement queue before resetting")
 		// The event could arrive after the resetting, which causes the flakiness.
@@ -71,9 +71,12 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 	})
 
 	Context("When updating clusterResourcePlacement", func() {
+		BeforeEach(func() {
+			By("By getting latest crp before updating")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName}, createdCRP)).Should(Succeed())
+		})
 		AfterEach(func() {
 			By("By deleting crp")
-			createdCRP = clusterResourcePlacementForTest()
 			Expect(k8sClient.Delete(ctx, createdCRP)).Should(Succeed())
 
 			By("By checking crp")
@@ -83,8 +86,6 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 		})
 
 		It("Updating the spec and it should enqueue the event", func() {
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName}, createdCRP)).Should(Succeed())
-
 			By("By updating the clusterResourcePlacement spec")
 			revisionLimit := int32(3)
 			createdCRP.Spec.RevisionHistoryLimit = &revisionLimit
@@ -97,8 +98,6 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 		})
 
 		It("Updating the status and it should ignore the event", func() {
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRPName}, createdCRP)).Should(Succeed())
-
 			By("By updating the clusterResourcePlacement status")
 			newCondition := metav1.Condition{
 				Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
@@ -119,7 +118,6 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 	Context("When deleting clusterResourcePlacement", func() {
 		It("Should enqueue the event", func() {
 			By("By deleting crp")
-			createdCRP = clusterResourcePlacementForTest()
 			Expect(k8sClient.Delete(ctx, createdCRP)).Should(Succeed())
 
 			By("By checking crp")
