@@ -22,8 +22,14 @@ const (
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
 	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
 
-	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}.
-	ResourceSnapshotNameFmt = "%s-%d"
+	// SubindexOfResourceSnapshotAnnotation is the annotation to store the subindex of resource snapshot in the group.
+	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindexOfResourceSnapshot"
+
+	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}-snapshot.
+	ResourceSnapshotNameFmt = "%s-%d-snapshot"
+
+	// ResourceSnapshotNameWithSubindexFmt is resourcePolicySnapshot name with subindex format: {CRPName}-{resourceIndex}-{subindex}.
+	ResourceSnapshotNameWithSubindexFmt = " %s-%d-%d"
 )
 
 // +genclient
@@ -39,8 +45,8 @@ const (
 // Its spec is immutable.
 // We may need to produce more than one resourceSnapshot for all the resources a ResourcePlacement selected to get around the 1MB size limit of k8s objects.
 // We assign an ever-increasing index for each such group of resourceSnapshots.
-// The name convention of a clusterResourceSnapshot is {CRPName}-{resourceIndex}(-{subindex})*
-// where the name of the first snapshot of a group has no subindex part so its name is {CRPName}-{resourceIndex}.
+// The naming convention of a clusterResourceSnapshot is {CRPName}-{resourceIndex}-{subindex}
+// where the name of the first snapshot of a group has no subindex part so its name is {CRPName}-{resourceIndex}-snapshot.
 // resourceIndex will begin with 0.
 // Each snapshot MUST have the following labels:
 //   - `CRPTrackingLabel` which points to its owner CRP.
@@ -52,6 +58,9 @@ const (
 // The first snapshot of the index group MUST have the following annotations:
 //   - "NumberOfResourceSnapshots" to store the total number of resource snapshots in the index group.
 //   - `ResourceGroupHashAnnotation` whose value is the sha-256 hash of all the snapshots belong to the same snapshot index.
+//
+// Each snapshot (excluding the first snapshot) MUST have the following annotations:
+//   - "SubindexOfResourceSnapshotAnnotation" to store the subindex of resource snapshot in the group.
 type ClusterResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
