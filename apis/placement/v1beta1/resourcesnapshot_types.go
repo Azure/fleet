@@ -25,7 +25,7 @@ const (
 	// SubindexOfResourceSnapshotAnnotation is the annotation to store the subindex of resource snapshot in the group.
 	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindexOfResourceSnapshot"
 
-	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}.
+	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}-snapshot.
 	ResourceSnapshotNameFmt = "%s-%d-snapshot"
 )
 
