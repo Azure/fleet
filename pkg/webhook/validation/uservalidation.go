@@ -47,10 +47,12 @@ func ValidateUserForResource(whiteListedUsers []string, userInfo authenticationv
 	return admission.Denied(fmt.Sprintf("user: %s in groups: %v is not allowed to modify fleet resource %s: %s/%s", userInfo.Username, userInfo.Groups, resKind, resName, resNamespace))
 }
 
+// IsMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
 func IsMasterGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo authenticationv1.UserInfo) bool {
 	return slices.Contains(whiteListedUsers, userInfo.Username) || slices.Contains(userInfo.Groups, mastersGroup)
 }
 
+// IsUserAuthenticatedServiceAccount returns true if user is a valid/authenticated service account.
 func IsUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool {
 	return slices.Contains(userInfo.Groups, serviceAccountsKubeSystemGroup) && slices.Contains(userInfo.Groups, serviceAccountsGroup) && slices.Contains(userInfo.Groups, authenticatedGroup)
 }

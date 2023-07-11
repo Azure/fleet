@@ -195,6 +195,7 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	return obj, gvk, mapping.Resource
 }
 
+// CreateResourcesForWebHookE2E create resources required for Webhook E2E.
 func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster, memberNamespace string) {
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -274,6 +275,7 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create role binding %s for webhook E2E", rb.Name)
 }
 
+// DeleteResourcesForWebHookE2E deletes resources created for Webhook E2E.
 func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster, memberNamespace string) {
 	rb := rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{

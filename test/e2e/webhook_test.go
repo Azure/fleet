@@ -613,7 +613,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			labels[testKey] = testValue
 			mc.SetLabels(labels)
 
-			By("expecting successful UPDATE of CRD")
+			By("expecting successful UPDATE of member cluster")
 			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
 			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
 
@@ -767,7 +767,7 @@ var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "RoleBinding", rb.Name, rb.Namespace)))
 		})
 
-		It("should allow update operation on role for user in system:masters group", func() {
+		It("should allow update operation on role binding for user in system:masters group", func() {
 			var rb rbacv1.RoleBinding
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testRoleBinding, Namespace: memberNamespace.Name}, &rb)).Should(Succeed())
 

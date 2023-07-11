@@ -460,6 +460,7 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 	return nil
 }
 
+// createRule returns a admission rule using the arguments passed.
 func createRule(apiGroups, apiResources, resources []string, scopeType *admv1.ScopeType) admv1.Rule {
 	return admv1.Rule{
 		APIGroups:   apiGroups,

@@ -2,7 +2,6 @@ package validation
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -34,7 +33,7 @@ func TestValidateUserForResource(t *testing.T) {
 			resKind:      "Role",
 			resName:      "test-role",
 			resNamespace: "test-namespace",
-			wantResponse: admission.Allowed(fmt.Sprintf("user: test-user in groups: [system:masters] is allowed to modify fleet resource Role: test-role/test-namespace")),
+			wantResponse: admission.Allowed("user: test-user in groups: [system:masters] is allowed to modify fleet resource Role: test-role/test-namespace"),
 		},
 		"allow white listed user not in system:masters group": {
 			userInfo: v1.UserInfo{
@@ -45,7 +44,7 @@ func TestValidateUserForResource(t *testing.T) {
 			resName:          "test-role-binding",
 			resNamespace:     "test-namespace",
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Allowed(fmt.Sprintf("user: test-user in groups: [test-group] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace")),
+			wantResponse:     admission.Allowed("user: test-user in groups: [test-group] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace"),
 		},
 		"allow valid service account": {
 			userInfo: v1.UserInfo{
@@ -55,7 +54,7 @@ func TestValidateUserForResource(t *testing.T) {
 			resKind:      "RoleBinding",
 			resName:      "test-role-binding",
 			resNamespace: "test-namespace",
-			wantResponse: admission.Allowed(fmt.Sprintf("user: test-user in groups: [system:serviceaccounts system:serviceaccounts:kube-system system:authenticated] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace")),
+			wantResponse: admission.Allowed("user: test-user in groups: [system:serviceaccounts system:serviceaccounts:kube-system system:authenticated] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace"),
 		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: v1.UserInfo{
@@ -65,7 +64,7 @@ func TestValidateUserForResource(t *testing.T) {
 			resKind:      "Role",
 			resName:      "test-role",
 			resNamespace: "test-namespace",
-			wantResponse: admission.Denied(fmt.Sprintf("user: test-user in groups: [test-group] is not allowed to modify fleet resource Role: test-role/test-namespace")),
+			wantResponse: admission.Denied("user: test-user in groups: [test-group] is not allowed to modify fleet resource Role: test-role/test-namespace"),
 		},
 	}
 

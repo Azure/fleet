@@ -44,6 +44,7 @@ type fleetResourceValidator struct {
 	decoder          *admission.Decoder
 }
 
+// Handle receives the request then allows/denies the request to modify fleet resources.
 func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
@@ -68,6 +69,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	return response
 }
 
+// handleCRD allows/denies the request to modify CRD object after validation.
 func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Response {
 	var crd v1.CustomResourceDefinition
 	if err := v.decodeRequestObject(req, &crd); err != nil {
@@ -82,6 +84,7 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify CRD: %s", req.UserInfo.Username, req.UserInfo.Groups, crd.Name))
 }
 
+// handleMemberCluster allows/denies the request to modify member cluster object after validation.
 func (v *fleetResourceValidator) handleMemberCluster(ctx context.Context, req admission.Request) admission.Response {
 	var mc fleetv1alpha1.MemberCluster
 	if err := v.decodeRequestObject(req, &mc); err != nil {
@@ -95,6 +98,7 @@ func (v *fleetResourceValidator) handleMemberCluster(ctx context.Context, req ad
 	return admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify member cluster: %s", req.UserInfo.Username, req.UserInfo.Groups, mc.Name))
 }
 
+// handleRole allows/denies the request to modify role after validation.
 func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Response {
 	var role rbacv1.Role
 	if err := v.decodeRequestObject(req, &role); err != nil {
@@ -104,6 +108,7 @@ func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Res
 	return validation.ValidateUserForResource(v.whiteListedUsers, req.UserInfo, role.Kind, role.Name, role.Namespace)
 }
 
+// handleRoleBinding allows/denies the request to modify role after validation.
 func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admission.Response {
 	var rb rbacv1.RoleBinding
 	if err := v.decodeRequestObject(req, &rb); err != nil {
@@ -113,6 +118,7 @@ func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admiss
 	return validation.ValidateUserForResource(v.whiteListedUsers, req.UserInfo, rb.Kind, rb.Name, rb.Namespace)
 }
 
+// decodeRequestObject decodes the request object into the passed runtime object.
 func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj runtime.Object) error {
 	if req.Operation == admissionv1.Delete {
 		// req.Object is not populated for delete: https://github.com/kubernetes-sigs/controller-runtime/issues/1762.
@@ -129,11 +135,13 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 	return nil
 }
 
+// InjectDecoder injects the decoder into fleetResourceValidator.
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
 }
 
+// createCRDGVK returns GVK for CRD.
 func createCRDGVK() metav1.GroupVersionKind {
 	return metav1.GroupVersionKind{
 		Group:   v1.SchemeGroupVersion.Group,
@@ -142,6 +150,7 @@ func createCRDGVK() metav1.GroupVersionKind {
 	}
 }
 
+// createMemberClusterGVK returns GVK for member cluster.
 func createMemberClusterGVK() metav1.GroupVersionKind {
 	return metav1.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
@@ -150,6 +159,7 @@ func createMemberClusterGVK() metav1.GroupVersionKind {
 	}
 }
 
+// createRoleGVK return GVK for role.
 func createRoleGVK() metav1.GroupVersionKind {
 	return metav1.GroupVersionKind{
 		Group:   rbacv1.SchemeGroupVersion.Group,
@@ -158,6 +168,7 @@ func createRoleGVK() metav1.GroupVersionKind {
 	}
 }
 
+// createRoleBindingGVK returns GVK for role binding.
 func createRoleBindingGVK() metav1.GroupVersionKind {
 	return metav1.GroupVersionKind{
 		Group:   rbacv1.SchemeGroupVersion.Group,
