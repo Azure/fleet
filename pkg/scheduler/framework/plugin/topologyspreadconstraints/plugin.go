@@ -113,23 +113,17 @@ func (p *Plugin) PostBatch(
 	state framework.CycleStatePluginReadWriter,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 ) (int, *framework.Status) {
+	if policy.Spec.Policy == nil {
+		// The policy does not exist; note that this normally will not occur as in this case
+		// the policy is considered of the PickAll type and this extension point will not
+		// run for this placement type.
+		return 0, framework.FromError(fmt.Errorf("policy does not exist"), p.Name(), "failed to get policy")
+	}
+
 	if len(policy.Spec.Policy.TopologySpreadConstraints) == 0 {
 		// There are no topology spread constraints to enforce; skip.
 		return 0, framework.NewNonErrorStatus(framework.Skip, p.Name(), "no topology spread constraint is present")
 	}
-
-	// Prepare some common states for future use. This helps avoid the cost of repeatedly
-	// calculating the same states at each extension point.
-	//
-	// Note that this will happen as long as there is one or more topology spread constraints
-	// in presence in the scheduling policy, regardless of its settings.
-	pluginState, err := prepareTopologySpreadConstraintsPluginState(state, policy)
-	if err != nil {
-		return 0, framework.FromError(err, p.Name(), "failed to prepare plugin state")
-	}
-
-	// Save the plugin state.
-	state.Write(framework.StateKey(p.Name()), pluginState)
 
 	// Set a batch limit of 1 if there are topology spread constraints in presence.
 	//
@@ -147,6 +141,15 @@ func (p *Plugin) PreFilter(
 	state framework.CycleStatePluginReadWriter,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
+	if policy.Spec.Policy == nil {
+		// The policy does not exist; in this case the policy is considered of the PickAll
+		// type, and topology spread constraints do not apply to this type.
+		//
+		// Note that this will lead the scheduler to skip this plugin in the next stage
+		// (Filter).
+		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "policy does not exist")
+	}
+
 	if len(policy.Spec.Policy.TopologySpreadConstraints) == 0 {
 		// There are no topology spread constraints to enforce; skip.
 		//
@@ -155,13 +158,18 @@ func (p *Plugin) PreFilter(
 		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no topology spread constraint is present")
 	}
 
-	// Read the plugin state.
-	pluginState, err := p.readPluginState(state)
+	// Prepare some common states for future use. This helps avoid the cost of repeatedly
+	// calculating the same states at each extension point.
+	//
+	// Note that this will happen as long as there is one or more topology spread constraints
+	// in presence in the scheduling policy, regardless of its settings.
+	pluginState, err := prepareTopologySpreadConstraintsPluginState(state, policy)
 	if err != nil {
-		// This branch should never be reached, as the plugin state has been set at the very
-		// first extension point.
-		return framework.FromError(err, p.Name(), "failed to read plugin state")
+		return framework.FromError(err, p.Name(), "failed to prepare plugin state")
 	}
+
+	// Save the plugin state.
+	state.Write(framework.StateKey(p.Name()), pluginState)
 
 	if len(pluginState.doNotScheduleConstraints) == 0 {
 		// There are no DoNotSchedule topology spread constraints to enforce; skip.
@@ -185,8 +193,8 @@ func (p *Plugin) Filter(
 	// Read the plugin state.
 	pluginState, err := p.readPluginState(state)
 	if err != nil {
-		// This branch should never be reached, as the plugin state has been set at the very
-		// first extension point.
+		// This branch should never be reached, as for any policy with present topology spread
+		// constraints, a common plugin state has been set at the PreFilter extension point.
 		return framework.FromError(err, p.Name(), "failed to read plugin state")
 	}
 
@@ -206,13 +214,28 @@ func (p *Plugin) Filter(
 func (p *Plugin) PreScore(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
+	if policy.Spec.Policy == nil {
+		// The policy does not exist; in this case the policy is considered of the PickAll
+		// type, and topology spread constraints do not apply to this type. Note also that
+		// normally this extension point will not run at all for this placement type.
+		return framework.FromError(fmt.Errorf("policy does not exist"), p.Name(), "failed to get policy")
+	}
+
+	if len(policy.Spec.Policy.TopologySpreadConstraints) == 0 {
+		// There are no topology spread constraints to enforce; skip.
+		//
+		// Note that this will lead the scheduler to skip this plugin in the next stage
+		// (Score).
+		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no topology spread constraint is present")
+	}
+
 	// Read the plugin state.
 	pluginState, err := p.readPluginState(state)
 	if err != nil {
-		// This branch should never be reached, as the plugin state has been set at the very
-		// first extension point.
+		// This branch should never be reached, as for any policy with present topology spread
+		// constraints, a common plugin state has been set at the PreFilter extension point.
 		return framework.FromError(err, p.Name(), "failed to read plugin state")
 	}
 
@@ -241,8 +264,8 @@ func (p *Plugin) Score(
 	// Read the plugin state.
 	pluginState, err := p.readPluginState(state)
 	if err != nil {
-		// This branch should never be reached, as the plugin state has been set at the very
-		// first extension point.
+		// This branch should never be reached, as for any policy with present topology spread
+		// constraints, a common plugin state has been set at the PreFilter extension point.
 		return nil, framework.FromError(err, p.Name(), "failed to read plugin state")
 	}
 
