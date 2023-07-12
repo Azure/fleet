@@ -19,10 +19,6 @@ const (
 
 	// NumberOfClustersAnnotation is the annotation that indicates how many clusters should be selected for selectN placement type.
 	NumberOfClustersAnnotation = fleetPrefix + "numberOfClusters"
-
-	// CRPGenerationAnnotation is the annotation that indicates the generation from which the
-	// policy snapshot is created or last updated.
-	CRPGenerationAnnotation = fleetPrefix + "CRPGeneration"
 )
 
 // +genclient

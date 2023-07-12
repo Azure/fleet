@@ -26,6 +26,10 @@ const (
 
 	// FleetResourceLabelKey is that label that indicates the resource is a fleet resource.
 	FleetResourceLabelKey = fleetPrefix + "isFleetResource"
+
+	// CRPGenerationAnnotation is the annotation that indicates the generation of the CRP from
+	// which an object is derived or last updated.
+	CRPGenerationAnnotation = fleetPrefix + "CRPGeneration"
 )
 
 const (
