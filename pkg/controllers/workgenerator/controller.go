@@ -190,7 +190,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	masterResourceSnapshot := fleetv1beta1.ClusterResourceSnapshot{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &masterResourceSnapshot); err != nil {
 		klog.ErrorS(err, "Failed to get the resource snapshot from resource masterResourceSnapshot",
-			"resource masterResourceSnapshot", klog.KObj(resourceBinding), "masterResourceSnapshot", resourceBinding.Spec.ResourceSnapshotName)
+			"resourceBinding", klog.KObj(resourceBinding), "masterResourceSnapshot", resourceBinding.Spec.ResourceSnapshotName)
 		return nil, controller.NewAPIServerError(true, err)
 	}
 	resourceSnapshots[masterResourceSnapshot.Name] = &masterResourceSnapshot
@@ -235,7 +235,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	return resourceSnapshots, nil
 }
 
-// upsertWork creates or updates the work for the corresponding resource snapshot
+// upsertWork creates or updates the work for the corresponding resource snapshot.
 func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, workName string, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, resourceBinding *fleetv1beta1.ClusterResourceBinding) error {
 	needCreate := false
 	if work == nil {

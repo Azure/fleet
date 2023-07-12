@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,6 +42,8 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 
 	Context("Test Bound ClusterResourceBinding", func() {
 		var binding *fleetv1beta1.ClusterResourceBinding
+		ignoreOption := cmpopts.IgnoreFields(metav1.ObjectMeta{},
+			"UID", "ResourceVersion", "ManagedFields", "CreationTimestamp", "Generation")
 
 		BeforeEach(func() {
 			memberClusterName = "cluster-" + utils.RandStr()
@@ -132,33 +135,37 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
-				//inspect the work manifest
-				expectedManifest := []v1alpha1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
-					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
-					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
-				}
-				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				//inspect the work owner reference
-				expectedOwnerReference := []metav1.OwnerReference{
-					{
-						APIVersion:         fleetv1beta1.GroupVersion.String(),
-						Kind:               "ClusterResourceBinding",
-						Name:               binding.Name,
-						UID:                binding.UID,
-						BlockOwnerDeletion: pointer.Bool(true),
+				//inspect the work
+				wantWork := v1alpha1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: namespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         fleetv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: pointer.Bool(true),
+							},
+						},
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ParentBindingLabel: binding.Name,
+						},
+					},
+					Spec: v1alpha1.WorkSpec{
+						Workload: v1alpha1.WorkloadTemplate{
+							Manifests: []v1alpha1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+								{RawExtension: runtime.RawExtension{Raw: testCloneset}},
+							},
+						},
 					},
 				}
-				diff = cmp.Diff(expectedOwnerReference, work.OwnerReferences)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work owner reference(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				//inspect the work labels
-				expectedLabels := map[string]string{
-					fleetv1beta1.CRPTrackingLabel:   testCRPName,
-					fleetv1beta1.ParentBindingLabel: binding.Name,
-				}
-				diff = cmp.Diff(expectedLabels, work.Labels)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work label(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				diff := cmp.Diff(wantWork, work, ignoreOption)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 			})
 
 			It("Should treat the unscheduled binding as bound", func() {
@@ -241,32 +248,36 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is created in %s", work.Name, work.Namespace))
-				//inspect the work manifest
-				expectedManifest = []v1alpha1.Manifest{
-					{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
-					{RawExtension: runtime.RawExtension{Raw: testPdb}},
-				}
-				diff = cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				//inspect the work owner reference
-				expectedOwnerReference := []metav1.OwnerReference{
-					{
-						APIVersion:         fleetv1beta1.GroupVersion.String(),
-						Kind:               "ClusterResourceBinding",
-						Name:               binding.Name,
-						UID:                binding.UID,
-						BlockOwnerDeletion: pointer.Bool(true),
+				//inspect the work
+				wantWork := v1alpha1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1),
+						Namespace: namespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         fleetv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: pointer.Bool(true),
+							},
+						},
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:   testCRPName,
+							fleetv1beta1.ParentBindingLabel: binding.Name,
+						},
+					},
+					Spec: v1alpha1.WorkSpec{
+						Workload: v1alpha1.WorkloadTemplate{
+							Manifests: []v1alpha1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
+								{RawExtension: runtime.RawExtension{Raw: testPdb}},
+							},
+						},
 					},
 				}
-				diff = cmp.Diff(expectedOwnerReference, work.OwnerReferences)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work owner reference(%s) mismatch (-want +got):\n%s", work.Name, diff))
-				//inspect the work labels
-				expectedLabels := map[string]string{
-					fleetv1beta1.CRPTrackingLabel:   testCRPName,
-					fleetv1beta1.ParentBindingLabel: binding.Name,
-				}
-				diff = cmp.Diff(expectedLabels, work.Labels)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work label(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				diff = cmp.Diff(wantWork, work, ignoreOption)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 			})
 
 			It("Should update existing work and create more work in the target namespace when resource snapshots change", func() {

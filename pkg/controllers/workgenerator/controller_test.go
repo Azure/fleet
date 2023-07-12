@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package workgenerator
 
 import (
@@ -73,7 +78,7 @@ func Test_getWorkNameFromSnapshotName(t *testing.T) {
 			wantErr:    nil,
 			wantedName: "placement-2",
 		},
-		"test return error if the resource snapshot has invaide subindex": {
+		"test return error if the resource snapshot has invalid subindex": {
 			resourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "placement-1-2",
@@ -111,7 +116,6 @@ func Test_getWorkNameFromSnapshotName(t *testing.T) {
 			}
 			if workName != tt.wantedName {
 				t.Errorf("getWorkNameFromSnapshotName test `%s` workName = `%v`, wantedName `%v`", name, workName, tt.wantedName)
-				return
 			}
 		})
 	}
