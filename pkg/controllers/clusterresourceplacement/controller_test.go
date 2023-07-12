@@ -85,7 +85,6 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 			Name: testName,
 		},
 		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-			Policy: placementPolicyForTest(),
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 				{
 					Group:   corev1.GroupName,
@@ -96,14 +95,15 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 					},
 				},
 			},
+			Policy: placementPolicyForTest(),
 		},
 	}
 }
 
 func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
-	wantPolicy := placementPolicyForTest()
-	wantPolicy.NumberOfClusters = nil
-	jsonBytes, err := json.Marshal(wantPolicy)
+	testPolicy := placementPolicyForTest()
+	testPolicy.NumberOfClusters = nil
+	jsonBytes, err := json.Marshal(testPolicy)
 	if err != nil {
 		t.Fatalf("failed to create the policy hash: %v", err)
 	}
@@ -115,13 +115,15 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 	unspecifiedPolicyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
 	tests := []struct {
 		name                    string
+		policy                  *fleetv1beta1.PlacementPolicy
 		revisionHistoryLimit    *int32
 		policySnapshots         []fleetv1beta1.ClusterSchedulingPolicySnapshot
 		wantPolicySnapshots     []fleetv1beta1.ClusterSchedulingPolicySnapshot
 		wantLatestSnapshotIndex int // index of the wantPolicySnapshots array
 	}{
 		{
-			name: "new clusterResourcePolicy and no existing policy snapshots owned by my-crp",
+			name:   "new clusterResourcePolicy and no existing policy snapshots owned by my-crp",
+			policy: placementPolicyForTest(),
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -168,7 +170,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -176,7 +178,59 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 1,
 		},
 		{
+			name: "new clusterResourcePolicy (unspecified policy) and no existing policy snapshots owned by my-crp",
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+			},
+			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-crp-1",
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+					},
+				},
+				// new policy snapshot owned by the my-crp
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "0",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+					},
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+						PolicyHash: unspecifiedPolicyHash,
+					},
+				},
+			},
+			wantLatestSnapshotIndex: 1,
+		},
+		{
 			name:                 "new clusterResourcePolicy with invalidRevisionLimit and no existing policy snapshots owned by my-crp",
+			policy:               placementPolicyForTest(),
 			revisionHistoryLimit: &invalidRevisionLimit,
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
@@ -224,7 +278,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -233,6 +287,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 		},
 		{
 			name:                 "crp policy has no change",
+			policy:               placementPolicyForTest(),
 			revisionHistoryLimit: &singleRevisionLimit,
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
@@ -257,7 +312,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -285,7 +340,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -296,6 +351,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 			name: "crp policy has changed and there is no active snapshot",
 			// It happens when last reconcile loop fails after setting the latest label to false and
 			// before creating a new policy snapshot.
+			policy:               placementPolicyForTest(),
 			revisionHistoryLimit: &multipleRevisionLimit,
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
@@ -391,7 +447,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -400,6 +456,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 		},
 		{
 			name:                 "crp policy has changed and there is an active snapshot",
+			policy:               placementPolicyForTest(),
 			revisionHistoryLimit: &singleRevisionLimit,
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
@@ -449,7 +506,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -457,7 +514,8 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 0,
 		},
 		{
-			name: "crp policy has been changed and reverted back and there is no active snapshot",
+			name:   "crp policy has been changed and reverted back and there is no active snapshot",
+			policy: placementPolicyForTest(),
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -503,7 +561,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -554,7 +612,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -564,6 +622,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 		{
 			name: "crp policy has not been changed and only the numberOfCluster is changed",
 			// cause no new policy snapshot is created, it does not trigger the history limit check.
+			policy:               placementPolicyForTest(),
 			revisionHistoryLimit: &singleRevisionLimit,
 			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				{
@@ -611,7 +670,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -662,7 +721,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     wantPolicy,
+						Policy:     testPolicy,
 						PolicyHash: policyHash,
 					},
 				},
@@ -674,6 +733,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			crp := clusterResourcePlacementForTest()
+			crp.Spec.Policy = tc.policy
 			crp.Spec.RevisionHistoryLimit = tc.revisionHistoryLimit
 			objects := []client.Object{crp}
 			for i := range tc.policySnapshots {

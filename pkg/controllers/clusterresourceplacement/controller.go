@@ -116,9 +116,11 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 
 func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
 	crpKObj := klog.KObj(crp)
-	schedulingPolicy := *crp.Spec.Policy // will exclude the numberOfClusters
-	schedulingPolicy.NumberOfClusters = nil
-	policyHash, err := generatePolicyHash(&schedulingPolicy)
+	schedulingPolicy := crp.Spec.Policy.DeepCopy()
+	if schedulingPolicy != nil {
+		schedulingPolicy.NumberOfClusters = nil // will exclude the numberOfClusters
+	}
+	policyHash, err := generatePolicyHash(schedulingPolicy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to generate policy hash of crp", "clusterResourcePlacement", crpKObj)
 		return nil, controller.NewUnexpectedBehaviorError(err)
@@ -168,7 +170,7 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 			},
 		},
 		Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-			Policy:     &schedulingPolicy,
+			Policy:     schedulingPolicy,
 			PolicyHash: []byte(policyHash),
 		},
 	}
@@ -365,7 +367,7 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
 		crp.Spec.Policy.NumberOfClusters != nil {
-		oldCount, err := parseNumberOfClustersFromAnnotation(latest)
+		oldCount, err := utils.ExtractNumOfClustersFromPolicySnapshot(latest)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the numberOfClusterAnnotation", "clusterSchedulingPolicySnapshot", klog.KObj(latest))
 			return controller.NewUnexpectedBehaviorError(err)
@@ -609,16 +611,6 @@ func parseResourceIndexFromLabel(s *fleetv1beta1.ClusterResourceSnapshot) (int, 
 	v, err := strconv.Atoi(indexLabel)
 	if err != nil || v < 0 {
 		return -1, fmt.Errorf("invalid resource index %q, error: %w", indexLabel, err)
-	}
-	return v, nil
-}
-
-// parseNumberOfClustersFromAnnotation returns error when parsing the annotation which should never return error in production.
-func parseNumberOfClustersFromAnnotation(s *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, error) {
-	n := s.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
-	v, err := strconv.Atoi(n)
-	if err != nil || v < 0 {
-		return -1, fmt.Errorf("invalid numberOfCluster %q, error: %w", n, err)
 	}
 	return v, nil
 }

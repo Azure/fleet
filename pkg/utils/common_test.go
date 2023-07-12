@@ -162,4 +162,3 @@ func TestExtractSubindexFromClusterResourceSnapshot(t *testing.T) {
 		})
 	}
 }
-
