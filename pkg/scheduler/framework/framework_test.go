@@ -2596,7 +2596,7 @@ func TestNewSchedulingDecisionsFrom(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			decisions := newSchedulingDecisionsFrom(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.existing...)
 			if diff := cmp.Diff(tc.want, decisions); diff != "" {
-				t.Errorf("decisions diff (-got, +want): %s", diff)
+				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
 		})
 	}
@@ -2643,7 +2643,7 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			decisions := newSchedulingDecisionsFrom(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.bindingSets...)
 			if diff := cmp.Diff(decisions, tc.wantDecisions); diff != "" {
-				t.Errorf("decisions diff (-got, +want): %s", diff)
+				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
 		})
 	}
