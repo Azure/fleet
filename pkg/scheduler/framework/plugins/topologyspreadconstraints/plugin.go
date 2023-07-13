@@ -16,6 +16,25 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+const (
+	// skewChangeScoreFactor is the factor applied to topology spread score for every unit
+	// of skew change.
+	//
+	// Note that it should be a negative value, so that any provisional placement that reduces
+	// skewing will be assigned a positive topology spread score.
+	skewChangeScoreFactor = -1
+	// maxSkewViolationPenality is the penalty applied to topology spread score when a
+	// provisional placement violates a topology spread constraint.
+	//
+	// Note that it should be a positive value, as the plugin will subtract this value from
+	// the total score.
+	maxSkewViolationPenality = 1000
+)
+
+var (
+	doNotScheduleConstraintViolationReasonTemplate = "violated topology spread constraint %q (max skew %d)"
+)
+
 // Plugin is the scheduler plugin that enforces the
 // topology spread constraints (if any) defined on a CRP.
 type Plugin struct {

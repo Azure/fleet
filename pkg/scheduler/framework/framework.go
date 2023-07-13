@@ -259,7 +259,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// Note that this state is shared between all plugins and the scheduler framework itself (though some fields are reserved by
 	// the framework). These resevered fields are never accessed concurrently, as each scheduling run has its own cycle and a run
 	// is always executed in one single goroutine; plugin access to the state is guarded by sync.Map.
-	state := NewCycleState()
+	state := NewCycleState(clusters, bound, scheduled)
 
 	switch policy.Spec.Policy.PlacementType {
 	case fleetv1beta1.PickAllPlacementType:
