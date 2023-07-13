@@ -110,7 +110,7 @@ func (p *Plugin) readPluginState(state framework.CycleStatePluginReadWriter) (*p
 // Note that the scheduler will not run this extension point in parallel.
 func (p *Plugin) PostBatch(
 	_ context.Context,
-	state framework.CycleStatePluginReadWriter,
+	_ framework.CycleStatePluginReadWriter,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 ) (int, *framework.Status) {
 	if policy.Spec.Policy == nil {
