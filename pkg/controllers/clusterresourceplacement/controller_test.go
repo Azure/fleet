@@ -229,63 +229,6 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 1,
 		},
 		{
-			name:                 "new clusterResourcePolicy with invalidRevisionLimit and no existing policy snapshots owned by my-crp",
-			policy:               placementPolicyForTest(),
-			revisionHistoryLimit: &invalidRevisionLimit,
-			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "another-crp-1",
-						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
-						},
-					},
-				},
-			},
-			wantPolicySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "another-crp-1",
-						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "1",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      "another-crp",
-						},
-					},
-				},
-				// new policy snapshot owned by the my-crp
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
-						Labels: map[string]string{
-							fleetv1beta1.PolicyIndexLabel:      "0",
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testName,
-						},
-						OwnerReferences: []metav1.OwnerReference{
-							{
-								Name:               testName,
-								BlockOwnerDeletion: pointer.Bool(true),
-								Controller:         pointer.Bool(true),
-								APIVersion:         fleetAPIVersion,
-								Kind:               "ClusterResourcePlacement",
-							},
-						},
-						Annotations: map[string]string{
-							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
-						},
-					},
-					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-						Policy:     testPolicy,
-						PolicyHash: policyHash,
-					},
-				},
-			},
-			wantLatestSnapshotIndex: 1,
-		},
-		{
 			name:                 "crp policy has no change",
 			policy:               placementPolicyForTest(),
 			revisionHistoryLimit: &singleRevisionLimit,
@@ -745,7 +688,11 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{Client: fakeClient, Scheme: scheme}
-			got, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp)
+			limit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+			if tc.revisionHistoryLimit != nil {
+				limit = *tc.revisionHistoryLimit
+			}
+			got, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(limit))
 			if err != nil {
 				t.Fatalf("failed to getOrCreateClusterSchedulingPolicySnapshot: %v", err)
 			}
@@ -1001,7 +948,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{Client: fakeClient, Scheme: scheme}
-			_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp)
+			_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}
@@ -1610,7 +1557,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				Client: fakeClient,
 				Scheme: scheme,
 			}
-			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.resourceSnapshotSpec)
+			limit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+			if tc.revisionHistoryLimit != nil {
+				limit = *tc.revisionHistoryLimit
+			}
+			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.resourceSnapshotSpec, int(limit))
 			if err != nil {
 				t.Fatalf("failed to handle getOrCreateClusterResourceSnapshot: %v", err)
 			}
@@ -1991,7 +1942,7 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 				Client: fakeClient,
 				Scheme: scheme,
 			}
-			_, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, resourceSnapshotSpecA)
+			_, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, resourceSnapshotSpecA, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}

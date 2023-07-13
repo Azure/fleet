@@ -93,7 +93,18 @@ func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fl
 // clusterSchedulingPolicySnapshot status and work status.
 // If the error type is ErrUnexpectedBehavior, the controller will skip the reconciling.
 func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (ctrl.Result, error) {
-	_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp)
+	revisionLimit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+	if crp.Spec.RevisionHistoryLimit != nil {
+		revisionLimit = *crp.Spec.RevisionHistoryLimit
+		if revisionLimit <= 0 {
+			err := fmt.Errorf("invalid clusterResourcePlacement %s: invalid revisionHistoryLimit %d", crp.Name, revisionLimit)
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "clusterResourcePlacement", klog.KObj(crp))
+			// use the default value instead
+			revisionLimit = fleetv1beta1.RevisionHistoryLimitDefaultValue
+		}
+	}
+
+	_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -104,7 +115,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: selectedResources,
 	}
-	_, err = r.getOrCreateClusterResourceSnapshot(ctx, crp, &resourceSnapshotSpec)
+	_, err = r.getOrCreateClusterResourceSnapshot(ctx, crp, &resourceSnapshotSpec, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -114,7 +125,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	return ctrl.Result{}, nil
 }
 
-func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
+func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
 	crpKObj := klog.KObj(crp)
 	schedulingPolicy := crp.Spec.Policy.DeepCopy()
 	if schedulingPolicy != nil {
@@ -154,7 +165,7 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 
 	// delete redundant snapshot revisions before creating a new snapshot to guarantee that the number of snapshots
 	// won't exceed the limit.
-	if err := r.deleteRedundantSchedulingPolicySnapshots(ctx, crp); err != nil {
+	if err := r.deleteRedundantSchedulingPolicySnapshots(ctx, crp, revisionHistoryLimit); err != nil {
 		return nil, err
 	}
 
@@ -196,17 +207,22 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 	return latestPolicySnapshot, nil
 }
 
-func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
+func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) error {
 	sortedList, err := r.listSortedClusterSchedulingPolicySnapshots(ctx, crp)
 	if err != nil {
 		return err
 	}
-	// respect the revisionHistoryLimit field
-	revisionLimit := parseRevisionLimit(crp)
-	if len(sortedList.Items) < revisionLimit {
+	if len(sortedList.Items) < revisionHistoryLimit {
 		return nil
 	}
-	for i := 0; i <= len(sortedList.Items)-revisionLimit; i++ { // need to reserve one slot for the new snapshot
+
+	if len(sortedList.Items)-revisionHistoryLimit > 0 {
+		// We always delete before creating a new snapshot, the snapshot size should never exceed the limit as there is
+		// no finalizer added and object should be deleted immediately.
+		klog.Warningf("The number of clusterSchedulingPolicySnapshots exceeds the revisionHistoryLimit and it should never happen", "clusterResourcePlacement", klog.KObj(crp), "numberOfSnapshots", len(sortedList.Items), "revisionHistoryLimit", revisionHistoryLimit)
+	}
+
+	for i := 0; i <= len(sortedList.Items)-revisionHistoryLimit; i++ { // need to reserve one slot for the new snapshot
 		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !errors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to delete clusterSchedulingPolicySnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterSchedulingPolicySnapshot", klog.KObj(&sortedList.Items[i]))
 			return controller.NewAPIServerError(false, err)
@@ -215,30 +231,17 @@ func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Contex
 	return nil
 }
 
-func parseRevisionLimit(crp *fleetv1beta1.ClusterResourcePlacement) int {
-	revisionLimit := fleetv1beta1.RevisionHistoryLimitDefaultValue
-	if crp.Spec.RevisionHistoryLimit != nil {
-		revisionLimit = *crp.Spec.RevisionHistoryLimit
-		if revisionLimit <= 0 {
-			err := fmt.Errorf("invalid clusterResourcePlacement %s: invalid revisionHistoryLimit %d", crp.Name, revisionLimit)
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "clusterResourcePlacement", klog.KObj(crp))
-			// use the default value instead
-			revisionLimit = fleetv1beta1.RevisionHistoryLimitDefaultValue
-		}
-	}
-	return int(revisionLimit)
-}
-
 // deleteRedundantResourceSnapshots handles multiple snapshots in a group.
-func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) error {
+func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) error {
 	sortedList, err := r.listSortedResourceSnapshots(ctx, crp)
 	if err != nil {
 		return err
 	}
 
-	// respect the revisionHistoryLimit field
-	revisionLimit := parseRevisionLimit(crp)
-	if len(sortedList.Items) < revisionLimit {
+	if len(sortedList.Items) < revisionHistoryLimit {
+		// If the number of existing snapshots is less than the limit no matter how many snapshots in a group, we don't
+		// need to delete any snapshots.
+		// Skip the checking and deleting.
 		return nil
 	}
 
@@ -259,7 +262,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 			groupCounter++
 			lastGroupIndex = ii
 		}
-		if groupCounter < revisionLimit { // need to reserve one slot for the new snapshot
+		if groupCounter < revisionHistoryLimit { // need to reserve one slot for the new snapshot
 			continue
 		}
 		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !errors.IsNotFound(err) {
@@ -267,11 +270,16 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 			return controller.NewAPIServerError(false, err)
 		}
 	}
+	if groupCounter-revisionHistoryLimit > 0 {
+		// We always delete before creating a new snapshot, the snapshot group size should never exceed the limit
+		// as there is no finalizer added and the object should be deleted immediately.
+		klog.Warningf("The number of clusterResourceSnapshot groups exceeds the revisionHistoryLimit and it should never happen", "clusterResourcePlacement", klog.KObj(crp), "numberOfSnapshotGroup", groupCounter, "revisionHistoryLimit", revisionHistoryLimit)
+	}
 	return nil
 }
 
 // TODO handle all the resources selected by placement larger than 1MB size limit of k8s objects.
-func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec) (*fleetv1beta1.ClusterResourceSnapshot, error) {
+func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
 	resourceHash, err := generateResourceHash(resourceSnapshotSpec)
 	if err != nil {
 		klog.ErrorS(err, "Failed to generate resource hash of crp", "clusterResourcePlacement", klog.KObj(crp))
@@ -314,7 +322,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	}
 	// delete redundant snapshot revisions before creating a new snapshot to guarantee that the number of snapshots
 	// won't exceed the limit.
-	if err := r.deleteRedundantResourceSnapshots(ctx, crp); err != nil {
+	if err := r.deleteRedundantResourceSnapshots(ctx, crp, revisionHistoryLimit); err != nil {
 		return nil, err
 	}
 
@@ -555,14 +563,16 @@ func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, crp *fleet
 	}
 	var errs []error
 	sort.Slice(snapshotList.Items, func(i, j int) bool {
+		iKObj := klog.KObj(&snapshotList.Items[i])
+		jKObj := klog.KObj(&snapshotList.Items[j])
 		ii, err := parseResourceIndexFromLabel(&snapshotList.Items[i])
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[i]))
+			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", iKObj)
 			errs = append(errs, err)
 		}
 		ji, err := parseResourceIndexFromLabel(&snapshotList.Items[j])
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[j]))
+			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", jKObj)
 			errs = append(errs, err)
 		}
 		if ii != ji {
@@ -571,14 +581,21 @@ func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, crp *fleet
 
 		iDoesExist, iSubindex, err := utils.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[i])
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[j]))
+			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", iKObj)
 			errs = append(errs, err)
 		}
 		jDoesExist, jSubindex, err := utils.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[j])
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[j]))
+			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", jKObj)
 			errs = append(errs, err)
 		}
+
+		// Both of the snapshots do not have subindex, which should not happen.
+		if !iDoesExist && !jDoesExist {
+			klog.ErrorS(err, "There are more than one resource snapshot which do not have subindex in a group", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", iKObj, "clusterResourceSnapshot", jKObj)
+			errs = append(errs, err)
+		}
+
 		if !iDoesExist { // check if it's the first snapshot
 			return false
 		}
