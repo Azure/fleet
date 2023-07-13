@@ -1,28 +1,23 @@
 package validation
 
 import (
-	"context"
+	"fmt"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/authentication/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
 func TestValidateUserForResource(t *testing.T) {
 	testCases := map[string]struct {
-		userInfo         v1.UserInfo
-		whiteListedUsers []string
 		resKind          string
-		resName          string
-		resNamespace     string
+		namespacedName   types.NamespacedName
+		whiteListedUsers []string
+		userInfo         v1.UserInfo
 		wantResponse     admission.Response
 	}{
 		"allow user in system:masters group": {
@@ -30,10 +25,9 @@ func TestValidateUserForResource(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{mastersGroup},
 			},
-			resKind:      "Role",
-			resName:      "test-role",
-			resNamespace: "test-namespace",
-			wantResponse: admission.Allowed("user: test-user in groups: [system:masters] is allowed to modify fleet resource Role: test-role/test-namespace"),
+			resKind:        "Role",
+			namespacedName: types.NamespacedName{Name: "test-role", Namespace: "test-namespace"},
+			wantResponse:   admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{mastersGroup}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 		"allow white listed user not in system:masters group": {
 			userInfo: v1.UserInfo{
@@ -41,106 +35,80 @@ func TestValidateUserForResource(t *testing.T) {
 				Groups:   []string{"test-group"},
 			},
 			resKind:          "RoleBinding",
-			resName:          "test-role-binding",
-			resNamespace:     "test-namespace",
+			namespacedName:   types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"},
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Allowed("user: test-user in groups: [test-group] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace"),
+			wantResponse:     admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow valid service account": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
-				Groups:   []string{serviceAccountsGroup, serviceAccountsKubeSystemGroup, authenticatedGroup},
+				Groups:   []string{serviceAccountsGroup},
 			},
-			resKind:      "RoleBinding",
-			resName:      "test-role-binding",
-			resNamespace: "test-namespace",
-			wantResponse: admission.Allowed("user: test-user in groups: [system:serviceaccounts system:serviceaccounts:kube-system system:authenticated] is allowed to modify fleet resource RoleBinding: test-role-binding/test-namespace"),
+			resKind:        "RoleBinding",
+			namespacedName: types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"},
+			wantResponse:   admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			resKind:      "Role",
-			resName:      "test-role",
-			resNamespace: "test-namespace",
-			wantResponse: admission.Denied("user: test-user in groups: [test-group] is not allowed to modify fleet resource Role: test-role/test-namespace"),
+			resKind:        "Role",
+			namespacedName: types.NamespacedName{Name: "test-role", Namespace: "test-namespace"},
+			wantResponse:   admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "test-user", []string{"test-group"}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForResource(testCase.whiteListedUsers, testCase.userInfo, testCase.resKind, testCase.resName, testCase.resNamespace)
+			gotResult := ValidateUserForResource(testCase.resKind, testCase.namespacedName, testCase.whiteListedUsers, testCase.userInfo)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
 }
 
-func TestValidateUserForFleetCR(t *testing.T) {
+func TestValidateUserForFleetCRD(t *testing.T) {
 	testCases := map[string]struct {
-		client           client.Client
+		group            string
+		namespacedName   types.NamespacedName
 		whiteListedUsers []string
 		userInfo         v1.UserInfo
-		wantResult       bool
+		wantResponse     admission.Response
 	}{
-		"allow use in system:masters group": {
+		"allow user in system:masters group to modify other CRD": {
+			group:          "other-group",
+			namespacedName: types.NamespacedName{Name: "test-crd"},
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResult: true,
+			wantResponse: admission.Allowed(fmt.Sprintf(crdAllowedFormat, "test-user", []string{mastersGroup}, types.NamespacedName{Name: "test-crd"})),
 		},
-		"allow white listed user not in system:masters group": {
+		"deny user in system:masters group to modify fleet CRD": {
+			group:          "fleet.azure.com",
+			namespacedName: types.NamespacedName{Name: "memberclusters.fleet.azure.com"},
 			userInfo: v1.UserInfo{
 				Username: "test-user",
+				Groups:   []string{"system:masters"},
 			},
-			whiteListedUsers: []string{"test-user"},
-			wantResult:       true,
+			wantResponse: admission.Denied(fmt.Sprintf(crdDeniedFormat, "test-user", []string{mastersGroup}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
-		"allow member cluster identity": {
-			client: &test.MockClient{
-				MockList: func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-					o := list.(*fleetv1alpha1.MemberClusterList)
-					*o = fleetv1alpha1.MemberClusterList{
-						Items: []fleetv1alpha1.MemberCluster{
-							{
-								ObjectMeta: metav1.ObjectMeta{
-									Name: "test-member-cluster",
-								},
-								Spec: fleetv1alpha1.MemberClusterSpec{
-									Identity: rbacv1.Subject{
-										Name: "member-cluster-identity",
-									},
-								},
-							},
-						},
-					}
-					return nil
-				},
-			},
-			userInfo: v1.UserInfo{
-				Username: "member-cluster-identity",
-			},
-			wantResult: true,
-		},
-		"fail to validate user with invalid username, groups": {
-			client: &test.MockClient{
-				MockList: func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-					return nil
-				},
-			},
+		"deny white listed user to modify fleet CRD": {
+			group:          "fleet.azure.com",
+			namespacedName: types.NamespacedName{Name: "memberclusters.fleet.azure.com"},
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResult: false,
+			whiteListedUsers: []string{"test-user"},
+			wantResponse:     admission.Denied(fmt.Sprintf(crdDeniedFormat, "test-user", []string{"test-group"}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForFleetCR(context.Background(), testCase.client, testCase.whiteListedUsers, testCase.userInfo)
-			assert.Equal(t, testCase.wantResult, gotResult, utils.TestCaseMsg, testName)
+			gotResult := ValidateUserForFleetCRD(testCase.group, testCase.namespacedName, testCase.whiteListedUsers, testCase.userInfo)
+			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
 }
