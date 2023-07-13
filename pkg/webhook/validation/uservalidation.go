@@ -60,7 +60,7 @@ func isMasterGroupUserOrWhiteListedUser(whiteListedUsers []string, userInfo auth
 	return slices.Contains(whiteListedUsers, userInfo.Username) || slices.Contains(userInfo.Groups, mastersGroup)
 }
 
-// isUserAuthenticatedServiceAccount returns true if user is a valid/authenticated service account.
+// isUserAuthenticatedServiceAccount returns true if user is a valid service account.
 func isUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool {
 	return slices.Contains(userInfo.Groups, serviceAccountsGroup)
 }

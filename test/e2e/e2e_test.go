@@ -228,7 +228,7 @@ var _ = BeforeSuite(func() {
 	}
 	testutils.CheckMemberClusterStatus(ctx, *HubCluster, &types.NamespacedName{Name: mc.Name}, wantMCStatus, mcStatusCmpOptions)
 
-	By("create resources webhook e2e")
+	By("create resources for webhook e2e")
 	testutils.CreateResourcesForWebHookE2E(ctx, HubCluster, memberNamespace.Name)
 })
 
