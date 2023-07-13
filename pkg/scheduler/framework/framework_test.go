@@ -63,6 +63,8 @@ var (
 
 // A few utilities for generating a large number of objects.
 var (
+	defaultFilteredStatus = NewNonErrorStatus(ClusterUnschedulable, dummyPluginName)
+
 	generateResourceBindings = func(count int, startIdx int) []*fleetv1beta1.ClusterResourceBinding {
 		bindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
 
@@ -82,16 +84,38 @@ var (
 		return bindings
 	}
 
-	generateClusterDecisions = func(count int, startIdx int) []fleetv1beta1.ClusterDecision {
+	generateClusterDecisions = func(count int, startIdx int, selected bool) []fleetv1beta1.ClusterDecision {
 		decisions := make([]fleetv1beta1.ClusterDecision, 0, count)
 
 		for i := 0; i < count; i++ {
-			decisions = append(decisions, fleetv1beta1.ClusterDecision{
+			newDecision := fleetv1beta1.ClusterDecision{
 				ClusterName: fmt.Sprintf(clusterNameTemplate, i+startIdx),
-				Selected:    true,
-			})
+				Selected:    selected,
+			}
+
+			if !selected {
+				newDecision.Reason = defaultFilteredStatus.String()
+			}
+
+			decisions = append(decisions, newDecision)
 		}
 		return decisions
+	}
+
+	generatedFilterdClusterWithStatus = func(count int, startIdx int) []*filteredClusterWithStatus {
+		filtered := make([]*filteredClusterWithStatus, 0, count)
+
+		for i := 0; i < count; i++ {
+			filtered = append(filtered, &filteredClusterWithStatus{
+				cluster: &fleetv1beta1.MemberCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(clusterNameTemplate, i+startIdx),
+					},
+				},
+				status: defaultFilteredStatus,
+			})
+		}
+		return filtered
 	}
 )
 
@@ -1867,8 +1891,8 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 			wantCondition:                     fullyScheduledCondition(policy),
 		},
 		{
-			name:                              "too many existing bindings",
-			maxUnselectedClusterDecisionCount: 2,
+			name:                              "too many filtered",
+			maxUnselectedClusterDecisionCount: 1,
 			existing: [][]*fleetv1beta1.ClusterResourceBinding{
 				{
 					&fleetv1beta1.ClusterResourceBinding{
@@ -1887,25 +1911,17 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 							},
 						},
 					},
-					&fleetv1beta1.ClusterResourceBinding{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: altBindingName,
-						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
-								ClusterName: altClusterName,
-								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
-									AffinityScore:       &affinityScore2,
-									TopologySpreadScore: &topologySpreadScore2,
-								},
-								Reason: pickedByPolicyReason,
-							},
-						},
-					},
 				},
 			},
 			filtered: []*filteredClusterWithStatus{
+				{
+					cluster: &fleetv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					status: filteredStatus,
+				},
 				{
 					cluster: &fleetv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
@@ -1927,12 +1943,8 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 				},
 				{
 					ClusterName: altClusterName,
-					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
-						AffinityScore:       &affinityScore2,
-						TopologySpreadScore: &topologySpreadScore2,
-					},
-					Reason: pickedByPolicyReason,
+					Selected:    false,
+					Reason:      filteredStatus.String(),
 				},
 			},
 			wantCondition: fullyScheduledCondition(policy),

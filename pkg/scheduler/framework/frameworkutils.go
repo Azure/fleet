@@ -224,15 +224,13 @@ func newSchedulingDecisionsFrom(maxUnselectedClusterDecisionCount int, filtered 
 	}
 
 	// Move some decisions from unbound clusters, if there are still enough room.
-	if diff := maxUnselectedClusterDecisionCount - len(newDecisions); diff > 0 {
-		for i := 0; i < diff && i < len(filtered); i++ {
-			clusterWithStatus := filtered[i]
-			newDecisions = append(newDecisions, fleetv1beta1.ClusterDecision{
-				ClusterName: clusterWithStatus.cluster.Name,
-				Selected:    false,
-				Reason:      clusterWithStatus.status.String(),
-			})
-		}
+	for i := 0; i < maxUnselectedClusterDecisionCount && i < len(filtered) && i < slotsLeft; i++ {
+		clusterWithStatus := filtered[i]
+		newDecisions = append(newDecisions, fleetv1beta1.ClusterDecision{
+			ClusterName: clusterWithStatus.cluster.Name,
+			Selected:    false,
+			Reason:      clusterWithStatus.status.String(),
+		})
 	}
 
 	return newDecisions
