@@ -383,6 +383,12 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              observedCRPGeneration:
+                description: ObservedCRPGeneration is the generation of the CRP which
+                  the scheduler uses to perform the scheduling cycle and prepare the
+                  scheduling status.
+                format: int64
+                type: integer
               targetClusters:
                 description: ClusterDecisions contains a list of names of member clusters
                   considered by the scheduler. Note that all the selected clusters
@@ -434,6 +440,8 @@ spec:
                   type: object
                 maxItems: 1000
                 type: array
+            required:
+            - observedCRPGeneration
             type: object
         required:
         - spec

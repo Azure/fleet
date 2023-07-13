@@ -26,6 +26,16 @@ const (
 
 	// FleetResourceLabelKey is that label that indicates the resource is a fleet resource.
 	FleetResourceLabelKey = fleetPrefix + "isFleetResource"
+
+	// FirstWorkNameFmt is the format of the name of the first work.
+	FirstWorkNameFmt = "%s-work"
+
+	// WorkNameWithSubindexFmt is the format of the name of a work with subindex.
+	WorkNameWithSubindexFmt = "%s-%d"
+
+	// CRPGenerationAnnotation is the annotation that indicates the generation of the CRP from
+	// which an object is derived or last updated.
+	CRPGenerationAnnotation = fleetPrefix + "CRPGeneration"
 )
 
 const (

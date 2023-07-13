@@ -10,6 +10,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	// WorkFinalizer is used to make sure that the binding is not deleted until the work objects it generates are all deleted.
+	WorkFinalizer = fleetPrefix + "work-cleanup"
+
+	// ParentBindingLabel is the label that contains the name of the binding that generates the work.
+	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
+)
+
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=rb
 // +kubebuilder:subresource:status
@@ -64,7 +72,9 @@ const (
 	// BindingStateBound means the binding is bound to the target cluster.
 	BindingStateBound BindingState = "Bound"
 
-	// BindingStateUnScheduled means the binding is not scheduled on to the target cluster anymore.
+	// BindingStateUnscheduled means the binding is not scheduled on to the target cluster anymore.
+	// This is a state that rollout controller cares about.
+	// The work generator still treat this as bound until rollout controller deletes the binding.
 	BindingStateUnscheduled BindingState = "Unscheduled"
 )
 
