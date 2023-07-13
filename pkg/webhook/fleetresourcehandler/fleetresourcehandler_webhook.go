@@ -52,19 +52,19 @@ func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind {
 		case createCRDGVK():
-			klog.V(2).InfoS("handling CRD resource", "GVK", createCRDGVK(), "NamespacedName", namespacedName)
+			klog.V(2).InfoS("handling CRD resource", "GVK", createCRDGVK(), "namespacedName", namespacedName)
 			response = v.handleCRD(req)
 		case createMemberClusterGVK():
-			klog.V(2).InfoS("handling Member cluster resource", "GVK", createMemberClusterGVK(), "NamespacedName", namespacedName)
+			klog.V(2).InfoS("handling Member cluster resource", "GVK", createMemberClusterGVK(), "namespacedName", namespacedName)
 			response = v.handleMemberCluster(req)
 		case createRoleGVK():
-			klog.V(2).InfoS("handling Role resource", "GVK", createRoleGVK(), "NamespacedName", namespacedName)
+			klog.V(2).InfoS("handling Role resource", "GVK", createRoleGVK(), "namespacedName", namespacedName)
 			response = v.handleRole(req)
 		case createRoleBindingGVK():
-			klog.V(2).InfoS("handling Role binding resource", "GVK", createRoleBindingGVK(), "NamespacedName", namespacedName)
+			klog.V(2).InfoS("handling Role binding resource", "GVK", createRoleBindingGVK(), "namespacedName", namespacedName)
 			response = v.handleRoleBinding(req)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "NamespacedName", namespacedName)
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
