@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -92,11 +91,11 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 
 	ctx := context.Background()
 	if err := s.cleanUpAllBindingsFor(ctx, crp); err != nil {
-		t.Errorf("cleanUpAllBindingsFor() = %v, want no error", err)
+		t.Fatalf("cleanUpAllBindingsFor() = %v, want no error", err)
 	}
 
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err == nil {
-		t.Errorf("Get() CRP = %v, want no error", err)
+		t.Fatalf("Get() CRP = %v, want no error", err)
 	}
 	wantCRP := &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
@@ -109,16 +108,18 @@ func TestCleanUpAllBindingsFor(t *testing.T) {
 		t.Errorf("updated CRP diff (-got, +want): %s", diff)
 	}
 
-	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, bindings[0]); err == nil || !errors.IsNotFound(err) {
-		t.Errorf("Get() binding %s = %v, want not found", bindingName, err)
+	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
+	if err := fakeClient.List(ctx, bindingList); err != nil {
+		t.Fatalf("List() bindings = %v, want no error", err)
 	}
-	if err := fakeClient.Get(ctx, types.NamespacedName{Name: altBindingName}, bindings[1]); err == nil || !errors.IsNotFound(err) {
-		t.Errorf("Get() binding %s = %v, want not found", altBindingName, err)
+
+	if len(bindingList.Items) != 0 {
+		t.Errorf("binding list length = %d, want 0", len(bindingList.Items))
 	}
 }
 
-// TestLookUpLatestPolicySnapshot tests the lookupLatestPolicySnapshot method.
-func TestLookUpLatestPolicySnapshot(t *testing.T) {
+// TestLookupLatestPolicySnapshot tests the lookupLatestPolicySnapshot method.
+func TestLookupLatestPolicySnapshot(t *testing.T) {
 	crp := &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       crpName,
@@ -218,7 +219,7 @@ func TestLookUpLatestPolicySnapshot(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			activePolicySnapshot, err := s.lookUpLatestPolicySnapshot(ctx, crp)
+			activePolicySnapshot, err := s.lookupLatestPolicySnapshot(ctx, crp)
 			if tc.expectedToFail {
 				if err == nil {
 					t.Errorf("lookUpLatestPolicySnapshot() = %v, want error", activePolicySnapshot)
@@ -255,11 +256,11 @@ func TestAddSchedulerCleanUpFinalizer(t *testing.T) {
 
 	ctx := context.Background()
 	if err := s.addSchedulerCleanUpFinalizer(ctx, crp); err != nil {
-		t.Errorf("addSchedulerCleanUpFinalizer() = %v, want no error", err)
+		t.Fatalf("addSchedulerCleanUpFinalizer() = %v, want no error", err)
 	}
 
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
-		t.Errorf("Get() CRP = %v, want no error", err)
+		t.Fatalf("Get() CRP = %v, want no error", err)
 	}
 	wantCRP := &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{

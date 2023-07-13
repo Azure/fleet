@@ -46,14 +46,17 @@ type Scheduler struct {
 
 	// client is the (cached) client in use by the scheduler for accessing Kubernetes API server.
 	client client.Client
+
 	// uncachedReader is the uncached read-only client in use by the scheduler for accessing
 	// Kubernetes API server; in most cases client should be used instead, unless consistency becomes
 	// a serious concern.
 	//
 	// TO-DO (chenyu1): explore the possbilities of using a mutation cache for better performance.
 	uncachedReader client.Reader
+
 	// manager is the controller manager in use by the scheduler.
 	manager ctrl.Manager
+
 	// eventRecorder is the event recorder in use by the scheduler.
 	eventRecorder record.EventRecorder
 }
@@ -77,6 +80,8 @@ func NewScheduler(
 }
 
 // ScheduleOnce performs scheduling for one single item pulled from the work queue.
+//
+// TO-DO (chenyu1): add scheduler related metrics.
 func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	// Retrieve the next item (name of a CRP) from the work queue.
 	//
@@ -111,6 +116,9 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	crp := &fleetv1beta1.ClusterResourcePlacement{}
 	crpKey := types.NamespacedName{Name: string(crpName)}
 	if err := s.client.Get(ctx, crpKey, crp); err != nil {
+		// Wrap the error for metrics; this method does not return an error.
+		klog.ErrorS(controller.NewAPIServerError(true, err), "Failed to get cluster resource placement", "clusterResourcePlacement", crpRef)
+
 		if errors.IsNotFound(err) {
 			// The CRP has been gone before the scheduler gets a chance to
 			// process it; normally this would not happen as sources would not enqueue any CRP that
@@ -119,7 +127,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 			// of the cleanup finalizer implies that bindings derived from the CRP are no longer present.
 			return
 		}
-		klog.ErrorS(err, "Failed to get cluster resource placement", "clusterResourcePlacement", crpRef)
+
 		// Requeue for later processing.
 		s.queue.AddRateLimited(crpName)
 		return
@@ -146,7 +154,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	// The CRP has not been marked for deletion; run the scheduling cycle for it.
 
 	// Verify that it has an active policy snapshot.
-	latestPolicySnapshot, err := s.lookUpLatestPolicySnapshot(ctx, crp)
+	latestPolicySnapshot, err := s.lookupLatestPolicySnapshot(ctx, crp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to lookup latest policy snapshot", "clusterResourcePlacement", crpRef)
 		// No requeue is needed; the scheduler will be triggered again when an active policy
@@ -233,8 +241,8 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 	// Note that the listing is performed using the uncached client; this is to ensure that all related
 	// bindings can be found, even if they have not been synced to the cache yet.
 	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
-	listOptions := &client.ListOptions{
-		LabelSelector: labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: crp.Name}),
+	listOptions := client.MatchingLabels{
+		fleetv1beta1.CRPTrackingLabel: crp.Name,
 	}
 	// TO-DO (chenyu1): this is a very expensive op; explore options for optimization.
 	if err := s.uncachedReader.List(ctx, bindingList, listOptions); err != nil {
@@ -267,15 +275,15 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 	controllerutil.RemoveFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer)
 	if err := s.client.Update(ctx, crp); err != nil {
 		klog.ErrorS(err, "Failed to remove scheduler cleanup finalizer from cluster resource placement", "clusterResourcePlacement", crpRef)
-		return controller.NewAPIServerError(false, err)
+		return controller.NewUpdateIgnoreConflictError(err)
 	}
 
 	return nil
 }
 
-// lookUpLatestPolicySnapshot returns the latest (i.e., active) policy snapshot associated with
+// lookupLatestPolicySnapshot returns the latest (i.e., active) policy snapshot associated with
 // a CRP.
-func (s *Scheduler) lookUpLatestPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
+func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
 	crpRef := klog.KObj(crp)
 
 	// Find out the latest policy snapshot associated with the CRP.
@@ -300,7 +308,7 @@ func (s *Scheduler) lookUpLatestPolicySnapshot(ctx context.Context, crp *fleetv1
 		//
 		// Either way, it is out of the scheduler's scope to handle such a case; the scheduler will
 		// be triggered again if the situation is corrected.
-		err := fmt.Errorf("no latest policy snapshot associated with cluster resource placement")
+		err := controller.NewExpectedBehaviorError(fmt.Errorf("no latest policy snapshot associated with cluster resource placement"))
 		klog.ErrorS(err, "Failed to find the latest policy snapshot", "clusterResourcePlacement", crpRef)
 		return nil, err
 	case len(policySnapshotList.Items) > 1:
@@ -310,7 +318,7 @@ func (s *Scheduler) lookUpLatestPolicySnapshot(ctx context.Context, crp *fleetv1
 		// Similarly, it is out of the scheduler's scope to handle such a case; the scheduler will
 		// report this unexpected occurrence but does not register it as a scheduler-side error.
 		// If (and when) the situation is corrected, the scheduler will be triggered again.
-		err := fmt.Errorf("too many active policy snapshots: %d, want 1", len(policySnapshotList.Items))
+		err := controller.NewUnexpectedBehaviorError(fmt.Errorf("too many active policy snapshots: %d, want 1", len(policySnapshotList.Items)))
 		klog.ErrorS(err, "There are multiple latest policy snapshots associated with cluster resource placement", "clusterResourcePlacement", crpRef)
 		return nil, err
 	default:
@@ -328,7 +336,7 @@ func (s *Scheduler) addSchedulerCleanUpFinalizer(ctx context.Context, crp *fleet
 
 		if err := s.client.Update(ctx, crp); err != nil {
 			klog.ErrorS(err, "Failed to update cluster resource placement", "clusterResourcePlacement", klog.KObj(crp))
-			return controller.NewAPIServerError(false, err)
+			return controller.NewUpdateIgnoreConflictError(err)
 		}
 	}
 
