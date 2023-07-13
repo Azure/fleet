@@ -262,7 +262,7 @@ func (s *Scheduler) cleanUpAllBindingsFor(ctx context.Context, crp *fleetv1beta1
 		binding := bindingList.Items[idx]
 		// Delete the binding if it has not been marked for deletion yet.
 		if binding.DeletionTimestamp == nil {
-			if err := s.client.Delete(ctx, &binding); err != nil {
+			if err := s.client.Delete(ctx, &binding); err != nil && !errors.IsNotFound(err) {
 				klog.ErrorS(err, "Failed to delete binding", "clusterResourceBinding", klog.KObj(&binding))
 				return controller.NewAPIServerError(false, err)
 			}
@@ -304,7 +304,7 @@ func (s *Scheduler) lookupLatestPolicySnapshot(ctx context.Context, crp *fleetv1
 	case len(policySnapshotList.Items) == 0:
 		// There is no latest policy snapshot associated with the CRP; it could happen when
 		// * the CRP is newly created; or
-		// * due to an unexpected situation, the sequence of policy snapshots is in an inconsistent state.
+		// * the sequence of policy snapshots is in an inconsistent state.
 		//
 		// Either way, it is out of the scheduler's scope to handle such a case; the scheduler will
 		// be triggered again if the situation is corrected.
