@@ -53,7 +53,7 @@ var (
 	lessFuncCluster = func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name
 	}
-	lessFuncScoredCluster = func(scored1, scored2 ScoredCluster) bool {
+	lessFuncScoredCluster = func(scored1, scored2 *ScoredCluster) bool {
 		return scored1.Cluster.Name < scored2.Cluster.Name
 	}
 	lessFuncFilteredCluster = func(filtered1, filtered2 *filteredClusterWithStatus) bool {
