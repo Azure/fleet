@@ -84,16 +84,16 @@ func TestValidateUserForFleetCRD(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(crdAllowedFormat, "test-user", []string{mastersGroup}, types.NamespacedName{Name: "test-crd"})),
 		},
-		"deny user in system:masters group to modify fleet CRD": {
+		"allow user in system:masters group to modify fleet CRD": {
 			group:          "fleet.azure.com",
 			namespacedName: types.NamespacedName{Name: "memberclusters.fleet.azure.com"},
 			userInfo: v1.UserInfo{
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(crdDeniedFormat, "test-user", []string{mastersGroup}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(crdAllowedFormat, "test-user", []string{mastersGroup}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
-		"deny white listed user to modify fleet CRD": {
+		"allow white listed user to modify fleet CRD": {
 			group:          "fleet.azure.com",
 			namespacedName: types.NamespacedName{Name: "memberclusters.fleet.azure.com"},
 			userInfo: v1.UserInfo{
@@ -101,7 +101,16 @@ func TestValidateUserForFleetCRD(t *testing.T) {
 				Groups:   []string{"test-group"},
 			},
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Denied(fmt.Sprintf(crdDeniedFormat, "test-user", []string{"test-group"}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse:     admission.Allowed(fmt.Sprintf(crdAllowedFormat, "test-user", []string{"test-group"}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+		},
+		"deny user not in system:masters group to modify fleet CRD": {
+			group:          "fleet.azure.com",
+			namespacedName: types.NamespacedName{Name: "memberclusters.fleet.azure.com"},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(crdDeniedFormat, "test-user", []string{"test-group"}, types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
 	}
 
