@@ -37,7 +37,10 @@ const (
 	// ApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
 	ApplySucceededReason = "ApplySucceeded"
 
-	resourcePlacementConditionMessageFormat = "%s is not seleted: %s"
+	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
+	resourcePlacementConditionScheduleFailedWithScoreMessageFormat    = "%s is not selected with clusterScore %+v: %s"
+	resourcePlacementConditionScheduleSucceededMessageFormat          = "Successfully scheduled resources for placement in %s: %s"
+	resourcePlacementConditionScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in %s with clusterScore %+v: %s"
 )
 
 func (r *Reconciler) Reconcile(ctx context.Context, _ controller.QueueKey) (ctrl.Result, error) {
@@ -722,6 +725,7 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 	scheduledCondition := latestSchedulingPolicySnapshot.GetCondition(string(fleetv1beta1.PolicySnapshotScheduled))
 
 	if scheduledCondition == nil ||
+		// defensive check and not needed for now as the policySnapshot should be immutable.
 		scheduledCondition.ObservedGeneration < latestSchedulingPolicySnapshot.Generation ||
 		// We have numberOfCluster annotation added on the CRP and it won't change the CRP generation.
 		// So that we need to compare the CRP observedCRPGeneration reported by the scheduler.
@@ -751,7 +755,7 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.PlacementScheduledConditionType),
 			Reason:             "ScheduleSucceeded",
-			Message:            "Successfully scheduled resources for placement",
+			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
 			ObservedGeneration: crp.Generation,
 		}
 		var rp fleetv1beta1.ResourcePlacementStatus
@@ -763,11 +767,18 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.PlacementScheduledConditionType),
 				Reason:             "ScheduleFailed",
-				Message:            fmt.Sprintf(resourcePlacementConditionMessageFormat, c.ClusterName, c.Reason),
+				Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, c.ClusterName, c.Reason),
 				ObservedGeneration: crp.Generation,
+			}
+			if c.ClusterScore != nil {
+				scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
 			}
 		} else {
 			rp.ClusterName = c.ClusterName
+			if c.ClusterScore != nil {
+				scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
+			}
+
 			// TODO populate the work status
 		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
