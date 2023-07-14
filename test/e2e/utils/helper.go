@@ -15,7 +15,6 @@ import (
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -33,10 +32,10 @@ import (
 )
 
 const (
-	crdClusterRole        = "CRD-cluster-role"
-	crdClusterRoleBinding = "CRD-role-binding"
-	crClusterRole         = "CR-cluster-role"
-	crClusterRoleBinding  = "CR-cluster-role-binding"
+	testClusterRole        = "wh-test-cluster-role"
+	testClusterRoleBinding = "wh-test-cluster-role-binding"
+	testRole               = "wh-test-role"
+	testRoleBinding        = "wh-test-role-binding"
 )
 
 var (
@@ -196,14 +195,15 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 	return obj, gvk, mapping.Resource
 }
 
-func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+// CreateResourcesForWebHookE2E create resources required for Webhook E2E.
+func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster, memberNamespace string) {
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crdClusterRole,
+			Name: testClusterRole,
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
-				APIGroups: []string{v1.SchemeGroupVersion.Group},
+				APIGroups: []string{"*"},
 				Verbs:     []string{"*"},
 				Resources: []string{"*"},
 			},
@@ -211,11 +211,11 @@ func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, h
 	}
 	gomega.Eventually(func() error {
 		return hubCluster.KubeClient.Create(ctx, &cr)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role %s to modify CRDs", cr.Name)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role %s for webhook E2E", cr.Name)
 
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crdClusterRoleBinding,
+			Name: testClusterRoleBinding,
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -227,33 +227,35 @@ func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, h
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: rbacv1.GroupName,
 			Kind:     "ClusterRole",
-			Name:     crdClusterRole,
+			Name:     testClusterRole,
 		},
 	}
 
 	gomega.Eventually(func() error {
 		return hubCluster.KubeClient.Create(ctx, &crb)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s to modify CRDs", crb.Name)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s for webhook E2E", crb.Name)
 
-	cr = rbacv1.ClusterRole{
+	r := rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crClusterRole,
+			Name:      testRole,
+			Namespace: memberNamespace,
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
-				APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
 				Verbs:     []string{"*"},
+				APIGroups: []string{"*"},
 				Resources: []string{"*"},
 			},
 		},
 	}
 	gomega.Eventually(func() error {
-		return hubCluster.KubeClient.Create(ctx, &cr)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role %s to modify CRDs", cr.Name)
+		return hubCluster.KubeClient.Create(ctx, &r)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create role %s for webhook E2E", r.Name)
 
-	crb = rbacv1.ClusterRoleBinding{
+	rb := rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crClusterRoleBinding,
+			Name:      testRoleBinding,
+			Namespace: memberNamespace,
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -264,40 +266,43 @@ func CreateClusterRoleAndClusterRoleBindingsForWebHookE2E(ctx context.Context, h
 		},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: rbacv1.GroupName,
-			Kind:     "ClusterRole",
-			Name:     crClusterRole,
+			Kind:     "Role",
+			Name:     testRole,
 		},
 	}
 	gomega.Eventually(func() error {
-		return hubCluster.KubeClient.Create(ctx, &crb)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s to modify CRDs", crb.Name)
+		return hubCluster.KubeClient.Create(ctx, &rb)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create role binding %s for webhook E2E", rb.Name)
 }
 
-func DeleteClusterRoleAndClusterRoleBindingForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+// DeleteResourcesForWebHookE2E deletes resources created for Webhook E2E.
+func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster, memberNamespace string) {
+	rb := rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testRoleBinding,
+			Namespace: memberNamespace,
+		},
+	}
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &rb)).Should(gomega.Succeed())
+
+	r := rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testRole,
+			Namespace: memberNamespace,
+		},
+	}
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &r)).Should(gomega.Succeed())
+
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crClusterRoleBinding,
+			Name: testClusterRoleBinding,
 		},
 	}
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &crb)).Should(gomega.Succeed())
 
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: crClusterRole,
-		},
-	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
-
-	crb = rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crdClusterRoleBinding,
-		},
-	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &crb)).Should(gomega.Succeed())
-
-	cr = rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crdClusterRole,
+			Name: testClusterRole,
 		},
 	}
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
