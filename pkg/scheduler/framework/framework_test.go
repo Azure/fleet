@@ -2740,3 +2740,228 @@ func TestEqualDecisions(t *testing.T) {
 		})
 	}
 }
+
+// TestRunPostBatchPlugins tests the runPostBatchPlugins method.
+func TestRunPostBatchPlugins(t *testing.T) {
+	dummyPostBatchPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyPostBatchPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	testCases := []struct {
+		name             string
+		postBatchPlugins []PostBatchPlugin
+		desiredBatchSize int
+		wantBatchLimit   int
+		wantStatus       *Status
+	}{
+		{
+			name: "single plugin, success",
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   1,
+		},
+		{
+			name: "single plugin, success, oversized",
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 15, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   10,
+		},
+		{
+			name: "multiple plugins, all success",
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 2, nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameB,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   1,
+		},
+		{
+			name: "multple plugins, one success, one error",
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 0, FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA)
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameB,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantStatus:       FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA),
+		},
+		{
+			name: "single plugin, skip",
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 0, NewNonErrorStatus(Skip, dummyPostBatchPluginNameA)
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantBatchLimit:   10,
+		},
+		{
+			name: "single plugin, unschedulable",
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 1, NewNonErrorStatus(ClusterUnschedulable, dummyPostBatchPluginNameA)
+					},
+				},
+			},
+			desiredBatchSize: 10,
+			wantStatus:       FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.postBatchPlugins {
+				profile.WithPostBatchPlugin(p)
+			}
+			f := &framework{
+				profile: profile,
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			state.desiredBatchSize = tc.desiredBatchSize
+			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+			batchLimit, status := f.runPostBatchPlugins(ctx, state, policy)
+			if batchLimit != tc.wantBatchLimit {
+				t.Errorf("runPostBatchPlugins() batch limit = %d, want %d", batchLimit, tc.wantBatchLimit)
+			}
+			if diff := cmp.Diff(status, tc.wantStatus, cmpopts.IgnoreUnexported(Status{}), ignoredStatusFields); diff != "" {
+				t.Errorf("runPostBatchPlugins() status diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+// TestRunPreScorePlugins tests the runPreScorePlugins method.
+func TestRunPreScorePlugins(t *testing.T) {
+	dummyPreScorePluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyPreScorePluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	testCases := []struct {
+		name                   string
+		preScorePlugins        []PreScorePlugin
+		wantSkippedPluginNames []string
+		wantStatus             *Status
+	}{
+		{
+			name: "single plugin, success",
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+						return nil
+					},
+				},
+			},
+		},
+		{
+			name: "multiple plugins, one success, one skip",
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameB,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return NewNonErrorStatus(Skip, dummyPreScorePluginNameB)
+					},
+				},
+			},
+			wantSkippedPluginNames: []string{dummyPreScorePluginNameB},
+		},
+		{
+			name: "single plugin, internal error",
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return FromError(fmt.Errorf("internal error"), dummyPreScorePluginNameA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("internal error"), dummyPreScorePluginNameA),
+		},
+		{
+			name: "single plugin, unschedulable",
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return NewNonErrorStatus(ClusterUnschedulable, dummyPreScorePluginNameA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("cluster is unschedulable"), dummyPreScorePluginNameA),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.preScorePlugins {
+				profile.WithPreScorePlugin(p)
+			}
+			f := &framework{
+				profile: profile,
+			}
+
+			ctx := context.Background()
+			state := NewCycleState()
+			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+
+			status := f.runPreScorePlugins(ctx, state, policy)
+			if diff := cmp.Diff(status, tc.wantStatus, cmp.AllowUnexported(Status{}), ignoredStatusFields); diff != "" {
+				t.Errorf("runPreScorePlugins() status diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
