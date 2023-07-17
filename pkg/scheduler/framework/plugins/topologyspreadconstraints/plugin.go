@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	doNotScheduleConstraintViolationReasonTemplate = "violated topology spread constraint %q (max skew %d)"
+	doNotScheduleConstraintViolationReasonTemplate = "violated doNotSchedule topology spread constraint %q (max skew %d)"
 )
 
 // Plugin is the scheduler plugin that enforces the

@@ -98,6 +98,6 @@ func TestPrepareScheduledOrBoundMap(t *testing.T) {
 
 	scheduleOrBoundMap := prepareScheduledOrBoundMap(scheduled, bound)
 	if diff := cmp.Diff(scheduleOrBoundMap, want); diff != "" {
-		t.Errorf("scheduledOrBoundMap diff (-got, +want): %s", diff)
+		t.Errorf("preparedScheduledOrBoundMap() scheduledOrBoundMap diff (-got, +want): %s", diff)
 	}
 }
