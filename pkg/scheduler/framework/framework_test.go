@@ -224,10 +224,10 @@ func TestClassifyBindings(t *testing.T) {
 		},
 	}
 
-	clusterName1 := "cluster-1"
-	clusterName2 := "cluster-2"
-	clusterName3 := "cluster-3"
-	clusterName4 := "cluster-4"
+	clusterName1 := fmt.Sprintf(clusterNameTemplate, 1)
+	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
+	clusterName3 := fmt.Sprintf(clusterNameTemplate, 3)
+	clusterName4 := fmt.Sprintf(clusterNameTemplate, 4)
 	clusters := []fleetv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1080,10 +1080,10 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 		},
 	}
 
-	clusterName1 := "cluster-1"
-	clusterName2 := "cluster-2"
-	clusterName3 := "cluster-3"
-	clusterName4 := "cluster-4"
+	clusterName1 := fmt.Sprintf(clusterNameTemplate, 1)
+	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
+	clusterName3 := fmt.Sprintf(clusterNameTemplate, 3)
+	clusterName4 := fmt.Sprintf(clusterNameTemplate, 4)
 
 	affinityScore1 := int32(10)
 	topologySpreadScore1 := int32(2)
@@ -2736,6 +2736,782 @@ func TestEqualDecisions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if isEqual := equalDecisions(tc.current, tc.desired); isEqual != tc.want {
 				t.Errorf("equalDecisions() = %v, want %v", isEqual, tc.want)
+			}
+		})
+	}
+}
+
+// TestDownScale tests the downscale method.
+func TestDownscale(t *testing.T) {
+	bindingName1 := fmt.Sprintf(bindingNameTemplate, 1)
+	bindingName2 := fmt.Sprintf(bindingNameTemplate, 2)
+	bindingName3 := fmt.Sprintf(bindingNameTemplate, 3)
+	bindingName4 := fmt.Sprintf(bindingNameTemplate, 4)
+	bindingName5 := fmt.Sprintf(bindingNameTemplate, 5)
+	bindingName6 := fmt.Sprintf(bindingNameTemplate, 6)
+
+	clusterName1 := fmt.Sprintf(clusterNameTemplate, 1)
+	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
+	clusterName3 := fmt.Sprintf(clusterNameTemplate, 3)
+	clusterName4 := fmt.Sprintf(clusterNameTemplate, 4)
+	clusterName5 := fmt.Sprintf(clusterNameTemplate, 5)
+	clusterName6 := fmt.Sprintf(clusterNameTemplate, 6)
+
+	topologySpreadScore1 := int32(1)
+	affinityScore1 := int32(10)
+	topologySpreadScore2 := int32(0)
+	affinityScore2 := int32(20)
+
+	testCases := []struct {
+		name                 string
+		scheduled            []*fleetv1beta1.ClusterResourceBinding
+		bound                []*fleetv1beta1.ClusterResourceBinding
+		count                int
+		wantUpdatedScheduled []*fleetv1beta1.ClusterResourceBinding
+		wantUpdatedBound     []*fleetv1beta1.ClusterResourceBinding
+		wantUnscheduled      []*fleetv1beta1.ClusterResourceBinding
+		expectedToFail       bool
+	}{
+		{
+			name: "downscale count is zero",
+			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+				},
+			},
+			bound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			count: 0,
+			wantUpdatedScheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+				},
+			},
+			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{},
+		},
+		{
+			name: "invalid downscale count",
+			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+				},
+			},
+			bound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			count:          3,
+			expectedToFail: true,
+		},
+		{
+			name: "trim part of scheduled bindings only",
+			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			bound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			count: 2,
+			wantUpdatedScheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "trim all scheduled bindings",
+			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			bound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			count:                3,
+			wantUpdatedScheduled: nil,
+			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "trim all scheduled bindings + part of bound bindings",
+			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			bound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateBound,
+						TargetCluster: clusterName5,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName5,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName5,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateBound,
+						TargetCluster: clusterName6,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName6,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName6,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateBound,
+						TargetCluster: clusterName4,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName4,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			count:                4,
+			wantUpdatedScheduled: nil,
+			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName6,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateBound,
+						TargetCluster: clusterName4,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName4,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateBound,
+						TargetCluster: clusterName5,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName5,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName5,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName6,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName6,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore2,
+								AffinityScore:       &affinityScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "trim all bindings",
+			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateScheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			bound: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateBound,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			count:                3,
+			wantUpdatedScheduled: nil,
+			wantUpdatedBound:     nil,
+			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName1,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName2,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State:         fleetv1beta1.BindingStateUnscheduled,
+						TargetCluster: clusterName3,
+						ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &fleetv1beta1.ClusterScore{
+								TopologySpreadScore: &topologySpreadScore1,
+								AffinityScore:       &affinityScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClientBuilder := fake.NewClientBuilder().WithScheme(scheme.Scheme)
+			for _, binding := range tc.scheduled {
+				fakeClientBuilder.WithObjects(binding)
+			}
+			for _, binding := range tc.bound {
+				fakeClientBuilder.WithObjects(binding)
+			}
+			fakeClient := fakeClientBuilder.Build()
+			// Construct framework manually instead of using NewFramework to avoid mocking the
+			// controller manager.
+			f := &framework{
+				client: fakeClient,
+			}
+
+			ctx := context.Background()
+			scheduled, bound, err := f.downscale(ctx, tc.scheduled, tc.bound, tc.count)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Fatalf("downscaled() = nil, want error")
+				}
+
+				return
+			}
+
+			if diff := cmp.Diff(scheduled, tc.wantUpdatedScheduled, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+				t.Errorf("downscale() updated scheduled diff (-got, +want) = %s", diff)
+			}
+
+			if diff := cmp.Diff(bound, tc.wantUpdatedBound, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+				t.Errorf("downscale() updated bound diff (-got, +want) = %s", diff)
+			}
+
+			// Verify that some bindings have been set to the unscheduled state.
+			for _, wantUnscheduledBinding := range tc.wantUnscheduled {
+				unscheduledBinding := &fleetv1beta1.ClusterResourceBinding{}
+				if err := fakeClient.Get(ctx, types.NamespacedName{Name: wantUnscheduledBinding.Name}, unscheduledBinding); err != nil {
+					t.Errorf("Get() binding %s = %v, want no error", wantUnscheduledBinding.Name, err)
+				}
+
+				if diff := cmp.Diff(unscheduledBinding, wantUnscheduledBinding, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+					t.Errorf("unscheduled binding %s diff (-got, +want): %s", wantUnscheduledBinding.Name, diff)
+				}
 			}
 		})
 	}
