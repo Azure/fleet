@@ -2701,7 +2701,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleSucceeded",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2712,7 +2712,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleSucceeded",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2723,7 +2723,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleSucceeded",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2829,7 +2829,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleFailed",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2839,7 +2839,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleFailed",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2944,7 +2944,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleSucceeded",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2954,7 +2954,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleFailed",
 								ObservedGeneration: crpGeneration,
 							},
@@ -2964,7 +2964,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
-								Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleFailed",
 								ObservedGeneration: crpGeneration,
 							},

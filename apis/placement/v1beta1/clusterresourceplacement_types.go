@@ -439,11 +439,11 @@ const (
 	// - "Unknown" means we haven't started the apply yet.
 	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
 
-	// PlacementScheduledConditionType indicates whether we have successfully scheduled the placement.
+	// ResourceScheduledConditionType indicates whether we have successfully scheduled the selected resources.
 	// Its condition status can be one of the following:
-	// - "True" means we have successfully scheduled the resources to fully satisfy the placement requirement.
+	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
-	PlacementScheduledConditionType ResourcePlacementConditionType = "PlacementScheduled"
+	ResourceScheduledConditionType ResourcePlacementConditionType = "ResourceScheduled"
 )
 
 // PlacementType identifies the type of placement.

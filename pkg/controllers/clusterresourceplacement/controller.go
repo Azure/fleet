@@ -685,6 +685,7 @@ func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlace
 		Conditions:        []metav1.Condition{},
 	}
 	// TODO query the sub resourceSnapshots by using latestResourceSnapshot and then update the status.
+	// Work generator also needs to do this and we need to refactor the code to share the same functionality.
 	for i := range latestResourceSnapshot.Spec.SelectedResources {
 		obj, err := r.decodeResourceContent(&latestResourceSnapshot.Spec.SelectedResources[i])
 		if err != nil {
@@ -703,6 +704,11 @@ func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlace
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
 	meta.SetStatusCondition(&status.Conditions, scheduledCondition)
 
+	// When scheduledCondition is unknown, appliedCondition should be unknown too.
+	// Note: If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
+	// pickN deployment requires 5 clusters and scheduler schedules the resources on 3 clusters. And the appliedCondition
+	// could be true when resources are applied successfully on these 3 clusters and the detailed the resourcePlacementStatuses
+	// need to be populated.
 	if scheduledCondition.Status == metav1.ConditionUnknown {
 		appliedCondition := metav1.Condition{
 			Status:             metav1.ConditionUnknown,
@@ -716,7 +722,7 @@ func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlace
 		return status, nil
 	}
 
-	// TODO collect work status and build appliedCondition & resourcePlacementStatus
+	// TODO check the resourceSnapshot status (set by work generator) and build appliedCondition & resourcePlacementStatus
 	status.PlacementStatuses = buildResourcePlacementStatus(crp, latestSchedulingPolicySnapshot)
 	return status, nil
 }
@@ -750,22 +756,15 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 
 func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) []fleetv1beta1.ResourcePlacementStatus {
 	res := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
-	for i, c := range latestSchedulingPolicySnapshot.Status.ClusterDecisions {
-		scheduledCondition := metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.PlacementScheduledConditionType),
-			Reason:             "ScheduleSucceeded",
-			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
-			ObservedGeneration: crp.Generation,
-		}
+	for _, c := range latestSchedulingPolicySnapshot.Status.ClusterDecisions {
+		var scheduledCondition metav1.Condition
 		var rp fleetv1beta1.ResourcePlacementStatus
-		if !latestSchedulingPolicySnapshot.Status.ClusterDecisions[i].Selected {
+		if !c.Selected {
 			// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
 			// For now, it starts from adding some sample failures of unselected clusters.
-			scheduledCondition.Status = metav1.ConditionFalse
 			scheduledCondition = metav1.Condition{
 				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.PlacementScheduledConditionType),
+				Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 				Reason:             "ScheduleFailed",
 				Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, c.ClusterName, c.Reason),
 				ObservedGeneration: crp.Generation,
@@ -774,6 +773,13 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 				scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
 			}
 		} else {
+			scheduledCondition = metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+				Reason:             "ScheduleSucceeded",
+				Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
+				ObservedGeneration: crp.Generation,
+			}
 			rp.ClusterName = c.ClusterName
 			if c.ClusterScore != nil {
 				scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
