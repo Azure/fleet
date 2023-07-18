@@ -2237,6 +2237,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 	crpGeneration := int64(25)
 	tests := []struct {
 		name                   string
+		policy                 *fleetv1beta1.PlacementPolicy
 		latestPolicySnapshot   *fleetv1beta1.ClusterSchedulingPolicySnapshot
 		latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
 		wantStatus             *fleetv1beta1.ClusterResourcePlacementStatus
@@ -2597,7 +2598,8 @@ func TestBuildPlacementStatus(t *testing.T) {
 			},
 		},
 		{
-			name: "the placement has been scheduled",
+			name:   "the placement has been scheduled",
+			policy: placementPolicyForTest(),
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -2650,6 +2652,10 @@ func TestBuildPlacementStatus(t *testing.T) {
 							ClusterName: "member-3",
 							Selected:    true,
 							Reason:      "success",
+						},
+						{
+							ClusterName: "member-4",
+							Reason:      "failed",
 						},
 					},
 				},
@@ -2824,32 +2830,12 @@ func TestBuildPlacementStatus(t *testing.T) {
 						ObservedGeneration: crpGeneration,
 					},
 				},
-				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
-					{
-						Conditions: []metav1.Condition{
-							{
-								Status:             metav1.ConditionFalse,
-								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleFailed",
-								ObservedGeneration: crpGeneration,
-							},
-						},
-					},
-					{
-						Conditions: []metav1.Condition{
-							{
-								Status:             metav1.ConditionFalse,
-								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleFailed",
-								ObservedGeneration: crpGeneration,
-							},
-						},
-					},
-				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{},
 			},
 		},
 		{
-			name: "the placement scheduling failed",
+			name:   "the placement scheduling failed",
+			policy: placementPolicyForTest(),
 			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
@@ -2973,11 +2959,135 @@ func TestBuildPlacementStatus(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "the placement scheduling succeeded when numberOfClusters is 0",
+			policy: &fleetv1beta1.PlacementPolicy{
+				PlacementType:    fleetv1beta1.PickNPlacementType,
+				NumberOfClusters: pointer.Int32(0),
+				Affinity: &fleetv1beta1.Affinity{
+					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"key1": "value1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			latestPolicySnapshot: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.PolicyIndexLabel:      "0",
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(0),
+					},
+					Generation: 1,
+				},
+				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     snapshotPolicy,
+					PolicyHash: policyHash,
+				},
+				Status: fleetv1beta1.SchedulingPolicySnapshotStatus{
+					ObservedCRPGeneration: crpGeneration,
+					Conditions: []metav1.Condition{
+						{
+							Status:             metav1.ConditionTrue,
+							Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+							Reason:             "Scheduled",
+							Message:            "message",
+							ObservedGeneration: 1,
+						},
+					},
+					ClusterDecisions: []fleetv1beta1.ClusterDecision{
+						{
+							ClusterName: "member-1",
+							Selected:    false,
+							Reason:      "filtered",
+						},
+						{
+							ClusterName: "member-2",
+							Selected:    false,
+							Reason:      "filtered",
+						},
+					},
+				},
+			},
+			latestResourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   testName,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name:               testName,
+							BlockOwnerDeletion: pointer.Bool(true),
+							Controller:         pointer.Bool(true),
+							APIVersion:         fleetAPIVersion,
+							Kind:               "ClusterResourcePlacement",
+						},
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "0",
+					},
+				},
+			},
+			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []fleetv1beta1.ResourceIdentifier{},
+				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionTrue,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Reason:             "Scheduled",
+						ObservedGeneration: crpGeneration,
+					},
+				},
+				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{},
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			crp := clusterResourcePlacementForTest()
+			crp := &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testName,
+				},
+				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+						{
+							Group:   corev1.GroupName,
+							Version: "v1",
+							Kind:    "Service",
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"region": "east"},
+							},
+						},
+					},
+					Policy: tc.policy,
+				},
+			}
 			crp.Generation = crpGeneration
 			r := Reconciler{}
 			got, err := r.buildPlacementStatus(crp, tc.latestPolicySnapshot, tc.latestResourceSnapshot)

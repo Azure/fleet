@@ -722,7 +722,7 @@ func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlace
 		return status, nil
 	}
 
-	// TODO check the resourceSnapshot status (set by work generator) and build appliedCondition & resourcePlacementStatus
+	// TODO collect works and build appliedCondition & resourcePlacementStatus
 	status.PlacementStatuses = buildResourcePlacementStatus(crp, latestSchedulingPolicySnapshot)
 	return status, nil
 }
@@ -754,38 +754,67 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 	}
 }
 
+func classifyClusterDecisions(decisions []fleetv1beta1.ClusterDecision) (selected []*fleetv1beta1.ClusterDecision, unselected []*fleetv1beta1.ClusterDecision) {
+	selected = make([]*fleetv1beta1.ClusterDecision, 0, len(decisions))
+	unselected = make([]*fleetv1beta1.ClusterDecision, 0, len(decisions))
+
+	for i := range decisions {
+		if decisions[i].Selected {
+			selected = append(selected, &decisions[i])
+		} else {
+			unselected = append(unselected, &decisions[i])
+		}
+	}
+	return selected, unselected
+}
+
 func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) []fleetv1beta1.ResourcePlacementStatus {
 	res := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
-	for _, c := range latestSchedulingPolicySnapshot.Status.ClusterDecisions {
-		var scheduledCondition metav1.Condition
-		var rp fleetv1beta1.ResourcePlacementStatus
-		if !c.Selected {
-			// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
-			// For now, it starts from adding some sample failures of unselected clusters.
-			scheduledCondition = metav1.Condition{
-				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-				Reason:             "ScheduleFailed",
-				Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, c.ClusterName, c.Reason),
-				ObservedGeneration: crp.Generation,
-			}
-			if c.ClusterScore != nil {
-				scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
-			}
-		} else {
-			scheduledCondition = metav1.Condition{
-				Status:             metav1.ConditionTrue,
-				Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-				Reason:             "ScheduleSucceeded",
-				Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
-				ObservedGeneration: crp.Generation,
-			}
-			rp.ClusterName = c.ClusterName
-			if c.ClusterScore != nil {
-				scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
-			}
+	decisions := latestSchedulingPolicySnapshot.Status.ClusterDecisions
+	selected, unselected := classifyClusterDecisions(decisions)
 
-			// TODO populate the work status
+	// In the pickN case, if the placement cannot be satisfied. For example, pickN deployment requires 5 clusters and
+	// scheduler schedules the resources on 3 clusters. We'll populate why the other two cannot be scheduled.
+	// Here it is calculating how many there are unscheduled resources.
+	unscheduledClusterCount := 0
+	if crp.Spec.Policy != nil &&
+		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
+		crp.Spec.Policy.NumberOfClusters != nil {
+		unscheduledClusterCount = int(*crp.Spec.Policy.NumberOfClusters) - len(selected)
+	}
+
+	for _, c := range selected {
+		var rp fleetv1beta1.ResourcePlacementStatus
+		scheduledCondition := metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+			Reason:             "ScheduleSucceeded",
+			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
+			ObservedGeneration: crp.Generation,
+		}
+		rp.ClusterName = c.ClusterName
+		if c.ClusterScore != nil {
+			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
+		}
+
+		// TODO populate the work status
+		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
+		res = append(res, rp)
+	}
+
+	for i := 0; i < unscheduledClusterCount && i < len(unselected); i++ {
+		// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
+		// For now, it starts from adding some sample failures of unselected clusters.
+		var rp fleetv1beta1.ResourcePlacementStatus
+		scheduledCondition := metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+			Reason:             "ScheduleFailed",
+			Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, unselected[i].ClusterName, unselected[i].Reason),
+			ObservedGeneration: crp.Generation,
+		}
+		if unselected[i].ClusterScore != nil {
+			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, unselected[i].ClusterName, unselected[i].ClusterScore, unselected[i].Reason)
 		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
 		res = append(res, rp)
