@@ -16,6 +16,25 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+const (
+	// skewChangeScoreFactor is the factor applied to topology spread score for every unit
+	// of skew change.
+	//
+	// Note that it should be a negative value, so that any provisional placement that reduces
+	// skewing will be assigned a positive topology spread score.
+	skewChangeScoreFactor = -1
+	// maxSkewViolationPenality is the penalty applied to topology spread score when a
+	// provisional placement violates a topology spread constraint.
+	//
+	// Note that it should be a positive value, as the plugin will subtract this value from
+	// the total score.
+	maxSkewViolationPenality = 1000
+)
+
+var (
+	doNotScheduleConstraintViolationReasonTemplate = "violated doNotSchedule topology spread constraint %q (max skew %d)"
+)
+
 // Plugin is the scheduler plugin that enforces the
 // topology spread constraints (if any) defined on a CRP.
 type Plugin struct {
@@ -97,11 +116,11 @@ func (p *Plugin) readPluginState(state framework.CycleStatePluginReadWriter) (*p
 	}
 
 	// Cast the value to the right type.
-	pluginState, ok := val.(*pluginState)
+	ps, ok := val.(*pluginState)
 	if !ok {
 		return nil, fmt.Errorf("failed to cast value %v to the right type", val)
 	}
-	return pluginState, nil
+	return ps, nil
 }
 
 // PostBatch allows the plugin to connect to the PostBatch extension point in the scheduling
@@ -163,15 +182,15 @@ func (p *Plugin) PreFilter(
 	//
 	// Note that this will happen as long as there is one or more topology spread constraints
 	// in presence in the scheduling policy, regardless of its settings.
-	pluginState, err := prepareTopologySpreadConstraintsPluginState(state, policy)
+	ps, err := prepareTopologySpreadConstraintsPluginState(state, policy)
 	if err != nil {
 		return framework.FromError(err, p.Name(), "failed to prepare plugin state")
 	}
 
 	// Save the plugin state.
-	state.Write(framework.StateKey(p.Name()), pluginState)
+	state.Write(framework.StateKey(p.Name()), ps)
 
-	if len(pluginState.doNotScheduleConstraints) == 0 {
+	if len(ps.doNotScheduleConstraints) == 0 {
 		// There are no DoNotSchedule topology spread constraints to enforce; skip.
 		//
 		// Note that this will lead the scheduler to skip this plugin in the next stage
@@ -191,7 +210,7 @@ func (p *Plugin) Filter(
 	cluster *fleetv1beta1.MemberCluster,
 ) (status *framework.Status) {
 	// Read the plugin state.
-	pluginState, err := p.readPluginState(state)
+	ps, err := p.readPluginState(state)
 	if err != nil {
 		// This branch should never be reached, as for any policy with present topology spread
 		// constraints, a common plugin state has been set at the PreFilter extension point.
@@ -199,7 +218,7 @@ func (p *Plugin) Filter(
 	}
 
 	// The state is safe for concurrent reads.
-	reasons, ok := pluginState.violations[clusterName(cluster.Name)]
+	reasons, ok := ps.violations[clusterName(cluster.Name)]
 	if ok {
 		// Violation is found; filter this cluster out.
 		return framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), reasons...)
@@ -232,14 +251,14 @@ func (p *Plugin) PreScore(
 	}
 
 	// Read the plugin state.
-	pluginState, err := p.readPluginState(state)
+	ps, err := p.readPluginState(state)
 	if err != nil {
 		// This branch should never be reached, as for any policy with present topology spread
 		// constraints, a common plugin state has been set at the PreFilter extension point.
 		return framework.FromError(err, p.Name(), "failed to read plugin state")
 	}
 
-	if len(pluginState.scheduleAnywayConstraints) == 0 && len(pluginState.doNotScheduleConstraints) == 0 {
+	if len(ps.scheduleAnywayConstraints) == 0 && len(ps.doNotScheduleConstraints) == 0 {
 		// There are no topology spread constraints to enforce; skip.
 		//
 		// Note that this will lead the scheduler to skip this plugin in the next stage
@@ -262,7 +281,7 @@ func (p *Plugin) Score(
 	cluster *fleetv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
 	// Read the plugin state.
-	pluginState, err := p.readPluginState(state)
+	ps, err := p.readPluginState(state)
 	if err != nil {
 		// This branch should never be reached, as for any policy with present topology spread
 		// constraints, a common plugin state has been set at the PreFilter extension point.
@@ -270,7 +289,7 @@ func (p *Plugin) Score(
 	}
 
 	// The state is safe for concurrent reads.
-	topologySpreadScore, ok := pluginState.scores[clusterName(cluster.Name)]
+	topologySpreadScore, ok := ps.scores[clusterName(cluster.Name)]
 	if !ok {
 		// No score is found; normally this should never happen, as the state is consistent,
 		// and each cluster that does not violate DoNotSchedule topology spread constraints
