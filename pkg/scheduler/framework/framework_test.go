@@ -2856,7 +2856,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
 			state.desiredBatchSize = tc.desiredBatchSize
 			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
@@ -2951,7 +2951,7 @@ func TestRunPreScorePlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
 			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
