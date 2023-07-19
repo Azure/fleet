@@ -14,7 +14,7 @@ import (
 
 // countByDomain counts the number of scheduled or bound bindings in each domain per a given
 // topology key.
-func countByDomain(_ []fleetv1beta1.MemberCluster, _ framework.CycleStatePluginReadWriter, _ string) bindingCounter {
+func countByDomain(_ []fleetv1beta1.MemberCluster, _ framework.CycleStatePluginReadWriter, _ string) *bindingCounterByDomain {
 	// Not yet implemented.
 	return &bindingCounterByDomain{}
 }
@@ -22,7 +22,7 @@ func countByDomain(_ []fleetv1beta1.MemberCluster, _ framework.CycleStatePluginR
 // willViolate returns whether producing one more binding in a domain would lead
 // to violations; it will also return the skew change (the delta between the max skew after setting
 // up a placement and the one before) caused by the provisional placement.
-func willViolate(_ bindingCounter, _ domainName, _ int) (violated bool, skewChange int, err error) {
+func willViolate(_ *bindingCounterByDomain, _ domainName, _ int) (violated bool, skewChange int, err error) {
 	// Not yet implemented.
 	return false, 0, nil
 }

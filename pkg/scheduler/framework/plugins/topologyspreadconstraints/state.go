@@ -15,29 +15,6 @@ type domainName string
 // count is the number of bindings in a topology domain.
 type count int
 
-// bindingCounter is an interface which allows counting the number of bindings in each
-// topology domain.
-type bindingCounter interface {
-	// Count returns the number of bindings in a topology domain.
-	//
-	// It returns false if the domain does not exist, or the counter has not been initialized
-	// (i.e. no domain has been registered).
-	Count(domainName) (count, bool)
-
-	// Smallest returns the smallest count in the counter.
-	//
-	// It returns false if the counter has not been initialized (i.e. no domain has been registered).
-	Smallest() (count, bool)
-	// SecondSmallest returns the second smallest count in the counter.
-	//
-	// It returns false if the counter has not been initialized (i.e. no domain has been registered).
-	SecondSmallest() (count, bool)
-	// Largest returns the largest count in the counter.
-	//
-	// It returns false if the counter has not been initialized (i.e. no domain has been registered).
-	Largest() (count, bool)
-}
-
 // bindingCounterByDomain implements the bindingCounter interface, counting the number of
 // bindings in each topology domain.
 type bindingCounterByDomain struct {
@@ -56,11 +33,6 @@ type bindingCounterByDomain struct {
 	// the smallest) count.
 	largest count
 }
-
-var (
-	// Verify that bindingCounterByDomain implements the bindingCounter interface at compile time.
-	_ bindingCounter = &bindingCounterByDomain{}
-)
 
 // Count returns the number of bindings in a topology domain.
 func (c *bindingCounterByDomain) Count(name domainName) (count, bool) {
