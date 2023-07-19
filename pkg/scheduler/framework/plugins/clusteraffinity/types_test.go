@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package framework
+package clusteraffinity
 
 import (
 	"testing"
@@ -13,6 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+const (
+	clusterName = "cluster-1"
 )
 
 func TestMatches(t *testing.T) {

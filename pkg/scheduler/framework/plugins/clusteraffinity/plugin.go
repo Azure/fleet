@@ -87,9 +87,9 @@ func (p *Plugin) readPluginState(state framework.CycleStatePluginReadWriter) (*p
 	}
 
 	// Cast the value to the right type.
-	pluginState, ok := val.(*pluginState)
+	ps, ok := val.(*pluginState)
 	if !ok {
 		return nil, fmt.Errorf("failed to cast value %v to the right type", val)
 	}
-	return pluginState, nil
+	return ps, nil
 }

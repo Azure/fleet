@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package framework
+package clusteraffinity
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
