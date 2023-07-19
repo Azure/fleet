@@ -18,6 +18,10 @@ const (
 
 	// RevisionHistoryLimitDefaultValue is the default value of RevisionHistoryLimit.
 	RevisionHistoryLimitDefaultValue = int32(10)
+
+	// SchedulerCRPCleanupFinalizer is a finalizer addd by the scheduler to CRPs, to make sure
+	// that all bindings derived from a CRP can be cleaned up after the CRP is deleted.
+	SchedulerCRPCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
 )
 
 // +genclient

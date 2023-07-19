@@ -38,12 +38,14 @@ var (
 )
 
 const (
-	testUser  = "test-user"
-	testKey   = "test-key"
-	testValue = "test-value"
+	testUser        = "test-user"
+	testKey         = "test-key"
+	testValue       = "test-value"
+	testRole        = "wh-test-role"
+	testRoleBinding = "wh-test-role-binding"
 
-	crdStatusErrFormat = `failed to validate user: %s in groups: %v to modify fleet CRD: %s`
-	mcStatusErrFormat  = `failed to validate user: %s in groups: %v to modify member cluster CR: %s`
+	crdStatusErrFormat      = `user: %s in groups: %v is not allowed to modify fleet CRD: %+v`
+	resourceStatusErrFormat = `user: %s in groups: %v is not allowed to modify fleet resource %s: %+v`
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
@@ -484,7 +486,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Create(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, types.NamespacedName{Name: crd.Name})))
 		})
 
 		It("should deny UPDATE operation on Fleet CRD for user not in system:masters group", func() {
@@ -500,7 +502,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Update(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, types.NamespacedName{Name: crd.Name})))
 		})
 
 		It("should deny DELETE operation on Fleet CRD for user not in system:masters group", func() {
@@ -513,10 +515,10 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &crd)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete CRD call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, crd.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(crdStatusErrFormat, testUser, testGroups, types.NamespacedName{Name: crd.Name})))
 		})
 
-		It("should allow UPDATE operation on Fleet CRDs if user in system:masters group", func() {
+		It("should allow UPDATE operation on Fleet CRDs even if user in system:masters group", func() {
 			var crd v1.CustomResourceDefinition
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)).Should(Succeed())
 
@@ -570,7 +572,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Create(ctx, &mc)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
 
 		It("should deny UPDATE operation on member cluster CR for user not in system:masters group", func() {
@@ -584,7 +586,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
 
 		It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
@@ -598,19 +600,19 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &mc)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(mcStatusErrFormat, testUser, testGroups, mc.Name)))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
 
 		It("should allow update operation on member cluster CR for user in system:masters group", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
 
-			By("update labels in CRD")
+			By("update labels in member cluster")
 			labels := make(map[string]string)
 			labels[testKey] = testValue
 			mc.SetLabels(labels)
 
-			By("expecting denial of operation UPDATE of CRD")
+			By("expecting successful UPDATE of member cluster")
 			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
 			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
 
@@ -618,6 +620,173 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			labels = mc.GetLabels()
 			delete(labels, testKey)
 			mc.SetLabels(labels)
+
+			By("expecting successful UPDATE of member cluster")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
+	Context("Role & Role binding validation webhook", func() {
+		It("should deny CREATE operation on role for user not in system:masters group", func() {
+			r := rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testRole,
+					Namespace: memberNamespace.Name,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						Verbs:     []string{"*"},
+						APIGroups: []string{rbacv1.SchemeGroupVersion.Group},
+						Resources: []string{"*"},
+					},
+				},
+			}
+
+			By("expecting denial of operation CREATE of role")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &r)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create role call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			fmt.Println(string(statusErr.Status().Reason))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Role", types.NamespacedName{Name: r.Name, Namespace: r.Namespace})))
+		})
+
+		It("should deny UPDATE operation on role for user not in system:masters group", func() {
+			var r rbacv1.Role
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testRole, Namespace: memberNamespace.Name}, &r)).Should(Succeed())
+
+			By("update role")
+			labels := make(map[string]string)
+			labels[testKey] = testValue
+			r.SetLabels(labels)
+
+			By("expecting denial of operation UPDATE of role")
+			err := HubCluster.ImpersonateKubeClient.Update(ctx, &r)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update role call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Role", types.NamespacedName{Name: r.Name, Namespace: r.Namespace})))
+		})
+
+		It("should deny DELETE operation on role for user not in system:masters group", func() {
+			r := rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testRole,
+					Namespace: memberNamespace.Name,
+				},
+			}
+
+			By("expecting denial of operation DELETE of role")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &r)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete role call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Role", types.NamespacedName{Name: r.Name, Namespace: r.Namespace})))
+		})
+
+		It("should allow update operation on role for user in system:masters group", func() {
+			var r rbacv1.Role
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testRole, Namespace: memberNamespace.Name}, &r)).Should(Succeed())
+
+			By("update labels in Role")
+			labels := make(map[string]string)
+			labels[testKey] = testValue
+			r.SetLabels(labels)
+
+			By("expecting successful UPDATE of role")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &r)).To(Succeed())
+
+			By("remove new label added for test")
+			labels = mc.GetLabels()
+			delete(labels, testKey)
+			mc.SetLabels(labels)
+
+			By("expecting successful UPDATE of role")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &r)).To(Succeed())
+		})
+
+		It("should deny CREATE operation on role binding for user not in system:masters group", func() {
+			rb := rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testRoleBinding,
+					Namespace: memberNamespace.Name,
+				},
+				Subjects: []rbacv1.Subject{
+					{
+						APIGroup: rbacv1.GroupName,
+						Kind:     "User",
+						Name:     testUser,
+					},
+				},
+				RoleRef: rbacv1.RoleRef{
+					APIGroup: rbacv1.GroupName,
+					Kind:     "Role",
+					Name:     testRole,
+				},
+			}
+
+			By("expecting denial of operation CREATE of role binding")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &rb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create role binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			fmt.Println(string(statusErr.Status().Reason))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "RoleBinding", types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace})))
+		})
+
+		It("should deny UPDATE operation on role binding for user not in system:masters group", func() {
+			var rb rbacv1.RoleBinding
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testRoleBinding, Namespace: memberNamespace.Name}, &rb)).Should(Succeed())
+
+			By("update role")
+			labels := make(map[string]string)
+			labels[testKey] = testValue
+			rb.SetLabels(labels)
+
+			By("expecting denial of operation UPDATE of role binding")
+			err := HubCluster.ImpersonateKubeClient.Update(ctx, &rb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update role binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "RoleBinding", types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace})))
+		})
+
+		It("should deny DELETE operation on role binding for user not in system:masters group", func() {
+			rb := rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testRoleBinding,
+					Namespace: memberNamespace.Name,
+				},
+			}
+
+			By("expecting denial of operation DELETE of role binding")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &rb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete role binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "RoleBinding", types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace})))
+		})
+
+		It("should allow update operation on role binding for user in system:masters group", func() {
+			var rb rbacv1.RoleBinding
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testRoleBinding, Namespace: memberNamespace.Name}, &rb)).Should(Succeed())
+
+			By("update labels in Role Binding")
+			labels := make(map[string]string)
+			labels[testKey] = testValue
+			rb.SetLabels(labels)
+
+			By("expecting successful UPDATE of role binding")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &rb)).To(Succeed())
+
+			By("remove new label added for test")
+			labels = mc.GetLabels()
+			delete(labels, testKey)
+			mc.SetLabels(labels)
+
+			By("expecting successful UPDATE of role binding")
+			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.KubeClient.Update(ctx, &rb)).To(Succeed())
 		})
 	})
 })

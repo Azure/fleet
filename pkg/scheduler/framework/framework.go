@@ -91,10 +91,7 @@ type framework struct {
 	// maxUnselectedClusterDecisionCount controls the maximum number of decisions for unselected clusters
 	// added to the policy snapshot status.
 	//
-	// Note that all picked clusters will always have their associated decisions written to the status;
-	// when the number of picked clusters is below this limit, the scheduler will use the
-	// remaining slots to fill up the status with explanations on why a specific cluster is not picked
-	// by scheduler (if applicable), so that user are better informed on how the scheduler functions.
+	// Note that all picked clusters will always have their associated decisions written to the status.
 	maxUnselectedClusterDecisionCount int
 }
 
