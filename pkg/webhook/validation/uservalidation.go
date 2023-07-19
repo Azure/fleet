@@ -75,13 +75,10 @@ func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, w
 		klog.V(2).InfoS("user in groups is allowed to modify member cluster label", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
 	}
-	if (isMCLabelUpdated && isMCUpdated) || (!isMCLabelUpdated && isMCUpdated) {
+	if isMCUpdated {
 		response = ValidateUserForFleetCR(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
 	}
-	if !isMCLabelUpdated && !isMCUpdated {
-		// ideally the code never reaches here, sanity check to catch corner cases and deny the request.
-		response = admission.Denied("user didn't update a valid field in member cluster CR")
-	}
+	response = admission.Denied("user didn't update a valid, updatable field in member cluster CR")
 	return response
 }
 
