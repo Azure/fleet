@@ -1,10 +1,13 @@
 package validation
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
@@ -58,22 +61,26 @@ func ValidateUserForResource(resKind string, namespacedName types.NamespacedName
 	return admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 }
 
+// ValidateMemberClusterUpdate checks to see if user is allowed to update argued fleet resource.
 func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
 	var response admission.Response
 	namespacedName := types.NamespacedName{Name: currentMC.Name}
-	if isMemberClusterLabelUpdated(currentMC.Labels, oldMC.Labels) {
-		klog.V(2).InfoS("member cluster labels was updated", "user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
-		// clearing labels to compare other member cluster fields.
-		currentMC.Labels = make(map[string]string, 0)
-		oldMC.Labels = make(map[string]string, 0)
-		if isMemberClusterUpdated(currentMC, oldMC) {
-			klog.V(2).InfoS("fields other than member cluster labels were also updated", "user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
-			response = ValidateUserForFleetCR(currentMC.Kind, namespacedName, whiteListedUsers, userInfo)
-		} else {
-			// we allow any user to update the labels for member cluster CR.
-			klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
-			response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
-		}
+	isMCLabelUpdated := isMemberClusterLabelUpdated(currentMC.Labels, oldMC.Labels)
+	isMCUpdated, err := isMemberClusterUpdated(currentMC, oldMC)
+	if err != nil {
+		return admission.Denied(err.Error())
+	}
+	if isMCLabelUpdated && !isMCUpdated {
+		// we allow any user to modify MemberCluster label.
+		klog.V(2).InfoS("user in groups is allowed to modify member cluster label", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
+		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
+	}
+	if (isMCLabelUpdated && isMCUpdated) || (!isMCLabelUpdated && isMCUpdated) {
+		response = ValidateUserForFleetCR(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
+	}
+	if !isMCLabelUpdated && !isMCUpdated {
+		// ideally the code never reaches here, sanity check to catch corner cases and deny the request.
+		response = admission.Denied("user didn't update a valid field in member cluster CR")
 	}
 	return response
 }
@@ -88,20 +95,49 @@ func isUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool 
 	return slices.Contains(userInfo.Groups, serviceAccountsGroup)
 }
 
+// isMemberClusterLabelUpdated return true if member cluster label is updated.
 func isMemberClusterLabelUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
 	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
 }
 
-func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) bool {
-	// Not comparing the whole ObjectMeta object because it has live fields.
-	return !reflect.DeepEqual(currentMC.Spec, oldMC.Spec) ||
-		// compare all non-read only fields in ObjectMeta, TypeMeta.
-		!reflect.DeepEqual(currentMC.GenerateName, oldMC.GenerateName) ||
-		!reflect.DeepEqual(currentMC.Annotations, oldMC.Annotations) ||
-		!reflect.DeepEqual(currentMC.OwnerReferences, oldMC.OwnerReferences) ||
-		!reflect.DeepEqual(currentMC.Finalizers, oldMC.Finalizers) ||
-		!reflect.DeepEqual(currentMC.ManagedFields, oldMC.ManagedFields) ||
-		!reflect.DeepEqual(currentMC.APIVersion, oldMC.APIVersion)
+// isMemberClusterUpdated returns true is member cluster spec or certain fields in object meta of member cluster CR is updated.
+func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool, error) {
+	// Remove all live fields from current MC objectMeta.
+	currentMC.SetSelfLink("")
+	currentMC.SetUID("")
+	currentMC.SetResourceVersion("")
+	currentMC.SetGeneration(0)
+	currentMC.SetCreationTimestamp(v1.Time{})
+	currentMC.SetDeletionTimestamp(nil)
+	currentMC.SetDeletionGracePeriodSeconds(nil)
+	currentMC.SetManagedFields(nil)
+	// Remove all live fields from old MC objectMeta.
+	oldMC.SetSelfLink("")
+	oldMC.SetUID("")
+	oldMC.SetResourceVersion("")
+	oldMC.SetGeneration(0)
+	oldMC.SetCreationTimestamp(v1.Time{})
+	oldMC.SetDeletionTimestamp(nil)
+	oldMC.SetDeletionGracePeriodSeconds(nil)
+	oldMC.SetManagedFields(nil)
+	// Set labels to be nil, set status to be empty.
+	currentMC.SetLabels(nil)
+	currentMC.Status = fleetv1alpha1.MemberClusterStatus{}
+	oldMC.SetLabels(nil)
+	oldMC.Status = fleetv1alpha1.MemberClusterStatus{}
+
+	currentMCBytes, err := json.Marshal(currentMC)
+	if err != nil {
+		return false, err
+	}
+	oldMCBytes, err := json.Marshal(oldMC)
+	if err != nil {
+		return false, err
+	}
+	currentMCHash := sha256.Sum256(currentMCBytes)
+	oldMCHash := sha256.Sum256(oldMCBytes)
+
+	return currentMCHash != oldMCHash, nil
 }
 
 // checkCRDGroup returns true if the input CRD group is a fleet CRD group.
