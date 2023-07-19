@@ -465,7 +465,7 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
 			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
@@ -576,7 +576,7 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
 			for _, name := range tc.skippedPluginNames {
 				state.skippedFilterPlugins.Insert(name)
 			}
@@ -747,7 +747,7 @@ func TestRunFilterPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
 			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
@@ -1050,7 +1050,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
 			scored, filtered, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
 			if tc.expectedToFail {
 				if err == nil {
