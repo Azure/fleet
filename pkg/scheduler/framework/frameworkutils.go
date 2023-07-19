@@ -343,14 +343,6 @@ func sortByClusterScoreAndName(bindings []*fleetv1beta1.ClusterResourceBinding) 
 }
 
 // shouldSchedule checks if the scheduler needs to perform some scheduling.
-//
-// A scheduling cycle is only needed if
-// * the policy is of the PickAll type; or
-// * the policy is of the PickN type, and currently there are not enough number of bindings.
-func shouldSchedule(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, desiredCount, existingCount int) bool {
-	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType {
-		return true
-	}
-
+func shouldSchedule(desiredCount, existingCount int) bool {
 	return desiredCount > existingCount
 }

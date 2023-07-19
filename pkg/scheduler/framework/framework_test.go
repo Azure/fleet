@@ -592,7 +592,7 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			}
 
 			status := f.runFilterPluginsFor(ctx, state, policy, cluster)
-			if diff := cmp.Diff(status, tc.wantStatus, cmpopts.IgnoreUnexported(Status{}), ignoredStatusFields); diff != "" {
+			if diff := cmp.Diff(status, tc.wantStatus, cmp.AllowUnexported(Status{}), ignoredStatusFields); diff != "" {
 				t.Errorf("runFilterPluginsFor() returned status diff (-got, +want) = %s", diff)
 			}
 		})

@@ -701,41 +701,40 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 			return ctrl.Result{}, err
 		}
 
-		// Check if the scheduler needs to take action; a scheduling cycle is only needed if
-		// * the policy is of the PickAll type; or
-		// * the policy is of the PickN type, and currently there are not enough number of bindings.
-		if !shouldSchedule(policy, numOfClusters, len(bound)+len(scheduled)) {
-			// No action is needed; however, a status refresh might be warranted.
-			//
-			// This is needed as a number of situations (e.g., POST/PUT failures) may lead to inconsistencies between
-			// the decisions added to the policy snapshot status and the actual list of bindings.
-			klog.V(2).InfoS("No scheduling is needed", "clusterSchedulingPolicySnapshot", policyRef)
-			// Note that since there is no reliable way to determine the validity of old decisions added
-			// to the policy snapshot status, we will only update the status with the known facts, i.e.,
-			// the clusters that are currently selected.
-			if err := f.updatePolicySnapshotStatusFrom(ctx, policy, nil, bound, scheduled); err != nil {
-				klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when no scheduling run is needed", "clusterSchedulingPolicySnapshot", policyRef)
-				return ctrl.Result{}, err
-			}
+		// Return immediately as there are no more bindings for the scheduler to scheduler at this moment.
+		return ctrl.Result{}, nil
+	}
 
-			// Return immediate as there no more bindings for the scheduler to schedule at this moment.
-			return ctrl.Result{}, nil
-		}
-
-		// The scheduler needs to take action; enter the actual scheduling stages.
-		klog.V(2).InfoS("Scheduling is needed; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
-
-		// Run all the plugins.
+	// Check if the scheduler needs to take action; a scheduling cycle is only needed if
+	// currently there are not enough number of bindings.
+	if !shouldSchedule(numOfClusters, len(bound)+len(scheduled)) {
+		// No action is needed; however, a status refresh might be warranted.
 		//
-		// TO-DO (chenyu1): assign variable when needed.
-		_, _, err := f.runAllPluginsForPickNPlacementType(ctx, state, policy, numOfClusters, len(bound)+len(scheduled), clusters)
-		if err != nil {
-			klog.ErrorS(err, "Failed to run all plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		// This is needed as a number of situations (e.g., POST/PUT failures) may lead to inconsistencies between
+		// the decisions added to the policy snapshot status and the actual list of bindings.
+		klog.V(2).InfoS("No scheduling is needed", "clusterSchedulingPolicySnapshot", policyRef)
+		// Note that since there is no reliable way to determine the validity of old decisions added
+		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
+		// the clusters that are currently selected.
+		if err := f.updatePolicySnapshotStatusFrom(ctx, policy, nil, bound, scheduled); err != nil {
+			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when no scheduling run is needed", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
 
-		// Return immediately as there are no more bindings for the scheduler to scheduler at this moment.
+		// Return immediate as there no more bindings for the scheduler to schedule at this moment.
 		return ctrl.Result{}, nil
+	}
+
+	// The scheduler needs to take action; enter the actual scheduling stages.
+	klog.V(2).InfoS("Scheduling is needed; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
+
+	// Run all the plugins.
+	//
+	// TO-DO (chenyu1): assign variable when needed.
+	_, _, err = f.runAllPluginsForPickNPlacementType(ctx, state, policy, numOfClusters, len(bound)+len(scheduled), clusters)
+	if err != nil {
+		klog.ErrorS(err, "Failed to run all plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
 	}
 
 	// Not yet implemented.
