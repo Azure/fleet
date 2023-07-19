@@ -744,8 +744,7 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 		// Trim scheduled bindings.
 		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
 		for i := 0; i < len(sortedScheduled) && i < count; i++ {
-			binding := sortedScheduled[i]
-			bindingsToDelete = append(bindingsToDelete, binding)
+			bindingsToDelete = append(bindingsToDelete, sortedScheduled[i])
 		}
 
 		return sortedScheduled[count:], bound, f.markAsUnscheduledFor(ctx, bindingsToDelete)
