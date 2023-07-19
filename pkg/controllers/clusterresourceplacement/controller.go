@@ -775,7 +775,7 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 
 	// In the pickN case, if the placement cannot be satisfied. For example, pickN deployment requires 5 clusters and
 	// scheduler schedules the resources on 3 clusters. We'll populate why the other two cannot be scheduled.
-	// Here it is calculating how many there are unscheduled resources.
+	// Here it is calculating how many unscheduled resources there are.
 	unscheduledClusterCount := 0
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
