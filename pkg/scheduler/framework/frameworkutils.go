@@ -341,3 +341,8 @@ func sortByClusterScoreAndName(bindings []*fleetv1beta1.ClusterResourceBinding) 
 
 	return bindings
 }
+
+// shouldSchedule checks if the scheduler needs to perform some scheduling.
+func shouldSchedule(desiredCount, existingCount int) bool {
+	return desiredCount > existingCount
+}
