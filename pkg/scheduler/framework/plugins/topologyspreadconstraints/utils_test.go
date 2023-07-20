@@ -662,3 +662,285 @@ func TestClassifyConstriants(t *testing.T) {
 		})
 	}
 }
+
+// TestWillViolate tests the willViolate function.
+func TestWillViolate(t *testing.T) {
+	topologyValue4 := domainName("topology-value-4")
+
+	testCases := []struct {
+		name           string
+		counter        *bindingCounterByDomain
+		dn             domainName
+		maxSkew        int
+		wantViolated   bool
+		wantSkewChange int
+		expectedToFail bool
+	}{
+		{
+			name: "domain not registered",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+				},
+				smallest:       1,
+				secondSmallest: 1,
+				largest:        1,
+			},
+			dn:             topologyValue2,
+			expectedToFail: true,
+		},
+		{
+			name: "invalid count (smaller than smallest)",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+				},
+				smallest:       2,
+				secondSmallest: 2,
+				largest:        2,
+			},
+			dn:             topologyValue1,
+			expectedToFail: true,
+		},
+		{
+			name: "invalid count (larger than largest)",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 2,
+				},
+				smallest:       1,
+				secondSmallest: 1,
+				largest:        1,
+			},
+			dn:             topologyValue2,
+			expectedToFail: true,
+		},
+		{
+			name: "one count only, no violation",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 2,
+					topologyValue2: 2,
+					topologyValue3: 2,
+				},
+				smallest:       2,
+				secondSmallest: 2,
+				largest:        2,
+			},
+			dn:             topologyValue1,
+			maxSkew:        1,
+			wantViolated:   false,
+			wantSkewChange: 1,
+		},
+		{
+			name: "one count only, violated",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 2,
+					topologyValue2: 2,
+					topologyValue3: 2,
+				},
+				smallest:       2,
+				secondSmallest: 2,
+				largest:        2,
+			},
+			dn: topologyValue2,
+			// This should never happen as the minimum required for maxSkew in API is 1; it is
+			// added here solely for the purpose of testing.
+			maxSkew:        0,
+			wantViolated:   true,
+			wantSkewChange: 1,
+		},
+		{
+			name: "one smallest count, pick smallest count, no violation",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 2,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        2,
+			},
+			dn:             topologyValue1,
+			maxSkew:        1,
+			wantViolated:   false,
+			wantSkewChange: -1,
+		},
+		{
+			name: "one smallest count, pick smallest count, violated",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 4,
+					topologyValue3: 4,
+				},
+				smallest:       1,
+				secondSmallest: 4,
+				largest:        4,
+			},
+			dn:             topologyValue1,
+			maxSkew:        1,
+			wantViolated:   true,
+			wantSkewChange: -1,
+		},
+		{
+			name: "multiple smallest counts, pick smallest count, no violation",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 1,
+					topologyValue3: 2,
+				},
+				smallest:       1,
+				secondSmallest: 1,
+				largest:        2,
+			},
+			dn:             topologyValue2,
+			maxSkew:        1,
+			wantViolated:   false,
+			wantSkewChange: 0,
+		},
+		{
+			name: "multiple smallest counts, pick smallest count, violated",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 1,
+					topologyValue3: 3,
+				},
+				smallest:       1,
+				secondSmallest: 1,
+				largest:        3,
+			},
+			dn:             topologyValue1,
+			maxSkew:        1,
+			wantViolated:   true,
+			wantSkewChange: 0,
+		},
+		{
+			name: "separate special counts, pick second smallest, no violation",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 3,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        3,
+			},
+			dn:             topologyValue2,
+			maxSkew:        2,
+			wantViolated:   false,
+			wantSkewChange: 0,
+		},
+		{
+			name: "separate special counts, pick second smallest, violated",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 3,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        3,
+			},
+			dn:             topologyValue2,
+			maxSkew:        1,
+			wantViolated:   true,
+			wantSkewChange: 0,
+		},
+		{
+			name: "separate special counts, pick a count larger than second smallest, less than largest, no violation",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 5,
+					topologyValue4: 3,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        5,
+			},
+			dn:             topologyValue4,
+			maxSkew:        5,
+			wantViolated:   false,
+			wantSkewChange: 0,
+		},
+		{
+			name: "separate special counts, pick a count larger than second smallest, less than largest, violated",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 5,
+					topologyValue4: 3,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        5,
+			},
+			dn:             topologyValue4,
+			maxSkew:        3,
+			wantViolated:   true,
+			wantSkewChange: 0,
+		},
+		{
+			name: "separate special counts, pick largest, no violation",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 5,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        5,
+			},
+			dn:             topologyValue3,
+			maxSkew:        5,
+			wantViolated:   false,
+			wantSkewChange: 1,
+		},
+		{
+			name: "separate special counts, pick largest, violated",
+			counter: &bindingCounterByDomain{
+				counter: map[domainName]count{
+					topologyValue1: 1,
+					topologyValue2: 2,
+					topologyValue3: 5,
+				},
+				smallest:       1,
+				secondSmallest: 2,
+				largest:        5,
+			},
+			dn:             topologyValue3,
+			maxSkew:        2,
+			wantViolated:   true,
+			wantSkewChange: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			violated, skewChange, err := willViolate(tc.counter, tc.dn, tc.maxSkew)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Errorf("willViolate(), want error")
+				}
+
+				return
+			}
+			if violated != tc.wantViolated {
+				t.Errorf("willViolate() violated = %t, want %t", violated, tc.wantViolated)
+			}
+			if skewChange != tc.wantSkewChange {
+				t.Errorf("willViolate() skewChange: got %v, want %v", skewChange, tc.wantSkewChange)
+			}
+		})
+	}
+}
