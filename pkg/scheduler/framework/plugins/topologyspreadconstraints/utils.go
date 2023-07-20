@@ -7,6 +7,7 @@ package topologyspreadconstraints
 
 import (
 	"fmt"
+	"sort"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
@@ -14,9 +15,79 @@ import (
 
 // countByDomain counts the number of scheduled or bound bindings in each domain per a given
 // topology key.
-func countByDomain(_ []fleetv1beta1.MemberCluster, _ framework.CycleStatePluginReadWriter, _ string) *bindingCounterByDomain {
-	// Not yet implemented.
-	return &bindingCounterByDomain{}
+func countByDomain(clusters []fleetv1beta1.MemberCluster, state framework.CycleStatePluginReadWriter, topologyKey string) *bindingCounterByDomain {
+	// Calculate the number of bindings in each domain.
+	//
+	// Note that all domains will have their corresponding counts, even if the counts are zero.
+	counter := make(map[domainName]count)
+	for _, cluster := range clusters {
+		val, ok := cluster.Labels[topologyKey]
+		if !ok {
+			// The cluster under inspection does not have the topology key and thus is
+			// not part of the spread.
+			continue
+		}
+
+		name := domainName(val)
+		count, ok := counter[name]
+		if !ok {
+			// Initialize the count for the domain (even if there is no scheduled or bound
+			// binding in the domain).
+			counter[name] = 0
+		}
+
+		if state.IsClusterScheduledOrBound(cluster.Name) {
+			// The cluster under inspection owns a scheduled or bound binding.
+			counter[name] = count + 1
+		}
+	}
+
+	// Prepare the special counts.
+	//
+	// Perform a sort; the counter only needs to keep the special counts for this plugin
+	// to function, namely the smallest count, the second smallest count, and the largest
+	// count.
+
+	// Initialize the special counts with a placeholder value.
+	var smallest, secondSmallest, largest int = -1, -1, -1
+	sorted := make([]int, 0, len(counter))
+
+	for _, c := range counter {
+		sorted = append(sorted, int(c))
+	}
+	sort.Ints(sorted)
+
+	switch {
+	case len(sorted) == 0:
+		// The counter is not initialized; do nothing.
+	case len(sorted) == 1:
+		// There is only one count.
+		smallest = sorted[0]
+		secondSmallest = sorted[0]
+		largest = sorted[0]
+	case len(sorted) == 2:
+		// There are two counts.
+		if sorted[0] < sorted[1] {
+			smallest = sorted[0]
+			secondSmallest = sorted[1]
+			largest = sorted[1]
+		} else { // counts[0] == counts[1]
+			smallest = sorted[0]
+			secondSmallest = sorted[0]
+			largest = sorted[0]
+		}
+	default: // len(sorted) >= 3
+		smallest = sorted[0]
+		secondSmallest = sorted[1]
+		largest = sorted[len(sorted)-1]
+	}
+
+	return &bindingCounterByDomain{
+		counter:        counter,
+		smallest:       count(smallest),
+		secondSmallest: count(secondSmallest),
+		largest:        count(largest),
+	}
 }
 
 // willViolate returns whether producing one more binding in a domain would lead
