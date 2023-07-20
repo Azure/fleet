@@ -36,7 +36,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		memberClusterName           string
 		namespaceName               string
 		memberClusterNamespacedName types.NamespacedName
-		r                           *Reconciler
+		r                           *v1alpha1Reconciler
 		ignoreOption                = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 	)
 
@@ -50,7 +50,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 
 			By("create the member cluster reconciler")
-			r = &Reconciler{
+			r = &v1alpha1Reconciler{
 				Client: k8sClient,
 			}
 			err := r.SetupWithManager(mgr)
@@ -232,7 +232,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 
 			By("create the member cluster reconciler")
-			r = &Reconciler{
+			r = &v1alpha1Reconciler{
 				Client:                  k8sClient,
 				NetworkingAgentsEnabled: true,
 			}
