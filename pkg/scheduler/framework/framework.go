@@ -884,9 +884,7 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 	// are inspected in parallel.
 	//
 	// Note that any failure would lead to the cancellation of the scheduling cycle.
-	//
-	// TO-DO (chenyu1): assign variables when needed.
-	_, filtered, err = f.runFilterPlugins(ctx, state, policy, clusters)
+	passed, filtered, err := f.runFilterPlugins(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run filter plugins", "clusterSchedulingPolicySnapshot", policyRef)
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -898,7 +896,19 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 		return nil, nil, controller.NewUnexpectedBehaviorError(status.AsError())
 	}
 
-	// Not yet implemented.
+	// Run score plugins.
+	//
+	// The scheduler checks each cluster candidate by calling the chain of score plugins; all scores are added together
+	// as the final score for a specific cluster.
+	//
+	// Note that at this moment, since no normalization is needed, the addition is performed directly at this step;
+	// when need for normalization materializes, this step should return a list of scores per cluster per plugin instead.
+	scored, err = f.runScorePlugins(ctx, state, policy, passed)
+	if err != nil {
+		klog.ErrorS(err, "Failed to run score plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
+	}
+
 	return scored, filtered, nil
 }
 
@@ -941,4 +951,76 @@ func (f *framework) runPreScorePlugins(ctx context.Context, state *CycleState, p
 	}
 
 	return nil
+}
+
+// runScorePluginsFor runs score plugins for a single cluster.
+func (f *framework) runScorePluginsFor(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (scoreList map[string]*ClusterScore, status *Status) {
+	// Pre-allocate score list to avoid races.
+	scoreList = make(map[string]*ClusterScore, len(f.profile.scorePlugins))
+
+	for _, pl := range f.profile.scorePlugins {
+		// Skip the plugin if it is not needed.
+		if state.skippedScorePlugins.Has(pl.Name()) {
+			continue
+		}
+		score, status := pl.Score(ctx, state, policy, cluster)
+		switch {
+		case status.IsSuccess():
+			scoreList[pl.Name()] = score
+		case status.IsInteralError():
+			return nil, status
+		default:
+			// Any status that is not Success or InternalError is considered an error.
+			return nil, FromError(fmt.Errorf("score plugin returned an unknown status %s", status), pl.Name())
+		}
+	}
+
+	return scoreList, nil
+}
+
+// runScorePlugins runs score plugins on clusters in parallel.
+func (f *framework) runScorePlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, clusters []*fleetv1beta1.MemberCluster) (ScoredClusters, error) {
+	// Create a child context.
+	childCtx, cancel := context.WithCancel(ctx)
+
+	// Pre-allocate slices to avoid races.
+	scoredClusters := make(ScoredClusters, len(clusters))
+	var scoredClustersIdx int32 = -1
+
+	errFlag := parallelizer.NewErrorFlag()
+
+	doWork := func(pieces int) {
+		cluster := clusters[pieces]
+		scoreList, status := f.runScorePluginsFor(childCtx, state, policy, cluster)
+		switch {
+		case status.IsSuccess():
+			totalScore := &ClusterScore{}
+			for _, score := range scoreList {
+				totalScore.Add(score)
+			}
+			// Use atomic add to avoid races with minimum overhead.
+			newScoredClustersIdx := atomic.AddInt32(&scoredClustersIdx, 1)
+			scoredClusters[newScoredClustersIdx] = &ScoredCluster{
+				Cluster: cluster,
+				Score:   totalScore,
+			}
+		default: // An error has occurred.
+			errFlag.Raise(status.AsError())
+			// Cancel the child context, which will lead the parallelizer to stop running tasks.
+			cancel()
+		}
+	}
+
+	// Run inspection in parallel.
+	//
+	// Note that the parallel run will be stopped immediately upon encounter of the first error.
+	f.parallelizer.ParallelizeUntil(childCtx, len(clusters), doWork, "runScorePlugins")
+	if err := errFlag.Lower(); err != nil {
+		return nil, err
+	}
+
+	// Trim the slice to its actual size.
+	scoredClusters = scoredClusters[:scoredClustersIdx+1]
+
+	return scoredClusters, nil
 }
