@@ -180,7 +180,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				return apierrors.IsNotFound(err)
 			}, duration, interval).Should(BeTrue(), "controller should not create work in hub cluster until all resources are created")
 			// check the binding status
-			var diff string
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 			wantMC := fleetv1beta1.ResourceBindingStatus{
 				Conditions: []metav1.Condition{
 					{
@@ -191,8 +191,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 					},
 				},
 			}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-			diff = cmp.Diff(wantMC, binding.Status, ignoreConditionOption)
+			diff := cmp.Diff(wantMC, binding.Status, ignoreConditionOption)
 			Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
 			Expect(binding.GetCondition(string(fleetv1beta1.ResourceBindingBound)).Message).Should(Equal(errResourceSnapshotDeleted.Error()))
 			// delete the binding
@@ -203,7 +202,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)
 				return apierrors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue(), "Failed to get the expected work in hub cluster")
+			}, timeout, interval).Should(BeTrue(), "Expect the work to be deleted in the hub cluster")
 			By(fmt.Sprintf("work %s is deleted in %s", work.Name, work.Namespace))
 		})
 

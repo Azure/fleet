@@ -192,6 +192,11 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              lastUpdateTime:
+                description: LastResourceUpdateTime is the last time the binding is
+                  updated to point to a new resource snapshot after it's created.
+                format: date-time
+                type: string
             type: object
         required:
         - spec

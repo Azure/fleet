@@ -67,16 +67,11 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
 
+	//+kubebuilder:scaffold:scheme
 	By("Set all the customized scheme")
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
-
-	//+kubebuilder:scaffold:scheme
-	By("construct the k8s client")
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).Should(Succeed())
-	Expect(k8sClient).NotTo(BeNil())
 
 	By("starting the controller manager")
 	klog.InitFlags(flag.CommandLine)
@@ -91,6 +86,9 @@ var _ = BeforeSuite(func() {
 		Logger:             klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog)),
 	})
 	Expect(err).Should(Succeed())
+	// make sure the k8s client is same as the controller client or we can have cache delay
+	By("set k8s client same as the controller manager")
+	k8sClient = mgr.GetClient()
 	// setup our main reconciler
 	err = (&Reconciler{
 		Client: mgr.GetClient(),

@@ -41,12 +41,12 @@ spec:
           snapshot group. - `IsLatestSnapshotLabel` which indicates whether the snapshot
           is the latest one. \n All the snapshots within the same index group must
           have the same ResourceIndexLabel. \n The first snapshot of the index group
-          MUST have the following annotations: - \"NumberOfResourceSnapshots\" to
-          store the total number of resource snapshots in the index group. - `ResourceGroupHashAnnotation`
+          MUST have the following annotations: - `NumberOfResourceSnapshotsAnnotation`
+          to store the total number of resource snapshots in the index group. - `ResourceGroupHashAnnotation`
           whose value is the sha-256 hash of all the snapshots belong to the same
           snapshot index. \n Each snapshot (excluding the first snapshot) MUST have
-          the following annotations: - \"SubindexOfResourceSnapshotAnnotation\" to
-          store the subindex of resource snapshot in the group."
+          the following annotations: - `SubindexOfResourceSnapshotAnnotation` to store
+          the subindex of resource snapshot in the group."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
