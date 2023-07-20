@@ -48,12 +48,13 @@ const (
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
 
-	crdResourceName           = "customresourcedefinitions"
-	memberClusterResourceName = "memberclusters"
-	replicaSetResourceName    = "replicasets"
-	podResourceName           = "pods"
-	roleResourceName          = "roles"
-	roleBindingResourceName   = "rolebindings"
+	crdResourceName                   = "customresourcedefinitions"
+	memberClusterResourceName         = "memberclusters"
+	internalMemberClusterResourceName = "internalmemberclusters"
+	replicaSetResourceName            = "replicasets"
+	podResourceName                   = "pods"
+	roleResourceName                  = "roles"
+	roleBindingResourceName           = "rolebindings"
 )
 
 var (
@@ -271,7 +272,11 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 						Operations: cudOperations,
 						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
 					},
-					// TODO (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
+					},
+					// TODO: (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
 				},
 			},
 		}

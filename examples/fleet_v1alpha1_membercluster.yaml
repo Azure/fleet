@@ -5,7 +5,7 @@ metadata:
 spec:
   state: Join
   identity:
-    name: member-agent-sa
+    name: hub-agent-sa
     kind: ServiceAccount
     namespace: fleet-system
     apiGroup: ""

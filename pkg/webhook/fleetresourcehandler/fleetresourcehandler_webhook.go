@@ -24,12 +24,16 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
-	ValidationPath    = "/validate-v1-fleetresourcehandler"
-	crdKind           = "CustomResourceDefinition"
-	memberClusterKind = "MemberCluster"
-	roleKind          = "Role"
-	roleBindingKind   = "RoleBinding"
-	groupMatch        = `^[^.]*\.(.*)`
+	ValidationPath = "/validate-v1-fleetresourcehandler"
+	groupMatch     = `^[^.]*\.(.*)`
+)
+
+var (
+	crdGVK         = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	mcGVK          = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
+	imcGVK         = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	roleGVK        = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "Role"}
+	roleBindingGVK = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -46,25 +50,28 @@ type fleetResourceValidator struct {
 }
 
 // Handle receives the request then allows/denies the request to modify fleet resources.
-func (v *fleetResourceValidator) Handle(_ context.Context, req admission.Request) admission.Response {
+func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch req.Kind {
-		case createCRDGVK():
-			klog.V(2).InfoS("handling CRD resource", "GVK", createCRDGVK(), "namespacedName", namespacedName)
+		case crdGVK:
+			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleCRD(req)
-		case createMemberClusterGVK():
-			klog.V(2).InfoS("handling Member cluster resource", "GVK", createMemberClusterGVK(), "namespacedName", namespacedName)
+		case mcGVK:
+			klog.V(2).InfoS("handling Member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleMemberCluster(req)
-		case createRoleGVK():
-			klog.V(2).InfoS("handling Role resource", "GVK", createRoleGVK(), "namespacedName", namespacedName)
+		case imcGVK:
+			klog.V(2).InfoS("handling Internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleInternalMemberCluster(ctx, req)
+		case roleGVK:
+			klog.V(2).InfoS("handling Role resource", "GVK", roleGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleRole(req)
-		case createRoleBindingGVK():
-			klog.V(2).InfoS("handling Role binding resource", "GVK", createRoleBindingGVK(), "namespacedName", namespacedName)
+		case roleBindingGVK:
+			klog.V(2).InfoS("handling Role binding resource", "GVK", roleBindingGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleRoleBinding(req)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName)
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
@@ -79,7 +86,7 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	}
 	// This regex works because every CRD name in kubernetes follows this pattern <plural>.<group>.
 	group := regexp.MustCompile(groupMatch).FindStringSubmatch(crd.Name)[1]
-	return validation.ValidateUserForFleetCRD(group, types.NamespacedName{Name: crd.Name, Namespace: crd.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForFleetCRD(group, types.NamespacedName{Name: crd.Name}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleMemberCluster allows/denies the request to modify member cluster object after validation.
@@ -95,7 +102,23 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		}
 		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, v.whiteListedUsers, req.UserInfo)
 	}
-	return validation.ValidateUserForFleetCR(currentMC.Kind, types.NamespacedName{Name: currentMC.Name, Namespace: currentMC.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForFleetResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, v.whiteListedUsers, req.UserInfo)
+}
+
+// handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
+func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
+	var currentIMC fleetv1alpha1.InternalMemberCluster
+	if err := v.decodeRequestObject(req, &currentIMC); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	if req.Operation == admissionv1.Update {
+		var oldIMC fleetv1alpha1.InternalMemberCluster
+		if err := v.decoder.DecodeRaw(req.OldObject, &oldIMC); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, currentIMC, oldIMC, v.whiteListedUsers, req.UserInfo)
+	}
+	return validation.ValidateUserForFleetResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleRole allows/denies the request to modify role after validation.
@@ -104,7 +127,7 @@ func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Res
 	if err := v.decodeRequestObject(req, &role); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	return validation.ValidateUserForResource(role.Kind, types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForFleetResource(role.Kind, types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleRoleBinding allows/denies the request to modify role after validation.
@@ -113,7 +136,7 @@ func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admiss
 	if err := v.decodeRequestObject(req, &rb); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	return validation.ValidateUserForResource(rb.Kind, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForFleetResource(rb.Kind, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
@@ -137,40 +160,4 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
-}
-
-// createCRDGVK returns GVK for CRD.
-func createCRDGVK() metav1.GroupVersionKind {
-	return metav1.GroupVersionKind{
-		Group:   v1.SchemeGroupVersion.Group,
-		Version: v1.SchemeGroupVersion.Version,
-		Kind:    crdKind,
-	}
-}
-
-// createMemberClusterGVK returns GVK for member cluster.
-func createMemberClusterGVK() metav1.GroupVersionKind {
-	return metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    memberClusterKind,
-	}
-}
-
-// createRoleGVK return GVK for role.
-func createRoleGVK() metav1.GroupVersionKind {
-	return metav1.GroupVersionKind{
-		Group:   rbacv1.SchemeGroupVersion.Group,
-		Version: rbacv1.SchemeGroupVersion.Version,
-		Kind:    roleKind,
-	}
-}
-
-// createRoleBindingGVK returns GVK for role binding.
-func createRoleBindingGVK() metav1.GroupVersionKind {
-	return metav1.GroupVersionKind{
-		Group:   rbacv1.SchemeGroupVersion.Group,
-		Version: rbacv1.SchemeGroupVersion.Version,
-		Kind:    roleBindingKind,
-	}
 }
