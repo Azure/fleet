@@ -65,9 +65,13 @@ type CycleState struct {
 	// becomes available.
 	skippedScorePlugins sets.String
 	// desiredBatchSize is the desired batch size for the current scheduling cycle.
+	//
+	// This is set when scheduling policies of the PickN placement type.
 	desiredBatchSize int
 	// batchSizeLimit is the limit on batch size for the current scheduling cycle, set by
 	// post-batch plugins.
+	//
+	// This is set when scheduling policies of the PickN placement type.
 	batchSizeLimit int
 }
 
