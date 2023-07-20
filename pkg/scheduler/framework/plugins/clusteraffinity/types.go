@@ -12,19 +12,35 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-// AffinityTerm is a processed version of ClusterSelectorTerm.
-type AffinityTerm struct {
+// affinityTerm is a processed version of ClusterSelectorTerm.
+type affinityTerm struct {
 	selector labels.Selector
 }
 
 // Matches returns true if the cluster matches the label selector.
-func (at *AffinityTerm) Matches(cluster *fleetv1beta1.MemberCluster) bool {
+func (at *affinityTerm) Matches(cluster *fleetv1beta1.MemberCluster) bool {
 	return at.selector.Matches(labels.Set(cluster.Labels))
+}
+
+// AffinityTerms is a "processed" representation of []ClusterSelectorTerms.
+// The terms are `ORed`.
+type AffinityTerms struct {
+	terms []affinityTerm
+}
+
+// Matches returns true if the cluster matches one of the terms.
+func (at *AffinityTerms) Matches(cluster *fleetv1beta1.MemberCluster) bool {
+	for _, term := range at.terms {
+		if term.Matches(cluster) {
+			return true
+		}
+	}
+	return false
 }
 
 // preferredAffinityTerm is a "processed" representation of PreferredClusterSelector.
 type preferredAffinityTerm struct {
-	AffinityTerm
+	affinityTerm
 	weight int32
 }
 
@@ -37,24 +53,24 @@ type PreferredAffinityTerms struct {
 func (t *PreferredAffinityTerms) Score(cluster *fleetv1beta1.MemberCluster) int32 {
 	var score int32
 	for _, term := range t.terms {
-		if term.AffinityTerm.Matches(cluster) {
+		if term.affinityTerm.Matches(cluster) {
 			score += term.weight
 		}
 	}
 	return score
 }
 
-func newAffinityTerm(term *fleetv1beta1.ClusterSelectorTerm) (*AffinityTerm, error) {
+func newAffinityTerm(term *fleetv1beta1.ClusterSelectorTerm) (*affinityTerm, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&term.LabelSelector)
 	if err != nil {
 		return nil, err
 	}
-	return &AffinityTerm{selector: selector}, nil
+	return &affinityTerm{selector: selector}, nil
 }
 
 // NewAffinityTerms returns the list of processed affinity terms.
-func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) ([]AffinityTerm, error) {
-	res := make([]AffinityTerm, 0, len(terms))
+func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) (*AffinityTerms, error) {
+	res := make([]affinityTerm, 0, len(terms))
 	for i := range terms {
 		// skipping for empty terms
 		if isEmptyClusterSelectorTerm(terms[i]) {
@@ -70,7 +86,7 @@ func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) ([]AffinityTerm,
 	if len(res) == 0 {
 		return nil, nil
 	}
-	return res, nil
+	return &AffinityTerms{terms: res}, nil
 }
 
 // NewPreferredAffinityTerms returns the list of processed preferred affinity terms.
@@ -86,7 +102,7 @@ func NewPreferredAffinityTerms(terms []fleetv1beta1.PreferredClusterSelector) (*
 			// We get here if the label selector failed to process
 			return nil, err
 		}
-		res = append(res, preferredAffinityTerm{AffinityTerm: *t, weight: terms[i].Weight})
+		res = append(res, preferredAffinityTerm{affinityTerm: *t, weight: terms[i].Weight})
 	}
 	if len(res) == 0 {
 		return nil, nil

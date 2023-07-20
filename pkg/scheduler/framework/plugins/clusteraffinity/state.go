@@ -6,7 +6,7 @@ import (
 
 type pluginState struct {
 	// requiredAffinityTerms is a list of processed version of required cluster affinity terms.
-	requiredAffinityTerms []AffinityTerm
+	requiredAffinityTerms *AffinityTerms
 
 	// preferredAffinityTerms is a list of processed version of preferred cluster affinity terms.
 	preferredAffinityTerms *PreferredAffinityTerms
@@ -22,7 +22,7 @@ func preparePluginState(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (*
 	} // added for the defensive programming as the caller has already checked.
 
 	clusterAffinity := policy.Spec.Policy.Affinity.ClusterAffinity
-	var requiredTerms []AffinityTerm
+	var requiredTerms *AffinityTerms
 	var err error
 	if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil &&
 		len(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) > 0 {

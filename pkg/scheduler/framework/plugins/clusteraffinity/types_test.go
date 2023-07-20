@@ -22,13 +22,13 @@ const (
 func TestMatches(t *testing.T) {
 	tests := []struct {
 		name    string
-		term    *AffinityTerm
+		term    *affinityTerm
 		cluster *fleetv1beta1.MemberCluster
 		want    bool
 	}{
 		{
 			name: "matched cluster",
-			term: &AffinityTerm{
+			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 			},
 			cluster: &fleetv1beta1.MemberCluster{
@@ -43,7 +43,7 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name: "label value mismatched cluster",
-			term: &AffinityTerm{
+			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 			},
 			cluster: &fleetv1beta1.MemberCluster{
@@ -58,7 +58,7 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name: "empty terms which does not restrict the selection space",
-			term: &AffinityTerm{
+			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{}),
 			},
 			cluster: &fleetv1beta1.MemberCluster{
@@ -73,7 +73,7 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name: "label does not exist in cluster",
-			term: &AffinityTerm{
+			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 			},
 			cluster: &fleetv1beta1.MemberCluster{
@@ -90,6 +90,121 @@ func TestMatches(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.term.Matches(tc.cluster)
+			if got != tc.want {
+				t.Fatalf("Matches()=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAffinityTermsMatches(t *testing.T) {
+	tests := []struct {
+		name    string
+		terms   *AffinityTerms
+		cluster *fleetv1beta1.MemberCluster
+		want    bool
+	}{
+		{
+			name: "matched cluster with single term",
+			terms: &AffinityTerms{
+				terms: []affinityTerm{
+					{
+						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+					},
+				},
+			},
+			cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+					Labels: map[string]string{
+						"region": "us-west",
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "matched cluster with multiple terms",
+			terms: &AffinityTerms{
+				terms: []affinityTerm{
+					{
+						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+					},
+					{
+						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+					},
+				},
+			},
+			cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+					Labels: map[string]string{
+						"region": "us-east",
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "matched cluster with empty terms which does not restrict the selection space",
+			terms: &AffinityTerms{
+				terms: []affinityTerm{
+					{
+						selector: labels.SelectorFromSet(map[string]string{}),
+					},
+					{
+						selector: labels.SelectorFromSet(map[string]string{"region": "us-east"}),
+					},
+				},
+			},
+			cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+					Labels: map[string]string{
+						"region": "us-west",
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "not matched cluster",
+			terms: &AffinityTerms{
+				terms: []affinityTerm{
+					{
+						selector: labels.SelectorFromSet(map[string]string{"region": "us-east"}),
+					},
+				},
+			},
+			cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+					Labels: map[string]string{
+						"regions": "us-west",
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "empty terms",
+			terms: &AffinityTerms{
+				terms: []affinityTerm{},
+			},
+			cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+					Labels: map[string]string{
+						"regions": "us-west",
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.terms.Matches(tc.cluster)
 			if got != tc.want {
 				t.Fatalf("Matches()=%v, want %v", got, tc.want)
 			}
@@ -124,13 +239,13 @@ func TestScore(t *testing.T) {
 			terms: &PreferredAffinityTerms{
 				terms: []preferredAffinityTerm{
 					{
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 						},
 						weight: 5,
 					},
 					{
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{}),
 						},
 						weight: -8,
@@ -152,13 +267,13 @@ func TestScore(t *testing.T) {
 			terms: &PreferredAffinityTerms{
 				terms: []preferredAffinityTerm{
 					{
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 						},
 						weight: 5,
 					},
 					{
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{"zone": "zone1"}),
 						},
 						weight: -8,
@@ -181,13 +296,13 @@ func TestScore(t *testing.T) {
 			terms: &PreferredAffinityTerms{
 				terms: []preferredAffinityTerm{
 					{
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 						},
 						weight: 5,
 					},
 					{
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{"zone": "zone1"}),
 						},
 						weight: -8,
@@ -220,7 +335,7 @@ func TestNewAffinityTerms(t *testing.T) {
 	tests := []struct {
 		name  string
 		terms []fleetv1beta1.ClusterSelectorTerm
-		want  []AffinityTerm
+		want  *AffinityTerms
 	}{
 		{
 			name: "nil terms",
@@ -261,9 +376,11 @@ func TestNewAffinityTerms(t *testing.T) {
 					},
 				},
 			},
-			want: []AffinityTerm{
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			want: &AffinityTerms{
+				terms: []affinityTerm{
+					{
+						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+					},
 				},
 			},
 		},
@@ -274,8 +391,8 @@ func TestNewAffinityTerms(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewAffinityTerms() got error %v, want nil", err)
 			}
-			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(AffinityTerm{})); diff != "" {
-				t.Errorf("NewAffinityTerms() affinityTerm mismatch (-want, +got):\n%s", diff)
+			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(AffinityTerms{}, affinityTerm{})); diff != "" {
+				t.Errorf("NewAffinityTerms() affinityTerms mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}
@@ -338,7 +455,7 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 				terms: []preferredAffinityTerm{
 					{
 						weight: 5,
-						AffinityTerm: AffinityTerm{
+						affinityTerm: affinityTerm{
 							selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 						},
 					},
@@ -352,7 +469,7 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewPreferredAffinityTerms() got error %v, want nil", err)
 			}
-			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(PreferredAffinityTerms{}, preferredAffinityTerm{}, AffinityTerm{})); diff != "" {
+			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(PreferredAffinityTerms{}, preferredAffinityTerm{}, affinityTerm{})); diff != "" {
 				t.Errorf("NewPreferredAffinityTerms() preferredAffinityTerm mismatch (-want, +got):\n%s", diff)
 			}
 		})
