@@ -132,8 +132,8 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 	// Set up  a new controller to do rollout resources according to CRP rollout strategy
 	klog.Info("Setting up rollout controller")
 	if err = (&rollout.Reconciler{
-		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorderFor(crpControllerName),
+		Client:    mgr.GetClient(),
+		APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to set up rollout controller")
 		return err

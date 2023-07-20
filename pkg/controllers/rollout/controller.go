@@ -36,8 +36,8 @@ import (
 // Reconciler recompute the cluster resource binding.
 type Reconciler struct {
 	client.Client
-
-	recorder record.EventRecorder
+	APIReader client.Reader
+	recorder  record.EventRecorder
 }
 
 // Reconcile triggers a single binding reconcile round.
@@ -75,14 +75,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// list all the bindings associated with the clusterResourcePlacement
+	// we read from the API server directly to avoid the repeated reconcile loop due to cache inconsistency
 	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
 	crpLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel: crp.Name,
 	}
-	if err := r.Client.List(ctx, bindingList, crpLabelMatcher); err != nil {
+	if err := r.APIReader.List(ctx, bindingList, crpLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
-		return ctrl.Result{}, controller.NewAPIServerError(true, err)
+		return ctrl.Result{}, controller.NewAPIServerError(false, err)
 	}
 	// take a deep copy of the bindings so that we can safely modify them
 	allBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindingList.Items))
@@ -90,19 +91,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		allBindings = append(allBindings, binding.DeepCopy())
 	}
 
-	// find the latest resource snapshot
+	// find the latest resource resourceBinding
 	latestResourceSnapshotName, err := r.fetchLatestResourceSnapshot(ctx, crpName)
 	if err != nil {
-		klog.ErrorS(err, "Failed to find the latest resource snapshot for the clusterResourcePlacement",
+		klog.ErrorS(err, "Failed to find the latest resource resourceBinding for the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
 		return ctrl.Result{}, err
 	}
-	klog.V(2).InfoS("Found the latest resource snapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
+	klog.V(2).InfoS("Found the latest resource resourceBinding for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
 
 	//TODO: handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not deleted yet
 
 	// pick the bindings to be updated
-	tobeUpdatedBindings, needRoll := r.pickBindingsToRoll(allBindings, latestResourceSnapshotName, &crp)
+	tobeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, &crp)
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "number of bindings", len(tobeUpdatedBindings))
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
@@ -113,10 +114,42 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{RequeueAfter: time.Minute}, r.updateBindings(ctx, latestResourceSnapshotName, tobeUpdatedBindings)
 }
 
+// fetchLatestResourceSnapshot lists all the latest resource resourceBinding associated with a CRP and returns the name of the master.
+func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName string) (string, error) {
+	var latestResourceSnapshotName string
+	latestResourceLabelMatcher := client.MatchingLabels{
+		fleetv1beta1.IsLatestSnapshotLabel: "true",
+		fleetv1beta1.CRPTrackingLabel:      crpName,
+	}
+	resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+	if err := r.Client.List(ctx, resourceSnapshotList, latestResourceLabelMatcher); err != nil {
+		klog.ErrorS(err, "Failed to list the latest resource resourceBinding associated with the clusterResourcePlacement",
+			"clusterResourcePlacement", crpName)
+		return "", controller.NewAPIServerError(true, err)
+	}
+	// try to find the master resource resourceBinding
+	for _, resourceSnapshot := range resourceSnapshotList.Items {
+		// only master has this annotation
+		if len(resourceSnapshot.Annotations[fleetv1beta1.ResourceGroupHashAnnotation]) != 0 {
+			latestResourceSnapshotName = resourceSnapshot.Name
+			break
+		}
+	}
+	// no resource resourceBinding found, it's possible since we remove the label from the last one first before
+	// creating a new resource resourceBinding.
+	if len(latestResourceSnapshotName) == 0 {
+		klog.V(2).InfoS("Cannot find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName)
+		return "", controller.NewExpectedBehaviorError(fmt.Errorf("cpr `%s` has no latest resourceSnapshot", crpName))
+	}
+	klog.V(4).InfoS("Find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName,
+		"latestResourceSnapshotName", latestResourceSnapshotName)
+	return latestResourceSnapshotName, nil
+}
+
 // pickBindingsToRoll go through all bindings associated with a CRP and returns the bindings that are ready to be updated.
 // There could be cases that no bindings are ready to be updated because of the maxSurge/maxUnavailable constraints even if there are out of sync bindings.
 // Thus, it also returns a bool indicating whether there are out of sync bindings to be rolled to differentiate those two cases.
-func (r *Reconciler) pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, latestResourceSnapshotName string, crp *fleetv1beta1.ClusterResourcePlacement) ([]*fleetv1beta1.ClusterResourceBinding, bool) {
+func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, latestResourceSnapshotName string, crp *fleetv1beta1.ClusterResourcePlacement) ([]*fleetv1beta1.ClusterResourceBinding, bool) {
 	// Those are the bindings that are chosen by the scheduler to be applied to selected clusters.
 	// They include the bindings that are already applied to the clusters and the bindings that are newly selected by the scheduler.
 	schedulerTargetedBinds := make([]*fleetv1beta1.ClusterResourceBinding, 0)
@@ -183,7 +216,7 @@ func (r *Reconciler) pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResou
 			if isBindingReady(binding, readyTimeCutOff) {
 				readyBindings = append(readyBindings, binding)
 			}
-			// The binding needs update if it's not pointing to the latest resource snapshot
+			// The binding needs update if it's not pointing to the latest resource resourceBinding
 			if binding.Spec.ResourceSnapshotName != latestResourceSnapshotName {
 				updateCandidates = append(updateCandidates, binding)
 			}
@@ -199,10 +232,10 @@ func (r *Reconciler) pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResou
 		// the CRP validation webhook should make sure this is not nil
 		targetNumber = int(*crp.Spec.Policy.NumberOfClusters)
 	}
-	klog.V(2).InfoS("Calculated the targetNumber ", "clusterResourcePlacement", klog.KObj(crp),
-		"targetNumber", targetNumber, "number of readyBindings", len(readyBindings), "number of canBeUnavailableBindings", len(canBeUnavailableBindings),
-		"number of canBeReadyBindings", len(canBeReadyBindings), "number of boundingCandidates", len(boundingCandidates),
-		"number of removeCandidates", len(removeCandidates), "number of updateCandidates", len(updateCandidates))
+	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", klog.KObj(crp),
+		"targetNumber", targetNumber, "readyBindingNumber", len(readyBindings), "canBeUnavailableBindingNumber", len(canBeUnavailableBindings),
+		"canBeReadyBindingNumber", len(canBeReadyBindings), "boundingCandidateNumber", len(boundingCandidates),
+		"removeCandidateNumber", len(removeCandidates), "updateCandidateNumber", len(updateCandidates))
 
 	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates) == 0 {
 		return tobeUpdatedBinding, false
@@ -215,7 +248,7 @@ func (r *Reconciler) pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResou
 	// Since we can't predict the number of bindings that can be unavailable after they are applied, we don't take them into account
 	lowerBoundAvailable := len(readyBindings) - len(canBeUnavailableBindings)
 	numberToRemove := lowerBoundAvailable - minAvailableNumber
-	klog.V(2).InfoS("Calculated the number to remove ", "clusterResourcePlacement", klog.KObj(crp),
+	klog.V(2).InfoS("Calculated the number to remove", "clusterResourcePlacement", klog.KObj(crp),
 		"maxUnavailableNumber", maxUnavailableNumber, "lowerBoundAvailable", lowerBoundAvailable, "numberToRemove", numberToRemove)
 	if numberToRemove > 0 {
 		i := 0
@@ -223,7 +256,7 @@ func (r *Reconciler) pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResou
 		for ; i < numberToRemove && i < len(removeCandidates); i++ {
 			tobeUpdatedBinding = append(tobeUpdatedBinding, removeCandidates[i])
 		}
-		// we then update the bound bindings to the latest resource snapshot which will lead them to be unavailable for a short period of time
+		// we then update the bound bindings to the latest resource resourceBinding which will lead them to be unavailable for a short period of time
 		j := 0
 		for ; i < numberToRemove && j < len(updateCandidates); i++ {
 			tobeUpdatedBinding = append(tobeUpdatedBinding, updateCandidates[j])
@@ -239,11 +272,23 @@ func (r *Reconciler) pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResou
 	upperBoundReadyNumber := len(canBeReadyBindings)
 	klog.V(2).InfoS("Calculated the number to add ", "clusterResourcePlacement", klog.KObj(crp),
 		"maxSurgeNumber", maxSurgeNumber, "maxReadyNumber", maxReadyNumber, "upperBoundReadyNumber", upperBoundReadyNumber)
-	for i := 0; i < maxReadyNumber-upperBoundReadyNumber; i++ {
+	for i := 0; i < maxReadyNumber-upperBoundReadyNumber && i < len(boundingCandidates); i++ {
 		tobeUpdatedBinding = append(tobeUpdatedBinding, boundingCandidates[i])
 	}
 
 	return tobeUpdatedBinding, true
+}
+
+// isBindingReady checks if a binding is considered ready.
+// A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
+func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) bool {
+	// find the latest applied condition that has the same generation as the binding
+	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
+	if appliedCondition != nil && appliedCondition.Status == metav1.ConditionTrue &&
+		appliedCondition.ObservedGeneration == binding.GetGeneration() {
+		return appliedCondition.LastTransitionTime.Time.Before(readyTimeCutOff)
+	}
+	return false
 }
 
 // updateBindings updates the bindings according to its state
@@ -254,7 +299,7 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 	for i := 0; i < len(tobeUpgradedBinding); i++ {
 		binding := tobeUpgradedBinding[i]
 		switch binding.Spec.State {
-		// The only thing we can do on a bound binding is to update its resource snapshot
+		// The only thing we can do on a bound binding is to update its resource resourceBinding
 		case fleetv1beta1.BindingStateBound:
 			binding.Spec.ResourceSnapshotName = latestResourceSnapshotName
 			binding.Status.LastResourceUpdateTime = metav1.Now()
@@ -263,7 +308,7 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 					klog.ErrorS(err, "Failed to update a binding to the latest resource", "resourceBinding", klog.KObj(binding))
 					return controller.NewUpdateIgnoreConflictError(err)
 				}
-				klog.V(2).InfoS("Updated a binding to the latest resource", "resourceBinding", klog.KObj(binding))
+				klog.V(2).InfoS("Updated a binding to the latest resource", "resourceBinding", klog.KObj(binding), "latestResourceSnapshotName", latestResourceSnapshotName)
 				return nil
 			})
 		// The only thing we can do on a scheduled binding is to bind it
@@ -271,10 +316,10 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 			binding.Spec.State = fleetv1beta1.BindingStateBound
 			errs.Go(func() error {
 				if err := r.Client.Update(cctx, binding); err != nil {
-					klog.ErrorS(err, "Failed to schedule a binding", "resourceBinding", klog.KObj(binding))
+					klog.ErrorS(err, "Failed to mark a binding bound", "resourceBinding", klog.KObj(binding))
 					return controller.NewUpdateIgnoreConflictError(err)
 				}
-				klog.V(2).InfoS("Scheduled a binding", "resourceBinding", klog.KObj(binding))
+				klog.V(2).InfoS("Mark a binding bound", "resourceBinding", klog.KObj(binding))
 				return nil
 			})
 		// The only thing we can do on an unscheduled binding is to delete it
@@ -292,99 +337,78 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 	return errs.Wait()
 }
 
-// isBindingReady checks if a binding is considered ready.
-// A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
-func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) bool {
-	// find the latest applied condition that has the same generation as the binding
-	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-	if appliedCondition != nil && appliedCondition.Status == metav1.ConditionTrue &&
-		appliedCondition.ObservedGeneration == binding.GetGeneration() {
-		return appliedCondition.LastTransitionTime.Time.Before(readyTimeCutOff)
-	}
-	return false
-}
-
-// fetchLatestResourceSnapshot lists all the latest resource snapshot associated with a CRP and returns the name of the master.
-func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName string) (string, error) {
-	var latestResourceSnapshotName string
-	latestResourceLabelMatcher := client.MatchingLabels{
-		fleetv1beta1.IsLatestSnapshotLabel: "true",
-		fleetv1beta1.CRPTrackingLabel:      crpName,
-	}
-	resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
-	if err := r.Client.List(ctx, resourceSnapshotList, latestResourceLabelMatcher); err != nil {
-		klog.ErrorS(err, "Failed to list the latest resource snapshot associated with the clusterResourcePlacement",
-			"clusterResourcePlacement", crpName)
-		return "", controller.NewAPIServerError(true, err)
-	}
-	// try to find the master resource snapshot
-	for _, resourceSnapshot := range resourceSnapshotList.Items {
-		// only master has this annotation
-		if len(resourceSnapshot.Annotations[fleetv1beta1.ResourceGroupHashAnnotation]) != 0 {
-			latestResourceSnapshotName = resourceSnapshot.Name
-			break
-		}
-	}
-	// no resource snapshot found, it's possible since we remove the label from the last one first before
-	// creating a new resource snapshot.
-	if len(latestResourceSnapshotName) == 0 {
-		klog.V(2).InfoS("Cannot find the latest associated resource snapshot", "clusterResourcePlacement", crpName)
-		return "", controller.NewExpectedBehaviorError(fmt.Errorf("cpr `%s` has no latest resourceSnapshot", crpName))
-	}
-	klog.V(4).InfoS("Find the latest associated resource snapshot", "clusterResourcePlacement", crpName,
-		"latestResourceSnapshotName", latestResourceSnapshotName)
-	return latestResourceSnapshotName, nil
-}
-
 // SetupWithManager sets up the rollout controller with the Manager.
 // The rollout controller watches resource snapshots and resource bindings.
-// It reconciles on the CRP when a new resource snapshot is created or an existing resource binding is created/updated.
+// It reconciles on the CRP when a new resource resourceBinding is created or an existing resource binding is created/updated.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("rollout-controller")
+	// TODO: consider converting this to a customized controller with a queue
 	return ctrl.NewControllerManagedBy(mgr).
+		// we don't actually watch the CRP but the controller runtime requires us to specify a for type
+		For(&fleetv1beta1.ClusterResourcePlacement{}, builder.WithPredicates(
+			&predicate.Funcs{
+				CreateFunc: func(createEvent event.CreateEvent) bool {
+					return false
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return false
+				},
+				DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
+					return false
+				},
+				GenericFunc: func(genericEvent event.GenericEvent) bool {
+					return false
+				},
+			},
+		)).
 		Watches(&source.Kind{Type: &fleetv1beta1.ClusterResourceSnapshot{}}, handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
-				r.handleResourceSnapshot(e.Object, q)
+				klog.V(2).InfoS("Handling a resourceSnapshot create event", "resourceSnapshot", klog.KObj(e.Object))
+				handleResourceSnapshot(e.Object, q)
 			},
 			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
-				r.handleResourceSnapshot(e.Object, q)
+				klog.V(2).InfoS("Handling a resourceSnapshot generic event", "resourceSnapshot", klog.KObj(e.Object))
+				handleResourceSnapshot(e.Object, q)
 			},
 		}).
 		Watches(&source.Kind{Type: &fleetv1beta1.ClusterResourceBinding{}}, handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
-				r.handleResourceBinding(e.Object, q)
+				klog.V(2).InfoS("Handling a resourceBinding create event", "resourceBinding", klog.KObj(e.Object))
+				handleResourceBinding(e.Object, q)
 			},
 			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-				r.handleResourceBinding(e.ObjectNew, q)
+				klog.V(2).InfoS("Handling a resourceBinding update event", "resourceBinding", klog.KObj(e.ObjectNew))
+				handleResourceBinding(e.ObjectNew, q)
 			},
 			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
-				r.handleResourceBinding(e.Object, q)
+				klog.V(2).InfoS("Handling a resourceBinding generic event", "resourceBinding", klog.KObj(e.Object))
+				handleResourceBinding(e.Object, q)
 			},
 		}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }
 
-// handleResourceSnapshot parse the snapshot label and annotation and enqueue the CRP name associated with the resource snapshot
-func (r *Reconciler) handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInterface) {
+// handleResourceSnapshot parse the resourceBinding label and annotation and enqueue the CRP name associated with the resource resourceBinding
+func handleResourceSnapshot(snapshot client.Object, q workqueue.RateLimitingInterface) {
 	snapshotKRef := klog.KObj(snapshot)
-	// check if it is the first resource snapshot which is supposed to have NumberOfResourceSnapshotsAnnotation
-	_, exist := snapshot.GetAnnotations()[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
+	// check if it is the first resource resourceBinding which is supposed to have NumberOfResourceSnapshotsAnnotation
+	_, exist := snapshot.GetAnnotations()[fleetv1beta1.ResourceGroupHashAnnotation]
 	if !exist {
-		// we only care about when a new resource snapshot index is created
+		// we only care about when a new resource resourceBinding index is created
 		klog.V(2).InfoS("Ignore the subsequent sub resource snapshots", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
-	// check if it is the latest resource snapshot
+	// check if it is the latest resource resourceBinding
 	isLatest, err := strconv.ParseBool(snapshot.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
 	if err != nil {
 		err := fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)
-		klog.ErrorS(err, "resource snapshot has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotKRef)
+		klog.ErrorS(err, "resource resourceBinding has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	if !isLatest {
 		// All newly created resource snapshots should start with the latest label to be true.
 		// However, this can happen if the label is removed fast by the time this reconcile loop is triggered.
-		klog.V(2).InfoS("Newly created resource snapshot %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
+		klog.V(2).InfoS("Newly created resource resourceBinding %s is not the latest", "clusterResourceSnapshot", snapshotKRef)
 		return
 	}
 	// get the CRP name from the label
@@ -401,63 +425,8 @@ func (r *Reconciler) handleResourceSnapshot(snapshot client.Object, q workqueue.
 	})
 }
 
-// handleResourceSnapshotUpdate parse the snapshot label and annotation and enqueue the CRP name associated with the resource snapshot
-// only if it's updated from a non-latest snapshot to the latest snapshot.
-// This is only possible in a very very corner case. The sequence is that the latest label of the resource snapshot is removed to prepare
-// for a new snapshot and then the CRP controller is stopped/crashed. In the meantime, the CRP changes back to the old resources so that
-// by the time the CRP controller is restarted, the latest label is added back to the old snapshot since it's the same as the current CRP.
-func (r *Reconciler) handleResourceSnapshotUpdate(snapshotOld, snapshotNew client.Object, q workqueue.RateLimitingInterface) {
-	snapshotNewKRef := klog.KObj(snapshotNew)
-	// check if it is the first resource snapshot which is supposed to have NumberOfResourceSnapshotsAnnotation
-	_, exist := snapshotNew.GetAnnotations()[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
-	if !exist {
-		// we only care about when a new resource snapshot index is changed
-		klog.V(2).InfoS("Ignore the subsequent sub resource snapshots", "clusterResourceSnapshot", snapshotNewKRef)
-		return
-	}
-	// check if the new resource snapshot is the latest resource snapshot
-	isLatest, err := strconv.ParseBool(snapshotNew.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
-	if err != nil {
-		err := fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)
-		klog.ErrorS(err, "resource snapshot has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotNewKRef)
-		return
-	}
-	if !isLatest {
-		klog.V(2).InfoS("Newly updated resource snapshot %s is not the latest, skip", "clusterResourceSnapshot", snapshotNewKRef)
-		return
-	}
-
-	// check if the old resource snapshot is the latest resource snapshot
-	snapshotOldKRef := klog.KObj(snapshotOld)
-	isLatest, err = strconv.ParseBool(snapshotOld.GetLabels()[fleetv1beta1.IsLatestSnapshotLabel])
-	if err != nil {
-		err := fmt.Errorf("invalid annotation value %s : %w", fleetv1beta1.IsLatestSnapshotLabel, err)
-		klog.ErrorS(err, "resource snapshot has does not have a valid islatest annotation", "clusterResourceSnapshot", snapshotOldKRef)
-		return
-	}
-	if isLatest {
-		klog.V(2).InfoS("Old updated resource snapshot %s is already the latest, skip", "clusterResourceSnapshot", snapshotOldKRef)
-		return
-	}
-
-	// get the CRP name from the label
-	crp := snapshotNew.GetLabels()[fleetv1beta1.CRPTrackingLabel]
-	if len(crp) == 0 {
-		// should never happen, we might be able to alert on this error
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("cannot find CRPTrackingLabel label value")),
-			"Invalid clusterResourceSnapshot", "clusterResourceSnapshot", snapshotNewKRef)
-		return
-	}
-
-	// enqueue the CRP to the rollout controller queue
-	klog.V(2).InfoS("Enqueue CRP for a resource snapshot updated from inactive to active", "clusterResourceSnapshot", snapshotNewKRef, "clusterResourcePolicy", crp)
-	q.Add(reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: crp},
-	})
-}
-
 // handleResourceBinding parse the binding label and enqueue the CRP name associated with the resource binding
-func (r *Reconciler) handleResourceBinding(binding client.Object, q workqueue.RateLimitingInterface) {
+func handleResourceBinding(binding client.Object, q workqueue.RateLimitingInterface) {
 	bindingRef := klog.KObj(binding)
 	// get the CRP name from the label
 	crp := binding.GetLabels()[fleetv1beta1.CRPTrackingLabel]

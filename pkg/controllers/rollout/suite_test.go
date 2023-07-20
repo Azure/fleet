@@ -12,11 +12,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/yaml"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -57,12 +58,14 @@ var _ = BeforeSuite(func() {
 	klog.InitFlags(fs)
 	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
+	// load test manifests
+	readTestManifests()
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("../../../", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
-
 	cfg, err = testEnv.Start()
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
@@ -77,9 +80,6 @@ var _ = BeforeSuite(func() {
 	klog.InitFlags(flag.CommandLine)
 	flag.Parse()
 
-	// load test manifests
-	readTestManifests()
-
 	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: "0",
@@ -93,7 +93,8 @@ var _ = BeforeSuite(func() {
 
 	// setup our main reconciler
 	err = (&Reconciler{
-		Client: k8sClient,
+		Client:    k8sClient,
+		APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 
