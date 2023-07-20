@@ -759,37 +759,62 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 		return scheduled, bound, controller.NewUnexpectedBehaviorError(err)
 	}
 
-	// Trim scheduled bindings.
-	bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
-	for i := 0; i < len(scheduled) && i < count; i++ {
-		binding := scheduled[i]
-		bindingsToDelete = append(bindingsToDelete, binding)
+	switch {
+	case count < len(scheduled):
+		// Trim part of scheduled bindings should suffice.
+
+		// Sort the scheduled bindings by their cluster scores (and secondly, their names).
+		//
+		// The scheduler will attempt to trim first bindings that less fitting to the scheduling
+		// policy; for any two clusters with the same score, prefer the one with a smaller name
+		// (in alphabetical order).
+		//
+		// Note that this is at best an approximation, as the cluster score assigned earlier might
+		// no longer apply, due to the ever-changing state in the fleet.
+		sortedScheduled := sortByClusterScoreAndName(scheduled)
+
+		// Trim scheduled bindings.
+		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+		for i := 0; i < len(sortedScheduled) && i < count; i++ {
+			bindingsToDelete = append(bindingsToDelete, sortedScheduled[i])
+		}
+
+		return sortedScheduled[count:], bound, f.markAsUnscheduledFor(ctx, bindingsToDelete)
+	case count == len(scheduled):
+		// Trim all scheduled bindings.
+		return nil, bound, f.markAsUnscheduledFor(ctx, scheduled)
+	case count < len(scheduled)+len(bound):
+		// Trim all scheduled bindings and part of bound bindings.
+		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+		bindingsToDelete = append(bindingsToDelete, scheduled...)
+
+		left := count - len(bindingsToDelete)
+
+		// Sort the scheduled bindings by their cluster scores (and secondly, their names).
+		//
+		// The scheduler will attempt to trim first bindings that less fitting to the scheduling
+		// policy; for any two clusters with the same score, prefer the one with a smaller name
+		// (in alphabetical order).
+		//
+		// Note that this is at best an approximation, as the cluster score assigned earlier might
+		// no longer apply, due to the ever-changing state in the fleet.
+		sortedBound := sortByClusterScoreAndName(bound)
+		for i := 0; i < left && i < len(sortedBound); i++ {
+			bindingsToDelete = append(bindingsToDelete, sortedBound[i])
+		}
+
+		return nil, sortedBound[left:], f.markAsUnscheduledFor(ctx, bindingsToDelete)
+	case count == len(scheduled)+len(bound):
+		// Trim all scheduled and bound bindings.
+		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+		bindingsToDelete = append(bindingsToDelete, scheduled...)
+		bindingsToDelete = append(bindingsToDelete, bound...)
+		return nil, nil, f.markAsUnscheduledFor(ctx, bindingsToDelete)
+	default:
+		// Normally this branch will never run, as an earlier check has guaranteed that
+		// count <= len(scheduled) + len(bound).
+		return nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("received an invalid downscale count %d (scheduled count: %d, bound count: %d)", count, len(scheduled), len(bound)))
 	}
-
-	if len(bindingsToDelete) == count {
-		// Trimming scheduled bindings alone would suffice.
-		return scheduled[count:], bound, f.markAsUnscheduledFor(ctx, bindingsToDelete)
-	}
-
-	// Trimming scheduled bindings alone is not enough, move on to bound bindings.
-
-	// Sort the bindings by their cluster scores (and secondly, their names).
-	//
-	// The scheduler will attempt to trim first bindings that less fitting to the scheduling
-	// policy; for any two clusters with the same score, prefer the one with a smaller name
-	// (in alphabetical order).
-	//
-	// Note that this is at best an approximation, as the cluster score assigned earlier might
-	// no longer apply, due to the ever-changing state in the fleet.
-	sorted := sortByClusterScoreAndName(bound)
-
-	// Trim bound bindings by their cluster scores and target cluster names.
-	left := count - len(bindingsToDelete)
-	for i := 0; i < left && i < len(sorted); i++ {
-		bindingsToDelete = append(bindingsToDelete, sorted[i])
-	}
-
-	return nil, sorted[left:], f.markAsUnscheduledFor(ctx, bindingsToDelete)
 }
 
 // runAllPluginsForPickNPlacementType runs all plugins for a scheduling policy of the PickN placement type.
