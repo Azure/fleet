@@ -689,7 +689,7 @@ func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlace
 	for i := range latestResourceSnapshot.Spec.SelectedResources {
 		obj, err := r.decodeResourceContent(&latestResourceSnapshot.Spec.SelectedResources[i])
 		if err != nil {
-			klog.ErrorS(err, "Failed to encode resourceContent of clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
+			klog.ErrorS(err, "Failed to decode resourceContent of clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
 			return nil, controller.NewUnexpectedBehaviorError(err)
 		}
 		ri := fleetv1beta1.ResourceIdentifier{

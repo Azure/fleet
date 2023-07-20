@@ -2274,8 +2274,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -2366,8 +2367,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -2458,8 +2460,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -2551,8 +2554,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -2664,8 +2668,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -2793,8 +2798,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -2896,8 +2902,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
@@ -3035,8 +3042,9 @@ func TestBuildPlacementStatus(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   testName,
+						fleetv1beta1.ResourceIndexLabel:    "0",
+						fleetv1beta1.CRPTrackingLabel:      testName,
+						fleetv1beta1.IsLatestSnapshotLabel: "true",
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
