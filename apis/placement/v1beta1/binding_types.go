@@ -88,6 +88,11 @@ type ResourceBindingStatus struct {
 	// Conditions is an array of current observed conditions for ClusterResourceBinding.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// LastResourceUpdateTime is the last time the binding is updated to point to a new resource snapshot
+	// after it's created.
+	// +optional
+	LastResourceUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 // ResourceBindingConditionType identifies a specific condition of the ClusterResourceBinding.
