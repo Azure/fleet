@@ -24,13 +24,11 @@ func (at *affinityTerm) Matches(cluster *fleetv1beta1.MemberCluster) bool {
 
 // AffinityTerms is a "processed" representation of []ClusterSelectorTerms.
 // The terms are `ORed`.
-type AffinityTerms struct {
-	terms []affinityTerm
-}
+type AffinityTerms []affinityTerm
 
 // Matches returns true if the cluster matches one of the terms.
-func (at *AffinityTerms) Matches(cluster *fleetv1beta1.MemberCluster) bool {
-	for _, term := range at.terms {
+func (at AffinityTerms) Matches(cluster *fleetv1beta1.MemberCluster) bool {
+	for _, term := range at {
 		if term.Matches(cluster) {
 			return true
 		}
@@ -45,14 +43,12 @@ type preferredAffinityTerm struct {
 }
 
 // PreferredAffinityTerms is a "processed" representation of []PreferredClusterSelector.
-type PreferredAffinityTerms struct {
-	terms []preferredAffinityTerm
-}
+type PreferredAffinityTerms []preferredAffinityTerm
 
 // Score returns a score for a cluster: the sum of the weights of the terms that match the cluster.
-func (t *PreferredAffinityTerms) Score(cluster *fleetv1beta1.MemberCluster) int32 {
+func (t PreferredAffinityTerms) Score(cluster *fleetv1beta1.MemberCluster) int32 {
 	var score int32
-	for _, term := range t.terms {
+	for _, term := range t {
 		if term.affinityTerm.Matches(cluster) {
 			score += term.weight
 		}
@@ -69,7 +65,7 @@ func newAffinityTerm(term *fleetv1beta1.ClusterSelectorTerm) (*affinityTerm, err
 }
 
 // NewAffinityTerms returns the list of processed affinity terms.
-func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) (*AffinityTerms, error) {
+func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) (AffinityTerms, error) {
 	res := make([]affinityTerm, 0, len(terms))
 	for i := range terms {
 		// skipping for empty terms
@@ -83,14 +79,11 @@ func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) (*AffinityTerms,
 		}
 		res = append(res, *t)
 	}
-	if len(res) == 0 {
-		return nil, nil
-	}
-	return &AffinityTerms{terms: res}, nil
+	return res, nil
 }
 
 // NewPreferredAffinityTerms returns the list of processed preferred affinity terms.
-func NewPreferredAffinityTerms(terms []fleetv1beta1.PreferredClusterSelector) (*PreferredAffinityTerms, error) {
+func NewPreferredAffinityTerms(terms []fleetv1beta1.PreferredClusterSelector) (PreferredAffinityTerms, error) {
 	res := make([]preferredAffinityTerm, 0, len(terms))
 	for i, term := range terms {
 		// skipping for weight == 0 or empty terms
@@ -104,10 +97,7 @@ func NewPreferredAffinityTerms(terms []fleetv1beta1.PreferredClusterSelector) (*
 		}
 		res = append(res, preferredAffinityTerm{affinityTerm: *t, weight: terms[i].Weight})
 	}
-	if len(res) == 0 {
-		return nil, nil
-	}
-	return &PreferredAffinityTerms{terms: res}, nil
+	return res, nil
 }
 
 func isEmptyClusterSelectorTerm(term fleetv1beta1.ClusterSelectorTerm) bool {

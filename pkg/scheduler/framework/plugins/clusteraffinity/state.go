@@ -6,10 +6,10 @@ import (
 
 type pluginState struct {
 	// requiredAffinityTerms is a list of processed version of required cluster affinity terms.
-	requiredAffinityTerms *AffinityTerms
+	requiredAffinityTerms AffinityTerms
 
 	// preferredAffinityTerms is a list of processed version of preferred cluster affinity terms.
-	preferredAffinityTerms *PreferredAffinityTerms
+	preferredAffinityTerms PreferredAffinityTerms
 }
 
 // preparePluginState initializes the state for the plugin to use in the scheduling cycle.
@@ -22,21 +22,22 @@ func preparePluginState(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (*
 	} // added for the defensive programming as the caller has already checked.
 
 	clusterAffinity := policy.Spec.Policy.Affinity.ClusterAffinity
-	var requiredTerms *AffinityTerms
-	var err error
+	ps := &pluginState{requiredAffinityTerms: []affinityTerm{}, preferredAffinityTerms: []preferredAffinityTerm{}}
+
 	if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil &&
 		len(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) > 0 {
-		requiredTerms, err = NewAffinityTerms(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms)
+		requiredTerms, err := NewAffinityTerms(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms)
 		if err != nil {
 			return nil, err
 		}
+		ps.requiredAffinityTerms = requiredTerms
 	}
-	var preferredTerms *PreferredAffinityTerms
 	if len(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) > 0 {
-		preferredTerms, err = NewPreferredAffinityTerms(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution)
+		preferredTerms, err := NewPreferredAffinityTerms(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution)
 		if err != nil {
 			return nil, err
 		}
+		ps.preferredAffinityTerms = preferredTerms
 	}
-	return &pluginState{requiredAffinityTerms: requiredTerms, preferredAffinityTerms: preferredTerms}, nil
+	return ps, nil
 }
