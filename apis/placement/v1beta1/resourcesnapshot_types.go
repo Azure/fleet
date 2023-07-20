@@ -56,11 +56,11 @@ const (
 // All the snapshots within the same index group must have the same ResourceIndexLabel.
 //
 // The first snapshot of the index group MUST have the following annotations:
-//   - "NumberOfResourceSnapshots" to store the total number of resource snapshots in the index group.
+//   - `NumberOfResourceSnapshotsAnnotation` to store the total number of resource snapshots in the index group.
 //   - `ResourceGroupHashAnnotation` whose value is the sha-256 hash of all the snapshots belong to the same snapshot index.
 //
 // Each snapshot (excluding the first snapshot) MUST have the following annotations:
-//   - "SubindexOfResourceSnapshotAnnotation" to store the subindex of resource snapshot in the group.
+//   - `SubindexOfResourceSnapshotAnnotation` to store the subindex of resource snapshot in the group.
 type ClusterResourceSnapshot struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

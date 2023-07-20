@@ -13,9 +13,6 @@ import (
 const (
 	// WorkFinalizer is used to make sure that the binding is not deleted until the work objects it generates are all deleted.
 	WorkFinalizer = fleetPrefix + "work-cleanup"
-
-	// ParentBindingLabel is the label that contains the name of the binding that generates the work.
-	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
 )
 
 // +kubebuilder:object:root=true
@@ -88,6 +85,11 @@ type ResourceBindingStatus struct {
 	// Conditions is an array of current observed conditions for ClusterResourceBinding.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// LastResourceUpdateTime is the last time the binding is updated to point to a new resource snapshot
+	// after it's created.
+	// +optional
+	LastResourceUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 // ResourceBindingConditionType identifies a specific condition of the ClusterResourceBinding.
@@ -100,14 +102,6 @@ const (
 	// - "False" means the corresponding work CR is not created yet.
 	// - "Unknown" means it is unknown.
 	ResourceBindingBound ResourceBindingConditionType = "Bound"
-
-	// ResourceBindingUpdated indicates whether (and when) a binding is updated to point
-	// to a new resource snapshot.
-	// Its condition status can be one of the following:
-	// - "True" means the binding has been updated.
-	// - "False" means the binding has not been updated yet.
-	// - "Unknown" means the update status is unknown.
-	ResourceBindingUpdated ResourceBindingConditionType = "Updated"
 
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
