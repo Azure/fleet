@@ -58,6 +58,21 @@ type CycleState struct {
 	// the String set has been deprecated; transition to the generic set when the new version
 	// becomes available.
 	skippedFilterPlugins sets.String
+	// skippedScorePlugins is a set of Score plugins that should be skipped in the current scheduling cycle.
+	//
+	// TO-DO (chenyu1): the sets package has added support for Go generic types in 1.26, and
+	// the String set has been deprecated; transition to the generic set when the new version
+	// becomes available.
+	skippedScorePlugins sets.String
+	// desiredBatchSize is the desired batch size for the current scheduling cycle.
+	//
+	// This is set when scheduling policies of the PickN placement type.
+	desiredBatchSize int
+	// batchSizeLimit is the limit on batch size for the current scheduling cycle, set by
+	// post-batch plugins.
+	//
+	// This is set when scheduling policies of the PickN placement type.
+	batchSizeLimit int
 }
 
 // Read retrieves a value from CycleState by a key.
@@ -111,5 +126,6 @@ func NewCycleState(clusters []fleetv1beta1.MemberCluster, scheduledOrBoundBindin
 		clusters:             clusters,
 		scheduledOrBound:     prepareScheduledOrBoundMap(scheduledOrBoundBindings...),
 		skippedFilterPlugins: sets.NewString(),
+		skippedScorePlugins:  sets.NewString(),
 	}
 }

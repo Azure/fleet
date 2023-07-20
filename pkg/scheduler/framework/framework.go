@@ -687,7 +687,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		// Perform actual downscaling; this will be skipped if the downscale count is zero.
 		scheduled, bound, err = f.downscale(ctx, scheduled, bound, downscaleCount)
 		if err != nil {
-			klog.ErrorS(err, "failed to downscale", "schedulingPolicySnapshot", policyRef)
+			klog.ErrorS(err, "failed to downscale", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
 
@@ -703,6 +703,38 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 
 		// Return immediately as there are no more bindings for the scheduler to scheduler at this moment.
 		return ctrl.Result{}, nil
+	}
+
+	// Check if the scheduler needs to take action; a scheduling cycle is only needed if
+	// currently there are not enough number of bindings.
+	if !shouldSchedule(numOfClusters, len(bound)+len(scheduled)) {
+		// No action is needed; however, a status refresh might be warranted.
+		//
+		// This is needed as a number of situations (e.g., POST/PUT failures) may lead to inconsistencies between
+		// the decisions added to the policy snapshot status and the actual list of bindings.
+		klog.V(2).InfoS("No scheduling is needed", "clusterSchedulingPolicySnapshot", policyRef)
+		// Note that since there is no reliable way to determine the validity of old decisions added
+		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
+		// the clusters that are currently selected.
+		if err := f.updatePolicySnapshotStatusFrom(ctx, policy, nil, bound, scheduled); err != nil {
+			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when no scheduling run is needed", "clusterSchedulingPolicySnapshot", policyRef)
+			return ctrl.Result{}, err
+		}
+
+		// Return immediate as there no more bindings for the scheduler to schedule at this moment.
+		return ctrl.Result{}, nil
+	}
+
+	// The scheduler needs to take action; enter the actual scheduling stages.
+	klog.V(2).InfoS("Scheduling is needed; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
+
+	// Run all the plugins.
+	//
+	// TO-DO (chenyu1): assign variable when needed.
+	_, _, err = f.runAllPluginsForPickNPlacementType(ctx, state, policy, numOfClusters, len(bound)+len(scheduled), clusters)
+	if err != nil {
+		klog.ErrorS(err, "Failed to run all plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
 	}
 
 	// Not yet implemented.
@@ -783,4 +815,130 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 		// count <= len(scheduled) + len(bound).
 		return nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("received an invalid downscale count %d (scheduled count: %d, bound count: %d)", count, len(scheduled), len(bound)))
 	}
+}
+
+// runAllPluginsForPickNPlacementType runs all plugins for a scheduling policy of the PickN placement type.
+//
+// Note that all stages are required to run for this placement type.
+func (f *framework) runAllPluginsForPickNPlacementType(
+	ctx context.Context,
+	state *CycleState,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	numOfClusters int,
+	numOfBoundOrScheduledBindings int,
+	clusters []fleetv1beta1.MemberCluster,
+) (scored ScoredClusters, filtered []*filteredClusterWithStatus, err error) {
+	policyRef := klog.KObj(policy)
+
+	// Calculate the batch size.
+	//
+	// Note that obsolete bindings are not counted.
+	state.desiredBatchSize = numOfClusters - numOfBoundOrScheduledBindings
+
+	// An earlier check guarantees that the desired batch size is always positive; however, the scheduler still
+	// performs a sanity check here; normally this branch will never run.
+	if state.desiredBatchSize <= 0 {
+		err := fmt.Errorf("desired batch size is below zero: %d", state.desiredBatchSize)
+		klog.ErrorS(err, "Failed to calculate desired batch size", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Run pre-batch plugins.
+	//
+	// These plugins each yields a batch size limit; the minimum of these limits is used as the actual batch size for
+	// this scheduling cycle.
+	//
+	// Note that any failure would lead to the cancellation of the scheduling cycle.
+	batchSizeLimit, status := f.runPostBatchPlugins(ctx, state, policy)
+	if status.IsInteralError() {
+		klog.ErrorS(status.AsError(), "Failed to run post batch plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(status.AsError())
+	}
+
+	// A sanity check; normally this branch will never run, as runPostBatchPlugins guarantees that
+	// the batch size limit is never greater than the desired batch size.
+	if batchSizeLimit > state.desiredBatchSize || batchSizeLimit < 0 {
+		err := fmt.Errorf("batch size limit is not valid: %d, desired batch size: %d", batchSizeLimit, state.desiredBatchSize)
+		klog.ErrorS(err, "Failed to set batch size limit", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
+	}
+	state.batchSizeLimit = batchSizeLimit
+
+	// Run pre-filter plugins.
+	//
+	// Each plugin can:
+	// * set up some common state for future calls (on different extensions points) in the scheduling cycle; and/or
+	// * check if it needs to run the the Filter stage.
+	//   Any plugin that would like to be skipped is listed in the cycle state for future reference.
+	//
+	// Note that any failure would lead to the cancellation of the scheduling cycle.
+	if status := f.runPreFilterPlugins(ctx, state, policy); status.IsInteralError() {
+		klog.ErrorS(status.AsError(), "Failed to run pre filter plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(status.AsError())
+	}
+
+	// Run filter plugins.
+	//
+	// The scheduler checks each cluster candidate by calling the chain of filter plugins; if any plugin suggests
+	// that the cluster should not be bound, the cluster is ignored for the rest of the cycle. Note that clusters
+	// are inspected in parallel.
+	//
+	// Note that any failure would lead to the cancellation of the scheduling cycle.
+	//
+	// TO-DO (chenyu1): assign variables when needed.
+	_, filtered, err = f.runFilterPlugins(ctx, state, policy, clusters)
+	if err != nil {
+		klog.ErrorS(err, "Failed to run filter plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Run pre-score plugins.
+	if status := f.runPreScorePlugins(ctx, state, policy); status.IsInteralError() {
+		klog.ErrorS(status.AsError(), "Failed ro run pre-score plugins", "clusterSchedulingPolicySnapshot", policyRef)
+		return nil, nil, controller.NewUnexpectedBehaviorError(status.AsError())
+	}
+
+	// Not yet implemented.
+	return scored, filtered, nil
+}
+
+// runPostBatchPlugins runs all post batch plugins sequentially.
+func (f *framework) runPostBatchPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, *Status) {
+	minBatchSizeLimit := state.desiredBatchSize
+	for _, pl := range f.profile.postBatchPlugins {
+		batchSizeLimit, status := pl.PostBatch(ctx, state, policy)
+		switch {
+		case status.IsSuccess():
+			if batchSizeLimit < minBatchSizeLimit && batchSizeLimit >= 0 {
+				minBatchSizeLimit = batchSizeLimit
+			}
+		case status.IsInteralError():
+			return 0, status
+		case status.IsSkip(): // Do nothing.
+		default:
+			// Any status that is not Success, InternalError, or Skip is considered an error.
+			return 0, FromError(fmt.Errorf("postbatch plugin returned an unsupported status: %s", status), pl.Name())
+		}
+	}
+
+	return minBatchSizeLimit, nil
+}
+
+// runPreScorePlugins runs all pre score plugins sequentially.
+func (f *framework) runPreScorePlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+	for _, pl := range f.profile.preScorePlugins {
+		status := pl.PreScore(ctx, state, policy)
+		switch {
+		case status.IsSuccess(): // Do nothing.
+		case status.IsInteralError():
+			return status
+		case status.IsSkip():
+			state.skippedScorePlugins.Insert(pl.Name())
+		default:
+			// Any status that is not Success, InternalError, or Skip is considered an error.
+			return FromError(fmt.Errorf("prescore plugin returned an unknown status %s", status), pl.Name())
+		}
+	}
+
+	return nil
 }
