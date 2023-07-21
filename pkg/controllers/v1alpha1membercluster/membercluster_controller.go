@@ -234,7 +234,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1alpha1.Member
 	expectedNS := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            namespaceName,
-			OwnerReferences: []metav1.OwnerReference{*v1alpha1ToOwnerReference(mc)},
+			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 			Labels:          map[string]string{fleetv1beta1.FleetResourceLabelKey: fleetNamespaceLabelValue},
 		},
 	}
@@ -278,7 +278,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            roleName,
 			Namespace:       namespaceName,
-			OwnerReferences: []metav1.OwnerReference{*v1alpha1ToOwnerReference(mc)},
+			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
 		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.WorkRule},
 	}
@@ -321,7 +321,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            roleBindingName,
 			Namespace:       namespaceName,
-			OwnerReferences: []metav1.OwnerReference{*v1alpha1ToOwnerReference(mc)},
+			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
 		Subjects: []rbacv1.Subject{mc.Spec.Identity},
 		RoleRef: rbacv1.RoleRef{
@@ -369,7 +369,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1a
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mc.Name,
 			Namespace:       namespaceName,
-			OwnerReferences: []metav1.OwnerReference{*v1alpha1ToOwnerReference(mc)},
+			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
 		Spec: fleetv1alpha1.InternalMemberClusterSpec{
 			State:                  mc.Spec.State,
@@ -402,7 +402,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1a
 	return currentImc, nil
 }
 
-func v1alpha1ToOwnerReference(memberCluster *fleetv1alpha1.MemberCluster) *metav1.OwnerReference {
+func toOwnerReference(memberCluster *fleetv1alpha1.MemberCluster) *metav1.OwnerReference {
 	return &metav1.OwnerReference{APIVersion: fleetv1alpha1.GroupVersion.String(), Kind: fleetv1alpha1.MemberClusterKind,
 		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 }
