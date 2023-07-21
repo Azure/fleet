@@ -28,12 +28,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
-const (
-	ApplyFailedReason    = "ApplyFailed"
-	ApplyPendingReason   = "ApplyPending"
-	ApplySucceededReason = "ApplySucceeded"
-)
-
 var (
 	ErrStillPendingManifest = fmt.Errorf("there are still manifest pending to be processed by the member cluster")
 	ErrFailedManifest       = fmt.Errorf("there are failed to apply manifests, please check the `failedResourcePlacements` status")
