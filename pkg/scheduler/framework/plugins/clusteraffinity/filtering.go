@@ -26,7 +26,7 @@ func (p *Plugin) PreFilter(
 		policy.Spec.Policy.Affinity.ClusterAffinity == nil
 
 	if noClusterAffinity {
-		// There are no clusterAffinity filter to enforce; skip.
+		// There are no cluster affinity terms filter to enforce; skip.
 		//
 		// Note that this will lead the scheduler to skip this plugin in the next stage
 		// (Filter).

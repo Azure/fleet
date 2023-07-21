@@ -23,19 +23,19 @@ func TestPreScore(t *testing.T) {
 	}{
 		{
 			name: "nil policy",
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginOptions.name),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
 		},
 		{
 			name:   "nil affinity",
 			policy: &fleetv1beta1.PlacementPolicy{},
-			want:   framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginOptions.name),
+			want:   framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
 		},
 		{
 			name: "nil cluster affinity",
 			policy: &fleetv1beta1.PlacementPolicy{
 				Affinity: &fleetv1beta1.Affinity{},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginOptions.name),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
 		},
 		{
 			name: "pluginState is not set",
@@ -45,7 +45,7 @@ func TestPreScore(t *testing.T) {
 				},
 			},
 			notSetPluginState: true,
-			want:              framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginOptions.name),
+			want:              framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
 		},
 		{
 			name: "nil pluginState",
@@ -54,7 +54,7 @@ func TestPreScore(t *testing.T) {
 					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
 				},
 			},
-			want: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginOptions.name),
+			want: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
 		},
 		{
 			name: "no preferred affinity terms",
@@ -64,7 +64,7 @@ func TestPreScore(t *testing.T) {
 				},
 			},
 			ps:   &pluginState{},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginOptions.name),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
 		},
 		{
 			name: "have preferred affinity terms",
@@ -100,7 +100,7 @@ func TestPreScore(t *testing.T) {
 			}
 			got := p.PreScore(context.Background(), state, snapshot)
 			if diff := cmp.Diff(tc.want, got, cmpStatusOptions); diff != "" {
-				t.Errorf("Filter() status mismatch (-want, +got):\n%s", diff)
+				t.Errorf("PreScore() status mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}
@@ -112,24 +112,24 @@ func TestPluginScore(t *testing.T) {
 		ps                *pluginState
 		notSetPluginState bool
 		cluster           *fleetv1beta1.MemberCluster
-		want              *framework.ClusterScore
+		wantScore         *framework.ClusterScore
 		wantStatus        *framework.Status
 	}{
 		{
 			name:              "pluginState is not set",
 			notSetPluginState: true,
-			wantStatus:        framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginOptions.name),
+			wantStatus:        framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
 		},
 		{
 			name:       "nil pluginState",
-			wantStatus: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginOptions.name),
+			wantStatus: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
 		},
 		{
 			name: "no preferred affinity terms",
 			ps: &pluginState{
 				preferredAffinityTerms: []preferredAffinityTerm{},
 			},
-			want: &framework.ClusterScore{AffinityScore: 0},
+			wantScore: &framework.ClusterScore{AffinityScore: 0},
 		},
 		{
 			name: "have preferred affinity terms",
@@ -158,7 +158,7 @@ func TestPluginScore(t *testing.T) {
 					},
 				},
 			},
-			want: &framework.ClusterScore{AffinityScore: -3},
+			wantScore: &framework.ClusterScore{AffinityScore: -3},
 		},
 	}
 	for _, tc := range tests {
@@ -170,11 +170,11 @@ func TestPluginScore(t *testing.T) {
 			}
 			got, gotStatus := p.Score(context.Background(), state, nil, tc.cluster)
 			if diff := cmp.Diff(tc.wantStatus, gotStatus, cmpStatusOptions); diff != "" {
-				t.Fatalf("Filter() status mismatch (-want, +got):\n%s", diff)
+				t.Fatalf("Score() status mismatch (-want, +got):\n%s", diff)
 			}
 
-			if gotStatus == nil && !cmp.Equal(got, tc.want) {
-				t.Errorf("Score()=%v, want %v", got, tc.want)
+			if gotStatus == nil && !cmp.Equal(got, tc.wantScore) {
+				t.Errorf("Score()=%v, want score %v", got, tc.wantScore)
 			}
 		})
 	}
