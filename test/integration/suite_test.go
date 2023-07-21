@@ -28,6 +28,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
+	"go.goms.io/fleet/pkg/controllers/v1alpha1membercluster"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
