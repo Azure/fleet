@@ -566,7 +566,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("memberCluster")
+	r.recorder = mgr.GetEventRecorderFor("v1beta1MemberCluster")
 	r.agents = make(map[fleetv1beta1.AgentType]bool)
 	r.agents[fleetv1beta1.MemberAgent] = true
 
