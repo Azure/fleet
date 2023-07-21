@@ -1,0 +1,12 @@
+apiVersion: placement.azure.com/v1beta1
+kind: MemberCluster
+metadata:
+  name: kind-member-testing1
+spec:
+  state: Join
+  identity:
+    name: member-agent-sa
+    kind: ServiceAccount
+    namespace: fleet-system
+    apiGroup: ""
+  heartbeatPeriodSeconds: 30
