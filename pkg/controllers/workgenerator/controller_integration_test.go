@@ -42,6 +42,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 
 	Context("Test Bound ClusterResourceBinding", func() {
 		var binding *fleetv1beta1.ClusterResourceBinding
+		ignoreTypeMeta := cmpopts.IgnoreFields(metav1.TypeMeta{}, "Kind", "APIVersion")
 		ignoreWorkOption := cmpopts.IgnoreFields(metav1.ObjectMeta{},
 			"UID", "ResourceVersion", "ManagedFields", "CreationTimestamp", "Generation")
 
@@ -262,7 +263,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 						},
 					},
 				}
-				diff := cmp.Diff(wantWork, work, ignoreWorkOption)
+				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status
 				wantMC := fleetv1beta1.ResourceBindingStatus{
@@ -407,7 +408,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 						},
 					},
 				}
-				diff = cmp.Diff(wantWork, work, ignoreWorkOption)
+				diff = cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 			})
 

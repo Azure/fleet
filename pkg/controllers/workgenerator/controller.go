@@ -115,11 +115,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if syncErr == nil {
 		return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 	}
-	// This is valid ONLY because we are 100% POSITIVE that the work generator uses the same client as the rollout controller and scheduler.
-	// Or we can miss the newly created master snapshot
 	if errors.Is(syncErr, errResourceSnapshotDeleted) {
-		// don't retry if the master resource snapshot is deleted
-		return ctrl.Result{}, nil
+		// this is expected to happen when the cache is not synced yet
+		return ctrl.Result{Requeue: true}, nil
 	}
 	return ctrl.Result{}, syncErr
 }
