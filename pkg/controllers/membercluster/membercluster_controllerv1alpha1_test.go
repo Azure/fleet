@@ -37,14 +37,14 @@ const (
 
 func TestSyncNamespace(t *testing.T) {
 	tests := map[string]struct {
-		r                   *v1alpha1Reconciler
+		r                   *V1Alpha1Reconciler
 		memberCluster       *fleetv1alpha1.MemberCluster
 		wantedNamespaceName string
 		wantedEvent         string
 		wantedError         string
 	}{
 		"namespace doesn't exist": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{}, "")
@@ -61,7 +61,7 @@ func TestSyncNamespace(t *testing.T) {
 			wantedError:         "",
 		},
 		"namespace exists without label": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*corev1.Namespace)
@@ -85,7 +85,7 @@ func TestSyncNamespace(t *testing.T) {
 			wantedError:         "",
 		},
 		"namespace exists with label": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*corev1.Namespace)
@@ -104,7 +104,7 @@ func TestSyncNamespace(t *testing.T) {
 			wantedError:         "",
 		},
 		"namespace create error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{}, "")
@@ -119,7 +119,7 @@ func TestSyncNamespace(t *testing.T) {
 			wantedError:         "namespace cannot be created",
 		},
 		"namespace get error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return errors.New("namespace cannot be retrieved")
@@ -131,7 +131,7 @@ func TestSyncNamespace(t *testing.T) {
 			wantedError:         "namespace cannot be retrieved",
 		},
 		"namespace patch error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*corev1.Namespace)
@@ -179,7 +179,7 @@ func TestSyncRole(t *testing.T) {
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
 
 	tests := map[string]struct {
-		r              *v1alpha1Reconciler
+		r              *V1Alpha1Reconciler
 		memberCluster  *fleetv1alpha1.MemberCluster
 		namespaceName  string
 		wantedRoleName string
@@ -187,7 +187,7 @@ func TestSyncRole(t *testing.T) {
 		wantedError    string
 	}{
 		"role exists but no diff": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*rbacv1.Role)
@@ -212,7 +212,7 @@ func TestSyncRole(t *testing.T) {
 			wantedError:    "",
 		},
 		"role exists but with diff": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*rbacv1.Role)
@@ -237,7 +237,7 @@ func TestSyncRole(t *testing.T) {
 			wantedError:    "",
 		},
 		"role doesn't exist": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
@@ -255,7 +255,7 @@ func TestSyncRole(t *testing.T) {
 			wantedError:    "",
 		},
 		"role create error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
@@ -270,7 +270,7 @@ func TestSyncRole(t *testing.T) {
 			wantedError:    "role cannot be created",
 		},
 		"role get error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return errors.New("role cannot be retrieved")
@@ -283,7 +283,7 @@ func TestSyncRole(t *testing.T) {
 			wantedError:    "role cannot be retrieved",
 		},
 		"role update error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						o := obj.(*rbacv1.Role)
@@ -359,7 +359,7 @@ func TestSyncRoleBinding(t *testing.T) {
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 
 	tests := map[string]struct {
-		r             *v1alpha1Reconciler
+		r             *V1Alpha1Reconciler
 		memberCluster *fleetv1alpha1.MemberCluster
 		namespaceName string
 		roleName      string
@@ -367,7 +367,7 @@ func TestSyncRoleBinding(t *testing.T) {
 		wantedError   string
 	}{
 		"role binding but no diff": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						roleRef := rbacv1.RoleRef{
@@ -401,7 +401,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			wantedError:   "",
 		},
 		"role binding but with diff": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						roleRef := rbacv1.RoleRef{
@@ -434,7 +434,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			wantedError:   "",
 		},
 		"role binding doesn't exist": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
@@ -449,7 +449,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			wantedError:   "",
 		},
 		"role binding create error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return apierrors.NewNotFound(schema.GroupResource{Group: "", Resource: "Namespace"}, "namespace")
@@ -465,7 +465,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			wantedError:   "role binding cannot be created",
 		},
 		"role binding get error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return errors.New("role binding cannot be retrieved")
@@ -481,7 +481,7 @@ func TestSyncRoleBinding(t *testing.T) {
 			wantedError:   "role binding cannot be retrieved",
 		},
 		"role binding update error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 						return nil
@@ -548,7 +548,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 
 	tests := map[string]struct {
-		r                               *v1alpha1Reconciler
+		r                               *V1Alpha1Reconciler
 		memberCluster                   *fleetv1alpha1.MemberCluster
 		namespaceName                   string
 		internalMemberCluster           *fleetv1alpha1.InternalMemberCluster
@@ -557,7 +557,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 		wantedError                     string
 	}{
 		"internal member cluster exists and spec is updated": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockUpdate: updateMock},
 				recorder: utils.NewFakeRecorder(1),
@@ -573,7 +573,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			wantedError:                     "",
 		},
 		"internal member cluster exists and spec is not updated ": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockUpdate: updateMock},
 			},
@@ -591,7 +591,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			wantedError:                     "",
 		},
 		"internal member cluster update error": {
-			r: &v1alpha1Reconciler{Client: &test.MockClient{
+			r: &V1Alpha1Reconciler{Client: &test.MockClient{
 				MockUpdate: updateMock}},
 			memberCluster: &fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
@@ -606,7 +606,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			wantedError:                     "internal member cluster cannot be updated",
 		},
 		"internal member cluster gets created": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockCreate: createMock},
 				recorder: utils.NewFakeRecorder(1),
@@ -619,7 +619,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			wantedError:                     "",
 		},
 		"internal member cluster create error": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				Client: &test.MockClient{
 					MockCreate: createMock},
 			},
@@ -680,13 +680,13 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	now := metav1.Now()
 	tests := map[string]struct {
-		r                     *v1alpha1Reconciler
+		r                     *V1Alpha1Reconciler
 		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
 		memberCluster         *fleetv1alpha1.MemberCluster
 		wantedMemberCluster   *fleetv1alpha1.MemberCluster
 	}{
 		"copy with Joined condition": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -777,7 +777,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"copy with Left condition": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(2),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -873,7 +873,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"copy with Unknown condition": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -964,7 +964,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"No Agent Status": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent: true,
@@ -1006,7 +1006,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"Internal member cluster is nil": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent: true,
@@ -1017,7 +1017,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			wantedMemberCluster:   &fleetv1alpha1.MemberCluster{},
 		},
 		"other agent type reported in the status and should be ignored": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -1130,7 +1130,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"less agent type reported in the status": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -1199,7 +1199,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"condition is not reported in the status": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -1276,7 +1276,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"agent type is not reported in the status": {
-			r: &v1alpha1Reconciler{
+			r: &V1Alpha1Reconciler{
 				recorder: utils.NewFakeRecorder(1),
 				agents: map[fleetv1alpha1.AgentType]bool{
 					fleetv1alpha1.MemberAgent:              true,
@@ -1367,13 +1367,13 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 func TestUpdateMemberClusterStatus(t *testing.T) {
 	var count int
 	tests := map[string]struct {
-		r                   *v1alpha1Reconciler
+		r                   *V1Alpha1Reconciler
 		memberCluster       *fleetv1alpha1.MemberCluster
 		wantedError         string
 		verifyNumberOfRetry func() bool
 	}{
 		"update member cluster status": {
-			r: &v1alpha1Reconciler{Client: &test.MockClient{
+			r: &V1Alpha1Reconciler{Client: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					count++
 					return nil
@@ -1387,7 +1387,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"update member cluster status within cap": {
-			r: &v1alpha1Reconciler{Client: &test.MockClient{
+			r: &V1Alpha1Reconciler{Client: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					count++
 					if count == 3 {
@@ -1404,7 +1404,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"error updating exceeding cap for exponential backoff": {
-			r: &v1alpha1Reconciler{Client: &test.MockClient{
+			r: &V1Alpha1Reconciler{Client: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					count++
 					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
@@ -1418,7 +1418,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 			},
 		},
 		"error updating within cap with error different from conflict/serverTimeout": {
-			r: &v1alpha1Reconciler{Client: &test.MockClient{
+			r: &V1Alpha1Reconciler{Client: &test.MockClient{
 				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					count++
 					return errors.New("random update error")

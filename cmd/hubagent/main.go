@@ -92,7 +92,7 @@ func main() {
 
 	klog.V(2).InfoS("starting hubagent")
 
-	if err = (&membercluster.Reconciler{
+	if err = (&membercluster.V1Alpha1Reconciler{
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
