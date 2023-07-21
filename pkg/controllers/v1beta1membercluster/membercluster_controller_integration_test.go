@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package membercluster
+package v1beta1membercluster
 
 import (
 	"context"
@@ -21,7 +21,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -36,7 +35,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		memberClusterName           string
 		namespaceName               string
 		memberClusterNamespacedName types.NamespacedName
-		r                           *V1Alpha1Reconciler
+		r                           *Reconciler
 		ignoreOption                = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 	)
 
@@ -50,23 +49,23 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 
 			By("create the member cluster reconciler")
-			r = &V1Alpha1Reconciler{
+			r = &Reconciler{
 				Client: k8sClient,
 			}
 			err := r.SetupWithManager(mgr)
 			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")
-			mc := &fleetv1alpha1.MemberCluster{
+			mc := &fleetv1beta1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "MemberCluster",
-					APIVersion: fleetv1alpha1.GroupVersion.Version,
+					APIVersion: fleetv1beta1.GroupVersion.Version,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
 				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
+				Spec: fleetv1beta1.MemberClusterSpec{
+					State: fleetv1beta1.ClusterStateJoin,
 					Identity: rbacv1.Subject{
 						Kind: rbacv1.ServiceAccountKind,
 						Name: "hub-access",
@@ -85,17 +84,17 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			var ns corev1.Namespace
 			var role rbacv1.Role
 			var roleBinding rbacv1.RoleBinding
-			var imc fleetv1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleNameFormat, memberClusterName), Namespace: namespaceName}, &role)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleBindingNameFormat, memberClusterName), Namespace: namespaceName}, &roleBinding)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, mc)).Should(Succeed())
 
-			wantMC := fleetv1alpha1.MemberClusterStatus{
+			wantMC := fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
@@ -109,12 +108,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			imc.Status.ResourceUsage.Allocatable = utils.NewResourceList()
 			imc.Status.ResourceUsage.ObservationTime = metav1.Now()
 			joinedCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MemberAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status to joined")
@@ -136,10 +135,10 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		})
 
 		It("should create namespace, role, role binding and internal member cluster & mark member cluster as joined", func() {
-			var mc fleetv1alpha1.MemberCluster
+			var mc fleetv1beta1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			joinCondition := mc.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined))
+			joinCondition := mc.GetCondition(string(fleetv1beta1.ConditionTypeMemberClusterJoined))
 			Expect(joinCondition).NotTo(BeNil())
 			Expect(joinCondition.Status).To(Equal(metav1.ConditionTrue))
 			Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
@@ -147,9 +146,9 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 		It("member cluster is marked as left after leave workflow is completed", func() {
 			By("Update member cluster's spec to leave")
-			var mc fleetv1alpha1.MemberCluster
+			var mc fleetv1beta1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-			mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+			mc.Spec.State = fleetv1beta1.ClusterStateLeave
 			Expect(k8sClient.Update(ctx, &mc))
 
 			By("trigger reconcile again to initiate leave workflow")
@@ -159,18 +158,18 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
-			var imc fleetv1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
-			Expect(imc.Spec.State).To(Equal(fleetv1alpha1.ClusterStateLeave))
+			Expect(imc.Spec.State).To(Equal(fleetv1beta1.ClusterStateLeave))
 
 			By("mark Internal Member Cluster as left")
 			imcLeftCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionFalse,
 				Reason:             "InternalMemberClusterLeft",
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, imcLeftCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MemberAgent, imcLeftCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to mark member cluster as left")
@@ -182,16 +181,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC := fleetv1alpha1.MemberClusterStatus{
+			wantMC := fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterNotReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterLeft,
 						ObservedGeneration: mc.GetGeneration(),
@@ -232,7 +231,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 
 			By("create the member cluster reconciler")
-			r = &V1Alpha1Reconciler{
+			r = &Reconciler{
 				Client:                  k8sClient,
 				NetworkingAgentsEnabled: true,
 			}
@@ -240,16 +239,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(err).Should(Succeed())
 
 			By("create member cluster for join")
-			mc := &fleetv1alpha1.MemberCluster{
+			mc := &fleetv1beta1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "MemberCluster",
-					APIVersion: fleetv1alpha1.GroupVersion.Version,
+					APIVersion: fleetv1beta1.GroupVersion.Version,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: memberClusterName,
 				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					State: fleetv1alpha1.ClusterStateJoin,
+				Spec: fleetv1beta1.MemberClusterSpec{
+					State: fleetv1beta1.ClusterStateJoin,
 					Identity: rbacv1.Subject{
 						Kind: rbacv1.ServiceAccountKind,
 						Name: "hub-access",
@@ -268,7 +267,7 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			var ns corev1.Namespace
 			var role rbacv1.Role
 			var roleBinding rbacv1.RoleBinding
-			var imc fleetv1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: namespaceName}, &ns)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleNameFormat, memberClusterName), Namespace: namespaceName}, &role)).Should(Succeed())
@@ -283,12 +282,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			}
 			imc.Status.ResourceUsage.ObservationTime = metav1.Now()
 			joinedCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, joinedCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MemberAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status to joined")
@@ -311,23 +310,23 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 		It("should create namespace, role, role binding and internal member cluster & mark member cluster as joined", func() {
 			By("getting imc status")
-			var imc fleetv1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 
-			var mc fleetv1alpha1.MemberCluster
+			var mc fleetv1beta1.MemberCluster
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC := fleetv1alpha1.MemberClusterStatus{
+			wantMC := fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -340,12 +339,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("simulate multiClusterService agent updating internal member cluster status as joined")
 			joinedCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MultiClusterServiceAgent, joinedCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MultiClusterServiceAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status")
@@ -361,16 +360,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC = fleetv1alpha1.MemberClusterStatus{
+			wantMC = fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -383,12 +382,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("simulate serviceExportImport agent updating internal member cluster status as unknown")
 			joinedCondition = metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionUnknown,
 				Reason:             reasonMemberClusterUnknown,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.ServiceExportImportAgent, joinedCondition)
+			imc.SetConditionsWithType(fleetv1beta1.ServiceExportImportAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status")
@@ -404,16 +403,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC = fleetv1alpha1.MemberClusterStatus{
+			wantMC = fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -426,12 +425,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("simulate serviceExportImport agent updating internal member cluster status as joined")
 			joinedCondition = metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.ServiceExportImportAgent, joinedCondition)
+			imc.SetConditionsWithType(fleetv1beta1.ServiceExportImportAgent, joinedCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status")
@@ -447,16 +446,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC = fleetv1alpha1.MemberClusterStatus{
+			wantMC = fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterJoined,
 						ObservedGeneration: mc.GetGeneration(),
@@ -470,9 +469,9 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 		It("member cluster is marked as left after leave workflow is completed", func() {
 			By("Update member cluster's spec to leave")
-			var mc fleetv1alpha1.MemberCluster
+			var mc fleetv1beta1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-			mc.Spec.State = fleetv1alpha1.ClusterStateLeave
+			mc.Spec.State = fleetv1beta1.ClusterStateLeave
 			Expect(k8sClient.Update(ctx, &mc))
 
 			By("trigger reconcile again to initiate leave workflow")
@@ -482,21 +481,21 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
-			var imc fleetv1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
-			Expect(imc.Spec.State).To(Equal(fleetv1alpha1.ClusterStateLeave))
+			Expect(imc.Spec.State).To(Equal(fleetv1beta1.ClusterStateLeave))
 
 			By("getting imc status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 
 			By("member agent marks Internal Member Cluster as left")
 			imcLeftCondition := metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionFalse,
 				Reason:             "InternalMemberClusterLeft",
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MemberAgent, imcLeftCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MemberAgent, imcLeftCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
@@ -509,16 +508,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC := fleetv1alpha1.MemberClusterStatus{
+			wantMC := fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -533,12 +532,12 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("multiClusterService agent marks Internal Member Cluster as joined")
 			imcLeftCondition = metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
 				Reason:             "InternalMemberClusterJoined",
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MultiClusterServiceAgent, imcLeftCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MultiClusterServiceAgent, imcLeftCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
@@ -551,16 +550,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC = fleetv1alpha1.MemberClusterStatus{
+			wantMC = fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionTrue,
 						Reason:             reasonMemberClusterReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionUnknown,
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
@@ -574,20 +573,20 @@ var _ = Describe("Test MemberCluster Controller", func() {
 
 			By("multiClusterService and serviceExportImport agent mark Internal Member Cluster as left")
 			imcLeftCondition = metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionFalse,
 				Reason:             "InternalMemberClusterLeft",
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.MultiClusterServiceAgent, imcLeftCondition)
+			imc.SetConditionsWithType(fleetv1beta1.MultiClusterServiceAgent, imcLeftCondition)
 
 			imcLeftCondition = metav1.Condition{
-				Type:               string(fleetv1alpha1.AgentJoined),
+				Type:               string(fleetv1beta1.AgentJoined),
 				Status:             metav1.ConditionFalse,
 				Reason:             "InternalMemberClusterLeft",
 				ObservedGeneration: imc.GetGeneration(),
 			}
-			imc.SetConditionsWithType(fleetv1alpha1.ServiceExportImportAgent, imcLeftCondition)
+			imc.SetConditionsWithType(fleetv1beta1.ServiceExportImportAgent, imcLeftCondition)
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to initiate leave workflow")
@@ -600,16 +599,16 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			By("checking mc status")
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
-			wantMC = fleetv1alpha1.MemberClusterStatus{
+			wantMC = fleetv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterNotReadyToJoin,
 						ObservedGeneration: mc.GetGeneration(),
 					},
 					{
-						Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+						Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 						Status:             metav1.ConditionFalse,
 						Reason:             reasonMemberClusterLeft,
 						ObservedGeneration: mc.GetGeneration(),

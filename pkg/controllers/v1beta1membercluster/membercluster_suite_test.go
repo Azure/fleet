@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package membercluster
+package v1beta1membercluster
 
 import (
 	"flag"
@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var (
@@ -51,7 +51,7 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 
-		err = v1alpha1.AddToScheme(scheme.Scheme)
+		err = v1beta1.AddToScheme(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		//+kubebuilder:scaffold:scheme

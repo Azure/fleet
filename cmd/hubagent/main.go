@@ -23,7 +23,8 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
-	"go.goms.io/fleet/pkg/controllers/membercluster"
+	"go.goms.io/fleet/pkg/controllers/v1alpha1membercluster"
+	"go.goms.io/fleet/pkg/controllers/v1beta1membercluster"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
@@ -92,7 +93,15 @@ func main() {
 
 	klog.V(2).InfoS("starting hubagent")
 
-	if err = (&membercluster.V1Alpha1Reconciler{
+	if err = (&v1alpha1membercluster.Reconciler{
+		Client:                  mgr.GetClient(),
+		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
+	}).SetupWithManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
+		exitWithErrorFunc()
+	}
+
+	if err = (&v1beta1membercluster.Reconciler{
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
