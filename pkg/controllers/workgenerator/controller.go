@@ -108,12 +108,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		})
 	}
 	// update the resource binding status
-	updateErr := r.Client.Status().Update(ctx, &resourceBinding)
-	if updateErr != nil {
-		klog.ErrorS(updateErr, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
-	}
-	if syncErr == nil {
-		return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
+	if err := r.Client.Status().Update(ctx, &resourceBinding); err != nil {
+		klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
+		return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(err)
 	}
 	if errors.Is(syncErr, errResourceSnapshotDeleted) {
 		// this is expected to happen when the cache is not synced yet
