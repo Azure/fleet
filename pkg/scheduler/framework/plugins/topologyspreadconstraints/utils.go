@@ -93,9 +93,55 @@ func countByDomain(clusters []fleetv1beta1.MemberCluster, state framework.CycleS
 // willViolate returns whether producing one more binding in a domain would lead
 // to violations; it will also return the skew change (the delta between the max skew after setting
 // up a placement and the one before) caused by the provisional placement.
-func willViolate(_ *bindingCounterByDomain, _ domainName, _ int) (violated bool, skewChange int, err error) {
-	// Not yet implemented.
-	return false, 0, nil
+func willViolate(counter *bindingCounterByDomain, name domainName, maxSkew int) (violated bool, skewChange int, err error) {
+	count, ok := counter.Count(name)
+	if !ok {
+		// The domain is not registered in the counter; normally this would never
+		// happen as the state being evaluated is consistent and the counter tracks
+		// all domains.
+		return false, 0, fmt.Errorf("domain %s is not registered in the counter", name)
+	}
+
+	// Note if the earlier check passes, all special counts must be present.
+	smallest, _ := counter.Smallest()
+	secondSmallest, _ := counter.SecondSmallest()
+	largest, _ := counter.Largest()
+
+	if count < smallest || count > largest {
+		// Perform a sanity check here; normally this would never happen as the counter
+		// tracks all domains.
+		return false, 0, fmt.Errorf("the counter has invalid special counts: [%d, %d], received %d", smallest, largest, count)
+	}
+
+	currentSkew := int(largest - smallest)
+	switch {
+	case largest == smallest:
+		// Currently all domains have the same count of bindings.
+		//
+		// In this case, the placement will increase the skew by 1.
+		return currentSkew+1 > maxSkew, 1, nil
+	case count == smallest && smallest != secondSmallest:
+		// The plan is to place at the domain with the smallest count of bindings, and currently
+		// there are no other domains with the same smallest count.
+		//
+		// In this case, the placement will decrease the skew by 1.
+		return currentSkew-1 > maxSkew, -1, nil
+	case count == largest:
+		// The plan is to place at the domain with the largest count of bindings.
+		//
+		// In this case, the placement will increase the skew by 1.
+		return currentSkew+1 > maxSkew, 1, nil
+	default:
+		// In all the other cases, the skew will not be affected.
+		//
+		// These cases include:
+		//
+		// * place at the domain with the smallest count of bindings, but there are other
+		//   domains with the same smallest count; and
+		// * place at the domain with a count of bindings that is greater than the smallest
+		//   count, but less than the largest count.
+		return currentSkew > maxSkew, 0, nil
+	}
 }
 
 // classifyConstraints classifies topology spread constraints in a policy based on their
