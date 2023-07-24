@@ -980,11 +980,17 @@ func (f *framework) runScorePluginsFor(ctx context.Context, state *CycleState, p
 
 // runScorePlugins runs score plugins on clusters in parallel.
 func (f *framework) runScorePlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, clusters []*fleetv1beta1.MemberCluster) (ScoredClusters, error) {
+	// Pre-allocate slices to avoid races.
+	scoredClusters := make(ScoredClusters, len(clusters))
+
+	// As a shortcut, return immediately if there is no available cluster.
+	if len(clusters) == 0 {
+		return scoredClusters, nil
+	}
+
 	// Create a child context.
 	childCtx, cancel := context.WithCancel(ctx)
 
-	// Pre-allocate slices to avoid races.
-	scoredClusters := make(ScoredClusters, len(clusters))
 	var scoredClustersIdx int32 = -1
 
 	errFlag := parallelizer.NewErrorFlag()

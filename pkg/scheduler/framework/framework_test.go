@@ -3939,6 +3939,7 @@ func TestRunScorePlugins(t *testing.T) {
 	testCases := []struct {
 		name               string
 		scorePlugins       []ScorePlugin
+		clusters           []*fleetv1beta1.MemberCluster
 		wantScoredClusters ScoredClusters
 		expectedToFail     bool
 	}{
@@ -3986,6 +3987,7 @@ func TestRunScorePlugins(t *testing.T) {
 					},
 				},
 			},
+			clusters: clusters,
 			wantScoredClusters: ScoredClusters{
 				{
 					Cluster: clusters[0],
@@ -4052,7 +4054,35 @@ func TestRunScorePlugins(t *testing.T) {
 					},
 				},
 			},
+			clusters:       clusters,
 			expectedToFail: true,
+		},
+		{
+			name: "no cluster to score",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 1,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 2,
+							}, nil
+						}
+						return &ClusterScore{}, nil
+					},
+				},
+			},
+			clusters:           []*fleetv1beta1.MemberCluster{},
+			wantScoredClusters: ScoredClusters{},
 		},
 	}
 
@@ -4075,7 +4105,7 @@ func TestRunScorePlugins(t *testing.T) {
 				},
 			}
 
-			scoredClusters, err := f.runScorePlugins(ctx, state, policy, clusters)
+			scoredClusters, err := f.runScorePlugins(ctx, state, policy, tc.clusters)
 			if tc.expectedToFail {
 				if err == nil {
 					t.Errorf("runScorePlugins(), got no error, want error")
