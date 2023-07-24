@@ -95,8 +95,9 @@ type SchedulingPolicySnapshotConditionType string
 const (
 	// 	Scheduled indicates the scheduled condition of the given SchedulingPolicySnapshot.
 	// Its condition status can be one of the following:
-	// - "True" means the corresponding SchedulingPolicySnapshot is scheduled.
-	// - "False" means the corresponding SchedulingPolicySnapshot is not scheduled yet.
+	// - "True" means we have successfully scheduled corresponding SchedulingPolicySnapshot to fully satisfy the
+	// placement requirement.
+	// - "False" means we did not fully satisfy the placement requirement of the corresponding SchedulingPolicySnapshot.
 	// - "Unknown" means the status of the scheduling is unknown.
 	PolicySnapshotScheduled SchedulingPolicySnapshotConditionType = "Scheduled"
 )
