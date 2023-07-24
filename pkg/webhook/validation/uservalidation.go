@@ -63,14 +63,15 @@ func ValidateUserForResource(resKind string, namespacedName types.NamespacedName
 
 // ValidateMemberClusterUpdate checks to see if user is allowed to update argued fleet resource.
 func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
-	var response admission.Response
+	response := admission.Denied("user didn't update a valid, updatable field in member cluster CR")
 	namespacedName := types.NamespacedName{Name: currentMC.Name}
-	isMCLabelUpdated := isMemberClusterLabelUpdated(currentMC.Labels, oldMC.Labels)
+	isMCLabelUpdated := isMemberClusterMapFieldUpdated(currentMC.Labels, oldMC.Labels)
+	isMCAnnotationUpdated := isMemberClusterMapFieldUpdated(currentMC.Annotations, oldMC.Annotations)
 	isMCUpdated, err := isMemberClusterUpdated(currentMC, oldMC)
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
-	if isMCLabelUpdated && !isMCUpdated {
+	if (isMCLabelUpdated || isMCAnnotationUpdated) && !isMCUpdated {
 		// we allow any user to modify MemberCluster label.
 		klog.V(2).InfoS("user in groups is allowed to modify member cluster label", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
@@ -78,7 +79,6 @@ func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, w
 	if isMCUpdated {
 		response = ValidateUserForFleetCR(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
 	}
-	response = admission.Denied("user didn't update a valid, updatable field in member cluster CR")
 	return response
 }
 
@@ -92,8 +92,8 @@ func isUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool 
 	return slices.Contains(userInfo.Groups, serviceAccountsGroup)
 }
 
-// isMemberClusterLabelUpdated return true if member cluster label is updated.
-func isMemberClusterLabelUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
+// isMemberClusterMapFieldUpdated return true if member cluster label is updated.
+func isMemberClusterMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
 	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
 }
 

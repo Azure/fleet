@@ -91,7 +91,6 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 	if req.Operation == admissionv1.Update {
 		var oldMC fleetv1alpha1.MemberCluster
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
-			// TODO: returning http bad request may not be ideal.
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, v.whiteListedUsers, req.UserInfo)
