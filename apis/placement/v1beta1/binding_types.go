@@ -101,14 +101,6 @@ const (
 	// - "Unknown" means it is unknown.
 	ResourceBindingBound ResourceBindingConditionType = "Bound"
 
-	// ResourceBindingUpdated indicates whether (and when) a binding is updated to point
-	// to a new resource snapshot.
-	// Its condition status can be one of the following:
-	// - "True" means the binding has been updated.
-	// - "False" means the binding has not been updated yet.
-	// - "Unknown" means the update status is unknown.
-	ResourceBindingUpdated ResourceBindingConditionType = "Updated"
-
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
 	// - "True" means all the resources are created in the target cluster.
