@@ -12,20 +12,57 @@ import (
 func (p *Plugin) PreScore(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
-	// TODO not implemented.
-	_, _ = p.readPluginState(state)
+	noClusterAffinity := policy.Spec.Policy == nil ||
+		policy.Spec.Policy.Affinity == nil ||
+		policy.Spec.Policy.Affinity.ClusterAffinity == nil
+
+	if noClusterAffinity {
+		// There are no clusterAffinity filter to enforce; skip.
+		//
+		// Note that this will lead the scheduler to skip this plugin in the next stage
+		// (Score).
+		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no cluster affinity term is present")
+	}
+
+	// Read the plugin state.
+	ps, err := p.readPluginState(state)
+	if err != nil {
+		// This branch should never be reached, as for any policy with present topology spread
+		// constraints, a common plugin state has been set at the PreFilter extension point.
+		return framework.FromError(err, p.Name(), "failed to read plugin state")
+	}
+
+	if len(ps.preferredAffinityTerms) == 0 {
+		// There are no preferred affinity terms to enforce; skip.
+		//
+		// Note that this will lead the scheduler to skip this plugin in the next stage
+		// (Score).
+		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no preferred cluster affinity term is present or all of the terms are empty")
+	}
+
+	// All done.
 	return nil
 }
 
 // Score allows the plugin to connect to the Score extension point in the scheduling framework.
 func (p *Plugin) Score(
 	_ context.Context,
-	_ framework.CycleStatePluginReadWriter,
+	state framework.CycleStatePluginReadWriter,
 	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	_ *fleetv1beta1.MemberCluster,
+	cluster *fleetv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
-	// TODO not implemented.
-	return nil, nil
+	// Read the plugin state.
+	ps, err := p.readPluginState(state)
+	if err != nil {
+		// This branch should never be reached, as for any policy with present cluster affinity terms, a common plugin
+		// state has been set at the PreFilter extension point.
+		return nil, framework.FromError(err, p.Name(), "failed to read plugin state")
+	}
+	score = &framework.ClusterScore{
+		AffinityScore: int(ps.preferredAffinityTerms.Score(cluster)),
+	}
+	// All done.
+	return score, nil
 }

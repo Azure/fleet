@@ -7,6 +7,7 @@ Licensed under the MIT license.
 package clusteraffinity
 
 import (
+	"errors"
 	"fmt"
 
 	"go.goms.io/fleet/pkg/scheduler/framework"
@@ -90,6 +91,9 @@ func (p *Plugin) readPluginState(state framework.CycleStatePluginReadWriter) (*p
 	ps, ok := val.(*pluginState)
 	if !ok {
 		return nil, fmt.Errorf("failed to cast value %v to the right type", val)
+	}
+	if ps == nil {
+		return nil, errors.New("plugin state is nil")
 	}
 	return ps, nil
 }
