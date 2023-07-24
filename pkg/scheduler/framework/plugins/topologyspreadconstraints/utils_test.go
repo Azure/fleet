@@ -1065,10 +1065,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					fmt.Sprintf(doNotScheduleConstraintViolationReasonTemplate, topologyKey1, maxSkew1),
 				},
 			},
-			wantScores: topologySpreadScores{
-				// Note that this score will never be used.
-				clusterName1: -1 * skewChangeScoreFactor,
-			},
+			wantScores: topologySpreadScores{},
 		},
 		{
 			name: "2 doNotSchedule topology spread constraints, 4 clusters, 4 scores (1 excluded cluster)",
@@ -1234,8 +1231,6 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			wantScores: topologySpreadScores{
 				clusterName2: -1 * skewChangeScoreFactor,
 				clusterName3: 0,
-				// This value will not be used.
-				clusterName4: 0,
 			},
 		},
 		{
@@ -1756,8 +1751,6 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 				},
 				scores: topologySpreadScores{
 					clusterName2: -2 * skewChangeScoreFactor,
-					// This value will not be used.
-					clusterName4: 0,
 				},
 			},
 		},

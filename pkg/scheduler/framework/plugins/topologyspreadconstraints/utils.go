@@ -225,6 +225,10 @@ func evaluateAllConstraints(
 					fmt.Sprintf(doNotScheduleConstraintViolationReasonTemplate, constraint.TopologyKey, *constraint.MaxSkew),
 				}
 				violations[clusterName(cluster.Name)] = reasons
+
+				// Untrack the cluster's score.
+				delete(scores, clusterName(cluster.Name))
+
 				continue
 			}
 			scores[clusterName(cluster.Name)] += skewChange * skewChangeScoreFactor
