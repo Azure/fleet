@@ -935,6 +935,11 @@ func TestWillViolate(t *testing.T) {
 
 				return
 			}
+
+			if err != nil {
+				t.Fatalf("willViolate() = %v, want no error", err)
+			}
+
 			if violated != tc.wantViolated {
 				t.Errorf("willViolate() violated = %t, want %t", violated, tc.wantViolated)
 			}
