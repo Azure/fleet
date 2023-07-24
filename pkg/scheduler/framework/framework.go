@@ -729,15 +729,89 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	klog.V(2).InfoS("Scheduling is needed; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
 
 	// Run all the plugins.
-	//
-	// TO-DO (chenyu1): assign variable when needed.
-	_, _, err = f.runAllPluginsForPickNPlacementType(ctx, state, policy, numOfClusters, len(bound)+len(scheduled), clusters)
+	scored, filtered, err := f.runAllPluginsForPickNPlacementType(ctx, state, policy, numOfClusters, len(bound)+len(scheduled), clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run all plugins", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
 
-	// Not yet implemented.
+	// Pick the top scored clusters.
+	klog.V(2).InfoS("Picking clusters", "clusterSchedulingPolicySnapshot", policyRef)
+
+	// Calculate the number of clusters to pick.
+	numOfClustersToPick := calcNumOfClustersToSelect(state.desiredBatchSize, state.batchSizeLimit, len(scored))
+
+	// Do a sanity check; normally this branch will never run, as earlier check
+	// guarantees that the number of clusters to pick is always no greater than number of
+	// scored clusters.
+	if numOfClustersToPick > len(scored) {
+		err := fmt.Errorf("number of clusters to pick is greater than number of scored clusters: %d > %d", numOfClustersToPick, len(scored))
+		klog.ErrorS(err, "Failed to calculate number of clusters to pick", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Pick the clusters.
+	//
+	// Note that at this point of the scheduling cycle, any cluster associated with a currently
+	// active or creating binding should be filtered out already.
+	picked := pickTopNScoredClusters(scored, numOfClustersToPick)
+
+	// Cross-reference the newly picked clusters with obsolete bindings; find out
+	//
+	// * bindings that should be created, i.e., create a binding for every cluster that is newly picked
+	//   and does not have a binding associated with;
+	// * bindings that should be updated, i.e., associate a binding whose target cluster is picked again
+	//   in the current run with the latest score;
+	// * bindings that should be deleted, i.e., mark a binding as deleting if its target cluster is no
+	//   longer picked in the current run.
+	//
+	// Fields in the returned bindings are fulfilled and/or refreshed as applicable.
+	klog.V(2).InfoS("Cross-referencing bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef)
+	toCreate, toDelete, toPatch, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, picked, obsolete)
+	if err != nil {
+		klog.ErrorS(err, "Failed to cross-reference bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// Manipulate bindings accordingly.
+	klog.V(2).InfoS("Manipulating bindings", "clusterSchedulingPolicySnapshot", policyRef)
+	if err := f.manipulateBindings(ctx, policy, toCreate, toDelete, toPatch); err != nil {
+		klog.ErrorS(err, "Failed to manipulate bindings", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// Requeue if needed.
+	//
+	// The scheduler will requeue to pick more clusters for the current policy snapshot if and only if
+	// * one or more plugins have imposed a valid batch size limit; and
+	// * the scheduler has found enough clusters for the current policy snapshot per this batch size limit.
+	//
+	// Note that the scheduler workflow at this point guarantees that the desired batch size is no less
+	// than the batch size limit, and that the number of picked clusters is no more than the batch size
+	// limit.
+	//
+	// Also note that if a requeue is needed, the scheduling decisions and condition are updated only
+	// when there are no more clusters to pick.
+	if shouldRequeue(state.desiredBatchSize, state.batchSizeLimit, len(toCreate)+len(toPatch)) {
+		return ctrl.Result{
+			Requeue: true,
+		}, nil
+	}
+
+	// Extract the patched bindings.
+	patched := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(toPatch))
+	for _, p := range toPatch {
+		patched = append(patched, p.updated)
+	}
+
+	// Update policy snapshot status with the latest scheduling decisions and condition.
+	klog.V(2).InfoS("Updating policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
+	if err := f.updatePolicySnapshotStatusFrom(ctx, policy, filtered, toCreate, patched, scheduled, bound); err != nil {
+		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// The scheduling cycle has completed.
 	return ctrl.Result{}, nil
 }
 
