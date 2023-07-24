@@ -3741,3 +3741,387 @@ func TestDownscale(t *testing.T) {
 		})
 	}
 }
+
+// TestRunScorePluginsFor tests the runScorePluginsFor method.
+func TestRunScorePluginsFor(t *testing.T) {
+	dummyScorePluginA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyScorePluginB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	testCases := []struct {
+		name               string
+		scorePlugins       []ScorePlugin
+		skippedPluginNames []string
+		wantStatus         *Status
+		wantScoreList      map[string]*ClusterScore
+	}{
+		{
+			name: "single plugin, success",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return &ClusterScore{
+							TopologySpreadScore: 1,
+							AffinityScore:       20,
+						}, nil
+					},
+				},
+			},
+			wantScoreList: map[string]*ClusterScore{
+				dummyScorePluginA: {
+					TopologySpreadScore: 1,
+					AffinityScore:       20,
+				},
+			},
+		},
+		{
+			name: "multiple plugins, all success",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return &ClusterScore{
+							TopologySpreadScore: 1,
+							AffinityScore:       20,
+						}, nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginB,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return &ClusterScore{
+							TopologySpreadScore: 0,
+							AffinityScore:       10,
+						}, nil
+					},
+				},
+			},
+			wantScoreList: map[string]*ClusterScore{
+				dummyScorePluginA: {
+					TopologySpreadScore: 1,
+					AffinityScore:       20,
+				},
+				dummyScorePluginB: {
+					TopologySpreadScore: 0,
+					AffinityScore:       10,
+				},
+			},
+		},
+		{
+			name: "multiple plugin, one success, one skipped",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return &ClusterScore{
+							TopologySpreadScore: 1,
+							AffinityScore:       20,
+						}, nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginB,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return &ClusterScore{
+							TopologySpreadScore: 0,
+							AffinityScore:       10,
+						}, nil
+					},
+				},
+			},
+			skippedPluginNames: []string{dummyScorePluginB},
+			wantScoreList: map[string]*ClusterScore{
+				dummyScorePluginA: {
+					TopologySpreadScore: 1,
+					AffinityScore:       20,
+				},
+			},
+		},
+		{
+			name: "single plugin, internal error",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("internal error"), dummyScorePluginA),
+		},
+		{
+			name: "single plugin, skip",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return nil, NewNonErrorStatus(Skip, dummyScorePluginA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("unexpected status"), dummyScorePluginA),
+		},
+		{
+			name: "single plugin, unschedulable",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return nil, NewNonErrorStatus(ClusterUnschedulable, dummyScorePluginA)
+					},
+				},
+			},
+			wantStatus: FromError(fmt.Errorf("unexpected status"), dummyScorePluginA),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.scorePlugins {
+				profile.WithScorePlugin(p)
+			}
+			f := &framework{
+				profile: profile,
+			}
+
+			ctx := context.Background()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
+			for _, name := range tc.skippedPluginNames {
+				state.skippedScorePlugins.Insert(name)
+			}
+			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+			cluster := &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			}
+
+			scoreList, status := f.runScorePluginsFor(ctx, state, policy, cluster)
+			if diff := cmp.Diff(status, tc.wantStatus, cmp.AllowUnexported(Status{}), ignoredStatusFields); diff != "" {
+				t.Errorf("runScorePluginsFor() status diff (-got, +want): %s", diff)
+			}
+
+			if diff := cmp.Diff(scoreList, tc.wantScoreList); diff != "" {
+				t.Errorf("runScorePluginsFor() scoreList diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+// TestRunScorePlugins tests the runScorePlugins method.
+func TestRunScorePlugins(t *testing.T) {
+	dummyScorePluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyScorePluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	clusters := []*fleetv1beta1.MemberCluster{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altClusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherClusterName,
+			},
+		},
+	}
+
+	testCases := []struct {
+		name               string
+		scorePlugins       []ScorePlugin
+		clusters           []*fleetv1beta1.MemberCluster
+		wantScoredClusters ScoredClusters
+		expectedToFail     bool
+	}{
+		{
+			name: "three clusters, two score plugins, all scored",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 1,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 2,
+							}, nil
+						}
+						return &ClusterScore{}, nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameB,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								AffinityScore: 10,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								AffinityScore: 20,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								AffinityScore: 15,
+							}, nil
+						}
+						return &ClusterScore{}, nil
+					},
+				},
+			},
+			clusters: clusters,
+			wantScoredClusters: ScoredClusters{
+				{
+					Cluster: clusters[0],
+					Score: &ClusterScore{
+						TopologySpreadScore: 1,
+						AffinityScore:       10,
+					},
+				},
+				{
+					Cluster: clusters[1],
+					Score: &ClusterScore{
+						TopologySpreadScore: 0,
+						AffinityScore:       20,
+					},
+				},
+				{
+					Cluster: clusters[2],
+					Score: &ClusterScore{
+						TopologySpreadScore: 2,
+						AffinityScore:       15,
+					},
+				},
+			},
+		},
+		{
+			name: "three clusters, two score plugins, one internal error on specific cluster",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 1,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 2,
+							}, nil
+						}
+						return &ClusterScore{}, nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameB,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								AffinityScore: 10,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{}, FromError(fmt.Errorf("internal error"), dummyScorePluginNameB)
+						case anotherClusterName:
+							return &ClusterScore{
+								AffinityScore: 15,
+							}, nil
+						}
+						return &ClusterScore{}, nil
+					},
+				},
+			},
+			clusters:       clusters,
+			expectedToFail: true,
+		},
+		{
+			name: "no cluster to score",
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 1,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 2,
+							}, nil
+						}
+						return &ClusterScore{}, nil
+					},
+				},
+			},
+			clusters:           []*fleetv1beta1.MemberCluster{},
+			wantScoredClusters: ScoredClusters{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.scorePlugins {
+				profile.WithScorePlugin(p)
+			}
+			f := &framework{
+				profile:      profile,
+				parallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+			}
+
+			ctx := context.Background()
+			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
+			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			}
+
+			scoredClusters, err := f.runScorePlugins(ctx, state, policy, tc.clusters)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Errorf("runScorePlugins(), got no error, want error")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("runScorePlugins() = %v, want no error", err)
+			}
+
+			// The method runs in parallel; as a result the order cannot be guaranteed.
+			// Sort them by cluster name for easier comparison.
+			if diff := cmp.Diff(scoredClusters, tc.wantScoredClusters, cmpopts.SortSlices(lessFuncScoredCluster), cmp.AllowUnexported(ScoredCluster{})); diff != "" {
+				t.Errorf("runScorePlugins() scored clusters diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
