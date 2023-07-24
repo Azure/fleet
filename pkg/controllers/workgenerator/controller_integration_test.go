@@ -194,7 +194,7 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 			}
 			diff := cmp.Diff(wantMC, binding.Status, ignoreConditionOption)
 			Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
-			Expect(binding.GetCondition(string(fleetv1beta1.ResourceBindingBound)).Message).Should(Equal(errResourceSnapshotDeleted.Error()))
+			Expect(binding.GetCondition(string(fleetv1beta1.ResourceBindingBound)).Message).Should(Equal(errResourceSnapshotNotFound.Error()))
 			// delete the binding
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())

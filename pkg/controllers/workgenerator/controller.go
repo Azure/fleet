@@ -42,8 +42,8 @@ const (
 )
 
 var (
-	errResourceSnapshotDeleted = errors.New("the master resource snapshot is deleted")
-	errResourceNotFullyCreated = errors.New("not all resource snapshot in the same index group are created")
+	errResourceSnapshotNotFound = errors.New("the master resource snapshot is not found")
+	errResourceNotFullyCreated  = errors.New("not all resource snapshot in the same index group are created")
 )
 
 // Reconciler watches binding objects and generate work objects in the designated cluster namespace
@@ -112,8 +112,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.ErrorS(err, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
 		return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(err)
 	}
-	if errors.Is(syncErr, errResourceSnapshotDeleted) {
-		// this is expected to happen when the cache is not synced yet
+	if errors.Is(syncErr, errResourceSnapshotNotFound) {
+		// This error usually indicates that the resource snapshot is deleted since the rollout controller which fills
+		// the resource snapshot share the same informer cache with this controller. We don't need to retry in this case
+		// since the resource snapshot will not come back. We will get another event if the binding is pointing to a new resource.
+		// However, this error can happen when the resource snapshot exists during the IT test when the client that creates
+		// the resource snapshot is not the same as the controller client so that we need to retry in this case.
+		// This error can also happen if the user uses a customized rollout controller that does not share the same informer cache with this controller.
 		return ctrl.Result{Requeue: true}, nil
 	}
 	return ctrl.Result{}, syncErr
@@ -232,7 +237,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &masterResourceSnapshot); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("The master resource snapshot is deleted", "resourceBinding", klog.KObj(resourceBinding), "resourceSnapshotName", resourceBinding.Spec.ResourceSnapshotName)
-			return nil, errResourceSnapshotDeleted
+			return nil, errResourceSnapshotNotFound
 		}
 		klog.ErrorS(err, "Failed to get the resource snapshot from resource masterResourceSnapshot",
 			"resourceBinding", klog.KObj(resourceBinding), "masterResourceSnapshot", resourceBinding.Spec.ResourceSnapshotName)
