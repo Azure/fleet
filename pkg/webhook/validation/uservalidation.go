@@ -73,7 +73,7 @@ func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, w
 	}
 	if (isMCLabelUpdated || isMCAnnotationUpdated) && !isMCUpdated {
 		// we allow any user to modify MemberCluster label.
-		klog.V(2).InfoS("user in groups is allowed to modify member cluster label", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
+		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
 	}
 	if isMCUpdated {
@@ -117,10 +117,12 @@ func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool,
 	oldMC.SetDeletionTimestamp(nil)
 	oldMC.SetDeletionGracePeriodSeconds(nil)
 	oldMC.SetManagedFields(nil)
-	// Set labels to be nil, set status to be empty.
+	// Set labels, annotations to be nil, set status to be empty.
 	currentMC.SetLabels(nil)
+	currentMC.SetAnnotations(nil)
 	currentMC.Status = fleetv1alpha1.MemberClusterStatus{}
 	oldMC.SetLabels(nil)
+	oldMC.SetAnnotations(nil)
 	oldMC.Status = fleetv1alpha1.MemberClusterStatus{}
 
 	currentMCBytes, err := json.Marshal(currentMC)
