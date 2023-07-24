@@ -675,12 +675,12 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		// bound bindings; when processing bound bindings, the logic prioritizes bindings that
 		//
 		//
-		// This step will also mark all obsolete bindings (if any) as deleting right away.
+		// This step will also mark all obsolete bindings (if any) as unscheduled right away.
 		klog.V(2).InfoS("Downscaling is needed", "clusterSchedulingPolicySnapshot", policyRef, "downscaleCount", downscaleCount)
 
-		// Mark all obsolete bindings as deleting first.
+		// Mark all obsolete bindings as unscheduled first.
 		if err := f.markAsUnscheduledFor(ctx, obsolete); err != nil {
-			klog.ErrorS(err, "Failed to mark obsolete bindings as deleting", "clusterSchedulingPolicySnapshot", policyRef)
+			klog.ErrorS(err, "Failed to mark obsolete bindings as unscheduled", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
 
@@ -753,16 +753,16 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	// Pick the clusters.
 	//
 	// Note that at this point of the scheduling cycle, any cluster associated with a currently
-	// active or creating binding should be filtered out already.
+	// bound or scheduled binding should be filtered out already.
 	picked := pickTopNScoredClusters(scored, numOfClustersToPick)
 
 	// Cross-reference the newly picked clusters with obsolete bindings; find out
 	//
 	// * bindings that should be created, i.e., create a binding for every cluster that is newly picked
 	//   and does not have a binding associated with;
-	// * bindings that should be updated, i.e., associate a binding whose target cluster is picked again
-	//   in the current run with the latest score;
-	// * bindings that should be deleted, i.e., mark a binding as deleting if its target cluster is no
+	// * bindings that should be patched, i.e., associate a binding whose target cluster is picked again
+	//   in the current run with the latest score and the latest scheduling policy snapshot;
+	// * bindings that should be deleted, i.e., mark a binding as unschedulable if its target cluster is no
 	//   longer picked in the current run.
 	//
 	// Fields in the returned bindings are fulfilled and/or refreshed as applicable.
@@ -793,9 +793,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	// Also note that if a requeue is needed, the scheduling decisions and condition are updated only
 	// when there are no more clusters to pick.
 	if shouldRequeue(state.desiredBatchSize, state.batchSizeLimit, len(toCreate)+len(toPatch)) {
-		return ctrl.Result{
-			Requeue: true,
-		}, nil
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Extract the patched bindings.

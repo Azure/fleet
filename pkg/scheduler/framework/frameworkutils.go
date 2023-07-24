@@ -26,7 +26,7 @@ import (
 //     but have not yet been cleared for processing by the dispatcher; and
 //   - dangling bindings, i.e., bindings that are associated with a cluster that is no longer in
 //     a normally operating state (the cluster has left the fleet, or is in the state of leaving),
-//     yet has not been marked as deleting by the scheduler; and
+//     yet has not been marked as unscheduled by the scheduler; and
 //   - obsolete bindings, i.e., bindings that are no longer associated with the latest scheduling
 //     policy.
 func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bindings []fleetv1beta1.ClusterResourceBinding, clusters []fleetv1beta1.MemberCluster) (bound, scheduled, obsolete, dangling []*fleetv1beta1.ClusterResourceBinding) {
@@ -278,12 +278,12 @@ func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
 }
 
 // shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how
-// many active or creating bindings it should remove.
+// many scheduled or bound bindings it should remove.
 func shouldDownscale(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, desired, present, obsolete int) (act bool, count int) {
 	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && desired <= present {
 		// Downscale only applies to CRPs of the Pick N placement type; and it only applies when the number of
-		// clusters requested by the user is less than the number of currently active + creating bindings combined;
-		// or there are the right number of active + creating bindings, yet some obsolete bindings still linger
+		// clusters requested by the user is less than the number of currently bound + scheduled bindings combined;
+		// or there are the right number of bound + scheduled bindings, yet some obsolete bindings still linger
 		// in the system.
 		if count := present - desired + obsolete; count > 0 {
 			// Note that in the case of downscaling, obsolete bindings are always removed; they
