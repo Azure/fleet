@@ -4083,6 +4083,10 @@ func TestRunScorePlugins(t *testing.T) {
 				return
 			}
 
+			if err != nil {
+				t.Fatalf("runScorePlugins() = %v, want no error", err)
+			}
+
 			// The method runs in parallel; as a result the order cannot be guaranteed.
 			// Sort them by cluster name for easier comparison.
 			if diff := cmp.Diff(scoredClusters, tc.wantScoredClusters, cmpopts.SortSlices(lessFuncScoredCluster), cmp.AllowUnexported(ScoredCluster{})); diff != "" {
