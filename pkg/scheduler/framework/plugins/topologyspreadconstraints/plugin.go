@@ -29,6 +29,9 @@ const (
 	// Note that it should be a positive value, as the plugin will subtract this value from
 	// the total score.
 	maxSkewViolationPenality = 1000
+
+	// defaultPluginName is the default name for the topology spread constraints plugin.
+	defaultPluginName = "TopologySpreadConstraints"
 )
 
 var (
@@ -73,7 +76,7 @@ type topologySpreadConstraintsPluginOptions struct {
 type Option func(*topologySpreadConstraintsPluginOptions)
 
 var defaultTopologySpreadConstraintsPluginOptions = topologySpreadConstraintsPluginOptions{
-	name: "TopologySpreadConstraints",
+	name: defaultPluginName,
 }
 
 // WithName sets the name of the plugin.
@@ -258,18 +261,15 @@ func (p *Plugin) PreScore(
 		return framework.FromError(err, p.Name(), "failed to read plugin state")
 	}
 
-	if len(ps.scheduleAnywayConstraints) == 0 && len(ps.doNotScheduleConstraints) == 0 {
-		// There are no topology spread constraints to enforce; skip.
-		//
-		// Note that this will lead the scheduler to skip this plugin in the next stage
-		// (Score).
-		//
-		// Also note that the plugin will still score clusters even if there are only DoNotSchedule
-		// topology spread constraints in presence; this can help reduce the skew (if applicable).
-		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no topology spread constraint is present")
+	// Check if there are available scores.
+	if len(ps.scores) == 0 {
+		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no available scores")
 	}
 
 	// All done.
+	//
+	// Note that this plugin will still score clusters even if there are only DoNotSchedule
+	// topology spread constraints in presence; this can help reduce the skew (if applicable).
 	return nil
 }
 

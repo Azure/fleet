@@ -75,6 +75,22 @@ func TestClusterScoreEqual(t *testing.T) {
 				BoundOrScheduledScore: 0,
 			},
 		},
+		{
+			name: "s1 is nil",
+			s2: &ClusterScore{
+				TopologySpreadScore:   1,
+				AffinityScore:         7,
+				BoundOrScheduledScore: 0,
+			},
+		},
+		{
+			name: "s2 is nil",
+			s1: &ClusterScore{
+				TopologySpreadScore:   2,
+				AffinityScore:         5,
+				BoundOrScheduledScore: 1,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
