@@ -24,8 +24,8 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
-	"go.goms.io/fleet/pkg/controllers/v1alpha1membercluster"
-	"go.goms.io/fleet/pkg/controllers/v1beta1membercluster"
+	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
+	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
@@ -95,7 +95,7 @@ func main() {
 
 	klog.V(2).InfoS("starting hubagent")
 
-	if err = (&v1alpha1membercluster.Reconciler{
+	if err = (&mcv1alpha1.Reconciler{
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
@@ -103,7 +103,7 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	if err = (&v1beta1membercluster.Reconciler{
+	if err = (&mcv1beta1.Reconciler{
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {

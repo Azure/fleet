@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package v1alpha1membercluster
+package v1alpha1
 
 import (
 	"flag"

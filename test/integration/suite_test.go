@@ -28,7 +28,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
-	"go.goms.io/fleet/pkg/controllers/v1alpha1membercluster"
+	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -90,7 +90,7 @@ var _ = BeforeSuite(func() {
 
 	By("Construct the controller manager")
 	// Set up  the memberCluster reconciler with the manager
-	err = (&v1alpha1membercluster.Reconciler{
+	err = (&mcv1alpha1.Reconciler{
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: false,
 	}).SetupWithManager(mgr)
