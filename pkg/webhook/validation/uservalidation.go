@@ -7,7 +7,6 @@ import (
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
@@ -63,7 +62,7 @@ func ValidateUserForResource(resKind string, namespacedName types.NamespacedName
 
 // ValidateMemberClusterUpdate checks to see if user is allowed to update argued fleet resource.
 func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
-	response := admission.Allowed("user updated read-only field/fields, so not field/fields will be updated")
+	response := admission.Allowed("user most likely updated read-only field/fields, so not field/fields will be updated")
 	namespacedName := types.NamespacedName{Name: currentMC.Name}
 	isMCLabelUpdated := isMemberClusterMapFieldUpdated(currentMC.Labels, oldMC.Labels)
 	isMCAnnotationUpdated := isMemberClusterMapFieldUpdated(currentMC.Annotations, oldMC.Annotations)
@@ -97,33 +96,13 @@ func isMemberClusterMapFieldUpdated(currentMCLabels, oldMCLabels map[string]stri
 	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
 }
 
-// isMemberClusterUpdated returns true is member cluster spec or certain fields in object meta of member cluster CR is updated.
+// isMemberClusterUpdated returns true is member cluster spec or status is updated.
 func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool, error) {
-	// Remove all live fields from current MC objectMeta.
-	currentMC.SetSelfLink("")
-	currentMC.SetUID("")
-	currentMC.SetResourceVersion("")
-	currentMC.SetGeneration(0)
-	currentMC.SetCreationTimestamp(v1.Time{})
-	currentMC.SetDeletionTimestamp(nil)
-	currentMC.SetDeletionGracePeriodSeconds(nil)
-	currentMC.SetManagedFields(nil)
-	// Remove all live fields from old MC objectMeta.
-	oldMC.SetSelfLink("")
-	oldMC.SetUID("")
-	oldMC.SetResourceVersion("")
-	oldMC.SetGeneration(0)
-	oldMC.SetCreationTimestamp(v1.Time{})
-	oldMC.SetDeletionTimestamp(nil)
-	oldMC.SetDeletionGracePeriodSeconds(nil)
-	oldMC.SetManagedFields(nil)
-	// Set labels, annotations to be nil, set status to be empty.
+	// Set labels, annotations to be nil. Read-only field updates are not received by the admission webhook.
 	currentMC.SetLabels(nil)
 	currentMC.SetAnnotations(nil)
-	currentMC.Status = fleetv1alpha1.MemberClusterStatus{}
 	oldMC.SetLabels(nil)
 	oldMC.SetAnnotations(nil)
-	oldMC.Status = fleetv1alpha1.MemberClusterStatus{}
 
 	currentMCBytes, err := json.Marshal(currentMC)
 	if err != nil {
