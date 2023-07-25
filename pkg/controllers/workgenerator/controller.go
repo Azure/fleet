@@ -246,11 +246,10 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	resourceSnapshots[masterResourceSnapshot.Name] = &masterResourceSnapshot
 
 	// check if there are more snapshot in the same index group
-	countAnnotation := masterResourceSnapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
-	snapshotCount, err := strconv.Atoi(countAnnotation)
-	if err != nil || snapshotCount < 1 {
-		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf(
-			"master resource snapshot %s has an invalid snapshot count %d or err %w", masterResourceSnapshot.Name, snapshotCount, err))
+	snapshotCount, err := utils.ExtractNumberOfResourceSnapshots(&masterResourceSnapshot)
+	if err != nil {
+		klog.ErrorS(err, "Master resource snapshot has invalid numberOfResourceSnapshots annotation", "masterResourceSnapshot", klog.KObj(&masterResourceSnapshot))
+		return nil, controller.NewUnexpectedBehaviorError(err)
 	}
 	if snapshotCount > 1 {
 		// fetch all the resource snapshot in the same index group

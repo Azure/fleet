@@ -419,7 +419,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to all the target clusters.
 	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
-	// - "Unknown" means we haven't started the apply yet.
+	// - "Unknown" means we haven't started or finished the apply yet.
 	ClusterResourcePlacementAppliedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementApplied"
 )
 
@@ -428,19 +428,25 @@ const (
 type ResourcePlacementConditionType string
 
 const (
-	// ResourceWorkCreatedConditionType indicates whether we have created the corresponding work object under the
-	// per-cluster namespaces (i.e., fleet-member-<member-name>).
+	// ResourceWorkCreatedConditionType indicates whether we have created/updated the corresponding work objects under the
+	// per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by the placement.
 	// Its condition status can be one of the following:
-	// - "True" means we have successfully created the corresponding work resources.
-	// - "False" means we have failed to creat the corresponding work resources. We will fill the Reason field.
-	// - "Unknown" means we don't have a scheduling decision yet.
+	// - "True" means we have successfully created the latest corresponding work resources or updated the existing work
+	// resources to the latest.
+	// - "False" means we have not created the latest corresponding work resources or updated the existing work resources
+	// to the latest.
+	// There are few possibilities:
+	// - In the processing state
+	// - Rollout controller has decided not to create the resources in this cluster for now to honor the rollout strategy
+	// configurations specified in the placement.
+	// - Work cannot be created because of the unknown failures.
 	ResourceWorkCreatedConditionType ResourcePlacementConditionType = "WorkCreated"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
-	// - "Unknown" means we haven't started the apply yet.
+	// - "Unknown" means we haven't started or finished the apply yet.
 	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
 
 	// ResourceScheduledConditionType indicates whether we have successfully scheduled the selected resources.

@@ -24,6 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -43,6 +44,9 @@ var (
 		cmpopts.SortSlices(func(r1, r2 fleetv1beta1.ClusterResourceSnapshot) bool {
 			return r1.Name < r2.Name
 		}),
+		cmpopts.SortSlices(func(c1, c2 metav1.Condition) bool {
+			return c1.Type < c2.Type
+		}),
 	}
 	singleRevisionLimit   = int32(1)
 	multipleRevisionLimit = int32(2)
@@ -52,7 +56,10 @@ var (
 func serviceScheme(t *testing.T) *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
+		t.Fatalf("failed to add fleet scheme: %v", err)
+	}
+	if err := workv1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add work scheme: %v", err)
 	}
 	return scheme
 }
@@ -2215,6 +2222,7 @@ func TestHandleDelete(t *testing.T) {
 	}
 }
 
+// TODO need to add more test cases
 func TestBuildPlacementStatus(t *testing.T) {
 	snapshotPolicy := placementPolicyForTest()
 	snapshotPolicy.NumberOfClusters = nil
@@ -2308,7 +2316,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Reason:             ApplyPendingReason,
+						Reason:             ApplyNotNeededReason,
 						ObservedGeneration: crpGeneration,
 					},
 					{
@@ -2401,7 +2409,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Reason:             ApplyPendingReason,
+						Reason:             ApplyNotNeededReason,
 						ObservedGeneration: crpGeneration,
 					},
 					{
@@ -2494,7 +2502,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Reason:             ApplyPendingReason,
+						Reason:             ApplyNotNeededReason,
 						ObservedGeneration: crpGeneration,
 					},
 					{
@@ -2588,7 +2596,7 @@ func TestBuildPlacementStatus(t *testing.T) {
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Reason:             ApplyPendingReason,
+						Reason:             ApplyNotNeededReason,
 						ObservedGeneration: crpGeneration,
 					},
 					{
@@ -2700,6 +2708,12 @@ func TestBuildPlacementStatus(t *testing.T) {
 				},
 				Conditions: []metav1.Condition{
 					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             "ApplyNotNeeded",
+						ObservedGeneration: crpGeneration,
+					},
+					{
 						Status:             metav1.ConditionTrue,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Reason:             "Scheduled",
@@ -2711,27 +2725,29 @@ func TestBuildPlacementStatus(t *testing.T) {
 						ClusterName: "member-1",
 						Conditions: []metav1.Condition{
 							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.ResourceWorkCreatedConditionType),
+								Reason:             "CreatingOrBlocked",
+								ObservedGeneration: crpGeneration,
+							},
+							{
 								Status:             metav1.ConditionTrue,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleSucceeded",
 								ObservedGeneration: crpGeneration,
 							},
 						},
+						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 					},
 					{
 						ClusterName: "member-2",
 						Conditions: []metav1.Condition{
 							{
-								Status:             metav1.ConditionTrue,
-								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleSucceeded",
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.ResourceWorkCreatedConditionType),
+								Reason:             "CreatingOrBlocked",
 								ObservedGeneration: crpGeneration,
 							},
-						},
-					},
-					{
-						ClusterName: "member-3",
-						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
@@ -2739,6 +2755,25 @@ func TestBuildPlacementStatus(t *testing.T) {
 								ObservedGeneration: crpGeneration,
 							},
 						},
+						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+					},
+					{
+						ClusterName: "member-3",
+						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.ResourceWorkCreatedConditionType),
+								Reason:             "CreatingOrBlocked",
+								ObservedGeneration: crpGeneration,
+							},
+							{
+								Status:             metav1.ConditionTrue,
+								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
+								Reason:             "ScheduleSucceeded",
+								ObservedGeneration: crpGeneration,
+							},
+						},
+						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 					},
 				},
 			},
@@ -2829,6 +2864,12 @@ func TestBuildPlacementStatus(t *testing.T) {
 					},
 				},
 				Conditions: []metav1.Condition{
+					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             "ApplyNotNeeded",
+						ObservedGeneration: crpGeneration,
+					},
 					{
 						Status:             metav1.ConditionTrue,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
@@ -2925,6 +2966,12 @@ func TestBuildPlacementStatus(t *testing.T) {
 				SelectedResources: []fleetv1beta1.ResourceIdentifier{},
 				Conditions: []metav1.Condition{
 					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             ApplyNotNeededReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
 						Status:             metav1.ConditionFalse,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Reason:             "SchedulingFailed",
@@ -2933,12 +2980,19 @@ func TestBuildPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: "member-1",
+						ClusterName:              "member-1",
+						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
 								Reason:             "ScheduleSucceeded",
+								ObservedGeneration: crpGeneration,
+							},
+							{
+								Status:             metav1.ConditionFalse,
+								Type:               string(fleetv1beta1.ResourceWorkCreatedConditionType),
+								Reason:             "CreatingOrBlocked",
 								ObservedGeneration: crpGeneration,
 							},
 						},
@@ -3065,6 +3119,12 @@ func TestBuildPlacementStatus(t *testing.T) {
 				SelectedResources: []fleetv1beta1.ResourceIdentifier{},
 				Conditions: []metav1.Condition{
 					{
+						Status:             metav1.ConditionUnknown,
+						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+						Reason:             ApplyNotNeededReason,
+						ObservedGeneration: crpGeneration,
+					},
+					{
 						Status:             metav1.ConditionTrue,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Reason:             "Scheduled",
@@ -3097,8 +3157,12 @@ func TestBuildPlacementStatus(t *testing.T) {
 				},
 			}
 			crp.Generation = crpGeneration
-			r := Reconciler{}
-			got, err := r.buildPlacementStatus(crp, tc.latestPolicySnapshot, tc.latestResourceSnapshot)
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				Build()
+			r := Reconciler{Client: fakeClient, Scheme: scheme}
+			got, err := r.buildPlacementStatus(context.Background(), crp, tc.latestPolicySnapshot, tc.latestResourceSnapshot)
 			if err != nil {
 				t.Fatalf("buildPlacementStatus() failed: %v", err)
 			}

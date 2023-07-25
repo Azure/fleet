@@ -289,3 +289,14 @@ func ExtractSubindexFromClusterResourceSnapshot(snapshot *fleetv1beta1.ClusterRe
 
 	return true, subindex, nil
 }
+
+// ExtractNumberOfResourceSnapshots extracts the number of clusterResourceSnapshots in a group from the master clusterResourceSnapshot.
+func ExtractNumberOfResourceSnapshots(snapshot *fleetv1beta1.ClusterResourceSnapshot) (int, error) {
+	countAnnotation := snapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
+	snapshotCount, err := strconv.Atoi(countAnnotation)
+	if err != nil || snapshotCount < 1 {
+		return 0, fmt.Errorf(
+			"resource snapshot %s has an invalid snapshot count %d or err %w", snapshot.Name, snapshotCount, err)
+	}
+	return snapshotCount, nil
+}
