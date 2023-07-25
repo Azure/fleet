@@ -661,6 +661,40 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			By("expecting successful UPDATE of member cluster")
 			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
 		})
+
+		It("should allow update operation on member cluster CR status for user in system:masters group", func() {
+			var mc fleetv1alpha1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+
+			By("update status of member cluster")
+			Expect(mc.Status.Conditions).ToNot(BeEmpty())
+			reason := mc.Status.Conditions[0].Reason
+			mc.Status.Conditions[0].Reason = "update"
+
+			By("expecting successful UPDATE of member cluster")
+			Expect(HubCluster.KubeClient.Status().Update(ctx, &mc)).To(Succeed())
+
+			By("revert spec change made for test")
+			mc.Status.Conditions[0].Reason = reason
+
+			By("expecting successful UPDATE of member cluster")
+			Expect(HubCluster.KubeClient.Status().Update(ctx, &mc)).To(Succeed())
+		})
+
+		It("should deny member cluster CR status update for user not in system:master group or a whitelisted user", func() {
+			var mc fleetv1alpha1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+
+			By("update status of member cluster")
+			Expect(mc.Status.Conditions).ToNot(BeEmpty())
+			mc.Status.Conditions[0].Reason = "update"
+
+			By("expecting denial UPDATE of member cluster status")
+			err := HubCluster.ImpersonateKubeClient.Status().Update(ctx, &mc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
+		})
 	})
 })
 

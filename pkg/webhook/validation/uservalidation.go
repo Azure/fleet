@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
@@ -103,6 +104,24 @@ func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool,
 	currentMC.SetAnnotations(nil)
 	oldMC.SetLabels(nil)
 	oldMC.SetAnnotations(nil)
+	// Remove all live fields from current MC objectMeta.
+	currentMC.SetSelfLink("")
+	currentMC.SetUID("")
+	currentMC.SetResourceVersion("")
+	currentMC.SetGeneration(0)
+	currentMC.SetCreationTimestamp(v1.Time{})
+	currentMC.SetDeletionTimestamp(nil)
+	currentMC.SetDeletionGracePeriodSeconds(nil)
+	currentMC.SetManagedFields(nil)
+	// Remove all live fields from old MC objectMeta.
+	oldMC.SetSelfLink("")
+	oldMC.SetUID("")
+	oldMC.SetResourceVersion("")
+	oldMC.SetGeneration(0)
+	oldMC.SetCreationTimestamp(v1.Time{})
+	oldMC.SetDeletionTimestamp(nil)
+	oldMC.SetDeletionGracePeriodSeconds(nil)
+	oldMC.SetManagedFields(nil)
 
 	currentMCBytes, err := json.Marshal(currentMC)
 	if err != nil {
