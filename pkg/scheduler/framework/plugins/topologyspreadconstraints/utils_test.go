@@ -1606,7 +1606,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 
 			violations, scores, err := evaluateAllConstraints(state, tc.doNotSchedule, tc.scheduleAnyway)
 			if err != nil {
-				t.Errorf("evaluateAllConstraints() = %v, want no error", err)
+				t.Fatalf("evaluateAllConstraints() = %v, want no error", err)
 			}
 			if diff := cmp.Diff(violations, tc.wantViolations); diff != "" {
 				t.Errorf("evaluateAllConstraints() violations diff (-got, +want): %s", diff)
@@ -2021,7 +2021,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 			state := framework.NewCycleState(tc.clusters, tc.bindings)
 			genPluginState, err := prepareTopologySpreadConstraintsPluginState(state, tc.policy)
 			if err != nil {
-				t.Errorf("prepareTopologySpreadConstraintsPluginState() = %v, want no error", err)
+				t.Fatalf("prepareTopologySpreadConstraintsPluginState() = %v, want no error", err)
 			}
 
 			if diff := cmp.Diff(genPluginState, tc.want, cmp.AllowUnexported(pluginState{})); diff != "" {
