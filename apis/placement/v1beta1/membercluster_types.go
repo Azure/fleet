@@ -123,6 +123,27 @@ func (m *MemberCluster) RemoveCondition(conditionType string) {
 	meta.RemoveStatusCondition(&m.Status.Conditions, conditionType)
 }
 
+// GetAgentStatus retrieves the status of a specific member agent from the MemberCluster object.
+//
+// If the specificed agent does not exist, or it has not updated its status with the hub cluster
+// yet, this function returns nil.
+func (m *MemberCluster) GetAgentStatus(agentType AgentType) *AgentStatus {
+	for _, s := range m.Status.AgentStatus {
+		if s.Type == agentType {
+			return &s
+		}
+	}
+	return nil
+}
+
+// GetAgentCondition queries the conditions in an agent status for a specific condition type.
+func (m *MemberCluster) GetAgentCondition(agentType AgentType, conditionType AgentConditionType) *metav1.Condition {
+	if s := m.GetAgentStatus(agentType); s != nil {
+		return meta.FindStatusCondition(s.Conditions, string(conditionType))
+	}
+	return nil
+}
+
 func init() {
 	SchemeBuilder.Register(&MemberCluster{}, &MemberClusterList{})
 }
