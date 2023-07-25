@@ -603,7 +603,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
 
-		It("should allow update operation on member cluster CR for user in system:masters group", func() {
+		It("should allow update operation on member cluster CR labels for any user", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
 
@@ -613,8 +613,7 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			mc.SetLabels(labels)
 
 			By("expecting successful UPDATE of member cluster")
-			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
-			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
+			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &mc)).To(Succeed())
 
 			By("remove new label added for test")
 			labels = mc.GetLabels()
@@ -622,7 +621,44 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			mc.SetLabels(labels)
 
 			By("expecting successful UPDATE of member cluster")
-			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &mc)).To(Succeed())
+		})
+
+		It("should allow update operation on member cluster CR annotations for any user", func() {
+			var mc fleetv1alpha1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+
+			By("update annotations in member cluster")
+			annotations := make(map[string]string)
+			annotations[testKey] = testValue
+			mc.SetLabels(annotations)
+
+			By("expecting successful UPDATE of member cluster")
+			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &mc)).To(Succeed())
+
+			By("remove new annotation added for test")
+			annotations = mc.GetLabels()
+			delete(annotations, testKey)
+			mc.SetLabels(annotations)
+
+			By("expecting successful UPDATE of member cluster")
+			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &mc)).To(Succeed())
+		})
+
+		It("should allow update operation on member cluster CR spec for user in system:masters group", func() {
+			var mc fleetv1alpha1.MemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+
+			By("update spec of member cluster")
+			mc.Spec.HeartbeatPeriodSeconds = 31
+
+			By("expecting successful UPDATE of member cluster")
+			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
+
+			By("revert spec change made for test")
+			mc.Spec.HeartbeatPeriodSeconds = 30
+
+			By("expecting successful UPDATE of member cluster")
 			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
 		})
 	})

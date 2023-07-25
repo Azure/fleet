@@ -241,7 +241,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny any user updating a read-only field on MC resource": {
+		"allow any user updating a read-only field on MC resource": {
 			currentMC: fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
@@ -264,7 +264,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Denied("user didn't update a valid, updatable field in member cluster CR"),
+			wantResponse: admission.Allowed("user updated a read-only field, so not field will be updated"),
 		},
 	}
 
