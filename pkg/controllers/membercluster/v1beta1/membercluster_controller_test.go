@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package membercluster
+package v1beta1
 
 import (
 	"context"
@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -38,7 +37,7 @@ const (
 func TestSyncNamespace(t *testing.T) {
 	tests := map[string]struct {
 		r                   *Reconciler
-		memberCluster       *fleetv1alpha1.MemberCluster
+		memberCluster       *fleetv1beta1.MemberCluster
 		wantedNamespaceName string
 		wantedEvent         string
 		wantedError         string
@@ -55,9 +54,9 @@ func TestSyncNamespace(t *testing.T) {
 				},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			memberCluster:       &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
-			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
+			wantedEvent:         utils.GetEventString(&fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespaceCreated, "Namespace was created"),
 			wantedError:         "",
 		},
 		"namespace exists without label": {
@@ -79,9 +78,9 @@ func TestSyncNamespace(t *testing.T) {
 				},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			memberCluster:       &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
-			wantedEvent:         utils.GetEventString(&fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched"),
+			wantedEvent:         utils.GetEventString(&fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}}, corev1.EventTypeNormal, eventReasonNamespacePatched, "Namespace was patched"),
 			wantedError:         "",
 		},
 		"namespace exists with label": {
@@ -99,7 +98,7 @@ func TestSyncNamespace(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			memberCluster:       &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: namespace1,
 			wantedError:         "",
 		},
@@ -114,7 +113,7 @@ func TestSyncNamespace(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}},
+			memberCluster:       &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}},
 			wantedNamespaceName: "",
 			wantedError:         "namespace cannot be created",
 		},
@@ -126,7 +125,7 @@ func TestSyncNamespace(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
+			memberCluster:       &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			wantedNamespaceName: "",
 			wantedError:         "namespace cannot be retrieved",
 		},
@@ -148,7 +147,7 @@ func TestSyncNamespace(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:       &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			memberCluster:       &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			wantedNamespaceName: "",
 			wantedError:         "namespace cannot be patched",
 		},
@@ -173,14 +172,14 @@ func TestSyncNamespace(t *testing.T) {
 }
 
 func TestSyncRole(t *testing.T) {
-	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
-	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
+	expectedMemberCluster1 := fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc2"}}
+	expectedMemberCluster2 := fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc3"}}
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleUpdated, "role was updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleCreated, "role was created")
 
 	tests := map[string]struct {
 		r              *Reconciler
-		memberCluster  *fleetv1alpha1.MemberCluster
+		memberCluster  *fleetv1beta1.MemberCluster
 		namespaceName  string
 		wantedRoleName string
 		wantedEvent    string
@@ -206,7 +205,7 @@ func TestSyncRole(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
+			memberCluster:  &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc1"}},
 			namespaceName:  namespace1,
 			wantedRoleName: "fleet-role-mc1",
 			wantedError:    "",
@@ -264,7 +263,7 @@ func TestSyncRole(t *testing.T) {
 						return errors.New("role cannot be created")
 					}},
 			},
-			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
+			memberCluster:  &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc4"}},
 			namespaceName:  "fleet-mc4",
 			wantedRoleName: "",
 			wantedError:    "role cannot be created",
@@ -277,7 +276,7 @@ func TestSyncRole(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
+			memberCluster:  &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
 			namespaceName:  "fleet-mc5",
 			wantedRoleName: "",
 			wantedError:    "role cannot be retrieved",
@@ -300,7 +299,7 @@ func TestSyncRole(t *testing.T) {
 					},
 				},
 			},
-			memberCluster:  &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
+			memberCluster:  &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc6"}},
 			namespaceName:  "fleet-mc6",
 			wantedRoleName: "",
 			wantedError:    "role cannot be updated",
@@ -347,20 +346,20 @@ func TestSyncRoleBinding(t *testing.T) {
 		return nil
 	}
 
-	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{
+	expectedMemberCluster1 := fleetv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "mc2"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+		Spec:       fleetv1beta1.MemberClusterSpec{Identity: identity},
 	}
-	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{
+	expectedMemberCluster2 := fleetv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+		Spec:       fleetv1beta1.MemberClusterSpec{Identity: identity},
 	}
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonRoleBindingUpdated, "role binding was updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonRoleBindingCreated, "role binding was created")
 
 	tests := map[string]struct {
 		r             *Reconciler
-		memberCluster *fleetv1alpha1.MemberCluster
+		memberCluster *fleetv1beta1.MemberCluster
 		namespaceName string
 		roleName      string
 		wantedEvent   string
@@ -392,9 +391,9 @@ func TestSyncRoleBinding(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{
+			memberCluster: &fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc1"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+				Spec:       fleetv1beta1.MemberClusterSpec{Identity: identity},
 			},
 			namespaceName: namespace1,
 			roleName:      "fleet-role-mc1",
@@ -456,9 +455,9 @@ func TestSyncRoleBinding(t *testing.T) {
 					},
 					MockCreate: createMock},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{
+			memberCluster: &fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc4"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+				Spec:       fleetv1beta1.MemberClusterSpec{Identity: identity},
 			},
 			namespaceName: "fleet-mc4",
 			roleName:      "fleet-role-mc4",
@@ -472,9 +471,9 @@ func TestSyncRoleBinding(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{
+			memberCluster: &fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc5"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+				Spec:       fleetv1beta1.MemberClusterSpec{Identity: identity},
 			},
 			namespaceName: "fleet-mc5",
 			roleName:      "fleet-role-mc5",
@@ -488,9 +487,9 @@ func TestSyncRoleBinding(t *testing.T) {
 					},
 					MockUpdate: updateMock},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{
+			memberCluster: &fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc6"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{Identity: identity},
+				Spec:       fleetv1beta1.MemberClusterSpec{Identity: identity},
 			},
 			namespaceName: "fleet-mc6",
 			roleName:      "fleet-role-mc6",
@@ -517,7 +516,7 @@ func TestSyncRoleBinding(t *testing.T) {
 
 func TestSyncInternalMemberCluster(t *testing.T) {
 	updateMock := func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-		o := obj.(*fleetv1alpha1.InternalMemberCluster)
+		o := obj.(*fleetv1beta1.InternalMemberCluster)
 		if o.Name == "mc3" {
 			return errors.New("internal member cluster cannot be updated")
 		}
@@ -525,23 +524,23 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 	}
 
 	createMock := func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-		o := obj.(*fleetv1alpha1.InternalMemberCluster)
+		o := obj.(*fleetv1beta1.InternalMemberCluster)
 		if o.Name == "mc5" {
 			return errors.New("internal member cluster cannot be created")
 		}
 		return nil
 	}
 
-	expectedMemberCluster1 := fleetv1alpha1.MemberCluster{
-		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+	expectedMemberCluster1 := fleetv1beta1.MemberCluster{
+		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1beta1.GroupVersion.Version},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
+		Spec:       fleetv1beta1.MemberClusterSpec{State: fleetv1beta1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
 	}
 
-	expectedMemberCluster2 := fleetv1alpha1.MemberCluster{
-		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.String()},
+	expectedMemberCluster2 := fleetv1beta1.MemberCluster{
+		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1beta1.GroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc4", UID: "mc4-UID"},
-		Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+		Spec:       fleetv1beta1.MemberClusterSpec{State: fleetv1beta1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
 	}
 
 	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
@@ -549,11 +548,11 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 
 	tests := map[string]struct {
 		r                               *Reconciler
-		memberCluster                   *fleetv1alpha1.MemberCluster
+		memberCluster                   *fleetv1beta1.MemberCluster
 		namespaceName                   string
-		internalMemberCluster           *fleetv1alpha1.InternalMemberCluster
+		internalMemberCluster           *fleetv1beta1.InternalMemberCluster
 		wantedEvent                     string
-		wantedInternalMemberClusterSpec *fleetv1alpha1.InternalMemberClusterSpec
+		wantedInternalMemberClusterSpec *fleetv1beta1.InternalMemberClusterSpec
 		wantedError                     string
 	}{
 		"internal member cluster exists and spec is updated": {
@@ -564,12 +563,12 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			},
 			memberCluster: &expectedMemberCluster1,
 			namespaceName: namespace1,
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Spec:       fleetv1beta1.InternalMemberClusterSpec{State: fleetv1beta1.ClusterStateJoin},
 				ObjectMeta: metav1.ObjectMeta{Name: "mc1", Namespace: namespace1},
 			},
 			wantedEvent:                     expectedEvent1,
-			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
+			wantedInternalMemberClusterSpec: &fleetv1beta1.InternalMemberClusterSpec{State: fleetv1beta1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
 			wantedError:                     "",
 		},
 		"internal member cluster exists and spec is not updated ": {
@@ -577,29 +576,29 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 				Client: &test.MockClient{
 					MockUpdate: updateMock},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{
-				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1alpha1.GroupVersion.Version},
+			memberCluster: &fleetv1beta1.MemberCluster{
+				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: fleetv1beta1.GroupVersion.Version},
 				ObjectMeta: metav1.ObjectMeta{Name: "mc2", UID: "mc2-UID"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+				Spec:       fleetv1beta1.MemberClusterSpec{State: fleetv1beta1.ClusterStateLeave},
 			},
 			namespaceName: namespace2,
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Spec:       fleetv1beta1.InternalMemberClusterSpec{State: fleetv1beta1.ClusterStateLeave},
 				ObjectMeta: metav1.ObjectMeta{Name: "mc2", Namespace: namespace2},
 			},
-			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+			wantedInternalMemberClusterSpec: &fleetv1beta1.InternalMemberClusterSpec{State: fleetv1beta1.ClusterStateLeave},
 			wantedError:                     "",
 		},
 		"internal member cluster update error": {
 			r: &Reconciler{Client: &test.MockClient{
 				MockUpdate: updateMock}},
-			memberCluster: &fleetv1alpha1.MemberCluster{
+			memberCluster: &fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
-				Spec:       fleetv1alpha1.MemberClusterSpec{State: fleetv1alpha1.ClusterStateLeave},
+				Spec:       fleetv1beta1.MemberClusterSpec{State: fleetv1beta1.ClusterStateLeave},
 			},
 			namespaceName: namespace3,
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Spec:       fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin},
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Spec:       fleetv1beta1.InternalMemberClusterSpec{State: fleetv1beta1.ClusterStateJoin},
 				ObjectMeta: metav1.ObjectMeta{Name: "mc3", Namespace: namespace2},
 			},
 			wantedInternalMemberClusterSpec: nil,
@@ -614,7 +613,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			memberCluster:                   &expectedMemberCluster2,
 			namespaceName:                   "fleet-mc4",
 			internalMemberCluster:           nil,
-			wantedInternalMemberClusterSpec: &fleetv1alpha1.InternalMemberClusterSpec{State: fleetv1alpha1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+			wantedInternalMemberClusterSpec: &fleetv1beta1.InternalMemberClusterSpec{State: fleetv1beta1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
 			wantedEvent:                     expectedEvent2,
 			wantedError:                     "",
 		},
@@ -623,7 +622,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 				Client: &test.MockClient{
 					MockCreate: createMock},
 			},
-			memberCluster:                   &fleetv1alpha1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
+			memberCluster:                   &fleetv1beta1.MemberCluster{ObjectMeta: metav1.ObjectMeta{Name: "mc5"}},
 			namespaceName:                   "fleet-mc5",
 			internalMemberCluster:           nil,
 			wantedInternalMemberClusterSpec: nil,
@@ -653,10 +652,10 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 
 func TestMarkMemberClusterJoined(t *testing.T) {
 	recorder := utils.NewFakeRecorder(1)
-	memberCluster := &fleetv1alpha1.MemberCluster{
+	memberCluster := &fleetv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       fleetv1alpha1.InternalMemberClusterKind,
-			APIVersion: fleetv1alpha1.GroupVersion.String(),
+			Kind:       fleetv1beta1.InternalMemberClusterKind,
+			APIVersion: fleetv1beta1.GroupVersion.String(),
 		},
 	}
 	markMemberClusterJoined(recorder, memberCluster)
@@ -668,7 +667,7 @@ func TestMarkMemberClusterJoined(t *testing.T) {
 
 	// Check expected conditions.
 	expectedConditions := []metav1.Condition{
-		{Type: string(fleetv1alpha1.ConditionTypeMemberClusterJoined), Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined},
+		{Type: string(fleetv1beta1.ConditionTypeMemberClusterJoined), Status: metav1.ConditionTrue, Reason: reasonMemberClusterJoined},
 	}
 
 	for i := range expectedConditions {
@@ -681,21 +680,21 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	now := metav1.Now()
 	tests := map[string]struct {
 		r                     *Reconciler
-		internalMemberCluster *fleetv1alpha1.InternalMemberCluster
-		memberCluster         *fleetv1alpha1.MemberCluster
-		wantedMemberCluster   *fleetv1alpha1.MemberCluster
+		internalMemberCluster *fleetv1beta1.InternalMemberCluster
+		memberCluster         *fleetv1beta1.MemberCluster
+		wantedMemberCluster   *fleetv1beta1.MemberCluster
 	}{
 		"copy with Joined condition": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -704,12 +703,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -717,10 +716,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -730,17 +729,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionTrue,
 							Reason: reasonMemberClusterJoined,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -749,12 +748,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -762,10 +761,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -779,14 +778,14 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"copy with Left condition": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(2),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -795,12 +794,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -808,10 +807,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -821,22 +820,22 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionFalse,
 							Reason: reasonMemberClusterLeft,
 						},
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
 							Status: metav1.ConditionFalse,
 							Reason: reasonMemberClusterNotReadyToJoin,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -845,12 +844,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -858,10 +857,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -875,14 +874,14 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"copy with Unknown condition": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -891,12 +890,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -904,10 +903,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -917,17 +916,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -936,12 +935,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -949,10 +948,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -966,13 +965,13 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"No Agent Status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -983,10 +982,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -997,7 +996,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
@@ -1008,25 +1007,25 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"Internal member cluster is nil": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent: true,
 				},
 			},
 			internalMemberCluster: nil,
-			memberCluster:         &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster:   &fleetv1alpha1.MemberCluster{},
+			memberCluster:         &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster:   &fleetv1beta1.MemberCluster{},
 		},
 		"other agent type reported in the status and should be ignored": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1035,12 +1034,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1048,10 +1047,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1059,10 +1058,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.MultiClusterServiceAgent,
+							Type: fleetv1beta1.MultiClusterServiceAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -1072,17 +1071,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionTrue,
 							Reason: reasonMemberClusterJoined,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1091,12 +1090,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1104,10 +1103,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.ServiceExportImportAgent,
+							Type: fleetv1beta1.ServiceExportImportAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1115,10 +1114,10 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type: fleetv1alpha1.MultiClusterServiceAgent,
+							Type: fleetv1beta1.MultiClusterServiceAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 									Reason: "Left",
 								},
@@ -1132,14 +1131,14 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"less agent type reported in the status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1148,12 +1147,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1163,17 +1162,17 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1182,12 +1181,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1201,14 +1200,14 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"condition is not reported in the status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1217,12 +1216,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1230,23 +1229,23 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type:                  fleetv1alpha1.ServiceExportImportAgent,
+							Type:                  fleetv1beta1.ServiceExportImportAgent,
 							LastReceivedHeartbeat: now,
 						},
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1255,12 +1254,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1268,7 +1267,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type:                  fleetv1alpha1.ServiceExportImportAgent,
+							Type:                  fleetv1beta1.ServiceExportImportAgent,
 							LastReceivedHeartbeat: now,
 						},
 					},
@@ -1278,14 +1277,14 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 		"agent type is not reported in the status": {
 			r: &Reconciler{
 				recorder: utils.NewFakeRecorder(1),
-				agents: map[fleetv1alpha1.AgentType]bool{
-					fleetv1alpha1.MemberAgent:              true,
-					fleetv1alpha1.ServiceExportImportAgent: true,
+				agents: map[fleetv1beta1.AgentType]bool{
+					fleetv1beta1.MemberAgent:              true,
+					fleetv1beta1.ServiceExportImportAgent: true,
 				},
 			},
-			internalMemberCluster: &fleetv1alpha1.InternalMemberCluster{
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+			internalMemberCluster: &fleetv1beta1.InternalMemberCluster{
+				Status: fleetv1beta1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1294,12 +1293,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1307,23 +1306,23 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type:                  fleetv1alpha1.MultiClusterServiceAgent,
+							Type:                  fleetv1beta1.MultiClusterServiceAgent,
 							LastReceivedHeartbeat: now,
 						},
 					},
 				},
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
-			wantedMemberCluster: &fleetv1alpha1.MemberCluster{
-				Status: fleetv1alpha1.MemberClusterStatus{
+			memberCluster: &fleetv1beta1.MemberCluster{},
+			wantedMemberCluster: &fleetv1beta1.MemberCluster{
+				Status: fleetv1beta1.MemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
+							Type:   string(fleetv1beta1.ConditionTypeMemberClusterJoined),
 							Status: metav1.ConditionUnknown,
 							Reason: reasonMemberClusterUnknown,
 						},
 					},
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
+					ResourceUsage: fleetv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
 							corev1.ResourceCPU: resource.MustParse("100m"),
 						},
@@ -1332,12 +1331,12 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 						},
 						ObservationTime: now,
 					},
-					AgentStatus: []fleetv1alpha1.AgentStatus{
+					AgentStatus: []fleetv1beta1.AgentStatus{
 						{
-							Type: fleetv1alpha1.MemberAgent,
+							Type: fleetv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1alpha1.AgentJoined),
+									Type:   string(fleetv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 									Reason: "Joined",
 								},
@@ -1345,7 +1344,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							LastReceivedHeartbeat: now,
 						},
 						{
-							Type:                  fleetv1alpha1.MultiClusterServiceAgent,
+							Type:                  fleetv1beta1.MultiClusterServiceAgent,
 							LastReceivedHeartbeat: now,
 						},
 					},
@@ -1357,7 +1356,7 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
-			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined)), tt.memberCluster.GetCondition(string(fleetv1alpha1.ConditionTypeMemberClusterJoined)), cmpopts.IgnoreTypes(time.Time{})))
+			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(string(fleetv1beta1.ConditionTypeMemberClusterJoined)), tt.memberCluster.GetCondition(string(fleetv1beta1.ConditionTypeMemberClusterJoined)), cmpopts.IgnoreTypes(time.Time{})))
 			assert.Equal(t, tt.wantedMemberCluster.Status.ResourceUsage, tt.memberCluster.Status.ResourceUsage)
 			assert.Equal(t, tt.wantedMemberCluster.Status.AgentStatus, tt.memberCluster.Status.AgentStatus)
 		})
@@ -1368,7 +1367,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 	var count int
 	tests := map[string]struct {
 		r                   *Reconciler
-		memberCluster       *fleetv1alpha1.MemberCluster
+		memberCluster       *fleetv1beta1.MemberCluster
 		wantedError         string
 		verifyNumberOfRetry func() bool
 	}{
@@ -1380,7 +1379,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				}},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
+			memberCluster: &fleetv1beta1.MemberCluster{},
 			wantedError:   "",
 			verifyNumberOfRetry: func() bool {
 				return count == 0
@@ -1397,7 +1396,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				}},
 				recorder: utils.NewFakeRecorder(10),
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{Spec: fleetv1alpha1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
+			memberCluster: &fleetv1beta1.MemberCluster{Spec: fleetv1beta1.MemberClusterSpec{HeartbeatPeriodSeconds: int32(5)}},
 			wantedError:   "",
 			verifyNumberOfRetry: func() bool {
 				return count == 3
@@ -1411,7 +1410,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				}},
 				recorder: utils.NewFakeRecorder(10),
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
+			memberCluster: &fleetv1beta1.MemberCluster{},
 			wantedError:   "The  operation against  could not be completed at this time, please try again.",
 			verifyNumberOfRetry: func() bool {
 				return count > 0
@@ -1425,7 +1424,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 				}},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster: &fleetv1alpha1.MemberCluster{},
+			memberCluster: &fleetv1beta1.MemberCluster{},
 			wantedError:   "random update error",
 			verifyNumberOfRetry: func() bool {
 				return count == 0
