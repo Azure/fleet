@@ -72,7 +72,7 @@ func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, w
 		return admission.Denied(err.Error())
 	}
 	if (isMCLabelUpdated || isMCAnnotationUpdated) && !isMCUpdated {
-		// we allow any user to modify MemberCluster label.
+		// we allow any user to modify MemberCluster labels/annotations.
 		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
 	}
