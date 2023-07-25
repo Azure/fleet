@@ -264,7 +264,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Allowed("user updated a read-only field, so not field will be updated"),
+			wantResponse: admission.Allowed("user updated read-only field/fields, so not field/fields will be updated"),
 		},
 	}
 
