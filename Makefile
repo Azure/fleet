@@ -43,7 +43,7 @@ GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
 # ENVTEST_K8S_VERSION refers to the version of k8s binary assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.26.x
+ENVTEST_K8S_VERSION = 1.26.1
 # ENVTEST_VER is the version of the ENVTEST binary
 ENVTEST_VER = latest
 ENVTEST_BIN := setup-envtest

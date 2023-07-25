@@ -13,9 +13,6 @@ import (
 const (
 	// WorkFinalizer is used to make sure that the binding is not deleted until the work objects it generates are all deleted.
 	WorkFinalizer = fleetPrefix + "work-cleanup"
-
-	// ParentBindingLabel is the label that contains the name of the binding that generates the work.
-	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
 )
 
 // +kubebuilder:object:root=true
@@ -100,14 +97,6 @@ const (
 	// - "False" means the corresponding work CR is not created yet.
 	// - "Unknown" means it is unknown.
 	ResourceBindingBound ResourceBindingConditionType = "Bound"
-
-	// ResourceBindingUpdated indicates whether (and when) a binding is updated to point
-	// to a new resource snapshot.
-	// Its condition status can be one of the following:
-	// - "True" means the binding has been updated.
-	// - "False" means the binding has not been updated yet.
-	// - "Unknown" means the update status is unknown.
-	ResourceBindingUpdated ResourceBindingConditionType = "Updated"
 
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:

@@ -143,3 +143,71 @@ func TestNewUserError(t *testing.T) {
 		})
 	}
 }
+
+func TestNewUpdateIgnoreConflictError(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		wantErr error
+	}{
+		{
+			name: "nil error leads to nil error",
+			err:  nil,
+		},
+		{
+			name:    "conflict error is expected",
+			err:     apierrors.NewConflict(schema.GroupResource{}, "conflict", nil),
+			wantErr: ErrExpectedBehavior,
+		},
+		{
+			name:    "not found error is not expected",
+			err:     apierrors.NewNotFound(schema.GroupResource{}, "bad"),
+			wantErr: ErrAPIServerError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotError := NewUpdateIgnoreConflictError(tt.err)
+			if tt.err == nil && gotError != nil {
+				t.Errorf("NewUpdateIgnoreConflictError() error = %v, nil", gotError)
+			}
+			if tt.err != nil && !errors.Is(gotError, tt.wantErr) {
+				t.Fatalf("NewUpdateIgnoreConflictError() = %v, want %v", gotError, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNewCreateIgnoreAlreadyExistError(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		wantErr error
+	}{
+		{
+			name: "nil error leads to nil error",
+			err:  nil,
+		},
+		{
+			name:    "already exist error is expected",
+			err:     apierrors.NewAlreadyExists(schema.GroupResource{}, "conflict"),
+			wantErr: ErrExpectedBehavior,
+		},
+		{
+			name:    "NewNotFound error is not expected",
+			err:     apierrors.NewNotFound(schema.GroupResource{}, "bad"),
+			wantErr: ErrAPIServerError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotError := NewCreateIgnoreAlreadyExistError(tt.err)
+			if tt.err == nil && gotError != nil {
+				t.Errorf("NewCreateIgnoreAlreadyExistError() error = %v, nil", gotError)
+			}
+			if tt.err != nil && !errors.Is(gotError, tt.wantErr) {
+				t.Fatalf("NewCreateIgnoreAlreadyExistError() = %v, want %v", gotError, tt.wantErr)
+			}
+		})
+	}
+}
