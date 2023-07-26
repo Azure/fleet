@@ -63,7 +63,7 @@ func ValidateUserForResource(resKind string, namespacedName types.NamespacedName
 
 // ValidateMemberClusterUpdate checks to see if user is allowed to update argued fleet resource.
 func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
-	response := admission.Allowed("user most likely updated read-only field/fields, so not field/fields will be updated")
+	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely updated read-only field/fields of member cluster resource, so no field/fields will be updated", userInfo.Username, userInfo.Groups))
 	namespacedName := types.NamespacedName{Name: currentMC.Name}
 	isMCLabelUpdated := isMemberClusterMapFieldUpdated(currentMC.Labels, oldMC.Labels)
 	isMCAnnotationUpdated := isMemberClusterMapFieldUpdated(currentMC.Annotations, oldMC.Annotations)
