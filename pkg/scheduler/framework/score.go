@@ -37,12 +37,20 @@ func (s1 *ClusterScore) Add(s2 *ClusterScore) {
 }
 
 // Equal returns true if a ClusterScore is equal to another.
-//
-// Note that this will panic if either score is nil.
 func (s1 *ClusterScore) Equal(s2 *ClusterScore) bool {
-	return s1.TopologySpreadScore == s2.TopologySpreadScore &&
-		s1.AffinityScore == s2.AffinityScore &&
-		s1.BoundOrScheduledScore == s2.BoundOrScheduledScore
+	switch {
+	case s1 == nil && s2 == nil:
+		// Both are nils.
+		return true
+	case s1 == nil || s2 == nil:
+		// One is nil and the other is not.
+		return false
+	default:
+		// Both are not nils.
+		return s1.TopologySpreadScore == s2.TopologySpreadScore &&
+			s1.AffinityScore == s2.AffinityScore &&
+			s1.BoundOrScheduledScore == s2.BoundOrScheduledScore
+	}
 }
 
 // Less returns true if a ClusterScore is less than another.
