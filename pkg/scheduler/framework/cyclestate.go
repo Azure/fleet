@@ -30,7 +30,8 @@ type CycleStatePluginReadWriter interface {
 	Delete(key StateKey)
 
 	ListClusters() []fleetv1beta1.MemberCluster
-	IsClusterScheduledOrBound(name string) bool
+	HasScheduledOrBoundBindingFor(clusterName string) bool
+	HasObsoleteBindingFor(clusterName string) bool
 }
 
 // CycleState is, similar to its namesake in kube-scheduler, provides a way for plugins to
@@ -47,10 +48,13 @@ type CycleState struct {
 	// in the current scheduling cycle.
 	clusters []fleetv1beta1.MemberCluster
 
-	// scheduledOrBound is a map between the name of a cluster and its scheduling status,
-	// i.e., whether there is already a binding of the scheduler or bound state, relevant to
-	// the current scheduling cycle in presence for the cluster.
-	scheduledOrBound map[string]bool
+	// scheduledOrBoundBindings is a map that helps check if there is a scheduler or bound
+	// binding in the current cycle associated with the cluster.
+	scheduledOrBoundBindings map[string]bool
+
+	// obsoleteBindings is a map that helps check if there is an obsolete binding in the current
+	// cycle associated with the cluster.
+	obsoleteBindings map[string]bool
 
 	// skippedFilterPlugins is a set of Filter plugins that should be skipped in the current scheduling cycle.
 	//
@@ -109,23 +113,35 @@ func (c *CycleState) ListClusters() []fleetv1beta1.MemberCluster {
 	return clusters
 }
 
-// IsClusterScheduledOrBound returns whether a cluster already has a scheduled or bound binding
-// associated.
+// HasScheduledOrBoundBindingFor returns whether a cluster already has a scheduled or bound
+// binding associated.
 //
 // This helps maintain consistence in a scheduling run and improve performance, i.e., the
 // scheduler and all plugins can have the same view of current spread of bindings. and any plugin
 // which requires the view no longer needs to list bindings on its own.
-func (c *CycleState) IsClusterScheduledOrBound(name string) bool {
-	return c.scheduledOrBound[name]
+func (c *CycleState) HasScheduledOrBoundBindingFor(clusterName string) bool {
+	return c.scheduledOrBoundBindings[clusterName]
 }
 
+// HasObsoleteBindingFor returns whether a cluster already has an obsolete binding associated.
+//
+// This helps maintain consistence in a scheduling run and improve performance, i.e., the
+// scheduler and all plugins can have the same view of current spread of bindings. and any plugin
+// which requires the view no longer needs to list bindings on its own.
+func (c *CycleState) HasObsoleteBindingFor(clusterName string) bool {
+	return c.obsoleteBindings[clusterName]
+}
+
+// IsClusterObsolete
+
 // NewCycleState creates a CycleState.
-func NewCycleState(clusters []fleetv1beta1.MemberCluster, scheduledOrBoundBindings ...[]*fleetv1beta1.ClusterResourceBinding) *CycleState {
+func NewCycleState(clusters []fleetv1beta1.MemberCluster, obsoleteBindings []*fleetv1beta1.ClusterResourceBinding, scheduledOrBoundBindings ...[]*fleetv1beta1.ClusterResourceBinding) *CycleState {
 	return &CycleState{
-		store:                sync.Map{},
-		clusters:             clusters,
-		scheduledOrBound:     prepareScheduledOrBoundMap(scheduledOrBoundBindings...),
-		skippedFilterPlugins: sets.NewString(),
-		skippedScorePlugins:  sets.NewString(),
+		store:                    sync.Map{},
+		clusters:                 clusters,
+		scheduledOrBoundBindings: prepareScheduledOrBoundBindingsMap(scheduledOrBoundBindings...),
+		obsoleteBindings:         prepareObsoleteBindingsMap(obsoleteBindings),
+		skippedFilterPlugins:     sets.NewString(),
+		skippedScorePlugins:      sets.NewString(),
 	}
 }

@@ -1100,9 +1100,9 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				},
 			},
 			Score: &ClusterScore{
-				TopologySpreadScore:   int(topologySpreadScore1),
-				AffinityScore:         int(affinityScore1),
-				BoundOrScheduledScore: 1,
+				TopologySpreadScore:       int(topologySpreadScore1),
+				AffinityScore:             int(affinityScore1),
+				PrevBoundOrScheduledScore: 1,
 			},
 		},
 		{
@@ -1112,9 +1112,9 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				},
 			},
 			Score: &ClusterScore{
-				TopologySpreadScore:   int(topologySpreadScore2),
-				AffinityScore:         int(affinityScore2),
-				BoundOrScheduledScore: 0,
+				TopologySpreadScore:       int(topologySpreadScore2),
+				AffinityScore:             int(affinityScore2),
+				PrevBoundOrScheduledScore: 0,
 			},
 		},
 		{
@@ -1124,9 +1124,9 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				},
 			},
 			Score: &ClusterScore{
-				TopologySpreadScore:   int(topologySpreadScore3),
-				AffinityScore:         int(affinityScore3),
-				BoundOrScheduledScore: 1,
+				TopologySpreadScore:       int(topologySpreadScore3),
+				AffinityScore:             int(affinityScore3),
+				PrevBoundOrScheduledScore: 1,
 			},
 		},
 	}
@@ -4178,9 +4178,9 @@ func TestPickTopNScoredClusters(t *testing.T) {
 				},
 			},
 			Score: &ClusterScore{
-				TopologySpreadScore:   1,
-				AffinityScore:         20,
-				BoundOrScheduledScore: 0,
+				TopologySpreadScore:       1,
+				AffinityScore:             20,
+				PrevBoundOrScheduledScore: 0,
 			},
 		},
 		{
@@ -4190,9 +4190,9 @@ func TestPickTopNScoredClusters(t *testing.T) {
 				},
 			},
 			Score: &ClusterScore{
-				TopologySpreadScore:   2,
-				AffinityScore:         10,
-				BoundOrScheduledScore: 1,
+				TopologySpreadScore:       2,
+				AffinityScore:             10,
+				PrevBoundOrScheduledScore: 1,
 			},
 		},
 	}
@@ -4227,9 +4227,9 @@ func TestPickTopNScoredClusters(t *testing.T) {
 						},
 					},
 					Score: &ClusterScore{
-						TopologySpreadScore:   2,
-						AffinityScore:         10,
-						BoundOrScheduledScore: 1,
+						TopologySpreadScore:       2,
+						AffinityScore:             10,
+						PrevBoundOrScheduledScore: 1,
 					},
 				},
 				{
@@ -4239,9 +4239,9 @@ func TestPickTopNScoredClusters(t *testing.T) {
 						},
 					},
 					Score: &ClusterScore{
-						TopologySpreadScore:   1,
-						AffinityScore:         20,
-						BoundOrScheduledScore: 0,
+						TopologySpreadScore:       1,
+						AffinityScore:             20,
+						PrevBoundOrScheduledScore: 0,
 					},
 				},
 			},
@@ -4258,9 +4258,9 @@ func TestPickTopNScoredClusters(t *testing.T) {
 						},
 					},
 					Score: &ClusterScore{
-						TopologySpreadScore:   2,
-						AffinityScore:         10,
-						BoundOrScheduledScore: 1,
+						TopologySpreadScore:       2,
+						AffinityScore:             10,
+						PrevBoundOrScheduledScore: 1,
 					},
 				},
 			},
