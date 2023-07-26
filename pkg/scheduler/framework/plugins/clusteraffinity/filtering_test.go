@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package clusteraffinity
 
 import (
@@ -22,7 +27,7 @@ var (
 	cmpPluginStateOptions = cmp.Options{
 		cmp.AllowUnexported(pluginState{}, affinityTerm{}, preferredAffinityTerm{}),
 	}
-	defaultClusterAffinityPluginName = defaultClusterAffinityPluginOptions.name
+	defaultPluginName = defaultPluginOptions.name
 )
 
 func TestPreFilter(t *testing.T) {
@@ -34,19 +39,19 @@ func TestPreFilter(t *testing.T) {
 	}{
 		{
 			name: "nil policy",
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name:   "nil affinity",
 			policy: &fleetv1beta1.PlacementPolicy{},
-			want:   framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want:   framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "nil cluster affinity",
 			policy: &fleetv1beta1.PlacementPolicy{
 				Affinity: &fleetv1beta1.Affinity{},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "no cluster affinity",
@@ -55,7 +60,7 @@ func TestPreFilter(t *testing.T) {
 					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 			wantPluginState: &pluginState{
 				requiredAffinityTerms:  []affinityTerm{},
 				preferredAffinityTerms: []preferredAffinityTerm{},
@@ -82,7 +87,7 @@ func TestPreFilter(t *testing.T) {
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 			wantPluginState: &pluginState{
 				requiredAffinityTerms:  []affinityTerm{},
 				preferredAffinityTerms: []preferredAffinityTerm{},
@@ -117,7 +122,7 @@ func TestPreFilter(t *testing.T) {
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 			wantPluginState: &pluginState{
 				requiredAffinityTerms: []affinityTerm{},
 				preferredAffinityTerms: []preferredAffinityTerm{
@@ -147,7 +152,7 @@ func TestPreFilter(t *testing.T) {
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 			wantPluginState: &pluginState{
 				requiredAffinityTerms:  []affinityTerm{},
 				preferredAffinityTerms: []preferredAffinityTerm{},
@@ -276,11 +281,11 @@ func TestFilter(t *testing.T) {
 		{
 			name:              "pluginState is not set",
 			notSetPluginState: true,
-			want:              framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
+			want:              framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name: "nil pluginState",
-			want: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
+			want: framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name: "matched cluster",
@@ -320,7 +325,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName),
 		},
 	}
 	for _, tc := range tests {
