@@ -15,14 +15,24 @@ import (
 )
 
 const (
-	crpName     = "test-crp"
-	clusterName = "bravelion"
+	crpName      = "test-crp"
+	clusterName1 = "bravelion"
+	clusterName2 = "jumpingcat"
+	crpName1     = "crp-1"
+	crpName2     = "crp-2"
+	crpName3     = "crp-3"
+	crpName4     = "crp-4"
+	crpName5     = "crp-5"
+	crpName6     = "crp-6"
+	crpName7     = "crp-7"
+)
+
+var (
+	numOfClusters = int32(10)
 )
 
 // TestIsPickNCRPFullyScheduled tests the isPickNCRPFullyScheduled function.
 func TestIsPickNCRPFullyScheduled(t *testing.T) {
-	numOfClusters := int32(10)
-
 	testCases := []struct {
 		name string
 		crp  *fleetv1beta1.ClusterResourcePlacement
@@ -130,14 +140,6 @@ func TestIsPickNCRPFullyScheduled(t *testing.T) {
 
 // TestClassifyCRPs tests the classifyCRPs function.
 func TestClassifyCRPs(t *testing.T) {
-	crpName1 := "crp-1"
-	crpName2 := "crp-2"
-	crpName3 := "crp-3"
-	crpName4 := "crp-4"
-	crpName5 := "crp-5"
-
-	numOfClusters := int32(10)
-
 	testCases := []struct {
 		name string
 		crps []fleetv1beta1.ClusterResourcePlacement
@@ -169,7 +171,7 @@ func TestClassifyCRPs(t *testing.T) {
 					},
 					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 						Policy: &fleetv1beta1.PlacementPolicy{
-							ClusterNames: []string{clusterName},
+							ClusterNames: []string{clusterName1},
 						},
 					},
 				},
@@ -268,7 +270,7 @@ func TestClassifyCRPs(t *testing.T) {
 					},
 					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 						Policy: &fleetv1beta1.PlacementPolicy{
-							ClusterNames: []string{clusterName},
+							ClusterNames: []string{clusterName1},
 						},
 					},
 				},

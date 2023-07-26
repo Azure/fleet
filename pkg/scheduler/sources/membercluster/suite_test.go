@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -21,19 +22,68 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/queue"
+	"go.goms.io/fleet/pkg/utils"
 )
 
 var (
-	hubTestEnv *envtest.Environment
-	hubClient  client.Client
-	ctx        context.Context
-	cancel     context.CancelFunc
+	hubTestEnv   *envtest.Environment
+	hubClient    client.Client
+	ctx          context.Context
+	cancel       context.CancelFunc
+	keyCollector *utils.SchedulerWorkqueueKeyCollector
+)
+
+var (
+	defaultResourceSelectors = []fleetv1beta1.ClusterResourceSelector{
+		{
+			Group:   "core",
+			Kind:    "Namespace",
+			Version: "v1",
+			Name:    "work",
+		},
+	}
+)
+
+var (
+	newMemberCluster = func(name string, state fleetv1beta1.ClusterState) *fleetv1beta1.MemberCluster {
+		return &fleetv1beta1.MemberCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Spec: fleetv1beta1.MemberClusterSpec{
+				State: state,
+			},
+		}
+	}
+
+	newCRP = func(name string, policy *fleetv1beta1.PlacementPolicy) *fleetv1beta1.ClusterResourcePlacement {
+		return &fleetv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: defaultResourceSelectors,
+				Policy:            policy,
+			},
+		}
+	}
 )
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Scheduler MemberCluster Source Controller Suite")
+}
+
+// setupResources adds resources required for this test suite to the hub cluster.
+func setupResources() {
+	Expect(hubClient.Create(ctx, newMemberCluster(clusterName1, fleetv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
+	Expect(hubClient.Create(ctx, newMemberCluster(clusterName2, fleetv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
+
+	Expect(hubClient.Create(ctx, newCRP(crpName1, nil))).Should(Succeed(), "Failed to create CRP")
+	Expect(hubClient.Create(ctx, newCRP(crpName2, &fleetv1beta1.PlacementPolicy{
+		PlacementType: fleetv1beta1.PickAllPlacementType,
+	}))).Should(Succeed(), "Failed to create CRP")
 }
 
 var _ = BeforeSuite(func() {
@@ -43,42 +93,50 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrap the test environment")
 
-	// Start the hub cluster
+	// Start the hub cluster.
 	hubTestEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 	hubCfg, err := hubTestEnv.Start()
-	Expect(err).ShouldNot(HaveOccurred())
-	Expect(hubCfg).ShouldNot(BeNil())
+	Expect(err).ToNot(HaveOccurred(), "Failed to start test environment")
+	Expect(hubCfg).ToNot(BeNil(), "Hub cluster configuration is nil")
 
 	// Add custom APIs to the runtime scheme.
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
-	// Set up clients for member and hub clusters.
+	// Set up a client for the hub cluster..
 	hubClient, err = client.New(hubCfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).ShouldNot(HaveOccurred())
-	Expect(hubClient).ShouldNot(BeNil())
+	Expect(err).ToNot(HaveOccurred(), "Failed to create hub cluster client")
+	Expect(hubClient).ToNot(BeNil(), "Hub cluster client is nil")
 
-	// Start up the InternalServiceExport controller.
+	// Set up resources.
+	setupResources()
+
+	// Set up a controller manager and let it manage the member cluster controller.
 	ctrlMgr, err := ctrl.NewManager(hubCfg, ctrl.Options{
 		Scheme:             scheme.Scheme,
 		MetricsBindAddress: "0",
 	})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
 
-	err = (&Reconciler{
-		Client:             hubClient,
-		SchedulerWorkQueue: schedulerWorkQueue,
-	}).SetupWithManager(ctrlMgr)
-	Expect(err).NotTo(HaveOccurred())
+	reconciler := New(hubClient, schedulerWorkQueue)
+	err = reconciler.SetupWithManager(ctrlMgr)
+	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
 
+	// Start the key collector.
+	keyCollector = utils.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)
+	go func() {
+		keyCollector.Run(ctx)
+	}()
+
+	// Start the controller manager.
 	go func() {
 		defer GinkgoRecover()
 		err := ctrlMgr.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to start manager")
+		Expect(err).ToNot(HaveOccurred(), "Failed to start controller manager")
 	}()
 })
 
@@ -87,6 +145,5 @@ var _ = AfterSuite(func() {
 	cancel()
 
 	By("tearing down the test environment")
-	Expect(memberTestEnv.Stop()).Should(Succeed())
-	Expect(hubTestEnv.Stop()).Should(Succeed())
+	Expect(hubTestEnv.Stop()).Should(Succeed(), "Failed to stop test environment")
 })
