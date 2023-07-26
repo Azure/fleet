@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	metricsV1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
@@ -61,6 +62,7 @@ func NewDisabledResourceConfig() *DisabledResourceConfig {
 	}
 	// disable fleet related resource by default
 	r.DisableGroup(fleetv1alpha1.GroupVersion.Group)
+	r.DisableGroup(fleetv1beta1.GroupVersion.Group)
 	r.DisableGroupVersionKind(WorkGVK)
 
 	// disable the below built-in resources

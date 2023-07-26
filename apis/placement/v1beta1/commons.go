@@ -33,6 +33,12 @@ const (
 	// WorkNameWithSubindexFmt is the format of the name of a work with subindex.
 	WorkNameWithSubindexFmt = "%s-%d"
 
+	// ParentResourceSnapshotIndexLabel is the label applied to work that contains the index of the resource snapshot that generates the work.
+	ParentResourceSnapshotIndexLabel = fleetPrefix + "parent-resource-snapshot-index"
+
+	// ParentBindingLabel is the label applied to work that contains the name of the binding that generates the work.
+	ParentBindingLabel = fleetPrefix + "parent-resource-binding"
+
 	// CRPGenerationAnnotation is the annotation that indicates the generation of the CRP from
 	// which an object is derived or last updated.
 	CRPGenerationAnnotation = fleetPrefix + "CRPGeneration"

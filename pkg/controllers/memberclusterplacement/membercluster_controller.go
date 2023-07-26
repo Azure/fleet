@@ -38,7 +38,7 @@ func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl
 	startTime := time.Now()
 	memberClusterName, ok := key.(string)
 	if !ok {
-		err := fmt.Errorf("got a resource key %+v not of type cluster wide key", key)
+		err := fmt.Errorf("got a resource key %+v not of type namespaced key", key)
 		klog.ErrorS(err, "we have encountered a fatal error that can't be retried")
 		return ctrl.Result{}, err
 	}

@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package membercluster
+package v1alpha1
 
 import (
 	"context"
@@ -567,7 +567,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("memberCluster")
+	r.recorder = mgr.GetEventRecorderFor("mcv1alpha1")
 	r.agents = make(map[fleetv1alpha1.AgentType]bool)
 	r.agents[fleetv1alpha1.MemberAgent] = true
 

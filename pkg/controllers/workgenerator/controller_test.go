@@ -93,7 +93,6 @@ func Test_getWorkNameFromSnapshotName(t *testing.T) {
 			wantErr:    controller.ErrUnexpectedBehavior,
 			wantedName: "",
 		},
-
 		"test return error if the resource snapshot does not have CRP track": {
 			resourceSnapshot: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{

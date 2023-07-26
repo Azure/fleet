@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package membercluster
+package v1alpha1
 
 import (
 	"flag"
@@ -43,7 +43,7 @@ var _ = BeforeSuite(func() {
 
 		By("bootstrapping test environment")
 		testEnv = &envtest.Environment{
-			CRDDirectoryPaths:     []string{filepath.Join("../../../", "config", "crd", "bases")},
+			CRDDirectoryPaths:     []string{filepath.Join("../../../../", "config", "crd", "bases")},
 			ErrorIfCRDPathMissing: true,
 		}
 		var err error
