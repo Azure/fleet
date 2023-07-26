@@ -91,6 +91,10 @@ func TestClusterScoreEqual(t *testing.T) {
 				BoundOrScheduledScore: 1,
 			},
 		},
+		{
+			name: "both s1 and s2 are nil",
+			want: true,
+		},
 	}
 
 	for _, tc := range testCases {
