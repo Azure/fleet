@@ -401,12 +401,12 @@ func pickTopNScoredClusters(scoredClusters ScoredClusters, N int) ScoredClusters
 //     -> in this case, no immediate requeue is necessary as retries will not correct the situation;
 //     the scheduler should wait for the next signal from scheduling triggers, e.g., new cluster
 //     joined, or scheduling policy is updated.
-//   - the desired batch size is less than the batch size limit, i.e., a plugin has imposed a limit
+//   - the desired batch size is greater than the batch size limit, i.e., a plugin has imposed a limit
 //     on the batch size; and the actual number of bindings created/updated is equal to batch size
 //     limit
 //     -> in this case, immediate requeue is needed as there might be more fitting clusters to bind
 //     resources to.
-//   - the desired batch size is less than the batch size limit, i.e., a plugin has imposed a limit
+//   - the desired batch size is greater than the batch size limit, i.e., a plugin has imposed a limit
 //     on the batch size; but the actual number of bindings created/updated is less than the batch
 //     size limit
 //     -> in this case, no immediate requeue is necessary as retries will not correct the situation;
