@@ -26,7 +26,7 @@ import (
 //     but have not yet been cleared for processing by the dispatcher; and
 //   - dangling bindings, i.e., bindings that are associated with a cluster that is no longer in
 //     a normally operating state (the cluster has left the fleet, or is in the state of leaving),
-//     yet has not been marked as deleting by the scheduler; and
+//     yet has not been marked as unscheduled by the scheduler; and
 //   - obsolete bindings, i.e., bindings that are no longer associated with the latest scheduling
 //     policy.
 func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bindings []fleetv1beta1.ClusterResourceBinding, clusters []fleetv1beta1.MemberCluster) (bound, scheduled, obsolete, dangling []*fleetv1beta1.ClusterResourceBinding) {
@@ -278,12 +278,12 @@ func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
 }
 
 // shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how
-// many active or creating bindings it should remove.
+// many scheduled or bound bindings it should remove.
 func shouldDownscale(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, desired, present, obsolete int) (act bool, count int) {
 	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && desired <= present {
 		// Downscale only applies to CRPs of the Pick N placement type; and it only applies when the number of
-		// clusters requested by the user is less than the number of currently active + creating bindings combined;
-		// or there are the right number of active + creating bindings, yet some obsolete bindings still linger
+		// clusters requested by the user is less than the number of currently bound + scheduled bindings combined;
+		// or there are the right number of bound + scheduled bindings, yet some obsolete bindings still linger
 		// in the system.
 		if count := present - desired + obsolete; count > 0 {
 			// Note that in the case of downscaling, obsolete bindings are always removed; they
@@ -345,4 +345,76 @@ func sortByClusterScoreAndName(bindings []*fleetv1beta1.ClusterResourceBinding) 
 // shouldSchedule checks if the scheduler needs to perform some scheduling.
 func shouldSchedule(desiredCount, existingCount int) bool {
 	return desiredCount > existingCount
+}
+
+// calcNumOfClustersToSelect calculates the number of clusters to select in a scheduling run; it
+// essentially returns the minimum among the desired number of clusters, the batch size limit,
+// and the number of scored clusters.
+func calcNumOfClustersToSelect(desired, limit, scored int) int {
+	num := desired
+	if limit < num {
+		num = limit
+	}
+	if scored < num {
+		num = scored
+	}
+	return num
+}
+
+// Pick clusters with the top N highest scores from a sorted list of clusters.
+//
+// Note that this function assumes that the list of clusters have been sorted by their scores,
+// and the N count is no greater than the length of the list.
+func pickTopNScoredClusters(scoredClusters ScoredClusters, N int) ScoredClusters {
+	// Sort the clusters by their scores in reverse order.
+	//
+	// Note that when two clusters have the same score, they are sorted by their names in
+	// lexicographical order instead; this is to achieve deterministic behavior when picking
+	// clusters.
+	sort.Sort(sort.Reverse(scoredClusters))
+
+	// No need to pick if there is no scored cluster or the number to pick is zero.
+	if len(scoredClusters) == 0 || N == 0 {
+		return make(ScoredClusters, 0)
+	}
+
+	// No need to pick if the number of scored clusters is less than or equal to N.
+	if len(scoredClusters) <= N {
+		return scoredClusters
+	}
+
+	return scoredClusters[:N]
+}
+
+// shouldRequeue determines if the scheduler should start another scheduling cycle on the same
+// policy snapshot.
+//
+// For each scheduling run, four different possibilities exist:
+//
+//   - the desired batch size is equal to the batch size limit, i.e., no plugin has imposed a limit
+//     on the batch size; and the actual number of bindings created/updated is equal to the desired
+//     batch size
+//     -> in this case, no immediate requeue is necessary as all the work has been completed.
+//   - the desired batch size is equal to the batch size limit, i.e., no plugin has imposed a limit
+//     on the batch size; but the actual number of bindings created/updated is less than the desired
+//     batch size
+//     -> in this case, no immediate requeue is necessary as retries will not correct the situation;
+//     the scheduler should wait for the next signal from scheduling triggers, e.g., new cluster
+//     joined, or scheduling policy is updated.
+//   - the desired batch size is greater than the batch size limit, i.e., a plugin has imposed a limit
+//     on the batch size; and the actual number of bindings created/updated is equal to batch size
+//     limit
+//     -> in this case, immediate requeue is needed as there might be more fitting clusters to bind
+//     resources to.
+//   - the desired batch size is greater than the batch size limit, i.e., a plugin has imposed a limit
+//     on the batch size; but the actual number of bindings created/updated is less than the batch
+//     size limit
+//     -> in this case, no immediate requeue is necessary as retries will not correct the situation;
+//     the scheduler should wait for the next signal from scheduling triggers, e.g., new cluster
+//     joined, or scheduling policy is updated.
+func shouldRequeue(desiredBatchSize, batchSizeLimit, bindingCount int) bool {
+	if desiredBatchSize > batchSizeLimit && bindingCount == batchSizeLimit {
+		return true
+	}
+	return false
 }

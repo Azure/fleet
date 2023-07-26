@@ -4125,3 +4125,200 @@ func TestRunScorePlugins(t *testing.T) {
 		})
 	}
 }
+
+// TestCalcNumOfClustersToSelect tests the calcNumOfClustersToSelect function.
+func TestCalcNumOfClustersToSelect(t *testing.T) {
+	testCases := []struct {
+		name    string
+		desired int
+		limit   int
+		scored  int
+		want    int
+	}{
+		{
+			name:    "no limit, enough bindings to pick",
+			desired: 3,
+			limit:   3,
+			scored:  10,
+			want:    3,
+		},
+		{
+			name:    "limit imposed, enough bindings to pick",
+			desired: 3,
+			limit:   2,
+			scored:  10,
+			want:    2,
+		},
+		{
+			name:    "limit imposed, not enough bindings to pick",
+			desired: 3,
+			limit:   2,
+			scored:  1,
+			want:    1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			toSelect := calcNumOfClustersToSelect(tc.desired, tc.limit, tc.scored)
+			if toSelect != tc.want {
+				t.Errorf("calcNumOfClustersToSelect(), got %d, want %d", toSelect, tc.want)
+			}
+		})
+	}
+}
+
+// TestPickTopNScoredClusters tests the pickTopNScoredClusters function.
+func TestPickTopNScoredClusters(t *testing.T) {
+	scs := ScoredClusters{
+		{
+			Cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			},
+			Score: &ClusterScore{
+				TopologySpreadScore:   1,
+				AffinityScore:         20,
+				BoundOrScheduledScore: 0,
+			},
+		},
+		{
+			Cluster: &fleetv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: altClusterName,
+				},
+			},
+			Score: &ClusterScore{
+				TopologySpreadScore:   2,
+				AffinityScore:         10,
+				BoundOrScheduledScore: 1,
+			},
+		},
+	}
+
+	testCases := []struct {
+		name               string
+		scoredClusters     ScoredClusters
+		picks              int
+		wantScoredClusters ScoredClusters
+	}{
+		{
+			name:               "no scored clusters",
+			scoredClusters:     ScoredClusters{},
+			picks:              1,
+			wantScoredClusters: ScoredClusters{},
+		},
+		{
+			name:               "zero to pick",
+			scoredClusters:     scs,
+			picks:              0,
+			wantScoredClusters: ScoredClusters{},
+		},
+		{
+			name:           "not enough to pick",
+			scoredClusters: scs,
+			picks:          10,
+			wantScoredClusters: ScoredClusters{
+				{
+					Cluster: &fleetv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore:   2,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
+					},
+				},
+				{
+					Cluster: &fleetv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: clusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore:   1,
+						AffinityScore:         20,
+						BoundOrScheduledScore: 0,
+					},
+				},
+			},
+		},
+		{
+			name:           "enough to pick",
+			scoredClusters: scs,
+			picks:          1,
+			wantScoredClusters: ScoredClusters{
+				{
+					Cluster: &fleetv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore:   2,
+						AffinityScore:         10,
+						BoundOrScheduledScore: 1,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			picked := pickTopNScoredClusters(tc.scoredClusters, tc.picks)
+			if diff := cmp.Diff(picked, tc.wantScoredClusters); diff != "" {
+				t.Errorf("pickTopNScoredClusters() picked diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+// TestShouldRequeue tests the shouldRequeue function.
+func TestShouldRequeue(t *testing.T) {
+	testCases := []struct {
+		name             string
+		desiredBatchSize int
+		batchLimit       int
+		bindingCount     int
+		want             bool
+	}{
+		{
+			name:             "no batch limit set, enough bindings",
+			desiredBatchSize: 3,
+			batchLimit:       3,
+			bindingCount:     3,
+		},
+		{
+			name:             "no batch limit set, not enough bindings",
+			desiredBatchSize: 3,
+			batchLimit:       3,
+			bindingCount:     2,
+		},
+		{
+			name:             "batch limit set, enough bindings",
+			desiredBatchSize: 5,
+			batchLimit:       1,
+			bindingCount:     1,
+			want:             true,
+		},
+		{
+			name:             "batch limit set, not enough bindings",
+			desiredBatchSize: 5,
+			batchLimit:       1,
+			bindingCount:     0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			requeue := shouldRequeue(tc.desiredBatchSize, tc.batchLimit, tc.bindingCount)
+			if requeue != tc.want {
+				t.Errorf("shouldRequeue(), got %t, want %t", requeue, tc.want)
+			}
+		})
+	}
+}
