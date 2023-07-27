@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -352,6 +353,14 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to get the ports field in Serivce object, name =%s: %w", object.GetName(), err)
+		}
+	} else if object.GetKind() == "Job" && object.GetAPIVersion() == batchv1.SchemeGroupVersion.String() {
+		if manualSelector, exist, _ := unstructured.NestedString(object.Object, "spec", "manualSelector"); !exist || manualSelector == "true" {
+			// remove the selector field added by the api-server if the job is not created with manual selector
+			// https://github.com/kubernetes/kubernetes/blob/d4fde1e92a83cb533ae63b3abe9d49f08efb7a2f/pkg/registry/batch/job/strategy.go#L219
+			unstructured.RemoveNestedField(object.Object, "spec", "selector")
+			unstructured.RemoveNestedField(object.Object, "spec", "template", "metadata", "creationTimestamp")
+			unstructured.RemoveNestedField(object.Object, "spec", "template", "metadata", "labels")
 		}
 	}
 
