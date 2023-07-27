@@ -17,14 +17,14 @@ type ClusterScore struct {
 	// AffinityScore determines how much a binding would satisfy the affinity terms
 	// specified by the user.
 	AffinityScore int
-	// PrevBoundOrScheduledScore reflects if there has already been an obsolete binding from
+	// ObsoletePlacementAffinityScore reflects if there has already been an obsolete binding from
 	// the same cluster resource placement associated with the cluster; it value range should
 	// be [0, 1], where 1 signals that an obsolete binding is present.
 	//
 	// Note that this score is for internal usage only; it serves the purpose of implementing
 	// a preference for already selected clusters when all the other conditions are the same,
 	// so as to minimize interruption between different scheduling runs.
-	PrevBoundOrScheduledScore int
+	ObsoletePlacementAffinityScore int
 }
 
 // Add adds a ClusterScore to another ClusterScore.
@@ -33,7 +33,7 @@ type ClusterScore struct {
 func (s1 *ClusterScore) Add(s2 *ClusterScore) {
 	s1.TopologySpreadScore += s2.TopologySpreadScore
 	s1.AffinityScore += s2.AffinityScore
-	s1.PrevBoundOrScheduledScore += s2.PrevBoundOrScheduledScore
+	s1.ObsoletePlacementAffinityScore += s2.ObsoletePlacementAffinityScore
 }
 
 // Equal returns true if a ClusterScore is equal to another.
@@ -49,7 +49,7 @@ func (s1 *ClusterScore) Equal(s2 *ClusterScore) bool {
 		// Both are not nils.
 		return s1.TopologySpreadScore == s2.TopologySpreadScore &&
 			s1.AffinityScore == s2.AffinityScore &&
-			s1.PrevBoundOrScheduledScore == s2.PrevBoundOrScheduledScore
+			s1.ObsoletePlacementAffinityScore == s2.ObsoletePlacementAffinityScore
 	}
 }
 
@@ -65,7 +65,7 @@ func (s1 *ClusterScore) Less(s2 *ClusterScore) bool {
 		return s1.AffinityScore < s2.AffinityScore
 	}
 
-	return s1.PrevBoundOrScheduledScore < s2.PrevBoundOrScheduledScore
+	return s1.ObsoletePlacementAffinityScore < s2.ObsoletePlacementAffinityScore
 }
 
 // ScoredCluster is a cluster with a score.
