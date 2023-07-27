@@ -98,7 +98,7 @@ func TestFilter(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil, tc.scheduledOrBoundBindings)
+			state := framework.NewCycleState(nil, nil, tc.scheduledOrBoundBindings)
 			cluster := fleetv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
