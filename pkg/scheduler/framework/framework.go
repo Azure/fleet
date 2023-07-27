@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -56,6 +57,8 @@ type Handle interface {
 	UncachedReader() client.Reader
 	// EventRecorder returns an event recorder.
 	EventRecorder() record.EventRecorder
+	// ClusterEligibilityChecker returns the cluster eligibility checker associated with the scheduler.
+	ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker
 }
 
 // Framework is an interface which scheduler framework should implement.
@@ -88,6 +91,9 @@ type framework struct {
 	// parallelizer is a utility which helps run tasks in parallel.
 	parallelizer *parallelizer.Parallerlizer
 
+	// eligibilityChecker is a utility which helps determine if a cluster is eligible for resource placement.
+	clusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
+
 	// maxUnselectedClusterDecisionCount controls the maximum number of decisions for unselected clusters
 	// added to the policy snapshot status.
 	//
@@ -109,6 +115,10 @@ type frameworkOptions struct {
 	// maxUnselectedClusterDecisionCount controls the maximum number of decisions for
 	// unselected clusters added to the policy snapshot status.
 	maxUnselectedClusterDecisionCount int
+
+	// checker is the cluster eligibility checker the scheduler framework will use to check
+	// if a cluster is eligibile for resource placement.
+	clusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
 }
 
 // Option is the function for configuring a scheduler framework.
@@ -118,6 +128,7 @@ type Option func(*frameworkOptions)
 var defaultFrameworkOptions = frameworkOptions{
 	numOfWorkers:                      parallelizer.DefaultNumOfWorkers,
 	maxUnselectedClusterDecisionCount: 20,
+	clusterEligibilityChecker:         clustereligibilitychecker.New(),
 }
 
 // WithNumOfWorkers sets the number of workers to use for a scheduler framework.
@@ -131,6 +142,13 @@ func WithNumOfWorkers(numOfWorkers int) Option {
 func WithMaxClusterDecisionCount(maxUnselectedClusterDecisionCount int) Option {
 	return func(fo *frameworkOptions) {
 		fo.maxUnselectedClusterDecisionCount = maxUnselectedClusterDecisionCount
+	}
+}
+
+// WithClusterEligibilityChecker sets the cluster eligibility checker for a scheduler framework.
+func WithClusterEligibilityChecker(checker *clustereligibilitychecker.ClusterEligibilityChecker) Option {
+	return func(fo *frameworkOptions) {
+		fo.clusterEligibilityChecker = checker
 	}
 }
 
@@ -162,6 +180,7 @@ func NewFramework(profile *Profile, manager ctrl.Manager, opts ...Option) Framew
 		eventRecorder:                     manager.GetEventRecorderFor(fmt.Sprintf(eventRecorderNameTemplate, profile.Name())),
 		parallelizer:                      parallelizer.NewParallelizer(options.numOfWorkers),
 		maxUnselectedClusterDecisionCount: options.maxUnselectedClusterDecisionCount,
+		clusterEligibilityChecker:         options.clusterEligibilityChecker,
 	}
 }
 
@@ -183,6 +202,11 @@ func (f *framework) UncachedReader() client.Reader {
 // EventRecorder returns the event recorder in use by the scheduler framework.
 func (f *framework) EventRecorder() record.EventRecorder {
 	return f.eventRecorder
+}
+
+// ClusterEligibilityChecker returns the cluster eligibility checker in use by the scheduler framework.
+func (f *framework) ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker {
+	return f.clusterEligibilityChecker
 }
 
 // RunSchedulingCycleFor performs scheduling for a cluster resource placement

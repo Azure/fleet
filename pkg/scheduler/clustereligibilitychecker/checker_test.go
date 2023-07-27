@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package clustereligibilitycheck
+package clustereligibilitychecker
 
 import (
 	"strings"
@@ -23,6 +23,10 @@ const (
 func TestIsClusterEligible(t *testing.T) {
 	clusterHeartbeatTimeout := time.Minute * 15
 	clusterHealthCheckTimeout := time.Minute * 15
+	checker := New(
+		WithClusterHeartbeatTimeout(clusterHeartbeatTimeout),
+		WithClusterHeartbeatTimeout(clusterHealthCheckTimeout),
+	)
 
 	testCases := []struct {
 		name             string
@@ -250,7 +254,7 @@ func TestIsClusterEligible(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			eligible, reason := IsClusterEligible(tc.cluster, clusterHeartbeatTimeout, clusterHealthCheckTimeout)
+			eligible, reason := checker.IsEligible(tc.cluster)
 			if eligible != tc.wantEligible {
 				t.Errorf("IsClusterEligible() eligible = %t, want %t", eligible, tc.wantEligible)
 			}

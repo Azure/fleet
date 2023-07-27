@@ -3,9 +3,9 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package clustereligibilitycheck features some utilties for verifying if a member cluster is
+// Package clustereligibilitychecker features a utility for verifying if a member cluster is
 // eligible for resource placement.
-package clustereligibilitycheck
+package clustereligibilitychecker
 
 import (
 	"fmt"
@@ -16,9 +16,76 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-// IsClusterEligible returns if a cluster is eligible for resource placement; if not, it will
+const (
+	// defaultClusterHeartbeatTimeout is the default timeout value this checker uses for checking
+	// if a cluster has been disconnected from the fleet for a prolonged period of time.
+	defaultClusterHeartbeatTimeout = time.Minute * 5
+
+	// defaultClusterHealthCheckTimeout is the default timeout value this checker uses for checking
+	// if a cluster is still in a healthy state.
+	defaultClusterHealthCheckTimeout = time.Minute * 5
+)
+
+type ClusterEligibilityChecker struct {
+	// The timeout value this checker uses for checking if a cluster has been disconnected
+	// from the fleet for a prolonged period of time.
+	clusterHeartbeatTimeout time.Duration
+
+	// The timeout value this checker uses for checking if a cluster is still in a healthy state.
+	clusterHealthCheckTimeout time.Duration
+}
+
+// checkerOptions is the options for this checker.
+type checkerOptions struct {
+	// The timeout value this checker uses for checking if a cluster has been disconnected
+	// from the fleet for a prolonged period of time.
+	clusterHeartbeatTimeout time.Duration
+
+	// The timeout value this checker uses for checking if a cluster is still in a healthy state.
+	clusterHealthCheckTimeout time.Duration
+}
+
+// Option helps set up the plugin.
+type Option func(*checkerOptions)
+
+// WithClusterHeartbeatTimeout sets the timeout value this plugin uses for checking
+// if a cluster has been disconnected from the fleet for a prolonged period of time.
+func WithClusterHeartbeatTimeout(timeout time.Duration) Option {
+	return func(o *checkerOptions) {
+		o.clusterHeartbeatTimeout = timeout
+	}
+}
+
+// WithClusterHealthCheckTimeout sets the timeout value this plugin uses for checking
+// if a cluster is still in a healthy state.
+func WithClusterHealthCheckTimeout(timeout time.Duration) Option {
+	return func(o *checkerOptions) {
+		o.clusterHealthCheckTimeout = timeout
+	}
+}
+
+// defaultPluginOptions is the default options for this plugin.
+var defaultCheckerOptions = checkerOptions{
+	clusterHeartbeatTimeout:   defaultClusterHeartbeatTimeout,
+	clusterHealthCheckTimeout: defaultClusterHealthCheckTimeout,
+}
+
+// New returns a new cluster eligibility checker.
+func New(opts ...Option) *ClusterEligibilityChecker {
+	options := defaultCheckerOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	return &ClusterEligibilityChecker{
+		clusterHeartbeatTimeout:   options.clusterHeartbeatTimeout,
+		clusterHealthCheckTimeout: options.clusterHealthCheckTimeout,
+	}
+}
+
+// IsEligible returns if a cluster is eligible for resource placement; if not, it will
 // also return the reason.
-func IsClusterEligible(cluster *fleetv1beta1.MemberCluster, clusterHeartbeatTimeout, clusterHealthCheckTimeout time.Duration) (eligible bool, reason string) {
+func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.MemberCluster) (eligible bool, reason string) {
 	// Filter out clusters that have left the fleet.
 	if cluster.Spec.State == fleetv1beta1.ClusterStateLeave {
 		return false, "cluster has left the fleet"
@@ -37,7 +104,7 @@ func IsClusterEligible(cluster *fleetv1beta1.MemberCluster, clusterHeartbeatTime
 	}
 
 	sinceLastHeartbeat := time.Since(memberAgentStatus.LastReceivedHeartbeat.Time)
-	if sinceLastHeartbeat > clusterHeartbeatTimeout {
+	if sinceLastHeartbeat > checker.clusterHeartbeatTimeout {
 		// The member agent has not sent heartbeat signals for a prolonged period of time.
 		//
 		// Note that this plugin assumes minimum clock drifts between clusters in the fleet.
@@ -63,7 +130,7 @@ func IsClusterEligible(cluster *fleetv1beta1.MemberCluster, clusterHeartbeatTime
 	}
 
 	sinceLastTransition := time.Since(memberAgentHealthyCond.LastTransitionTime.Time)
-	if memberAgentHealthyCond.Status != metav1.ConditionTrue && sinceLastTransition > clusterHealthCheckTimeout {
+	if memberAgentHealthyCond.Status != metav1.ConditionTrue && sinceLastTransition > checker.clusterHealthCheckTimeout {
 		// The cluster health check fails.
 		//
 		// Note that sporadic (isolated) health check failures will not preclude a cluster.

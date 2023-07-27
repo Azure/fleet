@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -31,6 +32,7 @@ var (
 // TestFilter tests the Filter method.
 func TestFilter(t *testing.T) {
 	p := New()
+	p.clusterEligibilityChecker = clustereligibilitychecker.New()
 
 	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
