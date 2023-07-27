@@ -44,7 +44,18 @@ func TestCycleStateBasicOps(t *testing.T) {
 		},
 	}
 
-	cs := NewCycleState(clusters, scheduledOrBoundBindings)
+	obsoleteBindings := []*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherBindingName,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				TargetCluster: anotherClusterName,
+			},
+		},
+	}
+
+	cs := NewCycleState(clusters, obsoleteBindings, scheduledOrBoundBindings)
 
 	k, v := "key", "value"
 	cs.Write(StateKey(k), StateValue(v))
@@ -62,14 +73,20 @@ func TestCycleStateBasicOps(t *testing.T) {
 	}
 
 	for _, binding := range scheduledOrBoundBindings {
-		if !cs.IsClusterScheduledOrBound(binding.Spec.TargetCluster) {
-			t.Fatalf("IsClusterScheduledOrBound(%v) = false, want true", binding.Spec.TargetCluster)
+		if !cs.HasScheduledOrBoundBindingFor(binding.Spec.TargetCluster) {
+			t.Fatalf("HasScheduledOrBoundBindingFor(%v) = false, want true", binding.Spec.TargetCluster)
+		}
+	}
+
+	for _, binding := range obsoleteBindings {
+		if !cs.HasObsoleteBindingFor(binding.Spec.TargetCluster) {
+			t.Fatalf("HasObsoleteBindingFor(%v) = false, want true", binding.Spec.TargetCluster)
 		}
 	}
 }
 
-// TestPrepareScheduledOrBoundMap tests the prepareScheduledOrBoundMap function.
-func TestPrepareScheduledOrBoundMap(t *testing.T) {
+// TestPrepareScheduledOrBoundBindingsMap tests the prepareScheduledOrBoundBindingsMap function.
+func TestPrepareScheduledOrBoundBindingsMap(t *testing.T) {
 	scheduled := []*fleetv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -96,8 +113,40 @@ func TestPrepareScheduledOrBoundMap(t *testing.T) {
 		altClusterName: true,
 	}
 
-	scheduleOrBoundMap := prepareScheduledOrBoundMap(scheduled, bound)
-	if diff := cmp.Diff(scheduleOrBoundMap, want); diff != "" {
-		t.Errorf("preparedScheduledOrBoundMap() scheduledOrBoundMap diff (-got, +want): %s", diff)
+	scheduleOrBoundBindingsMap := prepareScheduledOrBoundBindingsMap(scheduled, bound)
+	if diff := cmp.Diff(scheduleOrBoundBindingsMap, want); diff != "" {
+		t.Errorf("preparedScheduledOrBoundBindingsMap() scheduledOrBoundBindingsMap diff (-got, +want): %s", diff)
+	}
+}
+
+// TestPrepareObsoleteBindingsMap tests the prepareObsoleteBindingsMap function.
+func TestPrepareObsoleteBindingsMap(t *testing.T) {
+	obsolete := []*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bindingName,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				TargetCluster: clusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altBindingName,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				TargetCluster: altClusterName,
+			},
+		},
+	}
+
+	want := map[string]bool{
+		clusterName:    true,
+		altClusterName: true,
+	}
+
+	obsoleteBindingsMap := prepareObsoleteBindingsMap(obsolete)
+	if diff := cmp.Diff(obsoleteBindingsMap, want); diff != "" {
+		t.Errorf("prepareObsoleteBindingsMap() obsoleteBindingsMap diff (-got, +want): %s", diff)
 	}
 }

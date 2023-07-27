@@ -240,7 +240,7 @@ func TestPreFilter(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			state := framework.NewCycleState(nil)
+			state := framework.NewCycleState(nil, nil)
 			snapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 					Policy: tc.policy,
@@ -326,7 +326,7 @@ func TestFilter(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil)
+			state := framework.NewCycleState(nil, nil)
 			if !tc.notSetPluginState {
 				state.Write(framework.StateKey(p.Name()), tc.ps)
 			}

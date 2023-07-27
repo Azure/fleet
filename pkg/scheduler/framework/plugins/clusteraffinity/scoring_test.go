@@ -89,7 +89,7 @@ func TestPreScore(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil)
+			state := framework.NewCycleState(nil, nil)
 			if !tc.notSetPluginState {
 				state.Write(framework.StateKey(p.Name()), tc.ps)
 			}
@@ -164,7 +164,7 @@ func TestPluginScore(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil)
+			state := framework.NewCycleState(nil, nil)
 			if !tc.notSetPluginState {
 				state.Write(framework.StateKey(p.Name()), tc.ps)
 			}

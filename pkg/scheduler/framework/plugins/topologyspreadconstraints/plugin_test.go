@@ -311,7 +311,7 @@ func TestPreFilter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			state := framework.NewCycleState(tc.clusters, tc.bindings)
+			state := framework.NewCycleState(tc.clusters, nil, tc.bindings)
 			status := plugin.PreFilter(ctx, state, tc.policy)
 			// It is safe to compare unexported fields here as the struct is owned by the project.
 			if diff := cmp.Diff(status, tc.wantStatus, cmp.AllowUnexported(framework.Status{}), ignoreStatusErrorField); diff != "" {
