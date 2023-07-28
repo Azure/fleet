@@ -217,7 +217,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: CUDOperations,
-						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName}, &clusterScope),
+						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
 					},
 				},
 			},
