@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package internalmembercluster
+package v1beta1
 
 import (
 	"flag"
@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var (
@@ -50,7 +50,7 @@ var _ = BeforeSuite(func() {
 
 		By("bootstrapping test environment")
 		testEnv = &envtest.Environment{
-			CRDDirectoryPaths:     []string{filepath.Join("../../../", "config", "crd", "bases")},
+			CRDDirectoryPaths:     []string{filepath.Join("../../../../", "config", "crd", "bases")},
 			ErrorIfCRDPathMissing: true,
 		}
 		var err error
@@ -58,7 +58,7 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 
-		err = v1alpha1.AddToScheme(scheme.Scheme)
+		err = fleetv1beta1.AddToScheme(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		err = workv1alpha1.AddToScheme(scheme.Scheme)
