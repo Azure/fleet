@@ -7,13 +7,13 @@ import (
 
 type customHeadersRoundTripper struct {
 	delegatedRoundTripper http.RoundTripper
-	header               http.Header
+	header                http.Header
 }
 
 func NewCustomHeadersRoundTripper(header http.Header, rt http.RoundTripper) http.RoundTripper {
 	return &customHeadersRoundTripper{
 		delegatedRoundTripper: rt,
-		header:               header,
+		header:                header,
 	}
 }
 
