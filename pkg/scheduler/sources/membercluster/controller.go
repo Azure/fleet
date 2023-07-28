@@ -9,6 +9,7 @@ package membercluster
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/scheduler/framework/agentstatus"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -33,61 +34,17 @@ type Reconciler struct {
 	// SchedulerWorkQueue is the work queue for the scheduler.
 	SchedulerWorkQueue queue.ClusterResourcePlacementSchedulingQueueWriter
 
-	// clusterHeartbeatTimeout is the timeout value this controller uses for checking if a cluster
-	// has been disconnected from the fleet for a prolonged period of time.
-	clusterHeartbeatTimeout time.Duration
-
-	// clusterHealthCheckTimeout is the timeout value this plugin uses for checking if a cluster
-	// is still in a healthy state.
-	clusterHealthCheckTimeout time.Duration
-}
-
-// reconcilerOptions is the options for the Reconciler.
-type reconcilerOptions struct {
-	// clusterHeartbeatTimeout is the timeout value this controller uses for checking if a cluster
-	// has been disconnected from the fleet for a prolonged period of time.
-	clusterHeartbeatTimeout time.Duration
-
-	// clusterHealthCheckTimeout is the timeout value this plugin uses for checking if a cluster
-	// is still in a healthy state.
-	clusterHealthCheckTimeout time.Duration
-}
-
-// Option is the function for configuring the Reconciler.
-type Option func(*reconcilerOptions)
-
-// defaultReconcilerOptions is the default options for the Reconciler.
-var defaultReconcilerOptions = reconcilerOptions{
-	clusterHeartbeatTimeout:   5 * time.Minute,
-	clusterHealthCheckTimeout: 5 * time.Minute,
-}
-
-// WithClusterHeartbeatTimeout sets the cluster heartbeat timeout for the Reconciler.
-func WithClusterHeartbeatTimeout(timeout time.Duration) Option {
-	return func(o *reconcilerOptions) {
-		o.clusterHeartbeatTimeout = timeout
-	}
-}
-
-// WithClusterHealthCheckTimeout sets the cluster health check timeout for the Reconciler.
-func WithClusterHealthCheckTimeout(timeout time.Duration) Option {
-	return func(o *reconcilerOptions) {
-		o.clusterHealthCheckTimeout = timeout
-	}
+	// clusterEligibilityCheck helps check if a cluster is eligible for resource replacement.
+	ClusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
 }
 
 // New returns a new Reconciler.
-func New(client client.Client, wq queue.ClusterResourcePlacementSchedulingQueueWriter, opts ...Option) *Reconciler {
-	options := defaultReconcilerOptions
-	for _, opt := range opts {
-		opt(&options)
-	}
+func New(client client.Client, wq queue.ClusterResourcePlacementSchedulingQueueWriter, checker clustereligibilitychecker.ClusterEligibilityChecker) *Reconciler {
 
 	return &Reconciler{
 		Client:                    client,
 		SchedulerWorkQueue:        wq,
-		clusterHeartbeatTimeout:   options.clusterHeartbeatTimeout,
-		clusterHealthCheckTimeout: options.clusterHealthCheckTimeout,
+		ClusterEligibilityChecker: &checker,
 	}
 }
 
@@ -125,6 +82,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//   - CRPs of the PickAll placement type may be able to select this cluster now;
 	//   - CRPs of the PickN placement type, which have not been fully scheduled yet, may be
 	//     able to select this cluster, and gets a step closer to being fully scheduled;
+	//   - CRPs with a fixed set of target clusters, which have not been fully scheduled yet, may
+	//     be able to select this clusters, and gets a step closer to being fully scheduled;
 	//
 	// * 2a) and 2b) require no attention on the scheduler's end, specifically:
 	//   - CRPs which have already selected this cluster, regardless of its placement type, cannot
@@ -207,8 +166,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	customPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			// Ignore newly created cluster objects, as they are not yet ready for scheduling.
-			// When the clusters do become ready, the controller will catch an update event.
+			// Normally it is safe to ignore newly created cluster objects, as they are not yet
+			// ready for scheduling; when the clusters do become ready, the controller will catch
+			// an update event.
+			//
+			// Furthermore, when the controller restarts, the scheduler is set to reconcile all
+			// CRPs anyway, which will account for any missing updates on the cluster side
+			// during the downtime; in other words, notifications from this controller is not
+			// necessary.
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -232,15 +197,26 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return false
 			}
 
+			// Capture label changes.
+			//
+			// Note that the controller runs only when label changes happen on joined clusters.
+			if newCluster.Spec.State == fleetv1beta1.ClusterStateJoin && !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
+				return true
+			}
+
+			// The cluster has left.
+			if oldCluster.Spec.State == fleetv1beta1.ClusterStateJoin && newCluster.Spec.State == fleetv1beta1.ClusterStateLeave {
+				return true
+			}
+
 			// Check the resource placement eligibility for the old and new cluster object.
-			oldEligible, _ := agentstatus.IsClusterEligible(oldCluster, r.clusterHeartbeatTimeout, r.clusterHealthCheckTimeout)
-			newEligible, _ := agentstatus.IsClusterEligible(newCluster, r.clusterHeartbeatTimeout, r.clusterHealthCheckTimeout)
+			oldEligible, _ := r.ClusterEligibilityChecker.IsEligible(oldCluster)
+			newEligible, _ := r.ClusterEligibilityChecker.IsEligible(newCluster)
 
 			if !oldEligible && newEligible {
-				// The cluster becomes eligible for resource placement, i.e., match for case 1b)
-				// and 2c).
+				// The cluster becomes eligible for resource placement, i.e., match for case 1b).
 				//
-				// The reverse, i.e., ineligible -> eligible, is ignored (case 2b)).
+				// The reverse, i.e., eligible -> ineligible, is ignored (case 2b)).
 				return true
 			}
 
@@ -251,11 +227,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1beta1.MemberCluster{}).
-		// All label changes are captured, even if they should not trigger any scheduling changes.
-		//
-		// This captures changes in case 1a) and 2a). As mentioned earlier, from the prespective
-		// of this controller, there is no way to reliably tell the difference between the two
-		// cases.
-		WithEventFilter(predicate.Or(predicate.LabelChangedPredicate{}, customPredicate)).
+		WithEventFilter(customPredicate).
 		Complete(r)
 }

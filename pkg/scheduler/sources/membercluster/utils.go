@@ -12,10 +12,8 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-// isPickNCRPFullyScheduled returns whether a CRP of PickN placement type is fully scheduled.
-//
-// Note that this function assumes that the CRP is of PickN placement type.
-func isPickNCRPFullyScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
+// isCRPFullyScheduled returns whether a CRP is fully scheduled.
+func isCRPFullyScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	// Check the scheduled condition on the CRP to determine if it is fully scheduled.
 	//
 	// Here the controller checks the status rather than listing all the bindings and verify
@@ -53,15 +51,18 @@ func classifyCRPs(crps []fleetv1beta1.ClusterResourcePlacement) (toProcess []fle
 			// type and are affected by cluster side changes in case 1a) and 1b).
 			toProcess = append(toProcess, crp)
 		case len(crp.Spec.Policy.ClusterNames) != 0:
-			// Any CRP with an non-empty list of target cluster names is not affected by cluster
-			// side changes in case 1a) and 1b).
-
-			// Do nothing.
+			// Note that any CRP with a fixed set of target clusters will be automatically assigned
+			// the PickAll placement type, as it is the default value.
+			if !isCRPFullyScheduled(&crp) {
+				// Any CRP with an non-empty list of target cluster names can be affected by cluster
+				// side changes in case 1b), if it is not yet fully scheduled.
+				toProcess = append(toProcess, crp)
+			}
 		case crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
 			// CRPs of the PickAll placement type are affected by cluster side changes in case 1a)
 			// and 1b).
 			toProcess = append(toProcess, crp)
-		case !isPickNCRPFullyScheduled(&crp):
+		case !isCRPFullyScheduled(&crp):
 			// CRPs of the PickN placement type, which have not been fully scheduled, are affected
 			// by cluster side changes in case 1a) and 1b).
 			toProcess = append(toProcess, crp)

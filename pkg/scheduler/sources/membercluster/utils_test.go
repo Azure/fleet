@@ -31,7 +31,7 @@ var (
 	numOfClusters = int32(10)
 )
 
-// TestIsPickNCRPFullyScheduled tests the isPickNCRPFullyScheduled function.
+// TestIsCRPFullyScheduled tests the isCRPFullyScheduled function.
 func TestIsPickNCRPFullyScheduled(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -130,7 +130,7 @@ func TestIsPickNCRPFullyScheduled(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			scheduled := isPickNCRPFullyScheduled(tc.crp)
+			scheduled := isCRPFullyScheduled(tc.crp)
 			if scheduled != tc.want {
 				t.Errorf("isPickNCRPFullyScheduled() = %v, want %v", scheduled, tc.want)
 			}
@@ -163,7 +163,7 @@ func TestClassifyCRPs(t *testing.T) {
 			},
 		},
 		{
-			name: "single crp, fixed list of clusters",
+			name: "single crp, fixed list of clusters, not fully scheduled",
 			crps: []fleetv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -172,6 +172,43 @@ func TestClassifyCRPs(t *testing.T) {
 					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 						Policy: &fleetv1beta1.PlacementPolicy{
 							ClusterNames: []string{clusterName1},
+						},
+					},
+				},
+			},
+			want: []fleetv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: crpName,
+					},
+					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+						Policy: &fleetv1beta1.PlacementPolicy{
+							ClusterNames: []string{clusterName1},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "single crp, fixed list of clusters, fully scheduled",
+			crps: []fleetv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       crpName,
+						Generation: 1,
+					},
+					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+						Policy: &fleetv1beta1.PlacementPolicy{
+							ClusterNames: []string{clusterName1},
+						},
+					},
+					Status: fleetv1beta1.ClusterResourcePlacementStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 1,
+							},
 						},
 					},
 				},
@@ -323,6 +360,16 @@ func TestClassifyCRPs(t *testing.T) {
 				},
 			},
 			want: []fleetv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: crpName2,
+					},
+					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+						Policy: &fleetv1beta1.PlacementPolicy{
+							ClusterNames: []string{clusterName1},
+						},
+					},
+				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName1,

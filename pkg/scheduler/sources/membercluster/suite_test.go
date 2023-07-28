@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -77,12 +79,55 @@ func TestAPIs(t *testing.T) {
 
 // setupResources adds resources required for this test suite to the hub cluster.
 func setupResources() {
+	// Create a member cluster that has just joined the fleet.
 	Expect(hubClient.Create(ctx, newMemberCluster(clusterName1, fleetv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
-	Expect(hubClient.Create(ctx, newMemberCluster(clusterName2, fleetv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
+	// Create a member cluster that has left the fleet.
+	Expect(hubClient.Create(ctx, newMemberCluster(clusterName2, fleetv1beta1.ClusterStateLeave))).Should(Succeed(), "Failed to create member cluster")
 
+	// Create a CRP that has no placement policy specified.
 	Expect(hubClient.Create(ctx, newCRP(crpName1, nil))).Should(Succeed(), "Failed to create CRP")
+	// Create a CRP that is of the PickAll placement type.
 	Expect(hubClient.Create(ctx, newCRP(crpName2, &fleetv1beta1.PlacementPolicy{
 		PlacementType: fleetv1beta1.PickAllPlacementType,
+	}))).Should(Succeed(), "Failed to create CRP")
+	// Create a CRP that has a fixed set of target clusters and has not been fully scheduled.
+	Expect(hubClient.Create(ctx, newCRP(crpName3, &fleetv1beta1.PlacementPolicy{
+		ClusterNames: []string{clusterName1},
+	}))).Should(Succeed(), "Failed to create CRP")
+
+	// Create a CRP that has a fixed set of target clusters and has been fully scheduled.
+	crp := newCRP(crpName4, &fleetv1beta1.PlacementPolicy{
+		ClusterNames: []string{clusterName1},
+	})
+	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
+	// Update the status.
+	meta.SetStatusCondition(&crp.Status.Conditions, metav1.Condition{
+		Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: crp.Generation,
+		Reason:             dummyReason,
+	})
+	Expect(hubClient.Status().Update(ctx, crp)).Should(Succeed(), "Failed to update CRP status")
+
+	// Create a CRP that is of the PickN placement type and has been fully scheduled.
+	crp = newCRP(crpName5, &fleetv1beta1.PlacementPolicy{
+		PlacementType:    fleetv1beta1.PickNPlacementType,
+		NumberOfClusters: &numOfClusters,
+	})
+	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
+	// Update the status.
+	meta.SetStatusCondition(&crp.Status.Conditions, metav1.Condition{
+		Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: crp.Generation,
+		Reason:             dummyReason,
+	})
+	Expect(hubClient.Status().Update(ctx, crp)).Should(Succeed(), "Failed to update CRP status")
+
+	// Create a CRP that is of the PickN placement type and has not been fully scheduled.
+	Expect(hubClient.Create(ctx, newCRP(crpName6, &fleetv1beta1.PlacementPolicy{
+		PlacementType:    fleetv1beta1.PickNPlacementType,
+		NumberOfClusters: &numOfClusters,
 	}))).Should(Succeed(), "Failed to create CRP")
 }
 
@@ -121,8 +166,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+	clusterEligibilityChecker := clustereligibilitychecker.New()
 
-	reconciler := New(hubClient, schedulerWorkQueue)
+	reconciler := New(hubClient, schedulerWorkQueue, *clusterEligibilityChecker)
 	err = reconciler.SetupWithManager(ctrlMgr)
 	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
 

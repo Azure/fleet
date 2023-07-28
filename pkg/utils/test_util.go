@@ -176,13 +176,19 @@ func (kc *SchedulerWorkqueueKeyCollector) Run(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// IsPresent returns whether a given key is has been collected.
-func (kc *SchedulerWorkqueueKeyCollector) IsPresent(key string) bool {
+// IsPresent checks if all of the given keys are present in the collected keys.
+func (kc *SchedulerWorkqueueKeyCollector) IsPresent(keys ...string) (allPresent bool, absentKeys []string) {
 	kc.lock.Lock()
 	defer kc.lock.Unlock()
 
-	_, ok := kc.collectedKeys[key]
-	return ok
+	absentKeys = []string{}
+	for _, key := range keys {
+		if _, ok := kc.collectedKeys[key]; !ok {
+			absentKeys = append(absentKeys, key)
+		}
+	}
+
+	return len(absentKeys) == 0, absentKeys
 }
 
 // Reset clears all the collected keys.
