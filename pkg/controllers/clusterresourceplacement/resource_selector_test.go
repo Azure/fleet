@@ -322,12 +322,21 @@ func TestGenerateManifest(t *testing.T) {
 						BackoffLimit:   pointer.Int32(5),
 						CompletionMode: &indexedCompletion,
 						Selector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{"foo": "bar"},
+							MatchLabels: map[string]string{
+								"foo":                                "bar",
+								"job-name":                           "ryan-name",
+								"controller-uid":                     utilrand.String(10),
+								"batch.kubernetes.io/controller-uid": utilrand.String(10),
+							},
 						},
 						Template: corev1.PodTemplateSpec{
 							ObjectMeta: metav1.ObjectMeta{
 								Labels: map[string]string{
-									"foo": "bar",
+									"foo":                                "bar",
+									"controller-uid":                     utilrand.String(10),
+									"batch.kubernetes.io/controller-uid": utilrand.String(10),
+									"job-name":                           "ryan-name",
+									"batch.kubernetes.io/job-name":       "ryan-name",
 								},
 							},
 							Spec: corev1.PodSpec{
@@ -367,7 +376,20 @@ func TestGenerateManifest(t *testing.T) {
 					Spec: batchv1.JobSpec{
 						BackoffLimit:   pointer.Int32(5),
 						CompletionMode: &indexedCompletion,
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"foo":      "bar",
+								"job-name": "ryan-name",
+							},
+						},
 						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"foo":                          "bar",
+									"job-name":                     "ryan-name",
+									"batch.kubernetes.io/job-name": "ryan-name",
+								},
+							},
 							Spec: corev1.PodSpec{
 								Containers: []corev1.Container{
 									{Image: "foo/bar"},
@@ -383,6 +405,124 @@ func TestGenerateManifest(t *testing.T) {
 				unstructured.RemoveNestedField(mJob, "status")
 				unstructured.RemoveNestedField(mJob, "metadata", "creationTimestamp")
 				unstructured.RemoveNestedField(mJob, "spec", "template", "metadata", "creationTimestamp")
+
+				uJob := unstructured.Unstructured{Object: mJob}
+				rawJob, err := uJob.MarshalJSON()
+				if err != nil {
+					t.Fatalf("MarshalJSON failed: %v", err)
+				}
+
+				return &workv1alpha1.Manifest{
+					RawExtension: runtime.RawExtension{
+						Raw: rawJob,
+					},
+				}
+			},
+			expectedError: nil,
+		},
+		"should not touch select for Kind: Job with manualSelector": {
+			// Test that we remove the automatically generated select and labels
+			unstructuredObj: func() *unstructured.Unstructured {
+				indexedCompletion := batchv1.IndexedCompletion
+				job := batchv1.Job{
+					TypeMeta: metav1.TypeMeta{
+						APIVersion: "batch/v1",
+						Kind:       "Job",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "ryan-name",
+						Namespace:         "ryan-namespace",
+						DeletionTimestamp: &metav1.Time{Time: time.Date(00002, time.January, 1, 1, 1, 1, 1, time.UTC)},
+						ResourceVersion:   "svc-object-resourceVersion",
+						Generation:        int64(utilrand.Int()),
+						CreationTimestamp: metav1.Time{Time: time.Date(00001, time.January, 1, 1, 1, 1, 1, time.UTC)},
+						UID:               types.UID(utilrand.String(10)),
+					},
+					Spec: batchv1.JobSpec{
+						BackoffLimit:   pointer.Int32(5),
+						CompletionMode: &indexedCompletion,
+						ManualSelector: pointer.Bool(true),
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"foo":            "bar",
+								"controller-uid": "ghjdfhsakdfj7824",
+								"job-name":       "ryan-name",
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"foo":                          "bar",
+									"controller-uid":               "ghjdfhsakdfj7824",
+									"job-name":                     "ryan-name",
+									"batch.kubernetes.io/job-name": "ryan-name",
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Image: "foo/bar"},
+								},
+							},
+						},
+					},
+					Status: batchv1.JobStatus{
+						Active:                  1,
+						Failed:                  3,
+						UncountedTerminatedPods: &batchv1.UncountedTerminatedPods{},
+					},
+				}
+				mJob, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&job)
+				if err != nil {
+					t.Fatalf("ToUnstructured failed: %v", err)
+				}
+
+				return &unstructured.Unstructured{Object: mJob}
+			},
+			expectedManifest: func() *workv1alpha1.Manifest {
+				indexedCompletion := batchv1.IndexedCompletion
+				job := batchv1.Job{
+					TypeMeta: metav1.TypeMeta{
+						APIVersion: "batch/v1",
+						Kind:       "Job",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ryan-name",
+						Namespace: "ryan-namespace",
+					},
+					Spec: batchv1.JobSpec{
+						BackoffLimit:   pointer.Int32(5),
+						CompletionMode: &indexedCompletion,
+						ManualSelector: pointer.Bool(true),
+						Selector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"foo":            "bar",
+								"controller-uid": "ghjdfhsakdfj7824",
+								"job-name":       "ryan-name",
+							},
+						},
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Labels: map[string]string{
+									"foo":                          "bar",
+									"controller-uid":               "ghjdfhsakdfj7824",
+									"job-name":                     "ryan-name",
+									"batch.kubernetes.io/job-name": "ryan-name",
+								},
+							},
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Image: "foo/bar"},
+								},
+							},
+						},
+					},
+				}
+				mJob, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&job)
+				if err != nil {
+					t.Fatalf("ToUnstructured failed: %v", err)
+				}
+				unstructured.RemoveNestedField(mJob, "status")
+				unstructured.RemoveNestedField(mJob, "metadata", "creationTimestamp")
 
 				uJob := unstructured.Unstructured{Object: mJob}
 				rawJob, err := uJob.MarshalJSON()
