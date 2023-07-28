@@ -7,12 +7,17 @@ package main
 
 //goland:noinspection ALL
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/textproto"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +36,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/client"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
@@ -190,6 +196,18 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 				return nil, err
 			}
 			hubConfig.TLSClientConfig.CAData = caData
+		}
+	}
+
+	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
+		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
+		h, err := r.ReadMIMEHeader()
+		if err != nil && err != io.EOF {
+			klog.ErrorS(err, "failed to parse HUB_KUBE_HEADER %q", header)
+			return nil, err
+		}
+		hubConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			return client.NewCustomHeadersRoundTripper(http.Header(h), rt)
 		}
 	}
 	return hubConfig, nil
