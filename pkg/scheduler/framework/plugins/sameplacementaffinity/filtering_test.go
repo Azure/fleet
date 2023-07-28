@@ -44,7 +44,7 @@ func TestFilter(t *testing.T) {
 					},
 					Spec: fleetv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						State:         fleetv1beta1.BindingStateUnscheduled,
+						State:         fleetv1beta1.BindingStateScheduled,
 					},
 				},
 				{
