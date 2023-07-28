@@ -19,7 +19,6 @@ func (p *Plugin) Score(
 	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 	cluster *fleetv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
-
 	if state.HasObsoleteBindingFor(cluster.Name) {
 		return &framework.ClusterScore{ObsoletePlacementAffinityScore: 1}, nil
 	}
