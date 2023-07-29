@@ -33,7 +33,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-// Reconciler recompute the cluster resource binding.
+// Reconciler recomputes the cluster resource binding.
 type Reconciler struct {
 	client.Client
 	APIReader client.Reader
@@ -83,7 +83,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.APIReader.List(ctx, bindingList, crpLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
-		return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
 	// take a deep copy of the bindings so that we can safely modify them
 	allBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindingList.Items))
@@ -98,7 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			"clusterResourcePlacement", crpName)
 		return ctrl.Result{}, err
 	}
-	klog.V(2).InfoS("Found the latest resource resourceBinding for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
+	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
 
 	//TODO: handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not deleted yet
 
@@ -108,7 +108,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
 		return ctrl.Result{}, nil
 	}
-	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "number of bindings", len(tobeUpdatedBindings))
+	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(tobeUpdatedBindings))
 
 	// update all the bindings in parallel according to the rollout plan, requeue the request after the unavailable period
 	// has passed so that some applied bindings will be considered "ready" by the rollout process regardless if the binding updates succeed or not.
