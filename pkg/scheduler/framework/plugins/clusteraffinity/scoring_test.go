@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package clusteraffinity
 
 import (
@@ -23,19 +28,19 @@ func TestPreScore(t *testing.T) {
 	}{
 		{
 			name: "nil policy",
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name:   "nil affinity",
 			policy: &fleetv1beta1.PlacementPolicy{},
-			want:   framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want:   framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "nil cluster affinity",
 			policy: &fleetv1beta1.PlacementPolicy{
 				Affinity: &fleetv1beta1.Affinity{},
 			},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "pluginState is not set",
@@ -45,7 +50,7 @@ func TestPreScore(t *testing.T) {
 				},
 			},
 			notSetPluginState: true,
-			want:              framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
+			want:              framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name: "nil pluginState",
@@ -54,7 +59,7 @@ func TestPreScore(t *testing.T) {
 					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
 				},
 			},
-			want: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
+			want: framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name: "no preferred affinity terms",
@@ -64,7 +69,7 @@ func TestPreScore(t *testing.T) {
 				},
 			},
 			ps:   &pluginState{},
-			want: framework.NewNonErrorStatus(framework.Skip, defaultClusterAffinityPluginName),
+			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "have preferred affinity terms",
@@ -89,7 +94,7 @@ func TestPreScore(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil)
+			state := framework.NewCycleState(nil, nil)
 			if !tc.notSetPluginState {
 				state.Write(framework.StateKey(p.Name()), tc.ps)
 			}
@@ -118,11 +123,11 @@ func TestPluginScore(t *testing.T) {
 		{
 			name:              "pluginState is not set",
 			notSetPluginState: true,
-			wantStatus:        framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
+			wantStatus:        framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name:       "nil pluginState",
-			wantStatus: framework.FromError(errors.New("invalid state"), defaultClusterAffinityPluginName),
+			wantStatus: framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name: "no preferred affinity terms",
@@ -164,7 +169,7 @@ func TestPluginScore(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
-			state := framework.NewCycleState(nil)
+			state := framework.NewCycleState(nil, nil)
 			if !tc.notSetPluginState {
 				state.Write(framework.StateKey(p.Name()), tc.ps)
 			}

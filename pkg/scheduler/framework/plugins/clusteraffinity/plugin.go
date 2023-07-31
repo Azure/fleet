@@ -46,7 +46,7 @@ type clusterAffinityPluginOptions struct {
 
 type Option func(*clusterAffinityPluginOptions)
 
-var defaultClusterAffinityPluginOptions = clusterAffinityPluginOptions{
+var defaultPluginOptions = clusterAffinityPluginOptions{
 	name: "ClusterAffinity",
 }
 
@@ -59,7 +59,7 @@ func WithName(name string) Option {
 
 // New returns a new Plugin.
 func New(opts ...Option) Plugin {
-	options := defaultClusterAffinityPluginOptions
+	options := defaultPluginOptions
 	for _, opt := range opts {
 		opt(&options)
 	}

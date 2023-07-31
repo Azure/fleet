@@ -99,7 +99,7 @@ func main() {
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
+		klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
 		exitWithErrorFunc()
 	}
 
@@ -107,7 +107,7 @@ func main() {
 		Client:                  mgr.GetClient(),
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "MemberCluster")
+		klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
 		exitWithErrorFunc()
 	}
 
