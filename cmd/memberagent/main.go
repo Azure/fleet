@@ -7,12 +7,17 @@ package main
 
 //goland:noinspection ALL
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/textproto"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +41,7 @@ import (
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -190,6 +196,20 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 				return nil, err
 			}
 			hubConfig.TLSClientConfig.CAData = caData
+		}
+	}
+
+	// Sometime the hub cluster need additional http header for authentication or authorization.
+	// the "HUB_KUBE_HEADER" to allow sending custom header to hub's API Server for authentication and authorization.
+	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
+		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
+		h, err := r.ReadMIMEHeader()
+		if err != nil && !errors.Is(err, io.EOF) {
+			klog.ErrorS(err, "failed to parse HUB_KUBE_HEADER %q", header)
+			return nil, err
+		}
+		hubConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			return httpclient.NewCustomHeadersRoundTripper(http.Header(h), rt)
 		}
 	}
 	return hubConfig, nil
