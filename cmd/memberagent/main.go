@@ -199,6 +199,8 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		}
 	}
 
+	// Sometime the hub cluster need additional http header for authentication or authorization.
+	// the "HUB_KUBE_HEADER" to allow sending custom header to hub's API Server for authentication and authorization.
 	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
 		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
 		h, err := r.ReadMIMEHeader()
