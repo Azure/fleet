@@ -356,7 +356,8 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 		}
 	} else if object.GetKind() == "Job" && object.GetAPIVersion() == batchv1.SchemeGroupVersion.String() {
 		if manualSelector, exist, _ := unstructured.NestedBool(object.Object, "spec", "manualSelector"); !exist || !manualSelector {
-			// remove the selector field added by the api-server if the job is not created with manual selector
+			// remove the selector field and labels added by the api-server if the job is not created with manual selector
+			// whose value conflict with the ones created by the member cluster api server
 			// https://github.com/kubernetes/kubernetes/blob/d4fde1e92a83cb533ae63b3abe9d49f08efb7a2f/pkg/registry/batch/job/strategy.go#L219
 			// k8s used to add an old label called "controller-uid" but use a new label called "batch.kubernetes.io/controller-uid" after 1.26
 			unstructured.RemoveNestedField(object.Object, "spec", "selector", "matchLabels", "controller-uid")
