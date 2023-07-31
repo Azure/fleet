@@ -36,12 +36,12 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/client"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -207,7 +207,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 			return nil, err
 		}
 		hubConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
-			return client.NewCustomHeadersRoundTripper(http.Header(h), rt)
+			return httpclient.NewCustomHeadersRoundTripper(http.Header(h), rt)
 		}
 	}
 	return hubConfig, nil
