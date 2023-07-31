@@ -32,8 +32,7 @@ var (
 	// Note that successful connection to any of the extension points implies that the
 	// plugin already implements the Plugin interface.
 	_ framework.FilterPlugin = &Plugin{}
-	// TODO
-	// _ framework.ScorePlugin     = &Plugin{}
+	_ framework.ScorePlugin  = &Plugin{}
 )
 
 type samePlacementAntiAffinityPluginOptions struct {
