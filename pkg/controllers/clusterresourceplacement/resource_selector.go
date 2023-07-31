@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -352,6 +353,18 @@ func generateRawContent(object *unstructured.Unstructured) ([]byte, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to get the ports field in Serivce object, name =%s: %w", object.GetName(), err)
+		}
+	} else if object.GetKind() == "Job" && object.GetAPIVersion() == batchv1.SchemeGroupVersion.String() {
+		if manualSelector, exist, _ := unstructured.NestedBool(object.Object, "spec", "manualSelector"); !exist || !manualSelector {
+			// remove the selector field and labels added by the api-server if the job is not created with manual selector
+			// whose value conflict with the ones created by the member cluster api server
+			// https://github.com/kubernetes/kubernetes/blob/d4fde1e92a83cb533ae63b3abe9d49f08efb7a2f/pkg/registry/batch/job/strategy.go#L219
+			// k8s used to add an old label called "controller-uid" but use a new label called "batch.kubernetes.io/controller-uid" after 1.26
+			unstructured.RemoveNestedField(object.Object, "spec", "selector", "matchLabels", "controller-uid")
+			unstructured.RemoveNestedField(object.Object, "spec", "selector", "matchLabels", "batch.kubernetes.io/controller-uid")
+			unstructured.RemoveNestedField(object.Object, "spec", "template", "metadata", "creationTimestamp")
+			unstructured.RemoveNestedField(object.Object, "spec", "template", "metadata", "labels", "controller-uid")
+			unstructured.RemoveNestedField(object.Object, "spec", "template", "metadata", "labels", "batch.kubernetes.io/controller-uid")
 		}
 	}
 
