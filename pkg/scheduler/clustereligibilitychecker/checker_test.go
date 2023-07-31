@@ -155,7 +155,7 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: health condition not available",
+			wantReasonPrefix: "cluster is not connected to the fleet: health condition from member agent is not available",
 		},
 		{
 			name: "health check fails for a long period",

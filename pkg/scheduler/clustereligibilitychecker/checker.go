@@ -19,7 +19,7 @@ import (
 const (
 	// defaultClusterHeartbeatTimeout is the default timeout value this checker uses for checking
 	// if a cluster has been disconnected from the fleet for a prolonged period of time.
-	defaultClusterHeartbeatTimeout = time.Minute * 5
+	defaultClusterHeartbeatCheckTimeout = time.Minute * 5
 
 	// defaultClusterHealthCheckTimeout is the default timeout value this checker uses for checking
 	// if a cluster is still in a healthy state.
@@ -27,21 +27,23 @@ const (
 )
 
 type ClusterEligibilityChecker struct {
-	// The timeout value this checker uses for checking if a cluster has been disconnected
-	// from the fleet for a prolonged period of time.
-	clusterHeartbeatTimeout time.Duration
+	// clusterHeartbeatCheckTimeout is the timeout value this checker uses for checking if a cluster
+	// has been disconnected from the fleet for a prolonged period of time.
+	clusterHeartbeatCheckTimeout time.Duration
 
-	// The timeout value this checker uses for checking if a cluster is still in a healthy state.
+	// clusterHealthCheckTimeout is the timeout value this checker uses for checking if a cluster is
+	// still in a healthy state.
 	clusterHealthCheckTimeout time.Duration
 }
 
 // checkerOptions is the options for this checker.
 type checkerOptions struct {
-	// The timeout value this checker uses for checking if a cluster has been disconnected
-	// from the fleet for a prolonged period of time.
-	clusterHeartbeatTimeout time.Duration
+	// clusterHeartbeatCheckTimeout is the timeout value this checker uses for checking if a cluster
+	// has been disconnected from the fleet for a prolonged period of time.
+	clusterHeartbeatCheckTimeout time.Duration
 
-	// The timeout value this checker uses for checking if a cluster is still in a healthy state.
+	// clusterHealthCheckTimeout is the timeout value this checker uses for checking if a cluster is
+	// still in a healthy state.
 	clusterHealthCheckTimeout time.Duration
 }
 
@@ -52,7 +54,7 @@ type Option func(*checkerOptions)
 // if a cluster has been disconnected from the fleet for a prolonged period of time.
 func WithClusterHeartbeatTimeout(timeout time.Duration) Option {
 	return func(o *checkerOptions) {
-		o.clusterHeartbeatTimeout = timeout
+		o.clusterHeartbeatCheckTimeout = timeout
 	}
 }
 
@@ -66,8 +68,8 @@ func WithClusterHealthCheckTimeout(timeout time.Duration) Option {
 
 // defaultPluginOptions is the default options for this plugin.
 var defaultCheckerOptions = checkerOptions{
-	clusterHeartbeatTimeout:   defaultClusterHeartbeatTimeout,
-	clusterHealthCheckTimeout: defaultClusterHealthCheckTimeout,
+	clusterHeartbeatCheckTimeout: defaultClusterHeartbeatCheckTimeout,
+	clusterHealthCheckTimeout:    defaultClusterHealthCheckTimeout,
 }
 
 // New returns a new cluster eligibility checker.
@@ -78,8 +80,8 @@ func New(opts ...Option) *ClusterEligibilityChecker {
 	}
 
 	return &ClusterEligibilityChecker{
-		clusterHeartbeatTimeout:   options.clusterHeartbeatTimeout,
-		clusterHealthCheckTimeout: options.clusterHealthCheckTimeout,
+		clusterHeartbeatCheckTimeout: options.clusterHeartbeatCheckTimeout,
+		clusterHealthCheckTimeout:    options.clusterHealthCheckTimeout,
 	}
 }
 
@@ -104,7 +106,7 @@ func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.Membe
 	}
 
 	sinceLastHeartbeat := time.Since(memberAgentStatus.LastReceivedHeartbeat.Time)
-	if sinceLastHeartbeat > checker.clusterHeartbeatTimeout {
+	if sinceLastHeartbeat > checker.clusterHeartbeatCheckTimeout {
 		// The member agent has not sent heartbeat signals for a prolonged period of time.
 		//
 		// Note that this plugin assumes minimum clock drifts between clusters in the fleet.
@@ -126,7 +128,7 @@ func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.Membe
 	memberAgentHealthyCond := cluster.GetAgentCondition(fleetv1beta1.MemberAgent, fleetv1beta1.AgentHealthy)
 	if memberAgentHealthyCond == nil {
 		// The health condition is absent.
-		return false, "cluster is not connected to the fleet: health condition not available"
+		return false, "cluster is not connected to the fleet: health condition from member agent is not available"
 	}
 
 	sinceLastTransition := time.Since(memberAgentHealthyCond.LastTransitionTime.Time)
