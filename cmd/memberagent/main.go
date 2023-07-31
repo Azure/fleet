@@ -202,7 +202,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
 		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
 		h, err := r.ReadMIMEHeader()
-		if err != nil && errors.Is(err, io.EOF) {
+		if err != nil && !errors.Is(err, io.EOF) {
 			klog.ErrorS(err, "failed to parse HUB_KUBE_HEADER %q", header)
 			return nil, err
 		}
