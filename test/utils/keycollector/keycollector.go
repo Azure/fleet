@@ -3,6 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
+// Package keycollector features a utility that is used for testing scheduler-related logic.
 package keycollector
 
 import (
