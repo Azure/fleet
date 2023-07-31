@@ -11,7 +11,6 @@ import (
 	"context"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -24,9 +23,6 @@ const (
 type Plugin struct {
 	// The name of the plugin.
 	name string
-
-	// The cluster eligibility checker in use by the scheduler framework.
-	clusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
 
 	// The framework handle.
 	handle framework.Handle
@@ -84,7 +80,6 @@ func (p *Plugin) Name() string {
 
 // SetUpWithFramework sets up this plugin with a scheduler framework.
 func (p *Plugin) SetUpWithFramework(handle framework.Handle) {
-	p.clusterEligibilityChecker = handle.ClusterEligibilityChecker()
 	p.handle = handle
 
 	// This plugin does not need to set up any informer.
@@ -97,7 +92,7 @@ func (p *Plugin) Filter(
 	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 	cluster *fleetv1beta1.MemberCluster,
 ) (status *framework.Status) {
-	if eligible, reason := p.clusterEligibilityChecker.IsEligible(cluster); !eligible {
+	if eligible, reason := p.handle.ClusterEligibilityChecker().IsEligible(cluster); !eligible {
 		return framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), reason)
 	}
 

@@ -13,6 +13,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
@@ -29,10 +32,29 @@ var (
 	ignoredStatusFields = cmpopts.IgnoreFields(framework.Status{}, "reasons", "err")
 )
 
+// Mock framework.Handle interface for set up the plugin.
+type MockHandle struct {
+	clusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
+}
+
+var (
+	_ framework.Handle = &MockHandle{}
+)
+
+func (mh *MockHandle) Client() client.Client               { return nil }
+func (mh *MockHandle) Manager() ctrl.Manager               { return nil }
+func (mh *MockHandle) UncachedReader() client.Reader       { return nil }
+func (mh *MockHandle) EventRecorder() record.EventRecorder { return nil }
+func (mh *MockHandle) ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker {
+	return mh.clusterEligibilityChecker
+}
+
 // TestFilter tests the Filter method.
 func TestFilter(t *testing.T) {
 	p := New()
-	p.clusterEligibilityChecker = clustereligibilitychecker.New()
+	p.SetUpWithFramework(&MockHandle{
+		clusterEligibilityChecker: clustereligibilitychecker.New(),
+	})
 
 	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
