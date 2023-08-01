@@ -22,7 +22,7 @@ spec:
           args:
             - --leader-elect=true
             - --enable-webhook={{ .Values.enableWebhook }}
-            - --enable-deny-webhook={{ .Values.enableDenyWebhook }}
+            - --deny-webhook-guard-rail={{ .Values.denyWebhookGuardRail }}
             - --whitelisted-users=system:serviceaccount:fleet-system:hub-agent-sa
             - --webhook-client-connection-type={{.Values.webhookClientConnectionType}}
             - --v={{ .Values.logVerbosity }}
