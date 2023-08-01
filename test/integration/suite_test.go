@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
@@ -60,6 +62,7 @@ var _ = BeforeSuite(func() {
 	Expect(fleetv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	// get the codec with the all the scheme
 	genericCodecs := serializer.NewCodecFactory(scheme.Scheme)
