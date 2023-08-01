@@ -10,11 +10,10 @@ import (
 	"strconv"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -65,6 +64,41 @@ var _ = Describe("Test the rollout Controller", func() {
 		masterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
 		Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
 		By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
+		// create scheduled bindings for master snapshot on target clusters
+		clusters := make([]string, targetCluster)
+		for i := 0; i < int(targetCluster); i++ {
+			clusters[i] = "cluster-" + utils.RandStr()
+			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, clusters[i])
+			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
+			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			bindings = append(bindings, binding)
+		}
+		// check that all bindings are scheduled
+		Eventually(func() bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					return false
+				}
+				if binding.Spec.State != fleetv1beta1.BindingStateBound || binding.Spec.ResourceSnapshotName != masterSnapshot.Name {
+					return false
+				}
+			}
+			return true
+		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
+	})
+
+	It("Should rollout all the selected bindings when the rollout strategy is not set", func() {
+		// create CRP
+		var targetCluster int32 = 11
+		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster))
+		// remove the strategy
+		rolloutCRP.Spec.Strategy = fleetv1beta1.RolloutStrategy{}
+		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed())
+		// create master resource snapshot that is latest
+		masterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
+		Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+		By(fmt.Sprintf("master resource snapshot %s created", masterSnapshot.Name))
 		// create scheduled bindings for master snapshot on target clusters
 		clusters := make([]string, targetCluster)
 		for i := 0; i < int(targetCluster); i++ {
@@ -178,8 +212,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		// check that the unselected bindings are deleted
 		Eventually(func() bool {
 			for _, binding := range deletedBindings {
-				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
-				if !apierrors.IsNotFound(err) {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding); err != nil && !apierrors.IsNotFound(err) {
 					return false
 				}
 			}

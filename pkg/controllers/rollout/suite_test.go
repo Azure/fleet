@@ -93,8 +93,8 @@ var _ = BeforeSuite(func() {
 
 	// setup our main reconciler
 	err = (&Reconciler{
-		Client:    k8sClient,
-		APIReader: mgr.GetAPIReader(),
+		Client:         k8sClient,
+		UncachedReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 

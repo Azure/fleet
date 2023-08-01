@@ -36,8 +36,8 @@ import (
 // Reconciler recomputes the cluster resource binding.
 type Reconciler struct {
 	client.Client
-	APIReader client.Reader
-	recorder  record.EventRecorder
+	UncachedReader client.Reader
+	recorder       record.EventRecorder
 }
 
 // Reconcile triggers a single binding reconcile round.
@@ -80,7 +80,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	crpLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel: crp.Name,
 	}
-	if err := r.APIReader.List(ctx, bindingList, crpLabelMatcher); err != nil {
+	if err := r.UncachedReader.List(ctx, bindingList, crpLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
@@ -177,8 +177,9 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 	// Those are the bindings that are candidates to be updated to latest resources during the rolling phase.
 	updateCandidates := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 
-	// the list of bindings that are to be updated by this rolling phase
-	tobeUpdatedBinding := make([]*fleetv1beta1.ClusterResourceBinding, 0)
+	// fill out all the default values for CRP so we don't need to check nil values
+	// TODO: remove this after we have mutation webhook
+	fleetv1beta1.SetDefaultsClusterResourcePlacement(crp)
 
 	// calculate the cutoff time for a binding to be applied before so that it can be considered ready
 	readyTimeCutOff := time.Now().Add(-time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second)
@@ -236,8 +237,10 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 		"canBeReadyBindingNumber", len(canBeReadyBindings), "boundingCandidateNumber", len(boundingCandidates),
 		"removeCandidateNumber", len(removeCandidates), "updateCandidateNumber", len(updateCandidates))
 
+	// the list of bindings that are to be updated by this rolling phase
+	toBeUpdatedBinding := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates) == 0 {
-		return tobeUpdatedBinding, false
+		return toBeUpdatedBinding, false
 	}
 
 	// calculate the max number of bindings that can be unavailable according to user specified maxUnavailable
@@ -254,12 +257,12 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 		i := 0
 		// we first remove the bindings that are not selected by the scheduler anymore
 		for ; i < maxNumberToRemove && i < len(removeCandidates); i++ {
-			tobeUpdatedBinding = append(tobeUpdatedBinding, removeCandidates[i])
+			toBeUpdatedBinding = append(toBeUpdatedBinding, removeCandidates[i])
 		}
 		// we then update the bound bindings to the latest resource resourceBinding which will lead them to be unavailable for a short period of time
 		j := 0
 		for ; i < maxNumberToRemove && j < len(updateCandidates); i++ {
-			tobeUpdatedBinding = append(tobeUpdatedBinding, updateCandidates[j])
+			toBeUpdatedBinding = append(toBeUpdatedBinding, updateCandidates[j])
 			j++
 		}
 	}
@@ -276,10 +279,10 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 		"maxSurgeNumber", maxSurgeNumber, "maxReadyNumber", maxReadyNumber, "upperBoundReadyBindings",
 		upperBoundReadyNumber, "maxNumberOfBindingsToAdd", maxNumberToAdd)
 	for i := 0; i < maxNumberToAdd && i < len(boundingCandidates); i++ {
-		tobeUpdatedBinding = append(tobeUpdatedBinding, boundingCandidates[i])
+		toBeUpdatedBinding = append(toBeUpdatedBinding, boundingCandidates[i])
 	}
 
-	return tobeUpdatedBinding, true
+	return toBeUpdatedBinding, true
 }
 
 // isBindingReady checks if a binding is considered ready.
@@ -294,23 +297,24 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 	return false
 }
 
-// updateBindings updates the bindings according to its state
-func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotName string, tobeUpgradedBinding []*fleetv1beta1.ClusterResourceBinding) error {
+// updateBindings updates the bindings according to its state.
+func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotName string, toBeUpgradedBinding []*fleetv1beta1.ClusterResourceBinding) error {
 	// issue all the update requests in parallel
 	errs, cctx := errgroup.WithContext(ctx)
 	// handle the bindings depends on its state
-	for i := 0; i < len(tobeUpgradedBinding); i++ {
-		binding := tobeUpgradedBinding[i]
+	for i := 0; i < len(toBeUpgradedBinding); i++ {
+		binding := toBeUpgradedBinding[i]
+		bindObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		// The only thing we can do on a bound binding is to update its resource resourceBinding
 		case fleetv1beta1.BindingStateBound:
 			binding.Spec.ResourceSnapshotName = latestResourceSnapshotName
 			errs.Go(func() error {
 				if err := r.Client.Update(cctx, binding); err != nil {
-					klog.ErrorS(err, "Failed to update a binding to the latest resource", "resourceBinding", klog.KObj(binding))
+					klog.ErrorS(err, "Failed to update a binding to the latest resource", "resourceBinding", bindObj)
 					return controller.NewUpdateIgnoreConflictError(err)
 				}
-				klog.V(2).InfoS("Updated a binding to the latest resource", "resourceBinding", klog.KObj(binding), "latestResourceSnapshotName", latestResourceSnapshotName)
+				klog.V(2).InfoS("Updated a binding to the latest resource", "resourceBinding", bindObj, "latestResourceSnapshotName", latestResourceSnapshotName)
 				return nil
 			})
 		// We need to bound the scheduled binding to the latest resource snapshot, scheduler doesn't set the resource snapshot name
@@ -319,20 +323,20 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 			binding.Spec.ResourceSnapshotName = latestResourceSnapshotName
 			errs.Go(func() error {
 				if err := r.Client.Update(cctx, binding); err != nil {
-					klog.ErrorS(err, "Failed to mark a binding bound", "resourceBinding", klog.KObj(binding))
+					klog.ErrorS(err, "Failed to mark a binding bound", "resourceBinding", bindObj)
 					return controller.NewUpdateIgnoreConflictError(err)
 				}
-				klog.V(2).InfoS("Mark a binding bound", "resourceBinding", klog.KObj(binding))
+				klog.V(2).InfoS("Mark a binding bound", "resourceBinding", bindObj)
 				return nil
 			})
 		// The only thing we can do on an unscheduled binding is to delete it
 		case fleetv1beta1.BindingStateUnscheduled:
 			errs.Go(func() error {
 				if err := r.Client.Delete(cctx, binding); err != nil {
-					klog.ErrorS(err, "Failed to delete an unselected binding", "resourceBinding", klog.KObj(binding))
+					klog.ErrorS(err, "Failed to delete an unselected binding", "resourceBinding", bindObj)
 					return controller.NewAPIServerError(false, err)
 				}
-				klog.V(2).InfoS("Deleted an unselected binding", "resourceBinding", klog.KObj(binding))
+				klog.V(2).InfoS("Deleted an unselected binding", "resourceBinding", bindObj)
 				return nil
 			})
 		}

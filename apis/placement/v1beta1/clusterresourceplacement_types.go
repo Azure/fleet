@@ -22,6 +22,18 @@ const (
 	// SchedulerCRPCleanupFinalizer is a finalizer addd by the scheduler to CRPs, to make sure
 	// that all bindings derived from a CRP can be cleaned up after the CRP is deleted.
 	SchedulerCRPCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
+
+	// DefaultMaxUnavailableValue is the default value of MaxUnavailable in the rolling update config.
+	DefaultMaxUnavailableValue = "25%"
+
+	// 	DefaultMaxSurgeValue is the default value of MaxSurge in the rolling update config.
+	DefaultMaxSurgeValue = "25%"
+
+	// DefaultUnavailablePeriodSeconds is the default period of time we consider a newly applied workload as unavailable.
+	DefaultUnavailablePeriodSeconds = 60
+
+	// DefaultRevisionHistoryLimit is the default value of RevisionHistoryLimit.
+	DefaultRevisionHistoryLimit = 10
 )
 
 // +genclient
