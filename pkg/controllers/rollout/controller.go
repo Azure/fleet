@@ -31,6 +31,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 // Reconciler recomputes the cluster resource binding.
@@ -83,7 +84,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.UncachedReader.List(ctx, bindingList, crpLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
-		return ctrl.Result{}, controller.NewAPIServerError(true, err)
+		return ctrl.Result{}, controller.NewAPIServerError(false, err)
 	}
 	// take a deep copy of the bindings so that we can safely modify them
 	allBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindingList.Items))
@@ -102,19 +103,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	//TODO: handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not deleted yet
 
-	// pick the bindings to be updated
-	tobeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, &crp)
+	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
+	crpCopy := crp.DeepCopy()
+	fleetv1beta1.SetDefaultsClusterResourcePlacement(crpCopy)
+	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
+	if err = validator.ValidateClusterResourcePlacement(crpCopy); err != nil {
+		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)
+		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+	}
+	// pick the bindings to be updated according to the rollout plan
+	toBeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, crpCopy)
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
 		return ctrl.Result{}, nil
 	}
-	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(tobeUpdatedBindings))
+	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings))
 
-	// update all the bindings in parallel according to the rollout plan, requeue the request after the unavailable period
+	// update all the bindings in parallel according to the rollout plan, requeue the request after the mean value of unavailable period
 	// has passed so that some applied bindings will be considered "ready" by the rollout process regardless if the binding updates succeed or not.
 	// This is to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
-	return ctrl.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second},
-		r.updateBindings(ctx, latestResourceSnapshotName, tobeUpdatedBindings)
+	return ctrl.Result{RequeueAfter: time.Duration(*crpCopy.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds/2) * time.Second},
+		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
 }
 
 // fetchLatestResourceSnapshot lists all the latest resource resourceBinding associated with a CRP and returns the name of the master.
@@ -333,8 +342,10 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 		case fleetv1beta1.BindingStateUnscheduled:
 			errs.Go(func() error {
 				if err := r.Client.Delete(cctx, binding); err != nil {
-					klog.ErrorS(err, "Failed to delete an unselected binding", "resourceBinding", bindObj)
-					return controller.NewAPIServerError(false, err)
+					if !errors.IsNotFound(err) {
+						klog.ErrorS(err, "Failed to delete an unselected binding", "resourceBinding", bindObj)
+						return controller.NewAPIServerError(false, err)
+					}
 				}
 				klog.V(2).InfoS("Deleted an unselected binding", "resourceBinding", bindObj)
 				return nil

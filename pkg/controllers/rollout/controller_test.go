@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package rollout
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -145,6 +146,7 @@ func Test_pickBindingsToRoll(t *testing.T) {
 		tobeUpdatedBindings        []int
 		needRoll                   bool
 	}{
+		// TODO: add more tests
 		"test bound with out dated bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", "cluster-1"),
@@ -168,6 +170,28 @@ func Test_pickBindingsToRoll(t *testing.T) {
 			}
 			if gotNeedRoll != tt.needRoll {
 				t.Errorf("pickBindingsToRoll() gotNeedRoll = %v, want %v", gotNeedRoll, tt.needRoll)
+			}
+		})
+	}
+}
+
+func TestReconciler_updateBindings(t *testing.T) {
+	tests := map[string]struct {
+		name                       string
+		Client                     client.Client
+		latestResourceSnapshotName string
+		toBeUpgradedBinding        []*fleetv1beta1.ClusterResourceBinding
+		wantErr                    bool
+	}{
+		// TODO: Add negative test cases with fake client
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			r := &Reconciler{
+				Client: tt.Client,
+			}
+			if err := r.updateBindings(context.TODO(), tt.latestResourceSnapshotName, tt.toBeUpgradedBinding); (err != nil) != tt.wantErr {
+				t.Errorf("updateBindings() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

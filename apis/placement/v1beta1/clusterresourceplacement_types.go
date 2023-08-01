@@ -31,9 +31,6 @@ const (
 
 	// DefaultUnavailablePeriodSeconds is the default period of time we consider a newly applied workload as unavailable.
 	DefaultUnavailablePeriodSeconds = 60
-
-	// DefaultRevisionHistoryLimit is the default value of RevisionHistoryLimit.
-	DefaultRevisionHistoryLimit = 10
 )
 
 // +genclient

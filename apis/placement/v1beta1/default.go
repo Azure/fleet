@@ -40,6 +40,6 @@ func SetDefaultsClusterResourcePlacement(obj *ClusterResourcePlacement) {
 	}
 	if obj.Spec.RevisionHistoryLimit == nil {
 		obj.Spec.RevisionHistoryLimit = new(int32)
-		*obj.Spec.RevisionHistoryLimit = DefaultRevisionHistoryLimit
+		*obj.Spec.RevisionHistoryLimit = RevisionHistoryLimitDefaultValue
 	}
 }

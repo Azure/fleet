@@ -12,12 +12,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/yaml"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
