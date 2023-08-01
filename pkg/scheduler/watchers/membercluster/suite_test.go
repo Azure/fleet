@@ -24,7 +24,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
-	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/test/utils/keycollector"
 )
 
 var (
@@ -32,7 +32,7 @@ var (
 	hubClient    client.Client
 	ctx          context.Context
 	cancel       context.CancelFunc
-	keyCollector *utils.SchedulerWorkqueueKeyCollector
+	keyCollector *keycollector.SchedulerWorkqueueKeyCollector
 )
 
 var (
@@ -173,7 +173,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
 
 	// Start the key collector.
-	keyCollector = utils.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)
+	keyCollector = keycollector.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)
 	go func() {
 		keyCollector.Run(ctx)
 	}()

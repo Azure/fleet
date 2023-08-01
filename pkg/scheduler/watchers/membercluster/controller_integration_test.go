@@ -38,7 +38,7 @@ var (
 	someKeysEnqueuedActual = func() error {
 		errorFormat := "CRP keys %v have not been enqueued"
 		requiredKeys := []string{crpName1, crpName2, crpName3, crpName6}
-		if allPresent, absentKeys := keyCollector.IsPresent(requiredKeys...); !allPresent {
+		if isAllPresent, absentKeys := keyCollector.IsPresent(requiredKeys...); !isAllPresent {
 			return fmt.Errorf(errorFormat, absentKeys)
 		}
 
@@ -52,7 +52,7 @@ var (
 	allKeysEnqueuedActual = func() error {
 		errorFormat := "CRP keys %v have not been enqueued"
 		requiredKeys := []string{crpName1, crpName2, crpName3, crpName4, crpName5, crpName6}
-		if allPresent, absentKeys := keyCollector.IsPresent(requiredKeys...); !allPresent {
+		if isAllPresent, absentKeys := keyCollector.IsPresent(requiredKeys...); !isAllPresent {
 			return fmt.Errorf(errorFormat, absentKeys)
 		}
 

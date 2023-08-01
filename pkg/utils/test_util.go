@@ -6,14 +6,11 @@ Licensed under the MIT license.
 package utils
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/onsi/gomega/format"
-	"go.goms.io/fleet/pkg/scheduler/queue"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -138,71 +135,4 @@ func (matcher AlreadyExistMatcher) FailureMessage(actual interface{}) (message s
 // NegatedFailureMessage builds an error message.
 func (matcher AlreadyExistMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return format.Message(actual, "not to be already exist")
-}
-
-// SchedulerWorkqueueKeyCollector helps collect keys from a scheduler work queue for testing
-// purposes.
-type SchedulerWorkqueueKeyCollector struct {
-	schedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueue
-	lock               sync.Mutex
-	collectedKeys      map[string]bool
-}
-
-// NewSchedulerWorkqueueKeyCollector returns a new SchedulerWorkqueueKeyCollector.
-func NewSchedulerWorkqueueKeyCollector(wq queue.ClusterResourcePlacementSchedulingQueue) *SchedulerWorkqueueKeyCollector {
-	return &SchedulerWorkqueueKeyCollector{
-		schedulerWorkqueue: wq,
-		collectedKeys:      make(map[string]bool),
-	}
-}
-
-// Run runs the SchedulerWorkqueueKeyCollector.
-func (kc *SchedulerWorkqueueKeyCollector) Run(ctx context.Context) {
-	go func() {
-		for {
-			key, closed := kc.schedulerWorkqueue.NextClusterResourcePlacementKey()
-			if closed {
-				break
-			}
-
-			kc.lock.Lock()
-			kc.collectedKeys[string(key)] = true
-			kc.schedulerWorkqueue.Done(key)
-			kc.schedulerWorkqueue.Forget(key)
-			kc.lock.Unlock()
-		}
-	}()
-
-	<-ctx.Done()
-}
-
-// IsPresent checks if all of the given keys are present in the collected keys.
-func (kc *SchedulerWorkqueueKeyCollector) IsPresent(keys ...string) (allPresent bool, absentKeys []string) {
-	kc.lock.Lock()
-	defer kc.lock.Unlock()
-
-	absentKeys = []string{}
-	for _, key := range keys {
-		if _, ok := kc.collectedKeys[key]; !ok {
-			absentKeys = append(absentKeys, key)
-		}
-	}
-
-	return len(absentKeys) == 0, absentKeys
-}
-
-// Reset clears all the collected keys.
-func (kc *SchedulerWorkqueueKeyCollector) Reset() {
-	kc.lock.Lock()
-	defer kc.lock.Unlock()
-
-	kc.collectedKeys = make(map[string]bool)
-}
-
-// Len returns the count of collected keys.
-func (kc *SchedulerWorkqueueKeyCollector) Len() int {
-	kc.lock.Lock()
-	defer kc.lock.Unlock()
-
-	return len(kc.collectedKeys)
 }

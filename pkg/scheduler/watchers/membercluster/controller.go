@@ -40,7 +40,6 @@ type Reconciler struct {
 
 // New returns a new Reconciler.
 func New(client client.Client, wq queue.ClusterResourcePlacementSchedulingQueueWriter, checker clustereligibilitychecker.ClusterEligibilityChecker) *Reconciler {
-
 	return &Reconciler{
 		Client:                    client,
 		SchedulerWorkQueue:        wq,

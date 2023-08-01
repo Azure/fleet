@@ -46,8 +46,8 @@ var (
 var (
 	// expectedKeySetEnqueuedActual is a function that checks if the expected key set has been enqueued.
 	expectedKeySetEnqueuedActual = func() error {
-		if !keyCollector.IsPresent(crpName) {
-			return fmt.Errorf("expected key is not found")
+		if isAllPresent, absentKeys := keyCollector.IsPresent(crpName); !isAllPresent {
+			return fmt.Errorf("expected key(s) %v is not found", absentKeys)
 		}
 
 		if queueLen := keyCollector.Len(); queueLen != 1 {

@@ -52,12 +52,17 @@ func (kc *SchedulerWorkqueueKeyCollector) Run(ctx context.Context) {
 }
 
 // IsPresent returns whether a given key is has been collected.
-func (kc *SchedulerWorkqueueKeyCollector) IsPresent(key string) bool {
+func (kc *SchedulerWorkqueueKeyCollector) IsPresent(keys ...string) (isAllPresent bool, absentKeys []string) {
 	kc.lock.Lock()
 	defer kc.lock.Unlock()
 
-	_, ok := kc.collectedKeys[key]
-	return ok
+	absentKeys = make([]string, 0, len(keys))
+	for _, key := range keys {
+		if _, ok := kc.collectedKeys[key]; !ok {
+			absentKeys = append(absentKeys, key)
+		}
+	}
+	return len(absentKeys) == 0, absentKeys
 }
 
 // Reset clears all the collected keys.
