@@ -7,12 +7,17 @@ package main
 
 //goland:noinspection ALL
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/textproto"
 	"os"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,11 +34,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/controllers/internalmembercluster"
+	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
+	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -55,6 +63,7 @@ func init() {
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1beta1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
@@ -189,6 +198,20 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 			hubConfig.TLSClientConfig.CAData = caData
 		}
 	}
+
+	// Sometime the hub cluster need additional http header for authentication or authorization.
+	// the "HUB_KUBE_HEADER" to allow sending custom header to hub's API Server for authentication and authorization.
+	if header, ok := os.LookupEnv("HUB_KUBE_HEADER"); ok {
+		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
+		h, err := r.ReadMIMEHeader()
+		if err != nil && !errors.Is(err, io.EOF) {
+			klog.ErrorS(err, "failed to parse HUB_KUBE_HEADER %q", header)
+			return nil, err
+		}
+		hubConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+			return httpclient.NewCustomHeadersRoundTripper(http.Header(h), rt)
+		}
+	}
 	return hubConfig, nil
 }
 
@@ -246,8 +269,12 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	if err = internalmembercluster.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-		return fmt.Errorf("unable to create controller hub_member: %w", err)
+	if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+		return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
+	}
+
+	if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+		return fmt.Errorf("unable to create controller v1beta1 hub_member: %w", err)
 	}
 
 	klog.V(3).InfoS("starting hub manager")

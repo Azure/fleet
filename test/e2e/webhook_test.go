@@ -550,7 +550,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 	})
 })
 
-var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
+var _ = Describe("Fleet's CR Resource Handler webhook tests", Ordered, func() {
 	Context("CR validation webhook", func() {
 		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
 			mc := fleetv1alpha1.MemberCluster{
@@ -603,27 +603,98 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
 
-		It("should allow update operation on member cluster CR for user in system:masters group", func() {
+		It("should allow update operation on member cluster CR labels for any user", func() {
+			var mc fleetv1alpha1.MemberCluster
+			By("update labels in member cluster, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				mc.SetLabels(labels)
+				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+			By("remove new label added for test, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				labels := mc.GetLabels()
+				delete(labels, testKey)
+				mc.SetLabels(labels)
+				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should allow update operation on member cluster CR annotations for any user", func() {
+			var mc fleetv1alpha1.MemberCluster
+			By("update annotations in member cluster, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				annotations := make(map[string]string)
+				annotations[testKey] = testValue
+				mc.SetLabels(annotations)
+				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+			By("remove new annotation added for test, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				annotations := mc.GetLabels()
+				delete(annotations, testKey)
+				mc.SetLabels(annotations)
+				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should allow update operation on member cluster CR spec for user in system:masters group", func() {
+			var mc fleetv1alpha1.MemberCluster
+			By("update spec of member cluster, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				mc.Spec.HeartbeatPeriodSeconds = 31
+				return HubCluster.KubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+			By("revert spec change made for test, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				mc.Spec.HeartbeatPeriodSeconds = 30
+				return HubCluster.KubeClient.Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should allow update operation on member cluster CR status for user in system:masters group", func() {
+			var mc fleetv1alpha1.MemberCluster
+			var reason string
+			By("update status of member cluster, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				Expect(mc.Status.Conditions).ToNot(BeEmpty())
+				reason = mc.Status.Conditions[0].Reason
+				mc.Status.Conditions[0].Reason = "update"
+				return HubCluster.KubeClient.Status().Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+			By("revert spec change made for test, expecting successful UPDATE of member cluster")
+			Eventually(func() error {
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
+				mc.Status.Conditions[0].Reason = reason
+				return HubCluster.KubeClient.Status().Update(ctx, &mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny member cluster CR status update for user not in system:master group or a whitelisted user", func() {
 			var mc fleetv1alpha1.MemberCluster
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: MemberCluster.ClusterName}, &mc)).Should(Succeed())
 
-			By("update labels in member cluster")
-			labels := make(map[string]string)
-			labels[testKey] = testValue
-			mc.SetLabels(labels)
+			By("update status of member cluster")
+			Expect(mc.Status.Conditions).ToNot(BeEmpty())
+			mc.Status.Conditions[0].Reason = "update"
 
-			By("expecting successful UPDATE of member cluster")
-			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
-			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
-
-			By("remove new label added for test")
-			labels = mc.GetLabels()
-			delete(labels, testKey)
-			mc.SetLabels(labels)
-
-			By("expecting successful UPDATE of member cluster")
-			// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
-			Expect(HubCluster.KubeClient.Update(ctx, &mc)).To(Succeed())
+			By("expecting denial UPDATE of member cluster status")
+			err := HubCluster.ImpersonateKubeClient.Status().Update(ctx, &mc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
 	})
 })

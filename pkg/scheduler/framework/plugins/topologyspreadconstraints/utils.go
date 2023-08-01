@@ -36,7 +36,7 @@ func countByDomain(clusters []fleetv1beta1.MemberCluster, state framework.CycleS
 			counter[name] = 0
 		}
 
-		if state.IsClusterScheduledOrBound(cluster.Name) {
+		if state.HasScheduledOrBoundBindingFor(cluster.Name) {
 			// The cluster under inspection owns a scheduled or bound binding.
 			counter[name] = count + 1
 		}

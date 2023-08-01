@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package internalmembercluster
+package v1beta1
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -81,7 +81,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 		}
 
 		By("delete member cluster")
-		internalMemberCluster := v1alpha1.InternalMemberCluster{
+		internalMemberCluster := fleetv1beta1.InternalMemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      memberClusterName,
 				Namespace: memberClusterNamespace,
@@ -92,13 +92,13 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 
 	Context("join", func() {
 		BeforeEach(func() {
-			internalMemberCluster := v1alpha1.InternalMemberCluster{
+			internalMemberCluster := fleetv1beta1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      memberClusterName,
 					Namespace: memberClusterNamespace,
 				},
-				Spec: v1alpha1.InternalMemberClusterSpec{
-					State:                  v1alpha1.ClusterStateJoin,
+				Spec: fleetv1beta1.InternalMemberClusterSpec{
+					State:                  fleetv1beta1.ClusterStateJoin,
 					HeartbeatPeriodSeconds: int32(HBPeriod),
 				},
 			}
@@ -114,11 +114,11 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 
-			var imc v1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 
 			By("checking updated join condition")
-			updatedJoinedCond := imc.GetConditionWithType(v1alpha1.MemberAgent, string(v1alpha1.AgentJoined))
+			updatedJoinedCond := imc.GetConditionWithType(fleetv1beta1.MemberAgent, string(fleetv1beta1.AgentJoined))
 			Expect(updatedJoinedCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(updatedJoinedCond.Reason).To(Equal(eventReasonInternalMemberClusterJoined))
 
@@ -127,7 +127,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(agentStatus.LastReceivedHeartbeat).ToNot(Equal(metav1.Now()))
 
 			By("checking updated health condition")
-			updatedHealthCond := imc.GetConditionWithType(v1alpha1.MemberAgent, string(v1alpha1.AgentHealthy))
+			updatedHealthCond := imc.GetConditionWithType(fleetv1beta1.MemberAgent, string(fleetv1beta1.AgentHealthy))
 			Expect(updatedHealthCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(updatedHealthCond.Reason).To(Equal(eventReasonInternalMemberClusterHealthy))
 
@@ -146,10 +146,10 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 
-			var imc v1alpha1.InternalMemberCluster
+			var imc fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 
-			memberAgentStatus := imc.GetAgentStatus(v1alpha1.MemberAgent)
+			memberAgentStatus := imc.GetAgentStatus(fleetv1beta1.MemberAgent)
 			lastReceivedHeartbeat := memberAgentStatus.LastReceivedHeartbeat
 
 			time.Sleep(time.Second)
@@ -170,21 +170,21 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 	Context("leave", func() {
 		BeforeEach(func() {
 			By("create internalMemberCluster CR")
-			internalMemberCluster := v1alpha1.InternalMemberCluster{
+			internalMemberCluster := fleetv1beta1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      memberClusterName,
 					Namespace: memberClusterNamespace,
 				},
-				Spec: v1alpha1.InternalMemberClusterSpec{
-					State:                  v1alpha1.ClusterStateLeave,
+				Spec: fleetv1beta1.InternalMemberClusterSpec{
+					State:                  fleetv1beta1.ClusterStateLeave,
 					HeartbeatPeriodSeconds: int32(HBPeriod),
 				},
 			}
 			Expect(k8sClient.Create(ctx, &internalMemberCluster)).Should(Succeed())
 
 			By("update internalMemberCluster CR with random usage status")
-			internalMemberCluster.Status = v1alpha1.InternalMemberClusterStatus{
-				ResourceUsage: v1alpha1.ResourceUsage{
+			internalMemberCluster.Status = fleetv1beta1.InternalMemberClusterStatus{
+				ResourceUsage: fleetv1beta1.ResourceUsage{
 					Capacity:        utils.NewResourceList(),
 					Allocatable:     utils.NewResourceList(),
 					ObservationTime: metav1.Now(),
@@ -200,11 +200,11 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Not(HaveOccurred()))
 
-			var internalMemberCluster v1alpha1.InternalMemberCluster
+			var internalMemberCluster fleetv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &internalMemberCluster)).Should(Succeed())
 
 			By("checking updated join condition")
-			updatedJoinedCond := internalMemberCluster.GetConditionWithType(v1alpha1.MemberAgent, string(v1alpha1.AgentJoined))
+			updatedJoinedCond := internalMemberCluster.GetConditionWithType(fleetv1beta1.MemberAgent, string(fleetv1beta1.AgentJoined))
 			Expect(updatedJoinedCond.Status).Should(Equal(metav1.ConditionFalse))
 			Expect(updatedJoinedCond.Reason).Should(Equal(eventReasonInternalMemberClusterLeft))
 		})

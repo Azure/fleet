@@ -134,4 +134,12 @@ func Test_buildHubConfig(t *testing.T) {
 			},
 		}, *config)
 	})
+	t.Run("use insecure client and custom header - success", func(t *testing.T) {
+		t.Setenv("CONFIG_PATH", "./testdata/token")
+		t.Setenv("HUB_KUBE_HEADER", "Member-Resource-ID: some-id")
+		config, err := buildHubConfig("https://hub.domain.com", false, true)
+		assert.NotNil(t, config)
+		assert.Nil(t, err)
+		assert.NotNil(t, config.WrapTransport)
+	})
 }

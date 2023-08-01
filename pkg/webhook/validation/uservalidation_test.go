@@ -6,9 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -117,6 +119,232 @@ func TestValidateUserForFleetCRD(t *testing.T) {
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
 			gotResult := ValidateUserForFleetCRD(testCase.group, testCase.namespacedName, testCase.whiteListedUsers, testCase.userInfo)
+			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestValidateMemberClusterUpdate(t *testing.T) {
+	testCases := map[string]struct {
+		currentMC        fleetv1alpha1.MemberCluster
+		oldMC            fleetv1alpha1.MemberCluster
+		whiteListedUsers []string
+		userInfo         v1.UserInfo
+		wantResponse     admission.Response
+	}{
+		"allow any user to modify MC labels": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-mc",
+					Labels: map[string]string{"test-key": "test-value"},
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+			},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify MC annotations": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-mc",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+			},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow system:masters group user to modify MC spec": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-mc",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateLeave,
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateJoin,
+				},
+			},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"system:masters"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow system:masters group user to modify MC status": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+			},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"system:masters"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow whitelisted user to modify MC status": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateLeave,
+				},
+				Status: fleetv1alpha1.MemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateJoin,
+				},
+			},
+			whiteListedUsers: []string{"test-user"},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of member cluster spec by non system:masters group": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-mc",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateLeave,
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateJoin,
+				},
+			},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of member cluster spec by non whitelisted user ": {
+			currentMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-mc",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateLeave,
+				},
+			},
+			oldMC: fleetv1alpha1.MemberCluster{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "MemberCluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					State: fleetv1alpha1.ClusterStateJoin,
+				},
+			},
+			whiteListedUsers: []string{"test-user1"},
+			userInfo: v1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			gotResult := ValidateMemberClusterUpdate(testCase.currentMC, testCase.oldMC, testCase.whiteListedUsers, testCase.userInfo)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
