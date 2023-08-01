@@ -3,31 +3,52 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
+// Package validator provides utils to validate cluster resource placement resource.
 package validator
 
 import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/informer"
 )
+
+var ResourceInformer informer.Manager
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
 func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
-		//TODO: make sure the selector's gvk is valid
 		if selector.LabelSelector != nil {
 			if len(selector.Name) != 0 {
 				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
 			}
 			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
 				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
+			}
+		}
+		// we leverage the informer manager to do the resource scope validation
+		if ResourceInformer == nil {
+			allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
+		} else {
+			for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
+				gvk := schema.GroupVersionKind{
+					Group:   selector.Group,
+					Version: selector.Version,
+					Kind:    selector.Kind,
+				}
+
+				// TODO: Ensure gvk created from resource selector is valid.
+				if !ResourceInformer.IsClusterScopedResources(gvk) {
+					allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
+				}
 			}
 		}
 	}
