@@ -49,11 +49,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 	}
 
-	// Check if the policy snapshot has been deleted and has the scheduler finalizer.
-	//
-	// Normally this would not happen as the event filter is set to filter out all deletion events.
+	// Check if the CRP has been deleted and has the scheduler finalizer.
 	if crp.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer) {
-		// The policy snapshot has been deleted and still has the scheduler finalizer;
+		// The CRP has been deleted and still has the scheduler finalizer;
 		// enqueue it for the scheduler to process.
 		r.schedulerWorkqueue.AddRateLimited(queue.ClusterResourcePlacementKey(crp.Name))
 	}
