@@ -21,11 +21,11 @@ const (
 
 // TestIsClusterEligible tests the IsClusterEligible function.
 func TestIsClusterEligible(t *testing.T) {
-	clusterHeartbeatTimeout := time.Minute * 15
+	clusterHeartbeatCheckTimeout := time.Minute * 15
 	clusterHealthCheckTimeout := time.Minute * 15
 	checker := New(
-		WithClusterHeartbeatTimeout(clusterHeartbeatTimeout),
-		WithClusterHeartbeatTimeout(clusterHealthCheckTimeout),
+		WithClusterHeartbeatCheckTimeout(clusterHeartbeatCheckTimeout),
+		WithClusterHealthCheckTimeout(clusterHealthCheckTimeout),
 	)
 
 	testCases := []struct {
