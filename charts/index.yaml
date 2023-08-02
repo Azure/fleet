@@ -3,9 +3,9 @@ entries:
   hub-agent:
   - apiVersion: v2
     appVersion: 0.1.0
-    created: "2023-07-31T06:34:04.674364944Z"
+    created: "2023-08-02T18:02:14.44143999Z"
     description: A Helm chart for hub agent
-    digest: 8f9a616dfb9a2763042e22675bb3ae2a4916ecf40fcfe09fcac5798df2f7febb
+    digest: 90d7b640594a4a0026b223f559155657d122689ce9a4502eba55770021ce1899
     name: hub-agent
     type: application
     urls:
@@ -14,12 +14,12 @@ entries:
   member-agent:
   - apiVersion: v2
     appVersion: v0.1.0
-    created: "2023-07-31T06:34:04.674932247Z"
+    created: "2023-08-02T18:02:14.443132609Z"
     description: Helm chart for member agent.
-    digest: af7756538308cfef0b8d4e0d1e6413fde5a07e04080d072f74a265dd60803d79
+    digest: 3070eccf4e865860dae148fa3064506acd417f5569cd84964ca93ef20f6fc7d3
     name: member-agent
     type: application
     urls:
     - https://Azure.github.io/fleet/charts/member-agent-0.1.0.tgz
     version: 0.1.0
-generated: "2023-07-31T06:34:04.673448938Z"
+generated: "2023-08-02T18:02:14.439515269Z"
