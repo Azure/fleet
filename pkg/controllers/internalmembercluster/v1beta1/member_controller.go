@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"go.goms.io/fleet/apis"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/metrics"
@@ -210,7 +209,7 @@ func updateMemberAgentHeartBeat(imc *fleetv1beta1.InternalMemberCluster) {
 	}
 }
 
-func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.V1beta11ConditionedAgentObj) {
+func (r *Reconciler) markInternalMemberClusterHealthy(imc fleetv1beta1.ConditionedAgentObj) {
 	klog.V(2).InfoS("markInternalMemberClusterHealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1beta1.AgentHealthy),
@@ -229,7 +228,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc apis.V1beta11Condition
 	imc.SetConditionsWithType(fleetv1beta1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.V1beta11ConditionedAgentObj, err error) {
+func (r *Reconciler) markInternalMemberClusterUnhealthy(imc fleetv1beta1.ConditionedAgentObj, err error) {
 	klog.V(2).InfoS("markInternalMemberClusterUnhealthy", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1beta1.AgentHealthy),
@@ -249,7 +248,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc apis.V1beta11Conditi
 	imc.SetConditionsWithType(fleetv1beta1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterJoined(imc apis.V1beta11ConditionedAgentObj) {
+func (r *Reconciler) markInternalMemberClusterJoined(imc fleetv1beta1.ConditionedAgentObj) {
 	klog.V(2).InfoS("markInternalMemberClusterJoined", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1beta1.AgentJoined),
@@ -269,7 +268,7 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc apis.V1beta11Conditione
 	imc.SetConditionsWithType(fleetv1beta1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterJoinFailed(imc apis.V1beta11ConditionedAgentObj, err error) {
+func (r *Reconciler) markInternalMemberClusterJoinFailed(imc fleetv1beta1.ConditionedAgentObj, err error) {
 	klog.V(2).InfoS("markInternalMemberCluster join failed", "error", err, "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1beta1.AgentJoined),
@@ -289,7 +288,7 @@ func (r *Reconciler) markInternalMemberClusterJoinFailed(imc apis.V1beta11Condit
 	imc.SetConditionsWithType(fleetv1beta1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterLeft(imc apis.V1beta11ConditionedAgentObj) {
+func (r *Reconciler) markInternalMemberClusterLeft(imc fleetv1beta1.ConditionedAgentObj) {
 	klog.V(2).InfoS("markInternalMemberClusterLeft", "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1beta1.AgentJoined),
@@ -309,7 +308,7 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc apis.V1beta11ConditionedA
 	imc.SetConditionsWithType(fleetv1beta1.MemberAgent, newCondition)
 }
 
-func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc apis.V1beta11ConditionedAgentObj, err error) {
+func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc fleetv1beta1.ConditionedAgentObj, err error) {
 	klog.V(2).InfoS("markInternalMemberCluster leave failed", "error", err, "InternalMemberCluster", klog.KObj(imc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1beta1.AgentJoined),
