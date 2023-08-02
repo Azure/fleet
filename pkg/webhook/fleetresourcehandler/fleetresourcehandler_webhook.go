@@ -84,11 +84,18 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 
 // handleMemberCluster allows/denies the request to modify member cluster object after validation.
 func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admission.Response {
-	var mc fleetv1alpha1.MemberCluster
-	if err := v.decodeRequestObject(req, &mc); err != nil {
+	var currentMC fleetv1alpha1.MemberCluster
+	if err := v.decodeRequestObject(req, &currentMC); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	return validation.ValidateUserForFleetCR(mc.Kind, types.NamespacedName{Name: mc.Name, Namespace: mc.Namespace}, v.whiteListedUsers, req.UserInfo)
+	if req.Operation == admissionv1.Update {
+		var oldMC fleetv1alpha1.MemberCluster
+		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, v.whiteListedUsers, req.UserInfo)
+	}
+	return validation.ValidateUserForFleetCR(currentMC.Kind, types.NamespacedName{Name: currentMC.Name, Namespace: currentMC.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleRole allows/denies the request to modify role after validation.

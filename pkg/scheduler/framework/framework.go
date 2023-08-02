@@ -62,6 +62,8 @@ type Handle interface {
 	UncachedReader() client.Reader
 	// EventRecorder returns an event recorder.
 	EventRecorder() record.EventRecorder
+	// ClusterEligibilityChecker returns the cluster eligibility checker associated with the scheduler.
+	ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker
 }
 
 // Framework is an interface which scheduler framework should implement.
@@ -205,6 +207,11 @@ func (f *framework) UncachedReader() client.Reader {
 // EventRecorder returns the event recorder in use by the scheduler framework.
 func (f *framework) EventRecorder() record.EventRecorder {
 	return f.eventRecorder
+}
+
+// ClusterEligibilityChecker returns the cluster eligibility checker in use by the scheduler framework.
+func (f *framework) ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker {
+	return f.clusterEligibilityChecker
 }
 
 // RunSchedulingCycleFor performs scheduling for a cluster resource placement

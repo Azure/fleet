@@ -3,36 +3,69 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package clustereligibilitychecker
+package clustereligibility
 
 import (
-	"strings"
+	"context"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
+	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
 const (
 	clusterName = "bravelion"
+
+	policyName = "test-policy"
 )
 
-// TestIsClusterEligible tests the IsClusterEligible function.
-func TestIsClusterEligible(t *testing.T) {
-	clusterHeartbeatTimeout := time.Minute * 15
-	clusterHealthCheckTimeout := time.Minute * 15
-	checker := New(
-		WithClusterHeartbeatTimeout(clusterHeartbeatTimeout),
-		WithClusterHeartbeatTimeout(clusterHealthCheckTimeout),
-	)
+var (
+	ignoredStatusFields = cmpopts.IgnoreFields(framework.Status{}, "reasons", "err")
+)
+
+// Mock framework.Handle interface for set up the plugin.
+type MockHandle struct {
+	clusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
+}
+
+var (
+	_ framework.Handle = &MockHandle{}
+)
+
+func (mh *MockHandle) Client() client.Client               { return nil }
+func (mh *MockHandle) Manager() ctrl.Manager               { return nil }
+func (mh *MockHandle) UncachedReader() client.Reader       { return nil }
+func (mh *MockHandle) EventRecorder() record.EventRecorder { return nil }
+func (mh *MockHandle) ClusterEligibilityChecker() *clustereligibilitychecker.ClusterEligibilityChecker {
+	return mh.clusterEligibilityChecker
+}
+
+// TestFilter tests the Filter method.
+func TestFilter(t *testing.T) {
+	p := New()
+	p.SetUpWithFramework(&MockHandle{
+		clusterEligibilityChecker: clustereligibilitychecker.New(),
+	})
+
+	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
 
 	testCases := []struct {
-		name             string
-		cluster          *fleetv1beta1.MemberCluster
-		wantEligible     bool
-		wantReasonPrefix string
+		name    string
+		cluster *fleetv1beta1.MemberCluster
+		want    *framework.Status
 	}{
 		{
 			name: "cluster left",
@@ -44,7 +77,7 @@ func TestIsClusterEligible(t *testing.T) {
 					State: fleetv1beta1.ClusterStateLeave,
 				},
 			},
-			wantReasonPrefix: "cluster has left the fleet",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "no member agent status",
@@ -57,7 +90,7 @@ func TestIsClusterEligible(t *testing.T) {
 				},
 				Status: fleetv1beta1.MemberClusterStatus{},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: member agent not online yet",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "no member agent joined condition",
@@ -77,7 +110,7 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: member agent not joined yet",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "joined condition is false",
@@ -103,7 +136,7 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: member agent not joined yet",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "no recent heartbeat signals",
@@ -129,7 +162,7 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: no recent heartbeat signals",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "no health check signals",
@@ -155,7 +188,7 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: health condition from member agent is not available",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "health check fails for a long period",
@@ -186,7 +219,7 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantReasonPrefix: "cluster is not connected to the fleet: unhealthy for a prolonged period of time",
+			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
 		},
 		{
 			name: "recent health check failure",
@@ -217,7 +250,6 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantEligible: true,
 		},
 		{
 			name: "normal cluster",
@@ -248,18 +280,17 @@ func TestIsClusterEligible(t *testing.T) {
 					},
 				},
 			},
-			wantEligible: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			eligible, reason := checker.IsEligible(tc.cluster)
-			if eligible != tc.wantEligible {
-				t.Errorf("IsClusterEligible() eligible = %t, want %t", eligible, tc.wantEligible)
-			}
-			if !eligible && !strings.HasPrefix(reason, tc.wantReasonPrefix) {
-				t.Errorf("IsClusterEligible() reason = %s, want %s", reason, tc.wantReasonPrefix)
+			ctx := context.Background()
+			state := framework.NewCycleState(nil, nil)
+
+			status := p.Filter(ctx, state, policy, tc.cluster)
+			if diff := cmp.Diff(status, tc.want, cmp.AllowUnexported(framework.Status{}), ignoredStatusFields); diff != "" {
+				t.Errorf("p.Filter() status diff (-got, +want): %s", diff)
 			}
 		})
 	}

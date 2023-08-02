@@ -1,7 +1,7 @@
 apiVersion: placement.azure.com/v1beta1
 kind: MemberCluster
 metadata:
-  name: kind-member-testing1
+  name: kind-member-testing
 spec:
   state: Join
   identity:
