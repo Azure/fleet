@@ -37,7 +37,6 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
-	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -271,10 +270,6 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 
 	if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
 		return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
-	}
-
-	if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-		return fmt.Errorf("unable to create controller v1beta1 hub_member: %w", err)
 	}
 
 	klog.V(3).InfoS("starting hub manager")

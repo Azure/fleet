@@ -25,7 +25,6 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
-	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
@@ -100,14 +99,6 @@ func main() {
 		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
-		exitWithErrorFunc()
-	}
-
-	if err = (&mcv1beta1.Reconciler{
-		Client:                  mgr.GetClient(),
-		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
 		exitWithErrorFunc()
 	}
 
