@@ -194,7 +194,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 			admv1.Delete,
 		}
 
-		denyValidatingWebHookConfigurations := []admv1.ValidatingWebhook{
+		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.customresourcedefinition.validating",
 				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
@@ -237,7 +237,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				},
 			},
 		}
-		webHooks = append(webHooks, denyValidatingWebHookConfigurations...)
+		webHooks = append(webHooks, guardRailWebhookConfigurations...)
 	}
 
 	whCfg := admv1.ValidatingWebhookConfiguration{
