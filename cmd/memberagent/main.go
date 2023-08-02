@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
@@ -62,7 +61,6 @@ func init() {
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(fleetv1beta1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
