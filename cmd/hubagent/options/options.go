@@ -35,8 +35,8 @@ type Options struct {
 	MetricsBindAddress string
 	// EnableWebhook indicates if we will run a webhook
 	EnableWebhook bool
-	// DenyWebhookGuardRail indicates if we will enable/disable deny validating webhook configurations.
-	DenyWebhookGuardRail bool
+	// EnableGuardRail indicates if we will enable deny validating webhook configurations.
+	EnableGuardRail bool
 	// WhiteListedUsers indicates the list of user who are allowed to modify fleet resources
 	WhiteListedUsers string
 	// Sets the connection type for the webhook.
@@ -95,7 +95,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.LeaderElection.LeaseDuration.Duration, "leader-lease-duration", 15*time.Second, "This is effectively the maximum duration that a leader can be stopped before someone else will replace it.")
 	flag.StringVar(&o.LeaderElection.ResourceNamespace, "leader-election-namespace", utils.FleetSystemNamespace, "The namespace in which the leader election resource will be created.")
 	flag.BoolVar(&o.EnableWebhook, "enable-webhook", true, "If set, the fleet webhook is enabled.")
-	flag.BoolVar(&o.DenyWebhookGuardRail, "deny-webhook-guard-rail", false, "If set, the fleet deny validating webhook configurations are enabled.")
+	flag.BoolVar(&o.EnableGuardRail, "enable-guard-rail", false, "If set, the fleet deny validating webhook configurations are enabled.")
 	flag.StringVar(&o.WhiteListedUsers, "whitelisted-users", "", "If set, white listed users can modify fleet related resources.")
 	flag.StringVar(&o.WebhookClientConnectionType, "webhook-client-connection-type", "url", "Sets the connection type used by the webhook client. Only URL or Service is valid.")
 	flag.BoolVar(&o.NetworkingAgentsEnabled, "networking-agents-enabled", false, "Whether the networking agents are enabled or not.")

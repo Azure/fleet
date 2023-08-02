@@ -85,10 +85,10 @@ type Config struct {
 
 	clientConnectionType *options.WebhookClientConnectionType
 
-	enableDenyWebhook bool
+	enableGuardRail bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string, denyWebhookGuardRail bool) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -100,7 +100,7 @@ func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *optio
 		serviceNamespace:     namespace,
 		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", FleetWebhookSvcName, namespace, port),
 		clientConnectionType: clientConnectionType,
-		enableDenyWebhook:    denyWebhookGuardRail,
+		enableGuardRail:      enableGuardRail,
 	}
 	caPEM, err := w.genCertificate(certDir)
 	if err != nil {
@@ -177,7 +177,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 		},
 	}
 
-	if w.enableDenyWebhook {
+	if w.enableGuardRail {
 		namespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
