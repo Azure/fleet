@@ -291,15 +291,15 @@ func ExtractSubindexFromClusterResourceSnapshot(snapshot *fleetv1beta1.ClusterRe
 }
 
 func ExtractObservedCRPGenerationFromPolicySnapshot(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int64, error) {
-	crpGeneartionStr, ok := policy.Annotations[fleetv1beta1.CRPGenerationAnnotation]
+	crpGenerationStr, ok := policy.Annotations[fleetv1beta1.CRPGenerationAnnotation]
 	if !ok {
 		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.CRPGenerationAnnotation)
 	}
 
 	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
-	observedCRPGeneration, err := strconv.Atoi(crpGeneartionStr)
+	observedCRPGeneration, err := strconv.Atoi(crpGenerationStr)
 	if err != nil || observedCRPGeneration < 0 {
-		return 0, fmt.Errorf("invalid annotation %s: %s is not a valid value: %w", fleetv1beta1.CRPGenerationAnnotation, crpGeneartionStr, err)
+		return 0, fmt.Errorf("invalid annotation %s: %s is not a valid value: %w", fleetv1beta1.CRPGenerationAnnotation, crpGenerationStr, err)
 	}
 
 	return int64(observedCRPGeneration), nil
