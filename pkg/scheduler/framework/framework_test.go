@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -23,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 )
 
@@ -1723,8 +1725,8 @@ func TestManipulateBindings(t *testing.T) {
 	}
 }
 
-// TestUpdatePolicySnapshotStatusFrom tests the updatePolicySnapshotStatusFrom method.
-func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
+// TestUpdatePolicySnapshotStatusFromBindings tests the updatePolicySnapshotStatusFromBindings method.
+func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	defaultMaxUnselectedClusterDecisionCount := 20
 
 	affinityScore1 := int32(1)
@@ -1734,9 +1736,13 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPluginName, "filtered")
 
+	crpGeneration := 1
 	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
+			Annotations: map[string]string{
+				fleetv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration),
+			},
 		},
 	}
 
@@ -1807,7 +1813,7 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 					Reason: pickedByPolicyReason,
 				},
 			},
-			wantCondition: fullyScheduledCondition(policy),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "filtered and existing",
@@ -1883,12 +1889,12 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: fullyScheduledCondition(policy),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "none",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
-			wantCondition:                     fullyScheduledCondition(policy),
+			wantCondition:                     newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "too many filtered",
@@ -1947,7 +1953,7 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: fullyScheduledCondition(policy),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 	}
 
@@ -1964,7 +1970,11 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			if err := f.updatePolicySnapshotStatusFrom(ctx, policy, tc.filtered, tc.existing...); err != nil {
+			numOfClusters := 0
+			for _, bindingSet := range tc.existing {
+				numOfClusters += len(bindingSet)
+			}
+			if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, tc.filtered, tc.existing...); err != nil {
 				t.Fatalf("updatePolicySnapshotStatusFrom() = %v, want no error", err)
 			}
 
@@ -1980,6 +1990,10 @@ func TestUpdatePolicySnapshotStatusFrom(t *testing.T) {
 			updatedCondition := meta.FindStatusCondition(updatedPolicy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
 			if diff := cmp.Diff(updatedCondition, &tc.wantCondition, ignoredCondFields); diff != "" {
 				t.Errorf("policy snapshot scheduled condition not equal (-got, +want): %s", diff)
+			}
+
+			if policy.Status.ObservedCRPGeneration != int64(crpGeneration) {
+				t.Errorf("policy snapshot observed CRP generation: got %d, want %d", policy.Status.ObservedCRPGeneration, crpGeneration)
 			}
 		})
 	}
@@ -2369,8 +2383,8 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 	}
 }
 
-// TestNewSchedulingDecisionsFrom tests the newSchedulingDecisionsFrom function.
-func TestNewSchedulingDecisionsFrom(t *testing.T) {
+// TestNewSchedulingDecisionsFromBindings tests the newSchedulingDecisionsFromBindings function.
+func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 	topologySpreadScore1 := int32(1)
 	affinityScore1 := int32(10)
 	topologySpreadScore2 := int32(0)
@@ -2594,7 +2608,7 @@ func TestNewSchedulingDecisionsFrom(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFrom(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.existing...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.existing...)
 			if diff := cmp.Diff(tc.want, decisions); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -2641,7 +2655,7 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFrom(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.bindingSets...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.bindingSets...)
 			if diff := cmp.Diff(decisions, tc.wantDecisions); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -4318,6 +4332,189 @@ func TestShouldRequeue(t *testing.T) {
 			requeue := shouldRequeue(tc.desiredBatchSize, tc.batchLimit, tc.bindingCount)
 			if requeue != tc.want {
 				t.Errorf("shouldRequeue(), got %t, want %t", requeue, tc.want)
+			}
+		})
+	}
+}
+
+// TestCrossReferenceClustersWithTargetNames tests the crossReferenceClustersWithTargetNames method.
+func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
+	clusterName1 := fmt.Sprintf(clusterNameTemplate, 1)
+	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
+	clusterName3 := fmt.Sprintf(clusterNameTemplate, 3)
+	clusterName4 := fmt.Sprintf(clusterNameTemplate, 4)
+	clusterName5 := fmt.Sprintf(clusterNameTemplate, 5)
+	clusterName6 := fmt.Sprintf(clusterNameTemplate, 6)
+
+	current := []fleetv1beta1.MemberCluster{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName1,
+			},
+			Spec: fleetv1beta1.MemberClusterSpec{
+				State: fleetv1beta1.ClusterStateJoin,
+			},
+			Status: fleetv1beta1.MemberClusterStatus{
+				AgentStatus: []fleetv1beta1.AgentStatus{
+					{
+						Type: fleetv1beta1.MemberAgent,
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(fleetv1beta1.AgentJoined),
+								Status: metav1.ConditionTrue,
+							},
+							{
+								Type:               string(fleetv1beta1.AgentHealthy),
+								Status:             metav1.ConditionFalse,
+								LastTransitionTime: metav1.NewTime(time.Now()),
+							},
+						},
+						LastReceivedHeartbeat: metav1.NewTime(time.Now()),
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName2,
+			},
+			Spec: fleetv1beta1.MemberClusterSpec{
+				State: fleetv1beta1.ClusterStateJoin,
+			},
+			Status: fleetv1beta1.MemberClusterStatus{
+				AgentStatus: []fleetv1beta1.AgentStatus{
+					{
+						Type: fleetv1beta1.MemberAgent,
+						Conditions: []metav1.Condition{
+							{
+								Type:   string(fleetv1beta1.AgentJoined),
+								Status: metav1.ConditionTrue,
+							},
+							{
+								Type:               string(fleetv1beta1.AgentHealthy),
+								Status:             metav1.ConditionFalse,
+								LastTransitionTime: metav1.NewTime(time.Now()),
+							},
+						},
+						LastReceivedHeartbeat: metav1.NewTime(time.Now()),
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName3,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName4,
+			},
+			Spec: fleetv1beta1.MemberClusterSpec{
+				State: fleetv1beta1.ClusterStateLeave,
+			},
+		},
+	}
+
+	testCases := []struct {
+		name         string
+		target       []string
+		wantValid    []*fleetv1beta1.MemberCluster
+		wantInvalid  []*invalidClusterWithReason
+		wantNotFound []string
+	}{
+		{
+			// This case normally should never occur.
+			name:         "no target",
+			target:       []string{},
+			wantValid:    []*fleetv1beta1.MemberCluster{},
+			wantInvalid:  []*invalidClusterWithReason{},
+			wantNotFound: []string{},
+		},
+		{
+			name: "all valid",
+			target: []string{
+				clusterName1,
+				clusterName2,
+			},
+			wantValid: []*fleetv1beta1.MemberCluster{
+				&current[0],
+				&current[1],
+			},
+			wantInvalid:  []*invalidClusterWithReason{},
+			wantNotFound: []string{},
+		},
+		{
+			name: "all invalid",
+			target: []string{
+				clusterName3,
+				clusterName4,
+			},
+			wantValid: []*fleetv1beta1.MemberCluster{},
+			wantInvalid: []*invalidClusterWithReason{
+				{
+					cluster: &current[2],
+					reason:  "cluster is not connected to the fleet: member agent not online yet",
+				},
+				{
+					cluster: &current[3],
+					reason:  "cluster has left the fleet",
+				},
+			},
+			wantNotFound: []string{},
+		},
+		{
+			name: "all not found",
+			target: []string{
+				clusterName5,
+				clusterName6,
+			},
+			wantValid:   []*fleetv1beta1.MemberCluster{},
+			wantInvalid: []*invalidClusterWithReason{},
+			wantNotFound: []string{
+				clusterName5,
+				clusterName6,
+			},
+		},
+		{
+			name: "mixed",
+			target: []string{
+				clusterName1,
+				clusterName3,
+				clusterName5,
+			},
+			wantValid: []*fleetv1beta1.MemberCluster{
+				&current[0],
+			},
+			wantInvalid: []*invalidClusterWithReason{
+				{
+					cluster: &current[2],
+					reason:  "cluster is not connected to the fleet: member agent not online yet",
+				},
+			},
+			wantNotFound: []string{
+				clusterName5,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+			f := &framework{
+				clusterEligibilityChecker: clustereligibilitychecker.New(),
+			}
+
+			valid, invalid, notFound := f.crossReferenceClustersWithTargetNames(current, tc.target)
+
+			if diff := cmp.Diff(valid, tc.wantValid, cmp.AllowUnexported(invalidClusterWithReason{})); diff != "" {
+				t.Errorf("crossReferenceClustersWithTargetNames() valid diff (-got, +want): %s", diff)
+			}
+			if diff := cmp.Diff(invalid, tc.wantInvalid, cmp.AllowUnexported(invalidClusterWithReason{})); diff != "" {
+				t.Errorf("crossReferenceClustersWithTargetNames() invalid diff (-got, +want): %s", diff)
+			}
+			if diff := cmp.Diff(notFound, tc.wantNotFound, cmp.AllowUnexported(invalidClusterWithReason{})); diff != "" {
+				t.Errorf("crossReferenceClustersWithTargetNames() notFound diff (-got, +want): %s", diff)
 			}
 		})
 	}

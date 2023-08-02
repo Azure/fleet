@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -33,12 +34,16 @@ const (
 	// eventRecorderNameTemplate is the template used to format event recorder name for a scheduler framework.
 	eventRecorderNameTemplate = "scheduler-framework-%s"
 
-	// pickedByPolicyReason is the reason to use for scheduling decision when a cluster is picked.
-	pickedByPolicyReason = "picked by scheduling policy"
+	// The reasons to use for scheduling decisions.
+	pickedByPolicyReason                           = "picked by scheduling policy"
+	fixedSetOfClustersInvalidClusterReasonTemplate = "cluster is not eligible for resource placement yet: %s"
+	fixedSetOfClustersNotFoundClusterReason        = "specified cluster is not found"
 
 	// The reasons and messages for scheduled conditions.
-	fullyScheduledReason  = "SchedulingCompleted"
-	fullyScheduledMessage = "all required number of bindings have been created"
+	fullyScheduledReason     = "SchedulingPolicyFulfilled"
+	notFullyScheduledReason  = "SchedulingPolicyUnfulfilled"
+	fullyScheduledMessage    = "found all the clusters needed as specified by the scheduling policy"
+	notFullyScheduledMessage = "could not find all the clusters needed as specified by the scheduling policy"
 
 	// The array length limit of the cluster decision array in the scheduling policy snapshot
 	// status API.
@@ -282,11 +287,19 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	// is always executed in one single goroutine; plugin access to the state is guarded by sync.Map.
 	state := NewCycleState(clusters, obsolete, bound, scheduled)
 
-	switch policy.Spec.Policy.PlacementType {
-	case fleetv1beta1.PickAllPlacementType:
+	switch {
+	case policy.Spec.Policy == nil:
+		// The placement policy is not set; in such cases the policy is considered to be of
+		// the PickAll placement type.
+		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
+	case len(policy.Spec.Policy.ClusterNames) != 0:
+		// The placement policy features a fixed set of clusters to select; in such cases, the
+		// scheduler will bind to these clusters directly.
+		return f.runSchedulingCycleForFixedSetOfClusters(ctx, crpName, policy, clusters, bound, scheduled, obsolete)
+	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
 		// Run the scheduling cycle for policy of the PickAll placement type.
 		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
-	case fleetv1beta1.PickNPlacementType:
+	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType:
 		// Run the scheduling cycle for policy of the PickN placement type.
 		return f.runSchedulingCycleForPickNPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
 	default:
@@ -394,7 +407,11 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 
 	// Update policy snapshot status with the latest scheduling decisions and condition.
 	klog.V(2).InfoS("Updating policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
-	if err := f.updatePolicySnapshotStatusFrom(ctx, policy, filtered, toCreate, patched, scheduled, bound); err != nil {
+
+	// With the PickAll placement type, the desired number of clusters to select always matches
+	// with the count of scheduled + bound bindings.
+	numOfClusters := len(toCreate) + len(patched) + len(scheduled) + len(bound)
+	if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, filtered, toCreate, patched, scheduled, bound); err != nil {
 		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
@@ -625,21 +642,23 @@ func (f *framework) patchBindings(ctx context.Context, toPatch []*bindingWithPat
 	return nil
 }
 
-// updatePolicySnapshotStatusFrom updates the policy snapshot status, in accordance with the list of
+// updatePolicySnapshotStatusFromBindings updates the policy snapshot status, in accordance with the list of
 // clusters filtered out by the scheduler, and the list of bindings provisioned by the scheduler.
-func (f *framework) updatePolicySnapshotStatusFrom(
+func (f *framework) updatePolicySnapshotStatusFromBindings(
 	ctx context.Context,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	numOfClusters int,
 	filtered []*filteredClusterWithStatus,
 	existing ...[]*fleetv1beta1.ClusterResourceBinding,
 ) error {
 	policyRef := klog.KObj(policy)
 
 	// Prepare new scheduling decisions.
-	newDecisions := newSchedulingDecisionsFrom(f.maxUnselectedClusterDecisionCount, filtered, existing...)
+	newDecisions := newSchedulingDecisionsFromBindings(f.maxUnselectedClusterDecisionCount, filtered, existing...)
 	// Prepare new scheduling condition.
-	newCondition := fullyScheduledCondition(policy)
+	newCondition := newScheduledConditionFromBindings(policy, numOfClusters, existing...)
 
+	// Compare the new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
 	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
 	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
@@ -647,7 +666,16 @@ func (f *framework) updatePolicySnapshotStatusFrom(
 		return nil
 	}
 
+	// Retrieve the corresponding CRP generation.
+	observedCRPGeneration, err := utils.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Update the status.
 	policy.Status.ClusterDecisions = newDecisions
+	policy.Status.ObservedCRPGeneration = observedCRPGeneration
 	meta.SetStatusCondition(&policy.Status.Conditions, newCondition)
 	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
@@ -658,15 +686,13 @@ func (f *framework) updatePolicySnapshotStatusFrom(
 
 // runSchedulingCycleForPickNPlacementType runs the scheduling cycle for a scheduling policy of the PickN
 // placement type.
-//
-// TO-DO (chenyu1): remove the nolint directives once the function is implemented.
 func (f *framework) runSchedulingCycleForPickNPlacementType(
-	ctx context.Context, //nolint: revive
-	state *CycleState, //nolint: revive
-	crpName string, //nolint: revive
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, //nolint: revive
-	clusters []fleetv1beta1.MemberCluster, //nolint: revive
-	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding, //nolint: revive
+	ctx context.Context,
+	state *CycleState,
+	crpName string,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	clusters []fleetv1beta1.MemberCluster,
+	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
 ) (result ctrl.Result, err error) {
 	policyRef := klog.KObj(policy)
 
@@ -720,7 +746,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		// Note that since there is no reliable way to determine the validity of old decisions added
 		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
 		// the clusters that are currently selected.
-		if err := f.updatePolicySnapshotStatusFrom(ctx, policy, nil, scheduled, bound); err != nil {
+		if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, scheduled, bound); err != nil {
 			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when downscaling", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
@@ -740,7 +766,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		// Note that since there is no reliable way to determine the validity of old decisions added
 		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
 		// the clusters that are currently selected.
-		if err := f.updatePolicySnapshotStatusFrom(ctx, policy, nil, bound, scheduled); err != nil {
+		if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, bound, scheduled); err != nil {
 			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when no scheduling run is needed", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
@@ -828,7 +854,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 
 	// Update policy snapshot status with the latest scheduling decisions and condition.
 	klog.V(2).InfoS("Updating policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
-	if err := f.updatePolicySnapshotStatusFrom(ctx, policy, filtered, toCreate, patched, scheduled, bound); err != nil {
+	if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, filtered, toCreate, patched, scheduled, bound); err != nil {
 		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
@@ -1125,4 +1151,181 @@ func (f *framework) runScorePlugins(ctx context.Context, state *CycleState, poli
 	scoredClusters = scoredClusters[:scoredClustersIdx+1]
 
 	return scoredClusters, nil
+}
+
+// invalidClusterWithReason is struct that documents a cluster that is, though present in
+// the list of current clusters, not valid for resource placement (e.g., it is experiencing
+// a network partition)
+// along with a plugin status, which documents why a cluster is filtered out.
+//
+// This struct is used for the purpose of keeping reasons for returning scheduling decision to
+// the user.
+type invalidClusterWithReason struct {
+	cluster *fleetv1beta1.MemberCluster
+	reason  string
+}
+
+// crossReferenceClustersWithTargetNames cross-references the current list of clusters in the fleet
+// and the list of target clusters user specifies in the placement policy.
+func (f *framework) crossReferenceClustersWithTargetNames(current []fleetv1beta1.MemberCluster, target []string) (valid []*fleetv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) {
+	// Pre-allocate with a reasonable capacity.
+	valid = make([]*fleetv1beta1.MemberCluster, 0, len(target))
+	invalid = make([]*invalidClusterWithReason, 0, len(target))
+	notFound = make([]string, 0, len(target))
+
+	// Build a map of current clusters for quick lookup.
+	currentMap := make(map[string]fleetv1beta1.MemberCluster)
+	for idx := range current {
+		cluster := current[idx]
+		currentMap[cluster.Name] = cluster
+	}
+
+	for idx := range target {
+		targetName := target[idx]
+		cluster, ok := currentMap[targetName]
+		if !ok {
+			// The target cluster is not found in the list of current clusters.
+			notFound = append(notFound, targetName)
+			continue
+		}
+
+		eligible, reason := f.clusterEligibilityChecker.IsEligible(&cluster)
+		if !eligible {
+			// The target cluster is found, but it is not a valid target (ineligible for resource placement).
+			invalid = append(invalid, &invalidClusterWithReason{
+				cluster: &cluster,
+				reason:  reason,
+			})
+			continue
+		}
+
+		// The target cluster is found, and it is a valid target (eligible for resource placement).
+		valid = append(valid, &cluster)
+	}
+
+	return valid, invalid, notFound
+}
+
+// updatePolicySnapshotStatusFromTargetClusters updates the policy snapshot status with
+// the latest scheduling decisions and condition when there is a fixed set of clusters to
+// select.
+//
+// Note that due to the nature of scheduling to a fixed set of clusters, in the function
+// the scheduler prepares the scheduling related status based on the different types of
+// target clusters ather than the final outcome (i.e., the actual list of bindings created).
+// The correctness is still guaranteed as the outcome of the scheduling cycle is deterministic
+// when given a set of fixed clusters to schedule resources to, as long as
+//   - there is no manipulation of the scheduling result (e.g., binding directly created by
+//     the user) without acknowledge from the scheduler;and
+//   - the status is only added after the actual binding manipulation has been completed without
+//     an error.
+func (f *framework) updatePolicySnapshotStatusFromTargetClusters(
+	ctx context.Context,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	valid []*fleetv1beta1.MemberCluster,
+	invalid []*invalidClusterWithReason,
+	notFound []string,
+) error {
+	policyRef := klog.KObj(policy)
+
+	// Prepare new scheduling decisions.
+	newDecisions := newSchedulingDecisionsFromTargetClusters(valid, invalid, notFound)
+	// Prepare new scheduling condition.
+	var newCondition metav1.Condition
+	if len(invalid)+len(notFound) == 0 {
+		// The scheduler has selected all the clusters, as the scheduling policy dictates.
+		newCondition = newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage)
+	} else {
+		// Some of the targets cannot be selected.
+		newCondition = newScheduledCondition(policy, metav1.ConditionFalse, notFullyScheduledReason, notFullyScheduledMessage)
+	}
+
+	// Compare new decisions + condition with the old ones.
+	currentDecisions := policy.Status.ClusterDecisions
+	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
+	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
+		// Skip if there is no change in decisions and conditions.
+		return nil
+	}
+
+	// Retrieve the corresponding CRP generation.
+	observedCRPGeneration, err := utils.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+
+	// Update the status.
+	policy.Status.ClusterDecisions = newDecisions
+	policy.Status.ObservedCRPGeneration = observedCRPGeneration
+	meta.SetStatusCondition(&policy.Status.Conditions, newCondition)
+	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewAPIServerError(false, err)
+	}
+
+	return nil
+}
+
+// runSchedulingCycleForFixedSetOfClusters runs the scheduling cycle when there is a fixed
+// set of clusters to select in the placement policy.
+func (f *framework) runSchedulingCycleForFixedSetOfClusters(
+	ctx context.Context,
+	crpName string,
+	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	clusters []fleetv1beta1.MemberCluster,
+	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
+) (ctrl.Result, error) {
+	policyRef := klog.KObj(policy)
+
+	targetClusterNames := policy.Spec.Policy.ClusterNames
+	if len(targetClusterNames) == 0 {
+		// Skip the cycle if the list of target clusters is empty; normally this should not
+		// occur.
+		klog.V(2).InfoS("No scheduling is needed: list of target clusters is empty", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, nil
+	}
+
+	// Cross-reference the current list of clusters with the list of target cluster names to
+	// find out:
+	// * valid targets, i.e., cluster that is both present in the list of current clusters in
+	//   the fleet and the list of target clusters, and is eligible for resource placement;
+	// * invalid targets, i.e., cluster that is present in the list of current clusters in the
+	//   fleet and the list of target clusters, but is not eligible for resource placement;
+	// * not found targets, i.e., cluster that is present in the list of target clusters, but
+	//   is not present in the list of current clusters in the fleet.
+	valid, invalid, notFound := f.crossReferenceClustersWithTargetNames(clusters, targetClusterNames)
+
+	// Cross-reference the valid target clusters with obsolete bindings; find out
+	//
+	// * bindings that should be created, i.e., create a binding for every cluster that is a valid target
+	//   and does not have a binding associated with;
+	// * bindings that should be patched, i.e., associate a binding whose target cluster is a valid target
+	//   in the current run with the latest score and the latest scheduling policy snapshot;
+	// * bindings that should be deleted, i.e., mark a binding as unschedulable if its target cluster is no
+	//   longer picked in the current run.
+	//
+	// Fields in the returned bindings are fulfilled and/or refreshed as applicable.
+	klog.V(2).InfoS("Cross-referencing bindings with valid target clusters", "clusterSchedulingPolicySnapshot", policyRef)
+	toCreate, toDelete, toPatch, err := crossReferenceValidTargetsWithBindings(crpName, policy, valid, bound, scheduled, obsolete)
+	if err != nil {
+		klog.ErrorS(err, "Failed to cross-reference bindings with valid targets", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// Manipulate bindings accordingly.
+	klog.V(2).InfoS("Manipulating bindings", "clusterSchedulingPolicySnapshot", policyRef)
+	if err := f.manipulateBindings(ctx, policy, toCreate, toDelete, toPatch); err != nil {
+		klog.ErrorS(err, "Failed to manipulate bindings", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// Update policy snapshot status with the latest scheduling decisions and condition.
+	if err := f.updatePolicySnapshotStatusFromTargetClusters(ctx, policy, valid, invalid, notFound); err != nil {
+		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
+		return ctrl.Result{}, err
+	}
+
+	// The scheduling cycle is completed.
+	return ctrl.Result{}, nil
 }

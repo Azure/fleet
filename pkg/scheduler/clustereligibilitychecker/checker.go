@@ -50,9 +50,9 @@ type checkerOptions struct {
 // Option helps set up the plugin.
 type Option func(*checkerOptions)
 
-// WithClusterHeartbeatTimeout sets the timeout value this plugin uses for checking
+// WithClusterHeartbeatCheckTimeout sets the timeout value this plugin uses for checking
 // if a cluster has been disconnected from the fleet for a prolonged period of time.
-func WithClusterHeartbeatTimeout(timeout time.Duration) Option {
+func WithClusterHeartbeatCheckTimeout(timeout time.Duration) Option {
 	return func(o *checkerOptions) {
 		o.clusterHeartbeatCheckTimeout = timeout
 	}

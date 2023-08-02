@@ -13,10 +13,12 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+const (
+	policyName = "test-policy"
+)
+
 // TestExtractNumOfClustersFromPolicySnapshot tests the extractNumOfClustersFromPolicySnapshot function.
 func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
-	policyName := "test-policy"
-
 	testCases := []struct {
 		name              string
 		policy            *fleetv1beta1.ClusterSchedulingPolicySnapshot
@@ -158,6 +160,78 @@ func TestExtractSubindexFromClusterResourceSnapshot(t *testing.T) {
 
 			if gotExist != tc.wantExist || gotSubindex != tc.wantSubindex {
 				t.Fatalf("ExtractSubindexFromClusterResourceSnapshot() = %v, %v, want %v, %v", gotExist, gotSubindex, tc.wantExist, tc.wantSubindex)
+			}
+		})
+	}
+}
+
+// TestExtractObservedCRPGenerationFromPolicySnapshot tests the ExtractObservedCRPGenerationFromPolicySnapshot function.
+func TestExtractObservedCRPGenerationFromPolicySnapshot(t *testing.T) {
+	testCases := []struct {
+		name              string
+		policy            *fleetv1beta1.ClusterSchedulingPolicySnapshot
+		wantCRPGeneration int64
+		expectedToFail    bool
+	}{
+		{
+			name: "valid annotation",
+			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+					Annotations: map[string]string{
+						fleetv1beta1.CRPGenerationAnnotation: "1",
+					},
+				},
+			},
+			wantCRPGeneration: 1,
+		},
+		{
+			name: "no annotation",
+			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name: "invalid annotation: not an integer",
+			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+					Annotations: map[string]string{
+						fleetv1beta1.CRPGenerationAnnotation: "abc",
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name: "invalid annotation: negative integer",
+			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: policyName,
+					Annotations: map[string]string{
+						fleetv1beta1.CRPGenerationAnnotation: "-1",
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			observedCRPGeneration, err := ExtractObservedCRPGenerationFromPolicySnapshot(tc.policy)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Fatalf("ExtractObservedCRPGenerationFromPolicySnapshot() = %v, %v, want error", observedCRPGeneration, err)
+				}
+				return
+			}
+
+			if observedCRPGeneration != tc.wantCRPGeneration {
+				t.Fatalf("ExtractObservedCRPGenerationFromPolicySnapshot() = %v, %v, want %v, nil", observedCRPGeneration, err, tc.wantCRPGeneration)
 			}
 		})
 	}
