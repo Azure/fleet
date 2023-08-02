@@ -84,9 +84,11 @@ type Config struct {
 	caPEM []byte
 
 	clientConnectionType *options.WebhookClientConnectionType
+
+	enableGuardRail bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -98,6 +100,7 @@ func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *optio
 		serviceNamespace:     namespace,
 		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", FleetWebhookSvcName, namespace, port),
 		clientConnectionType: clientConnectionType,
+		enableGuardRail:      enableGuardRail,
 	}
 	caPEM, err := w.genCertificate(certDir)
 	if err != nil {
@@ -118,27 +121,6 @@ func (w *Config) Start(ctx context.Context) error {
 
 // createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook.
 func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
-	failPolicy := admv1.Ignore
-	sideEffortsNone := admv1.SideEffectClassNone
-	namespacedScope := admv1.NamespacedScope
-	clusterScope := admv1.ClusterScope
-
-	namespaceSelector := &metav1.LabelSelector{
-		MatchExpressions: []metav1.LabelSelectorRequirement{
-			{
-				Key:      fleetv1beta1.FleetResourceLabelKey,
-				Operator: metav1.LabelSelectorOpIn,
-				Values:   []string{"true"},
-			},
-		},
-	}
-
-	CUDOperations := []admv1.OperationType{
-		admv1.Create,
-		admv1.Update,
-		admv1.Delete,
-	}
-
 	whCfg := admv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: FleetWebhookCfgName,
@@ -146,97 +128,7 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 				"admissions.enforcer/disabled": "true",
 			},
 		},
-		Webhooks: []admv1.ValidatingWebhook{
-			{
-				Name:                    "fleet.pod.validating",
-				ClientConfig:            w.createClientConfig(pod.ValidationPath),
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: admissionReviewVersions,
-
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: []admv1.OperationType{
-							admv1.Create,
-						},
-						Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
-					},
-				},
-			},
-			{
-				Name:                    "fleet.clusterresourceplacement.validating",
-				ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: admissionReviewVersions,
-
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: []admv1.OperationType{
-							admv1.Create,
-							admv1.Update,
-						},
-						Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
-					},
-				},
-			},
-			{
-				Name:                    "fleet.replicaset.validating",
-				ClientConfig:            w.createClientConfig(replicaset.ValidationPath),
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: admissionReviewVersions,
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: []admv1.OperationType{
-							admv1.Create,
-						},
-						Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
-					},
-				},
-			},
-			{
-				Name:                    "fleet.customresourcedefinition.validating",
-				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: admissionReviewVersions,
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: CUDOperations,
-						Rule:       createRule([]string{apiextensionsv1.SchemeGroupVersion.Group}, []string{apiextensionsv1.SchemeGroupVersion.Version}, []string{crdResourceName}, &clusterScope),
-					},
-				},
-			},
-			{
-				Name:                    "fleet.membercluster.validating",
-				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: admissionReviewVersions,
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: CUDOperations,
-						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
-					},
-				},
-			},
-			{
-				Name:                    "fleet.namespacedresources.validating",
-				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-				FailurePolicy:           &failPolicy,
-				SideEffects:             &sideEffortsNone,
-				AdmissionReviewVersions: admissionReviewVersions,
-				NamespaceSelector:       namespaceSelector,
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: CUDOperations,
-						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
-					},
-					// TODO (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
-				},
-			},
-		},
+		Webhooks: w.buildValidatingWebHooks(),
 	}
 
 	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
@@ -263,6 +155,129 @@ func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
 	}
 	klog.V(2).InfoS("successfully created validatingwebhookconfiguration", "name", FleetWebhookCfgName)
 	return nil
+}
+
+// buildValidatingWebHooks returns a slice of validating webhook objects the length of slice differs based on whether fleet webhook guard rail is enabled/disabled.
+func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
+	failPolicy := admv1.Ignore
+	sideEffortsNone := admv1.SideEffectClassNone
+	namespacedScope := admv1.NamespacedScope
+	clusterScope := admv1.ClusterScope
+
+	webHooks := []admv1.ValidatingWebhook{
+		{
+			Name:                    "fleet.pod.validating",
+			ClientConfig:            w.createClientConfig(pod.ValidationPath),
+			FailurePolicy:           &failPolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+					},
+					Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
+				},
+			},
+		},
+		{
+			Name:                    "fleet.clusterresourceplacement.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
+			FailurePolicy:           &failPolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
+				},
+			},
+		},
+		{
+			Name:                    "fleet.replicaset.validating",
+			ClientConfig:            w.createClientConfig(replicaset.ValidationPath),
+			FailurePolicy:           &failPolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+					},
+					Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
+				},
+			},
+		},
+	}
+
+	if w.enableGuardRail {
+		namespaceSelector := &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      fleetv1beta1.FleetResourceLabelKey,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"true"},
+				},
+			},
+		}
+
+		cudOperations := []admv1.OperationType{
+			admv1.Create,
+			admv1.Update,
+			admv1.Delete,
+		}
+
+		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
+			{
+				Name:                    "fleet.customresourcedefinition.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{apiextensionsv1.SchemeGroupVersion.Group}, []string{apiextensionsv1.SchemeGroupVersion.Version}, []string{crdResourceName}, &clusterScope),
+					},
+				},
+			},
+			{
+				Name:                    "fleet.membercluster.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
+					},
+				},
+			},
+			{
+				Name:                    "fleet.namespacedresources.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				NamespaceSelector:       namespaceSelector,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
+					},
+					// TODO (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
+				},
+			},
+		}
+		webHooks = append(webHooks, guardRailWebhookConfigurations...)
+	}
+	return webHooks
 }
 
 // createClientConfig generates the client configuration with either service ref or URL for the argued interface.

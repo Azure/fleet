@@ -13,6 +13,7 @@ image:
 logVerbosity: 5
 
 enableWebhook: true
+enableGuardRail: true
 webhookClientConnectionType: service
 
 namespace:
