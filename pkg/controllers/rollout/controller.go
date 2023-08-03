@@ -119,10 +119,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings))
 
-	// update all the bindings in parallel according to the rollout plan, requeue the request after the mean value of unavailable period
-	// has passed so that some applied bindings will be considered "ready" by the rollout process regardless if the binding updates succeed or not.
-	// This is to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
-	return ctrl.Result{RequeueAfter: time.Duration(*crpCopy.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds/2) * time.Second},
+	// Update all the bindings in parallel according to the rollout plan.
+	// We need to requeue the request regardless if the binding updates succeed or not
+	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
+	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch
+	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
+	return ctrl.Result{RequeueAfter: time.Duration(*crpCopy.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
 }
 
@@ -186,20 +188,17 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 	// Those are the bindings that are candidates to be updated to latest resources during the rolling phase.
 	updateCandidates := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 
-	// fill out all the default values for CRP so we don't need to check nil values
-	// TODO: remove this after we have mutation webhook
-	fleetv1beta1.SetDefaultsClusterResourcePlacement(crp)
-
 	// calculate the cutoff time for a binding to be applied before so that it can be considered ready
 	readyTimeCutOff := time.Now().Add(-time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second)
 
 	// classify the bindings into different categories
+	// TODO: calculate the time we need to wait for the first applied but not ready binding to be ready.
 	for idx := range allBindings {
 		binding := allBindings[idx]
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
 			canBeReadyBindings = append(canBeReadyBindings, binding)
-			bindingReady := isBindingReady(binding, readyTimeCutOff)
+			_, bindingReady := isBindingReady(binding, readyTimeCutOff)
 			if bindingReady {
 				klog.V(8).InfoS("Found a ready unscheduled binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
 				readyBindings = append(readyBindings, binding)
@@ -221,7 +220,7 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 		case fleetv1beta1.BindingStateBound:
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
 			canBeReadyBindings = append(canBeReadyBindings, binding)
-			if isBindingReady(binding, readyTimeCutOff) {
+			if _, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
 				klog.V(8).InfoS("Found a ready bound binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
 				readyBindings = append(readyBindings, binding)
 			}
@@ -296,14 +295,20 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 
 // isBindingReady checks if a binding is considered ready.
 // A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
-func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) bool {
+func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
 	// find the latest applied condition that has the same generation as the binding
 	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
 	if appliedCondition != nil && appliedCondition.Status == metav1.ConditionTrue &&
 		appliedCondition.ObservedGeneration == binding.GetGeneration() {
-		return appliedCondition.LastTransitionTime.Time.Before(readyTimeCutOff)
+		waitTime := appliedCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
+		if waitTime < 0 {
+			return 0, true
+		}
+		// return the time we need to wait for it to be ready in this case
+		return waitTime, false
 	}
-	return false
+	// we don't know when the current spec is applied yet, return a negative wait time
+	return -1, false
 }
 
 // updateBindings updates the bindings according to its state.

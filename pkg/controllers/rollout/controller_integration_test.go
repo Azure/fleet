@@ -23,8 +23,7 @@ import (
 )
 
 const (
-	timeout  = time.Second * 10
-	duration = time.Second * 20
+	timeout  = time.Second * 5
 	interval = time.Millisecond * 250
 )
 
@@ -73,7 +72,7 @@ var _ = Describe("Test the rollout Controller", func() {
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			bindings = append(bindings, binding)
 		}
-		// check that all bindings are scheduled
+		// check that all bindings are bound
 		Eventually(func() bool {
 			for _, binding := range bindings {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)

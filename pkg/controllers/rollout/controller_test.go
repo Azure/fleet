@@ -9,6 +9,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,8 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
+
+var now = time.Now()
 
 func TestReconciler_handleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {
@@ -166,10 +169,10 @@ func Test_pickBindingsToRoll(t *testing.T) {
 				tobeUpdatedBindings = append(tobeUpdatedBindings, tt.allBindings[index])
 			}
 			if !reflect.DeepEqual(gotUpdatedBindings, tobeUpdatedBindings) {
-				t.Errorf("pickBindingsToRoll() gotUpdatedBindings = %v, want %v", gotUpdatedBindings, tt.tobeUpdatedBindings)
+				t.Errorf("pickBindingsToRoll() gotUpdatedBindings = %v, wantReady %v", gotUpdatedBindings, tt.tobeUpdatedBindings)
 			}
 			if gotNeedRoll != tt.needRoll {
-				t.Errorf("pickBindingsToRoll() gotNeedRoll = %v, want %v", gotNeedRoll, tt.needRoll)
+				t.Errorf("pickBindingsToRoll() gotNeedRoll = %v, wantReady %v", gotNeedRoll, tt.needRoll)
 			}
 		})
 	}
@@ -251,5 +254,102 @@ func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.Placem
 				},
 			},
 		},
+	}
+}
+
+func Test_isBindingReady(t *testing.T) {
+	tests := map[string]struct {
+		binding         *fleetv1beta1.ClusterResourceBinding
+		readyTimeCutOff time.Time
+		wantReady       bool
+		wantWaitTime    time.Duration
+	}{
+		"binding applied before the ready time cut off should return ready": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 10,
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(-time.Millisecond),
+							},
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
+		"binding applied after the ready time cut off should return not ready with a wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 10,
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(time.Millisecond),
+							},
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    time.Millisecond,
+		},
+		"binding not applied should return not ready with a negative wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    -1,
+		},
+		"binding applied for a previous generation should return not ready with a negative wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 9, //not the current generation
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(-time.Second),
+							},
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       false,
+			wantWaitTime:    -1,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			gotWaitTime, gotReady := isBindingReady(tt.binding, tt.readyTimeCutOff)
+			if gotReady != tt.wantReady {
+				t.Errorf("gotReady = %v, wantReady %v", gotReady, tt.wantReady)
+			}
+			if gotWaitTime != tt.wantWaitTime {
+				t.Errorf("gotWaitTime = %v, wantWaitTime %v", gotWaitTime, tt.wantWaitTime)
+			}
+		})
 	}
 }
