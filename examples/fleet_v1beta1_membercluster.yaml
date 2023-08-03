@@ -1,7 +1,7 @@
-apiVersion: placement.azure.com/v1beta1
+apiVersion: kubernetes-fleet.io/v1beta1
 kind: MemberCluster
 metadata:
-  name: kind-member-testing
+  name: kind-member-testing-v1beta1
 spec:
   state: Join
   identity:
