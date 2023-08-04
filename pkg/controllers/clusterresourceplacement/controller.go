@@ -25,8 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -272,7 +273,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 	// snapshots from the end.
 	for i := len(sortedList.Items) - 1; i >= 0; i-- {
 		snapshotKObj := klog.KObj(&sortedList.Items[i])
-		ii, err := parseResourceIndexFromLabel(&sortedList.Items[i])
+		ii, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(&sortedList.Items[i])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", snapshotKObj)
 			return controller.NewUnexpectedBehaviorError(err)
@@ -395,7 +396,7 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
 		crp.Spec.Policy.NumberOfClusters != nil {
-		oldCount, err := utils.ExtractNumOfClustersFromPolicySnapshot(latest)
+		oldCount, err := annotations.ExtractNumOfClustersFromPolicySnapshot(latest)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the numberOfClusterAnnotation", "clusterSchedulingPolicySnapshot", klog.KObj(latest))
 			return controller.NewUnexpectedBehaviorError(err)
@@ -539,7 +540,7 @@ func (r *Reconciler) lookupLatestResourceSnapshot(ctx context.Context, crp *flee
 		return nil, -1, controller.NewAPIServerError(false, err)
 	}
 	if len(snapshotList.Items) == 1 {
-		resourceIndex, err := parseResourceIndexFromLabel(&snapshotList.Items[0])
+		resourceIndex, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(&snapshotList.Items[0])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[0]))
 			return nil, -1, controller.NewUnexpectedBehaviorError(err)
@@ -562,7 +563,7 @@ func (r *Reconciler) lookupLatestResourceSnapshot(ctx context.Context, crp *flee
 		return nil, -1, nil
 	}
 	latestSnapshot := &sortedList.Items[len(sortedList.Items)-1]
-	resourceIndex, err := parseResourceIndexFromLabel(latestSnapshot)
+	resourceIndex, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(latestSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestSnapshot))
 		return nil, -1, controller.NewUnexpectedBehaviorError(err)
@@ -585,12 +586,12 @@ func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, crp *fleet
 	sort.Slice(snapshotList.Items, func(i, j int) bool {
 		iKObj := klog.KObj(&snapshotList.Items[i])
 		jKObj := klog.KObj(&snapshotList.Items[j])
-		ii, err := parseResourceIndexFromLabel(&snapshotList.Items[i])
+		ii, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(&snapshotList.Items[i])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", iKObj)
 			errs = append(errs, err)
 		}
-		ji, err := parseResourceIndexFromLabel(&snapshotList.Items[j])
+		ji, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(&snapshotList.Items[j])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the resource index label", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", jKObj)
 			errs = append(errs, err)
@@ -599,12 +600,12 @@ func (r *Reconciler) listSortedResourceSnapshots(ctx context.Context, crp *fleet
 			return ii < ji
 		}
 
-		iDoesExist, iSubindex, err := utils.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[i])
+		iDoesExist, iSubindex, err := annotations.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[i])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", iKObj)
 			errs = append(errs, err)
 		}
-		jDoesExist, jSubindex, err := utils.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[j])
+		jDoesExist, jSubindex, err := annotations.ExtractSubindexFromClusterResourceSnapshot(&snapshotList.Items[j])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the subindex index", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", jKObj)
 			errs = append(errs, err)
@@ -638,16 +639,6 @@ func parsePolicyIndexFromLabel(s *fleetv1beta1.ClusterSchedulingPolicySnapshot) 
 	v, err := strconv.Atoi(indexLabel)
 	if err != nil || v < 0 {
 		return -1, fmt.Errorf("invalid policy index %q, error: %w", indexLabel, err)
-	}
-	return v, nil
-}
-
-// parseResourceIndexFromLabel returns error when parsing the label which should never return error in production.
-func parseResourceIndexFromLabel(s *fleetv1beta1.ClusterResourceSnapshot) (int, error) {
-	indexLabel := s.Labels[fleetv1beta1.ResourceIndexLabel]
-	v, err := strconv.Atoi(indexLabel)
-	if err != nil || v < 0 {
-		return -1, fmt.Errorf("invalid resource index %q, error: %w", indexLabel, err)
 	}
 	return v, nil
 }

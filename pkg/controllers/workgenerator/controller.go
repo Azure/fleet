@@ -34,6 +34,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -254,12 +255,13 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	}
 	if snapshotCount > 1 {
 		// fetch all the resource snapshot in the same index group
-		index, exist := masterResourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
-		if !exist {
-			return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("master resource snapshot %s has no index label", masterResourceSnapshot.Name))
+		index, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(&masterResourceSnapshot)
+		if err != nil {
+			klog.ErrorS(err, "master resource snapshot has invalid resource index", "clusterResourceSnapshot", klog.KObj(&masterResourceSnapshot))
+			return nil, controller.NewUnexpectedBehaviorError(err)
 		}
 		resourceIndexLabelMatcher := client.MatchingLabels{
-			fleetv1beta1.ResourceIndexLabel: index,
+			fleetv1beta1.ResourceIndexLabel: strconv.Itoa(index),
 			fleetv1beta1.CRPTrackingLabel:   resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
 		}
 		resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}

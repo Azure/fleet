@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package utils
+package annotations
 
 import (
 	"testing"
@@ -232,6 +232,75 @@ func TestExtractObservedCRPGenerationFromPolicySnapshot(t *testing.T) {
 
 			if observedCRPGeneration != tc.wantCRPGeneration {
 				t.Fatalf("ExtractObservedCRPGenerationFromPolicySnapshot() = %v, %v, want %v, nil", observedCRPGeneration, err, tc.wantCRPGeneration)
+			}
+		})
+	}
+}
+
+func TestExtractNumberOfResourceSnapshots(t *testing.T) {
+	snapshotName := "test-snapshot"
+
+	testCases := []struct {
+		name      string
+		snapshot  *fleetv1beta1.ClusterResourceSnapshot
+		want      int
+		wantError bool
+	}{
+		{
+			name: "valid annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+			},
+			want: 1,
+		},
+		{
+			name: "no annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid annotation: not an integer",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "abc",
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid annotation: negative integer",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "-1",
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ExtractNumberOfResourceSnapshotsFromResourceSnapshot(tc.snapshot)
+			if gotErr := err != nil; gotErr != tc.wantError {
+				t.Fatalf("ExtractNumberOfResourceSnapshotsFromResourceSnapshot() got err %v, want err %v", err, tc.wantError)
+			}
+			if !tc.wantError && got != tc.want {
+				t.Fatalf("ExtractNumberOfResourceSnapshotsFromResourceSnapshot() = %v, want err %v", got, tc.want)
 			}
 		})
 	}
