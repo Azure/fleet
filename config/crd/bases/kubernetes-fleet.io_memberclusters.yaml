@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: memberclusters.placement.azure.com
+  name: memberclusters.kubernetes-fleet.io
 spec:
-  group: placement.azure.com
+  group: kubernetes-fleet.io
   names:
     categories:
     - fleet
@@ -14,7 +14,7 @@ spec:
     listKind: MemberClusterList
     plural: memberclusters
     shortNames:
-    - mc
+    - cluster
     singular: membercluster
   scope: Cluster
   versions:
