@@ -8,16 +8,15 @@ package validator
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
-// ValidateClusterResourcePlacementAlpha validate a ClusterResourcePlacement v1alpha1 object
+// ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object
 func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
@@ -45,7 +44,7 @@ func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alph
 	return apiErrors.NewAggregate(allErr)
 }
 
-// ValidateClusterResourcePlacement validate a ClusterResourcePlacement object
+// ValidateClusterResourcePlacement validates a ClusterResourcePlacement object
 func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
