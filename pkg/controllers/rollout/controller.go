@@ -122,7 +122,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Update all the bindings in parallel according to the rollout plan.
 	// We need to requeue the request regardless if the binding updates succeed or not
 	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
-	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch
+	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch the next ready one early.
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
 	return ctrl.Result{RequeueAfter: time.Duration(*crpCopy.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
