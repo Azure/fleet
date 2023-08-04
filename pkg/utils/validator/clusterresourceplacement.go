@@ -10,12 +10,14 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
-// ValidateClusterResourcePlacement validate a ClusterResourcePlacement object
-func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
+// ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
+func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
@@ -35,6 +37,74 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1alpha1.Cl
 		for _, selector := range clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity.ClusterSelectorTerms {
 			if _, err := metav1.LabelSelectorAsSelector(&selector.LabelSelector); err != nil {
 				allErr = append(allErr, fmt.Errorf("the labelSelector in cluster selector %+v is invalid: %w", selector, err))
+			}
+		}
+	}
+
+	return apiErrors.NewAggregate(allErr)
+}
+
+// ValidateClusterResourcePlacement validates a ClusterResourcePlacement object.
+func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.ClusterResourcePlacement) error {
+	allErr := make([]error, 0)
+
+	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
+		//TODO: make sure the selector's gvk is valid
+		if selector.LabelSelector != nil {
+			if len(selector.Name) != 0 {
+				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
+			}
+			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
+				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
+			}
+		}
+	}
+
+	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
+		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
+		if err := validateClusterAffinity(clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity); err != nil {
+			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
+		}
+	}
+
+	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
+		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
+	}
+
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validateClusterAffinity(_ *fleetv1beta1.ClusterAffinity) error {
+	// TODO: implement this
+	return nil
+}
+
+func validateRolloutStrategy(rolloutStrategy fleetv1beta1.RolloutStrategy) error {
+	allErr := make([]error, 0)
+	if rolloutStrategy.Type != fleetv1beta1.RollingUpdateRolloutStrategyType {
+		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
+	}
+
+	if rolloutStrategy.RollingUpdate != nil {
+		if rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds != nil && *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds < 0 {
+			allErr = append(allErr, fmt.Errorf("unavailablePeriodSeconds must be greater than or equal to 0, got %d", *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds))
+		}
+		if rolloutStrategy.RollingUpdate.MaxUnavailable != nil {
+			value, err := intstr.GetScaledValueFromIntOrPercent(rolloutStrategy.RollingUpdate.MaxUnavailable, 10, true)
+			if err != nil {
+				allErr = append(allErr, fmt.Errorf("maxUnavailable `%+v` is invalid: %w", rolloutStrategy.RollingUpdate.MaxUnavailable, err))
+			}
+			if value < 0 {
+				allErr = append(allErr, fmt.Errorf("maxUnavailable must be greater than or equal to 0, got `%+v`", rolloutStrategy.RollingUpdate.MaxUnavailable))
+			}
+		}
+		if rolloutStrategy.RollingUpdate.MaxSurge != nil {
+			value, err := intstr.GetScaledValueFromIntOrPercent(rolloutStrategy.RollingUpdate.MaxSurge, 10, true)
+			if err != nil {
+				allErr = append(allErr, fmt.Errorf("maxSurge `%+v` is invalid: %w", rolloutStrategy.RollingUpdate.MaxSurge, err))
+			}
+			if value < 0 {
+				allErr = append(allErr, fmt.Errorf("maxSurge must be greater than or equal to 0, got `%+v`", rolloutStrategy.RollingUpdate.MaxSurge))
 			}
 		}
 	}

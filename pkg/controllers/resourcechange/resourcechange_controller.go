@@ -183,7 +183,7 @@ func collectAllAffectedPlacements(res *unstructured.Unstructured, crpList []runt
 		var placement fleetv1alpha1.ClusterResourcePlacement
 		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(crp.DeepCopyObject().(*unstructured.Unstructured).Object, &placement)
 		// TODO: remove after we add validation webhooks
-		if err := validator.ValidateClusterResourcePlacement(&placement); err != nil {
+		if err := validator.ValidateClusterResourcePlacementAlpha(&placement); err != nil {
 			klog.ErrorS(err, "find one invalid cluster resource placement", "placement", klog.KObj(&placement))
 			continue
 		}
