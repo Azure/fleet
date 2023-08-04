@@ -259,7 +259,14 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 							},
 						},
 					},
-					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{},
+					ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+							Name:    utils.RandStr(),
+						},
+					},
 				},
 			}
 
