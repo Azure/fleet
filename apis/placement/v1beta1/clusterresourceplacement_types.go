@@ -129,18 +129,17 @@ type ClusterResourceSelector struct {
 // You can only specify at most one of the two fields: ClusterNames and Affinity.
 // If none is specified, all the joined clusters are selected.
 type PlacementPolicy struct {
-	// +kubebuilder:validation:MaxItems=100
-	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
-	// If the list is not empty, `PlacementType`, `NumberOfClusters`, `Affinity`, and `TopologySpreadConstraints`
-	//  are ignored.
-	// +optional
-	ClusterNames []string `json:"clusterNames,omitempty"`
-
-	// Type of placement. Can be "PickAll" or "PickN". Default is PickAll.
-	// +kubebuilder:validation:Enum=PickAll;PickN
+	// Type of placement. Can be "PickAll", "PickN" or "PickFixed". Default is PickAll.
+	// +kubebuilder:validation:Enum=PickAll;PickN;PickFixed
 	// +kubebuilder:default=PickAll
 	// +optional
 	PlacementType PlacementType `json:"placementType,omitempty"`
+
+	// +kubebuilder:validation:MaxItems=100
+	// ClusterNames contains a list of names of MemberCluster to place the selected resources.
+	// Only valid if the placement type is "PickFixed"
+	// +optional
+	ClusterNames []string `json:"clusterNames,omitempty"`
 
 	// NumberOfClusters of placement. Only valid if the placement type is "PickN".
 	// +kubebuilder:validation:Minimum=0
@@ -148,12 +147,14 @@ type PlacementPolicy struct {
 	NumberOfClusters *int32 `json:"numberOfClusters,omitempty"`
 
 	// Affinity contains cluster affinity scheduling rules. Defines which member clusters to place the selected resources.
+	// Only valid if the placement type is "PickAll" or "PickN".
 	// +optional
 	Affinity *Affinity `json:"affinity,omitempty"`
 
 	// TopologySpreadConstraints describes how a group of resources ought to spread across multiple topology
 	// domains. Scheduler will schedule resources in a way which abides by the constraints.
 	// All topologySpreadConstraints are ANDed.
+	// Only valid if the placement type is "PickN".
 	// +optional
 	// +patchMergeKey=topologyKey
 	// +patchStrategy=merge
@@ -332,8 +333,9 @@ type ClusterResourcePlacementStatus struct {
 
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
 	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
-	// In the pickN case, there are N placement statuses where N = NumberOfClusters. Some of them may not have assigned
-	// clusters when we cannot fill the required number of clusters.
+	// In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
+	// N placement statuses where N = ClusterNames.
+	// In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
 	// +optional
 	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
 
@@ -460,6 +462,9 @@ const (
 
 	// PickNPlacementType picks N clusters that satisfy the rules.
 	PickNPlacementType PlacementType = "PickN"
+
+	// PickFixedPlacementType picks a fixed set of clusters.
+	PickFixedPlacementType PlacementType = "PickFixed"
 )
 
 // ClusterResourcePlacementList contains a list of ClusterResourcePlacement.

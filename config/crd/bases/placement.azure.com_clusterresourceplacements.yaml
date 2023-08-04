@@ -75,6 +75,7 @@ spec:
                   affinity:
                     description: Affinity contains cluster affinity scheduling rules.
                       Defines which member clusters to place the selected resources.
+                      Only valid if the placement type is "PickAll" or "PickN".
                     properties:
                       clusterAffinity:
                         description: ClusterAffinity contains cluster affinity scheduling
@@ -250,9 +251,8 @@ spec:
                     type: object
                   clusterNames:
                     description: ClusterNames contains a list of names of MemberCluster
-                      to place the selected resources. If the list is not empty, `PlacementType`,
-                      `NumberOfClusters`, `Affinity`, and `TopologySpreadConstraints`
-                      are ignored.
+                      to place the selected resources. Only valid if the placement
+                      type is "PickFixed"
                     items:
                       type: string
                     maxItems: 100
@@ -265,17 +265,19 @@ spec:
                     type: integer
                   placementType:
                     default: PickAll
-                    description: Type of placement. Can be "PickAll" or "PickN". Default
-                      is PickAll.
+                    description: Type of placement. Can be "PickAll", "PickN" or "PickFixed".
+                      Default is PickAll.
                     enum:
                     - PickAll
                     - PickN
+                    - PickFixed
                     type: string
                   topologySpreadConstraints:
                     description: TopologySpreadConstraints describes how a group of
                       resources ought to spread across multiple topology domains.
                       Scheduler will schedule resources in a way which abides by the
-                      constraints. All topologySpreadConstraints are ANDed.
+                      constraints. All topologySpreadConstraints are ANDed. Only valid
+                      if the placement type is "PickN".
                     items:
                       description: TopologySpreadConstraint specifies how to spread
                         resources among the given cluster topology.
@@ -554,9 +556,10 @@ spec:
                   on the clusters that are selected by PlacementPolicy. Each selected
                   cluster according to the latest resource placement is guaranteed
                   to have a corresponding placementStatuses. In the pickN case, there
-                  are N placement statuses where N = NumberOfClusters. Some of them
-                  may not have assigned clusters when we cannot fill the required
-                  number of clusters.
+                  are N placement statuses where N = NumberOfClusters; Or in the pickFixed
+                  case, there are N placement statuses where N = ClusterNames. In
+                  these cases, some of them may not have assigned clusters when we
+                  cannot fill the required number of clusters.
                 items:
                   description: ResourcePlacementStatus represents the placement status
                     of selected resources for one target cluster.
