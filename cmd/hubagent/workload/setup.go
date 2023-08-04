@@ -20,6 +20,8 @@ import (
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
+	"go.goms.io/fleet/pkg/controllers/rollout"
+	"go.goms.io/fleet/pkg/controllers/workgenerator"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -120,10 +122,28 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		InformerManager:     dynamicInformerManager,
 		PlacementController: clusterResourcePlacementController,
 	}
-
 	memberClusterPlacementController := controller.NewController(mcPlacementControllerName, controller.NamespaceKeyFunc, mcp.Reconcile, ratelimiter)
 	if err != nil {
 		klog.ErrorS(err, "unable to set up resource change  controller")
+		return err
+	}
+
+	// Set up  a new controller to do rollout resources according to CRP rollout strategy
+	klog.Info("Setting up rollout controller")
+	if err = (&rollout.Reconciler{
+		Client:         mgr.GetClient(),
+		UncachedReader: mgr.GetAPIReader(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to set up rollout controller")
+		return err
+	}
+
+	// Set up the work generator
+	klog.Info("Setting up work generator")
+	if err = (&workgenerator.Reconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to set up work generator")
 		return err
 	}
 
