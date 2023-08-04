@@ -9,7 +9,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -257,50 +255,4 @@ func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]boo
 		return false
 	}
 	return true
-}
-
-// ExtractNumOfClustersFromPolicySnapshot extracts the numOfClusters value from the annotations
-// on a policy snapshot.
-func ExtractNumOfClustersFromPolicySnapshot(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, error) {
-	numOfClustersStr, ok := policy.Annotations[fleetv1beta1.NumberOfClustersAnnotation]
-	if !ok {
-		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.NumberOfClustersAnnotation)
-	}
-
-	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
-	numOfClusters, err := strconv.Atoi(numOfClustersStr)
-	if err != nil || numOfClusters < 0 {
-		return 0, fmt.Errorf("invalid annotation %s: %s is not a valid count: %w", fleetv1beta1.NumberOfClustersAnnotation, numOfClustersStr, err)
-	}
-
-	return numOfClusters, nil
-}
-
-// ExtractSubindexFromClusterResourceSnapshot extracts the subindex value from the annotations from a clusterResourceSnapshot.
-func ExtractSubindexFromClusterResourceSnapshot(snapshot *fleetv1beta1.ClusterResourceSnapshot) (doesExist bool, subindex int, err error) {
-	subindexStr, ok := snapshot.Annotations[fleetv1beta1.SubindexOfResourceSnapshotAnnotation]
-	if !ok {
-		return false, -1, nil
-	}
-	subindex, err = strconv.Atoi(subindexStr)
-	if err != nil || subindex < 0 {
-		return true, -1, fmt.Errorf("invalid annotation %s: %s is invalid: %w", fleetv1beta1.SubindexOfResourceSnapshotAnnotation, subindexStr, err)
-	}
-
-	return true, subindex, nil
-}
-
-func ExtractObservedCRPGenerationFromPolicySnapshot(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int64, error) {
-	crpGenerationStr, ok := policy.Annotations[fleetv1beta1.CRPGenerationAnnotation]
-	if !ok {
-		return 0, fmt.Errorf("cannot find annotation %s", fleetv1beta1.CRPGenerationAnnotation)
-	}
-
-	// Cast the annotation to an integer; throw an error if the cast cannot be completed or the value is negative.
-	observedCRPGeneration, err := strconv.Atoi(crpGenerationStr)
-	if err != nil || observedCRPGeneration < 0 {
-		return 0, fmt.Errorf("invalid annotation %s: %s is not a valid value: %w", fleetv1beta1.CRPGenerationAnnotation, crpGenerationStr, err)
-	}
-
-	return int64(observedCRPGeneration), nil
 }

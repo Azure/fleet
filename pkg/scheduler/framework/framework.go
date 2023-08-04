@@ -25,7 +25,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
-	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -667,7 +667,7 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	}
 
 	// Retrieve the corresponding CRP generation.
-	observedCRPGeneration, err := utils.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewUnexpectedBehaviorError(err)
@@ -699,7 +699,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	// Retrieve the desired number of clusters from the policy.
 	//
 	// Note that for scheduling policies of the PickN type, this annotation is expected to be present.
-	numOfClusters, err := utils.ExtractNumOfClustersFromPolicySnapshot(policy)
+	numOfClusters, err := annotations.ExtractNumOfClustersFromPolicySnapshot(policy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to extract number of clusters required from policy snapshot", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
@@ -1249,7 +1249,7 @@ func (f *framework) updatePolicySnapshotStatusFromTargetClusters(
 	}
 
 	// Retrieve the corresponding CRP generation.
-	observedCRPGeneration, err := utils.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewUnexpectedBehaviorError(err)
