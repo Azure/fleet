@@ -8,9 +8,8 @@ package labels
 import (
 	"testing"
 
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
