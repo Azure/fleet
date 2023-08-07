@@ -7,7 +7,12 @@ package workgenerator
 
 import (
 	"errors"
+	"reflect"
 	"testing"
+
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
+
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -115,6 +120,142 @@ func Test_getWorkNameFromSnapshotName(t *testing.T) {
 			}
 			if workName != tt.wantedName {
 				t.Errorf("getWorkNameFromSnapshotName test `%s` workName = `%v`, wantedName `%v`", name, workName, tt.wantedName)
+			}
+		})
+	}
+}
+
+func Test_buildAllWorkAppliedCondition(t *testing.T) {
+	tests := map[string]struct {
+		works      map[string]*workv1alpha1.Work
+		generation int64
+		want       metav1.Condition
+	}{
+		"applied should be true if all work applied": {
+			works: map[string]*workv1alpha1.Work{
+				"appliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 123,
+							},
+						},
+					},
+				},
+				"appliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 12,
+							},
+						},
+					},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             allWorkAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"applied should be false if not all work applied to the latest generation": {
+			works: map[string]*workv1alpha1.Work{
+				"notAppliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 122, // not the latest generation
+							},
+						},
+					},
+				},
+				"appliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 12,
+							},
+						},
+					},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             workNotAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"applied should be false if not all work has applied": {
+			works: map[string]*workv1alpha1.Work{
+				"appliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 122, // not the latest generation
+							},
+						},
+					},
+				},
+				"notAppliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             workNotAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			binding := &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test",
+					Generation: tt.generation,
+				},
+			}
+			if got := buildAllWorkAppliedCondition(tt.works, binding); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("buildAllWorkAppliedCondition() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -36,6 +36,7 @@ const (
 
 	lastAppliedConfigAnnotation = "fleet.azure.com/last-applied-configuration"
 
+	// TODO: move this to work api definition
 	ConditionTypeApplied   = "Applied"
 	ConditionTypeAvailable = "Available"
 

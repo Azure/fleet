@@ -232,3 +232,51 @@ func TestEqualConditionIgnoreReason(t *testing.T) {
 		})
 	}
 }
+
+func TestIsConditionStatusTrue(t *testing.T) {
+	tests := map[string]struct {
+		cond             *metav1.Condition
+		latestGeneration int64
+		want             bool
+	}{
+		"nil condition is considered false": {
+			cond: nil,
+			want: false,
+		},
+		"condition is considered false if status is not true": {
+			cond: &metav1.Condition{
+				Status: metav1.ConditionFalse,
+			},
+			want: false,
+		},
+		"condition is considered false if status is unknown": {
+			cond: &metav1.Condition{
+				Status: metav1.ConditionUnknown,
+			},
+			want: false,
+		},
+		"condition is considered false if status is true but generation is not up to date": {
+			cond: &metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 1,
+			},
+			latestGeneration: 2,
+			want:             false,
+		},
+		"condition is considered true if status is true and generation is up to date": {
+			cond: &metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				ObservedGeneration: 2,
+			},
+			latestGeneration: 2,
+			want:             true,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsConditionStatusTrue(tt.cond, tt.latestGeneration); got != tt.want {
+				t.Errorf("IsConditionStatusTrue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
