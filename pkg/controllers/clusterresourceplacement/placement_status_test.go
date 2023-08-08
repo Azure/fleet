@@ -488,6 +488,12 @@ func TestSetPlacementStatus(t *testing.T) {
 						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
+								Status:             metav1.ConditionUnknown,
+								Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+								Reason:             resourceApplyPendingReason,
+								ObservedGeneration: crpGeneration,
+							},
+							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
 								Reason:             workSynchronizePendingReason,
@@ -506,6 +512,12 @@ func TestSetPlacementStatus(t *testing.T) {
 						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
+								Status:             metav1.ConditionUnknown,
+								Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+								Reason:             resourceApplyPendingReason,
+								ObservedGeneration: crpGeneration,
+							},
+							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
 								Reason:             workSynchronizePendingReason,
@@ -523,6 +535,12 @@ func TestSetPlacementStatus(t *testing.T) {
 						ClusterName:              "member-3",
 						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionUnknown,
+								Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+								Reason:             resourceApplyPendingReason,
+								ObservedGeneration: crpGeneration,
+							},
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
@@ -614,9 +632,9 @@ func TestSetPlacementStatus(t *testing.T) {
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
 					{
-						Status:             metav1.ConditionUnknown,
+						Status:             metav1.ConditionTrue,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Reason:             ApplyPendingReason,
+						Reason:             resourceApplySucceededReason,
 						ObservedGeneration: crpGeneration,
 					},
 					{
@@ -739,6 +757,12 @@ func TestSetPlacementStatus(t *testing.T) {
 					{
 						ClusterName: "member-1",
 						Conditions: []metav1.Condition{
+							{
+								Status:             metav1.ConditionUnknown,
+								Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+								Reason:             resourceApplyPendingReason,
+								ObservedGeneration: crpGeneration,
+							},
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
@@ -872,9 +896,9 @@ func TestSetPlacementStatus(t *testing.T) {
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
 					{
-						Status:             metav1.ConditionUnknown,
+						Status:             metav1.ConditionTrue,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-						Reason:             ApplyPendingReason,
+						Reason:             resourceApplySucceededReason,
 						ObservedGeneration: crpGeneration,
 					},
 					{

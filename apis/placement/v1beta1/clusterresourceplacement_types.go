@@ -437,9 +437,10 @@ const (
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
 	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully applied to all the target clusters.
+	// - "True" means all the selected resources are successfully applied to all the target clusters or apply is not needed
+	// if there are no cluster(s) selected by the scheduler.
 	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
-	// - "Unknown" means we haven't started the apply yet.
+	// - "Unknown" means we haven't finished the apply yet.
 	ClusterResourcePlacementAppliedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementApplied"
 )
 
@@ -473,7 +474,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
-	// - "Unknown" means we haven't started the apply yet.
+	// - "Unknown" means we haven't finished the apply yet.
 	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
 )
 

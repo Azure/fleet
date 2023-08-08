@@ -83,17 +83,27 @@ func buildClusterResourcePlacementSyncCondition(crp *fleetv1beta1.ClusterResourc
 	}
 }
 
-func buildClusterResourcePlacementApplyCondition(crp *fleetv1beta1.ClusterResourcePlacement, naCount, pendingCount, succeededCount, failedCount int) metav1.Condition {
+func buildClusterResourcePlacementApplyCondition(crp *fleetv1beta1.ClusterResourcePlacement, isSync bool, pendingCount, succeededCount, failedCount int) metav1.Condition {
 	klog.V(3).InfoS("Building the clusterResourcePlacement applied condition", "clusterResourcePlacement", klog.KObj(crp),
-		"numberOfAppliedNotNeededCluster", naCount, "numberOfAppliedPendingCluster", pendingCount, "numberOfAppliedSucceededCluster", succeededCount, "numberOfAppliedFailedCluster", failedCount)
+		"isSynced", isSync, "numberOfAppliedPendingCluster", pendingCount, "numberOfAppliedSucceededCluster", succeededCount, "numberOfAppliedFailedCluster", failedCount)
 
-	if naCount+pendingCount+succeededCount+failedCount == 0 {
+	if pendingCount+succeededCount+failedCount == 0 {
 		// If the cluster is selected, it should be in one of the state.
+		return metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+			Reason:             ApplySucceededReason,
+			Message:            "There are no clusters selected to place the resources",
+			ObservedGeneration: crp.Generation,
+		}
+	}
+
+	if !isSync || pendingCount > 0 {
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
 			Reason:             ApplyPendingReason,
-			Message:            "There are no clusters selected to place the resources",
+			Message:            fmt.Sprintf("Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the %d member clusters ", pendingCount),
 			ObservedGeneration: crp.Generation,
 		}
 	}
@@ -108,35 +118,18 @@ func buildClusterResourcePlacementApplyCondition(crp *fleetv1beta1.ClusterResour
 		}
 	}
 
-	if pendingCount > 0 {
-		return metav1.Condition{
-			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-			Reason:             ApplyPendingReason,
-			Message:            fmt.Sprintf("There are still manifests pending to be processed by the %d member clusters", pendingCount),
-			ObservedGeneration: crp.Generation,
-		}
-	}
-	if succeededCount > 0 {
-		return metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-			Reason:             ApplySucceededReason,
-			Message:            fmt.Sprintf("Successfully applied resources to %d member clusters", succeededCount),
-			ObservedGeneration: crp.Generation,
-		}
-	}
-	return metav1.Condition{ // naCount > 0 only when new/old works have not been created on any of the clusters
-		Status:             metav1.ConditionUnknown,
+	return metav1.Condition{
+		Status:             metav1.ConditionTrue,
 		Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-		Reason:             ApplyPendingReason,
-		Message:            fmt.Sprintf("There are still %d cluster(s) pending to be sychronized on the hub cluster", naCount),
+		Reason:             ApplySucceededReason,
+		Message:            fmt.Sprintf("Successfully applied resources to %d member clusters", succeededCount),
 		ObservedGeneration: crp.Generation,
 	}
 }
 
 // setWorkStatusForResourcePlacementStatus will list all the associated works with latest resourceSnapshots and build the work conditions.
-func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, status *fleetv1beta1.ResourcePlacementStatus) error {
+// Returns workSynchronizedCondition & workAppliedCondition.
+func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, status *fleetv1beta1.ResourcePlacementStatus) (*metav1.Condition, *metav1.Condition, error) {
 	crpKObj := klog.KObj(crp)
 	namespaceMatcher := client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, status.ClusterName))
 	workLabelMatcher := client.MatchingLabels{
@@ -146,13 +139,13 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 
 	if err := r.Client.List(ctx, workList, workLabelMatcher, namespaceMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the work associated with the clusterResourcePlacement", "clusterResourcePlacement", crpKObj, "clusterName", status.ClusterName)
-		return controller.NewAPIServerError(true, err)
+		return nil, nil, controller.NewAPIServerError(true, err)
 	}
 
 	resourceIndex, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to parse the resource snapshot index label from latest clusterResourceSnapshot", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-		return controller.NewUnexpectedBehaviorError(err)
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
 	}
 	// Used to build the work synchronized condition
 	oldWorkCounter := 0 // The work is pointing to the old resourceSnapshot.
@@ -160,7 +153,7 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 	// Used to build the work applied condition
 	pendingWorkCounter := 0 // The work has not been applied yet.
 
-	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, 10) // preallocate the memory
+	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit) // preallocate the memory
 	for i := range workList.Items {
 		if workList.Items[i].DeletionTimestamp != nil {
 			continue // ignore the deleting work
@@ -170,12 +163,12 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 		indexFromWork, err := labels.ExtractResourceSnapshotIndexFromWork(&workList.Items[i])
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the resource snapshot index label from work", "clusterResourcePlacement", crpKObj, "work", workKObj)
-			return controller.NewUnexpectedBehaviorError(err)
+			return nil, nil, controller.NewUnexpectedBehaviorError(err)
 		}
 		if indexFromWork > resourceIndex {
 			err := fmt.Errorf("invalid work %s: resource snapshot index %d on the work is greater than resource index %d on the latest clusterResourceSnapshot", workKObj, indexFromWork, resourceIndex)
 			klog.ErrorS(err, "Invalid work", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot), "work", workKObj)
-			return controller.NewUnexpectedBehaviorError(err)
+			return nil, nil, controller.NewUnexpectedBehaviorError(err)
 		} else if indexFromWork < resourceIndex {
 			// The work is pointing to the old resourceSnapshot.
 			// it means the rollout controller has not updated the binding yet or work generator has not handled this work yet.
@@ -183,14 +176,14 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 		} else { // indexFromWork = resourceIndex
 			// The work is pointing to the latest resourceSnapshot.
 			newWorkCounter++
-		}
-		// we build the applied condition on all the works no matter they're latest or not.
-		isPending, failedManifests := buildFailedResourcePlacements(&workList.Items[i])
-		if isPending {
-			pendingWorkCounter++
-		}
-		if len(failedManifests) != 0 && len(failedResourcePlacements) <= maxFailedResourcePlacementLimit {
-			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+			// We only build the work applied status on the new works.
+			isPending, failedManifests := buildFailedResourcePlacements(&workList.Items[i])
+			if isPending {
+				pendingWorkCounter++
+			}
+			if len(failedManifests) != 0 && len(failedResourcePlacements) < maxFailedResourcePlacementLimit {
+				failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
+			}
 		}
 	}
 
@@ -207,26 +200,23 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 	desiredWorkCounter, err := annotations.ExtractNumberOfResourceSnapshotsFromResourceSnapshot(latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Master resource snapshot has invalid numberOfResourceSnapshots annotation", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-		return controller.NewUnexpectedBehaviorError(err)
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
 	}
-	workSynchronizedCondition, err := buildWorkSynchronizedCondition(crp, desiredWorkCounter, newWorkCounter, oldWorkCounter)
+	isSync, workSynchronizedCondition, err := buildWorkSynchronizedCondition(crp, desiredWorkCounter, newWorkCounter, oldWorkCounter)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	meta.SetStatusCondition(&status.Conditions, workSynchronizedCondition)
-	if newWorkCounter+oldWorkCounter == 0 {
-		// skip setting the applied work condition
-		return nil
-	}
-	workAppliedCondition := buildWorkAppliedCondition(crp, pendingWorkCounter > 0, len(failedResourcePlacements) > 0)
+
+	workAppliedCondition := buildWorkAppliedCondition(crp, !isSync || pendingWorkCounter > 0, len(failedResourcePlacements) > 0)
 	meta.SetStatusCondition(&status.Conditions, workAppliedCondition)
-	return nil
+	return &workSynchronizedCondition, &workAppliedCondition, nil
 }
 
-func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, desiredWorkCounter, newWorkCounter, oldWorkCounter int) (metav1.Condition, error) {
+func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, desiredWorkCounter, newWorkCounter, oldWorkCounter int) (bool, metav1.Condition, error) {
 	if desiredWorkCounter == newWorkCounter && oldWorkCounter == 0 {
 		// We have created all the works according to the latest resource snapshot.
-		return metav1.Condition{
+		return true, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
 			Reason:             workSynchronizedSucceededReason,
@@ -234,7 +224,7 @@ func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, 
 			ObservedGeneration: crp.Generation,
 		}, nil
 	}
-	return metav1.Condition{
+	return false, metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
 		Reason:             workSynchronizePendingReason,
@@ -244,22 +234,25 @@ func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, 
 }
 
 func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPendingWork, hasFailedResource bool) metav1.Condition {
+	// hasPendingWork could be true when
+	// - the works have not been created in the hub cluster.
+	// - the works have not been processed by the member cluster.
+	if hasPendingWork {
+		return metav1.Condition{
+			Status:             metav1.ConditionUnknown,
+			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
+			Reason:             resourceApplyPendingReason,
+			Message:            "Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the member cluster",
+			ObservedGeneration: crp.Generation,
+		}
+	}
+
 	if hasFailedResource {
 		return metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
 			Reason:             resourceApplyFailedReason,
 			Message:            "Failed to apply manifests, please check the `failedResourcePlacements` status",
-			ObservedGeneration: crp.Generation,
-		}
-	}
-
-	if hasPendingWork {
-		return metav1.Condition{
-			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
-			Reason:             resourceApplyPendingReason,
-			Message:            "There are still manifests pending to be processed by the member cluster",
 			ObservedGeneration: crp.Generation,
 		}
 	}

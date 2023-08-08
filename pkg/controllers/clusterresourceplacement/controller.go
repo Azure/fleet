@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -796,8 +795,6 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 	appliedPendingCount := 0
 	appliedFailedCount := 0
 	appliedSucceededCount := 0
-	// If appliedCondition is nil, it means the condition is NA (not applicable).
-	appliedNACount := 0
 
 	for _, c := range selected {
 		var rp fleetv1beta1.ResourcePlacementStatus
@@ -813,27 +810,23 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
 		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		if err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, &rp); err != nil {
+		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, &rp)
+		if err != nil {
 			return err
 		}
-		placementStatuses = append(placementStatuses, rp)
-
-		syncCondition := meta.FindStatusCondition(rp.Conditions, string(fleetv1beta1.ResourceWorkSynchronizedConditionType))
 		if syncCondition == nil || syncCondition.Status != metav1.ConditionTrue {
 			syncPendingCount++
 		} else {
 			syncSucceededCount++
 		}
-		appliedCondition := meta.FindStatusCondition(rp.Conditions, string(fleetv1beta1.ResourcesAppliedConditionType))
-		if appliedCondition == nil {
-			appliedNACount++
-		} else if appliedCondition.Status == metav1.ConditionUnknown {
+		if appliedCondition == nil || appliedCondition.Status == metav1.ConditionUnknown {
 			appliedPendingCount++
 		} else if appliedCondition.Status == metav1.ConditionFalse {
 			appliedFailedCount++
 		} else {
 			appliedSucceededCount++
 		}
+		placementStatuses = append(placementStatuses, rp)
 	}
 
 	for i := 0; i < unscheduledClusterCount && i < len(unselected); i++ {
@@ -855,6 +848,6 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 	}
 	crp.Status.PlacementStatuses = placementStatuses
 	crp.SetConditions(buildClusterResourcePlacementSyncCondition(crp, syncPendingCount, syncSucceededCount))
-	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, appliedNACount, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
+	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, syncPendingCount > 0, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
 	return nil
 }
