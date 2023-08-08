@@ -42,7 +42,7 @@ import (
 
 const (
 	allWorkSyncedReason  = "AllWorkSynced"
-	syncWorkFailed       = "SyncWorkFailed"
+	syncWorkFailedReason = "SyncWorkFailed"
 	workNeedSyncedReason = "StillNeedToSyncWork"
 	workNotAppliedReason = "NotAllWorkHasBeenApplied"
 	allWorkAppliedReason = "AllWorkHasBeenApplied"
@@ -95,27 +95,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
-	// make a copy of the binding so that it won't pollute the cache
-	binding := resourceBinding.DeepCopy()
 	workUpdated := false
 	// list all the corresponding works
-	works, syncErr := r.listAllWorksAssociated(ctx, binding)
+	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
 		// generate and apply the workUpdated works if we have all the works
-		workUpdated, syncErr = r.syncAllWork(ctx, binding, works)
+		workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works)
 	}
 
 	if syncErr != nil {
 		klog.ErrorS(syncErr, "Failed to sync all the works", "resourceBinding", bindingRef)
-		binding.SetConditions(metav1.Condition{
+		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceBindingBound),
-			Reason:             syncWorkFailed,
+			Reason:             syncWorkFailedReason,
 			Message:            syncErr.Error(),
 			ObservedGeneration: resourceBinding.Generation,
 		})
 	} else {
-		binding.SetConditions(metav1.Condition{
+		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingBound),
 			Reason:             allWorkSyncedReason,
@@ -123,20 +121,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		})
 		if workUpdated {
 			// revert the applied condition if we made any changes to the work
-			binding.SetConditions(metav1.Condition{
+			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             workNeedSyncedReason,
+				Message:            "The work needs to be synced first",
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
 			// try to gather the resource binding applied status if we didn't update any associated work spec this time
-			binding.SetConditions(buildAllWorkAppliedCondition(works, binding))
+			resourceBinding.SetConditions(buildAllWorkAppliedCondition(works, &resourceBinding))
 		}
 	}
 
 	// update the resource binding status
-	if updateErr := r.Client.Status().Update(ctx, binding); updateErr != nil {
+	if updateErr := r.Client.Status().Update(ctx, &resourceBinding); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
 		return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 	}
@@ -171,7 +170,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 		klog.V(2).InfoS("The resource binding is deleted", "resourceBinding", klog.KObj(resourceBinding))
 		return ctrl.Result{}, nil
 	}
-	klog.V(4).InfoS("The resource binding still has undeleted work", "resourceBinding", klog.KObj(resourceBinding),
+	klog.V(2).InfoS("The resource binding still has undeleted work", "resourceBinding", klog.KObj(resourceBinding),
 		"number of associated work", len(works))
 	// we watch the work objects deleting events, so we can afford to wait a bit longer here as a fallback case.
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -208,7 +207,7 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 			currentWork[work.Name] = work.DeepCopy()
 		}
 	}
-	klog.V(4).InfoS("Get all the work associated", "numOfWork", len(currentWork), "resourceBinding", klog.KObj(resourceBinding))
+	klog.V(2).InfoS("Get all the work associated", "numOfWork", len(currentWork), "resourceBinding", klog.KObj(resourceBinding))
 	return currentWork, nil
 }
 
@@ -314,7 +313,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 		// make sure the reconcile requeue the request
 		return nil, controller.NewExpectedBehaviorError(misMatchErr)
 	}
-	klog.V(4).InfoS("Get all the resource snapshot associated with the binding", "numOfSnapshot", len(resourceSnapshots), "resourceBinding", klog.KObj(resourceBinding))
+	klog.V(2).InfoS("Get all the resource snapshot associated with the binding", "numOfSnapshot", len(resourceSnapshots), "resourceBinding", klog.KObj(resourceBinding))
 	return resourceSnapshots, nil
 }
 
@@ -359,7 +358,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, wo
 		}
 		if workResourceIndex == resourceIndex {
 			// no need to do anything since the resource snapshot is immutable.
-			klog.V(4).InfoS(" work is already associated with the desired resourceSnapshot", "work", workObj, "resourceSnapshot", resourceSnapshotObj)
+			klog.V(2).InfoS(" work is already associated with the desired resourceSnapshot", "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 			return false, nil
 		}
 	}
@@ -381,15 +380,13 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, wo
 				"resourceSnapshot", resourceSnapshotObj, "work", workObj)
 			return true, controller.NewCreateIgnoreAlreadyExistError(err)
 		}
-	} else {
-		if err := r.Client.Update(ctx, work); err != nil {
-			klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceBinding", resourceBindingObj,
-				"resourceSnapshot", resourceSnapshotObj, "work", workObj)
-			return true, controller.NewUpdateIgnoreConflictError(err)
-		}
+	} else if err := r.Client.Update(ctx, work); err != nil {
+		klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceBinding", resourceBindingObj,
+			"resourceSnapshot", resourceSnapshotObj, "work", workObj)
+		return true, controller.NewUpdateIgnoreConflictError(err)
 	}
 
-	klog.V(4).InfoS("Successfully upsert the work associated with the resourceSnapshot", "isCreate", needCreate,
+	klog.V(2).InfoS("Successfully upsert the work associated with the resourceSnapshot", "isCreate", needCreate,
 		"resourceBinding", resourceBindingObj, "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 	return true, nil
 }
@@ -438,6 +435,7 @@ func buildAllWorkAppliedCondition(works map[string]*workv1alpha1.Work, binding *
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
 		Reason:             workNotAppliedReason,
+		Message:            "not all corresponding work objects are applied",
 		ObservedGeneration: binding.GetGeneration(),
 	}
 }
@@ -480,7 +478,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				parentBindingName, exist := evt.ObjectNew.GetLabels()[fleetv1beta1.ParentBindingLabel]
 				if !exist {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("work has no binding parent")),
-						"Could not find the parent binding label", "updated work", evt.ObjectNew, "existing label", evt.ObjectNew.GetLabels())
+						"Could not find the parent binding label", "updatedWork", evt.ObjectNew, "existing label", evt.ObjectNew.GetLabels())
 					return
 				}
 				oldWork, ok := evt.ObjectOld.(*workv1alpha1.Work)
@@ -497,6 +495,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}
 				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, workapi.ConditionTypeApplied)
 				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, workapi.ConditionTypeApplied)
+				// we only need to handle the case the applied condition is changed between the new and old work objects otherwise, it
+				// won't affect the binding applied condition.
 				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) {
 					klog.V(4).InfoS("Applied condition in the work didn't change", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return

@@ -7,8 +7,9 @@ package workgenerator
 
 import (
 	"errors"
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -254,8 +255,9 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Generation: tt.generation,
 				},
 			}
-			if got := buildAllWorkAppliedCondition(tt.works, binding); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("buildAllWorkAppliedCondition() = %v, want %v", got, tt.want)
+			got := buildAllWorkAppliedCondition(tt.works, binding)
+			if diff := cmp.Diff(got, tt.want, ignoreConditionOption); diff != "" {
+				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-want +got):\n%s", name, diff)
 			}
 		})
 	}
