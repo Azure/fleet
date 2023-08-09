@@ -263,9 +263,9 @@ func newScheduledConditionFromBindings(policy *fleetv1beta1.ClusterSchedulingPol
 	return newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage)
 }
 
-// newSchedulingDecisionsFromTargetClusters returns a list of scheduling decisions, based on different
+// newSchedulingDecisionsForPickFixedPlacementType returns a list of scheduling decisions, based on different
 // types of target clusters.
-func newSchedulingDecisionsFromTargetClusters(valid []*fleetv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) []fleetv1beta1.ClusterDecision {
+func newSchedulingDecisionsForPickFixedPlacementType(valid []*fleetv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) []fleetv1beta1.ClusterDecision {
 	// Pre-allocate with a reasonable capacity.
 	clusterDecisions := make([]fleetv1beta1.ClusterDecision, 0, len(valid))
 
@@ -285,7 +285,7 @@ func newSchedulingDecisionsFromTargetClusters(valid []*fleetv1beta1.MemberCluste
 			ClusterName: clusterWithReason.cluster.Name,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
-			Reason: fmt.Sprintf(fixedSetOfClustersInvalidClusterReasonTemplate, clusterWithReason.reason),
+			Reason: fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, clusterWithReason.reason),
 		})
 	}
 
@@ -295,7 +295,7 @@ func newSchedulingDecisionsFromTargetClusters(valid []*fleetv1beta1.MemberCluste
 			ClusterName: clusterName,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
-			Reason: fixedSetOfClustersNotFoundClusterReason,
+			Reason: pickFixedNotFoundClusterReason,
 		})
 	}
 

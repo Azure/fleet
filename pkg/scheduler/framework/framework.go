@@ -35,9 +35,9 @@ const (
 	eventRecorderNameTemplate = "scheduler-framework-%s"
 
 	// The reasons to use for scheduling decisions.
-	pickedByPolicyReason                           = "picked by scheduling policy"
-	fixedSetOfClustersInvalidClusterReasonTemplate = "cluster is not eligible for resource placement yet: %s"
-	fixedSetOfClustersNotFoundClusterReason        = "specified cluster is not found"
+	pickedByPolicyReason                  = "picked by scheduling policy"
+	pickFixedInvalidClusterReasonTemplate = "cluster is not eligible for resource placement yet: %s"
+	pickFixedNotFoundClusterReason        = "specified cluster is not found"
 
 	// The reasons and messages for scheduled conditions.
 	fullyScheduledReason     = "SchedulingPolicyFulfilled"
@@ -292,10 +292,10 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 		// The placement policy is not set; in such cases the policy is considered to be of
 		// the PickAll placement type.
 		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
-	case len(policy.Spec.Policy.ClusterNames) != 0:
+	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
 		// The placement policy features a fixed set of clusters to select; in such cases, the
 		// scheduler will bind to these clusters directly.
-		return f.runSchedulingCycleForFixedSetOfClusters(ctx, crpName, policy, clusters, bound, scheduled, obsolete)
+		return f.runSchedulingCycleForPickFixedPlacementType(ctx, crpName, policy, clusters, bound, scheduled, obsolete)
 	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
 		// Run the scheduling cycle for policy of the PickAll placement type.
 		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
@@ -1206,20 +1206,20 @@ func (f *framework) crossReferenceClustersWithTargetNames(current []fleetv1beta1
 	return valid, invalid, notFound
 }
 
-// updatePolicySnapshotStatusFromTargetClusters updates the policy snapshot status with
+// updatePolicySnapshotStatusForPickFixedPlacementType updates the policy snapshot status with
 // the latest scheduling decisions and condition when there is a fixed set of clusters to
-// select.
+// select (PickFixed placement type).
 //
 // Note that due to the nature of scheduling to a fixed set of clusters, in the function
 // the scheduler prepares the scheduling related status based on the different types of
-// target clusters ather than the final outcome (i.e., the actual list of bindings created).
+// target clusters other than the final outcome (i.e., the actual list of bindings created).
 // The correctness is still guaranteed as the outcome of the scheduling cycle is deterministic
 // when given a set of fixed clusters to schedule resources to, as long as
 //   - there is no manipulation of the scheduling result (e.g., binding directly created by
 //     the user) without acknowledge from the scheduler;and
 //   - the status is only added after the actual binding manipulation has been completed without
 //     an error.
-func (f *framework) updatePolicySnapshotStatusFromTargetClusters(
+func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 	ctx context.Context,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 	valid []*fleetv1beta1.MemberCluster,
@@ -1229,7 +1229,7 @@ func (f *framework) updatePolicySnapshotStatusFromTargetClusters(
 	policyRef := klog.KObj(policy)
 
 	// Prepare new scheduling decisions.
-	newDecisions := newSchedulingDecisionsFromTargetClusters(valid, invalid, notFound)
+	newDecisions := newSchedulingDecisionsForPickFixedPlacementType(valid, invalid, notFound)
 	// Prepare new scheduling condition.
 	var newCondition metav1.Condition
 	if len(invalid)+len(notFound) == 0 {
@@ -1251,7 +1251,7 @@ func (f *framework) updatePolicySnapshotStatusFromTargetClusters(
 	// Retrieve the corresponding CRP generation.
 	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
 	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewUnexpectedBehaviorError(err)
 	}
 
@@ -1267,9 +1267,9 @@ func (f *framework) updatePolicySnapshotStatusFromTargetClusters(
 	return nil
 }
 
-// runSchedulingCycleForFixedSetOfClusters runs the scheduling cycle when there is a fixed
+// runSchedulingCycleForPickFixedPlacementType runs the scheduling cycle when there is a fixed
 // set of clusters to select in the placement policy.
-func (f *framework) runSchedulingCycleForFixedSetOfClusters(
+func (f *framework) runSchedulingCycleForPickFixedPlacementType(
 	ctx context.Context,
 	crpName string,
 	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
@@ -1321,7 +1321,7 @@ func (f *framework) runSchedulingCycleForFixedSetOfClusters(
 	}
 
 	// Update policy snapshot status with the latest scheduling decisions and condition.
-	if err := f.updatePolicySnapshotStatusFromTargetClusters(ctx, policy, valid, invalid, notFound); err != nil {
+	if err := f.updatePolicySnapshotStatusForPickFixedPlacementType(ctx, policy, valid, invalid, notFound); err != nil {
 		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
