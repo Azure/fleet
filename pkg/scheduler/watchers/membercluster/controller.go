@@ -38,15 +38,6 @@ type Reconciler struct {
 	ClusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
 }
 
-// New returns a new Reconciler.
-func New(client client.Client, wq queue.ClusterResourcePlacementSchedulingQueueWriter, checker clustereligibilitychecker.ClusterEligibilityChecker) *Reconciler {
-	return &Reconciler{
-		Client:                    client,
-		SchedulerWorkQueue:        wq,
-		ClusterEligibilityChecker: &checker,
-	}
-}
-
 // Reconcile reconciles a member cluster.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	memberClusterRef := klog.KRef(req.Namespace, req.Name)
@@ -81,7 +72,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//   - CRPs of the PickAll placement type may be able to select this cluster now;
 	//   - CRPs of the PickN placement type, which have not been fully scheduled yet, may be
 	//     able to select this cluster, and gets a step closer to being fully scheduled;
-	//   - CRPs with a fixed set of target clusters, which have not been fully scheduled yet, may
+	//   - CRPs of the PickFixed placement type, which have not been fully scheduled yet, may
 	//     be able to select this clusters, and gets a step closer to being fully scheduled;
 	//
 	// * 2a) and 2b) require no attention on the scheduler's end, specifically:
@@ -96,9 +87,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//  between 1a) and 2a).)
 	//
 	// * 2c) requires attention on the scheduler's end, specifically:
-	//   - All CRPs, which have arleady selected this cluster, regardless of its placement type,
+	//   - All CRPs, which have already selected this cluster, regardless of its placement type,
 	//     must deselect it, as the binding is no longer valid (dangling). CRPs of the PickN type
-	//     may further needs to pick a another cluster as replacement.
+	//     may further need to pick another cluster as replacement.
 	//
 	// This controller is set to handle cases 1a), 1b), and 2c). Note that it is only guaranteed
 	// that this controller will not emit false negatives, i.e., all the changes that require

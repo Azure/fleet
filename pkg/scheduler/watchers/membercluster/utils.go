@@ -50,7 +50,7 @@ func classifyCRPs(crps []fleetv1beta1.ClusterResourcePlacement) (toProcess []fle
 			// CRPs with no placement policy specified are considered to be of the PickAll placement
 			// type and are affected by cluster side changes in case 1a) and 1b).
 			toProcess = append(toProcess, crp)
-		case len(crp.Spec.Policy.ClusterNames) != 0:
+		case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
 			// Note that any CRP with a fixed set of target clusters will be automatically assigned
 			// the PickAll placement type, as it is the default value.
 			if !isCRPFullyScheduled(&crp) {

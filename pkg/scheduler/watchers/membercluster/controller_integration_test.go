@@ -96,14 +96,37 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			memberCluster := &fleetv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName2}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
-			// Update the status; mark the cluster as ready.
+			// Update the labels
 			memberCluster.Labels = map[string]string{
 				dummyLabel: dummyLabelValue,
 			}
-			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster status")
+			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster labels")
 		})
 
-		It("should enqueue CRPs (case 1b)", func() {
+		It("should not enqueue CRPs for the left cluster", func() {
+			Eventually(noKeyEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Workqueue is not empty")
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("a left cluster rejoining, but not ready", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			// Retrieve the cluster.
+			memberCluster := &fleetv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName2}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the spec as join
+			memberCluster.Spec.State = fleetv1beta1.ClusterStateJoin
+			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster spec")
+		})
+
+		It("should not enqueue CRPs for not ready cluster", func() {
 			Eventually(noKeyEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Workqueue is not empty")
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
@@ -167,7 +190,7 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			memberCluster.Labels = map[string]string{
 				dummyLabel: dummyLabelValue,
 			}
-			Expect(hubClient.Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster")
+			Expect(hubClient.Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster labels")
 		})
 
 		It("should enqueue CRPs (case 1a)", func() {
@@ -209,7 +232,7 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 					LastReceivedHeartbeat: metav1.NewTime(time.Now().Add(-time.Hour)),
 				},
 			}
-			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster")
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster status")
 		})
 
 		It("should not enqueue CRPs (case 2b)", func() {
@@ -272,9 +295,9 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			memberCluster := &fleetv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
-			// Update the status; mark the cluster as ready.
+			// Update the spec as leave.
 			memberCluster.Spec.State = fleetv1beta1.ClusterStateLeave
-			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster status")
+			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster spec")
 		})
 
 		It("should enqueue CRPs (case 1b)", func() {

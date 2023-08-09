@@ -46,8 +46,8 @@ var (
 
 var (
 	expectedKeySetEnqueuedActual = func() error {
-		if !keyCollector.IsPresent(crpName1) {
-			return fmt.Errorf("expected key is not found")
+		if isAllPresent, absentKeys := keyCollector.IsPresent(crpName1); !isAllPresent {
+			return fmt.Errorf("expected key(s) %v is not found", absentKeys)
 		}
 
 		if queueLen := keyCollector.Len(); queueLen != 1 {

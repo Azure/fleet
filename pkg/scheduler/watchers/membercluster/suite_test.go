@@ -90,14 +90,16 @@ func setupResources() {
 	Expect(hubClient.Create(ctx, newCRP(crpName2, &fleetv1beta1.PlacementPolicy{
 		PlacementType: fleetv1beta1.PickAllPlacementType,
 	}))).Should(Succeed(), "Failed to create CRP")
-	// Create a CRP that has a fixed set of target clusters and has not been fully scheduled.
+	// Create a CRP that is of the PickFixed placement type and has not been fully scheduled.
 	Expect(hubClient.Create(ctx, newCRP(crpName3, &fleetv1beta1.PlacementPolicy{
-		ClusterNames: []string{clusterName1},
+		PlacementType: fleetv1beta1.PickFixedPlacementType,
+		ClusterNames:  []string{clusterName1},
 	}))).Should(Succeed(), "Failed to create CRP")
 
-	// Create a CRP that has a fixed set of target clusters and has been fully scheduled.
+	// Create a CRP that is of the PickFixed placement type and has been fully scheduled.
 	crp := newCRP(crpName4, &fleetv1beta1.PlacementPolicy{
-		ClusterNames: []string{clusterName1},
+		PlacementType: fleetv1beta1.PickFixedPlacementType,
+		ClusterNames:  []string{clusterName1},
 	})
 	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
 	// Update the status.
@@ -166,9 +168,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
-	clusterEligibilityChecker := clustereligibilitychecker.New()
 
-	reconciler := New(hubClient, schedulerWorkQueue, *clusterEligibilityChecker)
+	reconciler := Reconciler{
+		Client:                    hubClient,
+		SchedulerWorkQueue:        schedulerWorkQueue,
+		ClusterEligibilityChecker: clustereligibilitychecker.New(),
+	}
 	err = reconciler.SetupWithManager(ctrlMgr)
 	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
 
