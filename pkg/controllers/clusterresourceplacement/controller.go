@@ -233,6 +233,9 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 				fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
 				fleetv1beta1.PolicyIndexLabel:      strconv.Itoa(latestPolicySnapshotIndex),
 			},
+			Annotations: map[string]string{
+				fleetv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crp.Generation, 10),
+			},
 		},
 		Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 			Policy:     schedulingPolicy,
@@ -419,6 +422,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 // ensureLatestPolicySnapshot ensures the latest policySnapshot has the isLatest label and the numberOfClusters are updated.
 func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latest *fleetv1beta1.ClusterSchedulingPolicySnapshot) error {
 	needUpdate := false
+	latestKObj := klog.KObj(latest)
 	if latest.Labels[fleetv1beta1.IsLatestSnapshotLabel] != strconv.FormatBool(true) {
 		// When latestPolicySnapshot.Spec.PolicyHash == policyHash,
 		// It could happen when the controller just sets the latest label to false for the old snapshot, and fails to
@@ -429,13 +433,22 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 		latest.Labels[fleetv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(true)
 		needUpdate = true
 	}
+	crpGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(latest)
+	if err != nil {
+		klog.ErrorS(err, "Failed to parse the CRPGeneration from the annotations", "clusterSchedulingPolicySnapshot", latestKObj)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+	if crpGeneration != crp.Generation {
+		latest.Annotations[fleetv1beta1.CRPGenerationAnnotation] = strconv.FormatInt(crp.Generation, 10)
+		needUpdate = true
+	}
 
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
 		crp.Spec.Policy.NumberOfClusters != nil {
 		oldCount, err := annotations.ExtractNumOfClustersFromPolicySnapshot(latest)
 		if err != nil {
-			klog.ErrorS(err, "Failed to parse the numberOfClusterAnnotation", "clusterSchedulingPolicySnapshot", klog.KObj(latest))
+			klog.ErrorS(err, "Failed to parse the numberOfClusterAnnotation", "clusterSchedulingPolicySnapshot", latestKObj)
 			return controller.NewUnexpectedBehaviorError(err)
 		}
 		newCount := int(*crp.Spec.Policy.NumberOfClusters)
@@ -448,7 +461,7 @@ func (r *Reconciler) ensureLatestPolicySnapshot(ctx context.Context, crp *fleetv
 		return nil
 	}
 	if err := r.Client.Update(ctx, latest); err != nil {
-		klog.ErrorS(err, "Failed to update the clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", klog.KObj(latest))
+		klog.ErrorS(err, "Failed to update the clusterSchedulingPolicySnapshot", "clusterSchedulingPolicySnapshot", latestKObj)
 		return controller.NewUpdateIgnoreConflictError(err)
 	}
 	return nil

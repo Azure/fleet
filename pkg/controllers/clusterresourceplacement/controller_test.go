@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	testName = "my-crp"
+	testName      = "my-crp"
+	crpGeneration = 15
 )
 
 var (
@@ -82,7 +83,8 @@ func placementPolicyForTest() *fleetv1beta1.PlacementPolicy {
 func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 	return &fleetv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: testName,
+			Name:       testName,
+			Generation: crpGeneration,
 		},
 		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
@@ -188,6 +190,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							fleetv1beta1.IsLatestSnapshotLabel: "true",
 							fleetv1beta1.CRPTrackingLabel:      "another-crp",
 						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: "1",
+						},
 					},
 				},
 			},
@@ -199,6 +204,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							fleetv1beta1.PolicyIndexLabel:      "1",
 							fleetv1beta1.IsLatestSnapshotLabel: "true",
 							fleetv1beta1.CRPTrackingLabel:      "another-crp",
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: "1",
 						},
 					},
 				},
@@ -219,6 +227,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 								APIVersion:         fleetAPIVersion,
 								Kind:               "ClusterResourcePlacement",
 							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: strconv.Itoa(crpGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -252,6 +263,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -280,6 +292,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -477,6 +490,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 								Kind:               "ClusterResourcePlacement",
 							},
 						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: "1",
+						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
@@ -501,6 +517,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.CRPGenerationAnnotation:    "2",
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -527,6 +544,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 								Kind:               "ClusterResourcePlacement",
 							},
 						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: "1",
+						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
@@ -552,6 +572,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -585,6 +606,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 								Kind:               "ClusterResourcePlacement",
 							},
 						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: "1",
+						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
@@ -610,6 +634,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(1),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(2),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -636,6 +661,9 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 								Kind:               "ClusterResourcePlacement",
 							},
 						},
+						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation: "1",
+						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
 						// Policy is not specified.
@@ -661,6 +689,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -924,6 +953,38 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 						},
 						Annotations: map[string]string{
 							fleetv1beta1.NumberOfClustersAnnotation: "-123",
+						},
+					},
+					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+						Policy:     wantPolicy,
+						PolicyHash: policyHash,
+					},
+				},
+			},
+		},
+		{
+			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterPolicySnapshot.
+			name: "active policy snapshot exists and policySnapshot without crp generation annotation",
+			policySnapshots: []fleetv1beta1.ClusterSchedulingPolicySnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.PolicySnapshotNameFmt, testName, 1),
+						Labels: map[string]string{
+							fleetv1beta1.PolicyIndexLabel:      "1",
+							fleetv1beta1.IsLatestSnapshotLabel: "true",
+							fleetv1beta1.CRPTrackingLabel:      testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.NumberOfClustersAnnotation: "12",
 						},
 					},
 					Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
