@@ -358,7 +358,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, wo
 		}
 		if workResourceIndex == resourceIndex {
 			// no need to do anything since the resource snapshot is immutable.
-			klog.V(2).InfoS(" work is already associated with the desired resourceSnapshot", "work", workObj, "resourceSnapshot", resourceSnapshotObj)
+			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot", "work", workObj, "resourceSnapshot", resourceSnapshotObj)
 			return false, nil
 		}
 	}
@@ -495,10 +495,10 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}
 				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, workapi.ConditionTypeApplied)
 				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, workapi.ConditionTypeApplied)
-				// we only need to handle the case the applied condition is changed between the new and old work objects otherwise, it
-				// won't affect the binding applied condition.
+				// we only need to handle the case the applied condition is flipped between true and NOT true between the
+				// new and old work objects. Otherwise, it won't affect the binding applied condition
 				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) {
-					klog.V(4).InfoS("Applied condition in the work didn't change", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+					klog.V(2).InfoS("The work applied condition didn't flip between true and false", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return
 				}
 				klog.V(2).InfoS("Received a work update event", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)

@@ -11,13 +11,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	workapi "go.goms.io/fleet/pkg/controllers/work"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -246,6 +244,47 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 				ObservedGeneration: 1,
 			},
 		},
+		"applied should be false if some work applied condition is unknown": {
+			works: map[string]*workv1alpha1.Work{
+				"appliedWork1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work1",
+						Generation: 123,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionUnknown,
+								ObservedGeneration: 123,
+							},
+						},
+					},
+				},
+				"appliedWork2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "work2",
+						Generation: 12,
+					},
+					Status: workv1alpha1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               workapi.ConditionTypeApplied,
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: 12,
+							},
+						},
+					},
+				},
+			},
+			generation: 1,
+			want: metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingApplied),
+				Reason:             workNotAppliedReason,
+				ObservedGeneration: 1,
+			},
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -257,7 +296,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 			}
 			got := buildAllWorkAppliedCondition(tt.works, binding)
 			if diff := cmp.Diff(got, tt.want, ignoreConditionOption); diff != "" {
-				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-want +got):\n%s", name, diff)
+				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})
 	}

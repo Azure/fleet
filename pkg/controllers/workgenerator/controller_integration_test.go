@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.goms.io/fleet/pkg/utils/condition"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -29,6 +27,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 var (
