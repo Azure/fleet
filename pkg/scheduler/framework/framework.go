@@ -70,7 +70,7 @@ type Handle interface {
 type Framework interface {
 	Handle
 
-	// RunSchedulerCycleFor performs scheduling for a cluster resource placement, specifically
+	// RunSchedulingCycleFor performs scheduling for a cluster resource placement, specifically
 	// its associated latest scheduling policy snapshot.
 	RunSchedulingCycleFor(ctx context.Context, crpName string, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (result ctrl.Result, err error)
 }
@@ -143,7 +143,7 @@ func WithNumOfWorkers(numOfWorkers int) Option {
 	}
 }
 
-// WithMaxUnselectedClusterDecisionCount sets the maximum number of decisions added to the policy snapshot status.
+// WithMaxClusterDecisionCount sets the maximum number of decisions added to the policy snapshot status.
 func WithMaxClusterDecisionCount(maxUnselectedClusterDecisionCount int) Option {
 	return func(fo *frameworkOptions) {
 		fo.maxUnselectedClusterDecisionCount = maxUnselectedClusterDecisionCount
@@ -177,7 +177,7 @@ func NewFramework(profile *Profile, manager ctrl.Manager, opts ...Option) Framew
 	//
 	// Also note that an indexer might need to be set up for improved performance.
 
-	return &framework{
+	f := &framework{
 		profile:                           profile,
 		client:                            manager.GetClient(),
 		uncachedReader:                    manager.GetAPIReader(),
@@ -187,6 +187,11 @@ func NewFramework(profile *Profile, manager ctrl.Manager, opts ...Option) Framew
 		maxUnselectedClusterDecisionCount: options.maxUnselectedClusterDecisionCount,
 		clusterEligibilityChecker:         options.clusterEligibilityChecker,
 	}
+	// initialize all the plugins
+	for _, plugin := range f.profile.registeredPlugins {
+		plugin.SetUpWithFramework(f)
+	}
+	return f
 }
 
 // Client returns the (cached) client in use by the scheduler framework.

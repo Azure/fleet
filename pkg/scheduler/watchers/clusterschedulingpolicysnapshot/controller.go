@@ -104,7 +104,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManger sets up the controller with the manager.
+// SetupWithManager SetupWithManger sets up the controller with the manager.
 func (r *Reconciler) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
 	customPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
