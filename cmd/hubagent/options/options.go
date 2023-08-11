@@ -69,6 +69,10 @@ type Options struct {
 	ConcurrentMemberClusterSyncs int
 	// RateLimiterOpts is the ratelimit parameters for the work queue
 	RateLimiterOpts RateLimitOptions
+	// EnablePlacementV1Alpha1APIs enables the agents to watch the v1alpha1 CRs.
+	EnablePlacementV1Alpha1APIs bool
+	// EnablePlacementV1Beta1APIs enables the agents to watch the v1beta1 CRs.
+	EnablePlacementV1Beta1APIs bool
 }
 
 // NewOptions builds an empty options.
@@ -114,6 +118,8 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.IntVar(&o.ConcurrentClusterPlacementSyncs, "concurrent-cluster-placement-syncs", 1, "The number of cluster placement reconcilers to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
 	flags.IntVar(&o.ConcurrentMemberClusterSyncs, "concurrent-member-cluster-syncs", 1, "The number of member cluster reconcilers that are allowed to run concurrently.")
+	flags.BoolVar(&o.EnablePlacementV1Alpha1APIs, "enable-placement-v1alpha1-apis", true, "If set, the agents will watch for the placement v1alpha1 APIs.")
+	flags.BoolVar(&o.EnablePlacementV1Beta1APIs, "enable-placement-v1beta1-apis", false, "If set, the agents will watch for the placement v1beta1 APIs.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }

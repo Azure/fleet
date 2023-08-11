@@ -44,7 +44,7 @@ func handleTombStoneObj(obj interface{}) (client.Object, error) {
 func (d *ChangeDetector) onClusterResourcePlacementAdded(obj interface{}) {
 	placementMeta, _ := meta.Accessor(obj)
 	klog.V(3).InfoS("ClusterResourcePlacement Added", "placement", klog.KObj(placementMeta))
-	d.ClusterResourcePlacementController.Enqueue(obj)
+	d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(obj)
 }
 
 // onClusterResourcePlacementUpdated handles object update event and push the placement to the cluster placement queue.
@@ -58,7 +58,7 @@ func (d *ChangeDetector) onClusterResourcePlacementUpdated(oldObj, newObj interf
 	}
 	klog.V(3).InfoS("ClusterResourcePlacement Updated",
 		"placement", klog.KObj(oldPlacementMeta))
-	d.ClusterResourcePlacementController.Enqueue(newObj)
+	d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(newObj)
 }
 
 // onClusterResourcePlacementDeleted handles object delete event and push the placement to the cluster placement queue.
@@ -68,7 +68,7 @@ func (d *ChangeDetector) onClusterResourcePlacementDeleted(obj interface{}) {
 		klog.ErrorS(err, "failed to handle a cluster resource placement object delete event")
 	}
 	klog.V(3).InfoS("a clusterResourcePlacement is deleted", "placement", klog.KObj(clientObj))
-	d.ClusterResourcePlacementController.Enqueue(clientObj)
+	d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(clientObj)
 }
 
 // The next two are for the Work informer, we don't handle add event as placement reconciler creates the work
@@ -83,7 +83,7 @@ func (d *ChangeDetector) onWorkUpdated(oldObj, newObj interface{}) {
 	if placementName, exist := oldWorkMeta.GetLabels()[utils.LabelWorkPlacementName]; exist {
 		klog.V(3).InfoS("a work object is updated, will enqueue a placement event", "work", klog.KObj(oldWorkMeta), "placement", placementName)
 		// the meta key function handles string
-		d.ClusterResourcePlacementController.Enqueue(placementName)
+		d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(placementName)
 	} else {
 		klog.V(4).InfoS("ignore an updated work object without a placement label", "work", klog.KObj(oldWorkMeta))
 	}
@@ -99,7 +99,7 @@ func (d *ChangeDetector) onWorkDeleted(obj interface{}) {
 	if placementName, exist := clientObj.GetLabels()[utils.LabelWorkPlacementName]; exist {
 		klog.V(3).InfoS("a work object is deleted", "work", klog.KObj(clientObj), "placement", placementName)
 		// the meta key function handles string
-		d.ClusterResourcePlacementController.Enqueue(placementName)
+		d.ClusterResourcePlacementControllerV1Alpha1.Enqueue(placementName)
 	} else {
 		klog.V(4).InfoS("ignore a deleted work object without a placement label", "work", klog.KObj(clientObj))
 	}

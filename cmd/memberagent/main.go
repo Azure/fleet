@@ -36,6 +36,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
+	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -53,7 +54,9 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	leaderElectionNamespace     = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	enablePlacementV1Alpha1APIs = flag.Bool("enable-placement-v1alpha1-apis", true, "If set, the agents will watch for the placement v1alpha1 APIs.")
+	enablePlacementV1Beta1APIs  = flag.Bool("enable-placement-v1beta1-apis", false, "If set, the agents will watch for the placement v1beta1 APIs.")
 )
 
 func init() {
@@ -67,10 +70,32 @@ func init() {
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.WorkApplyTime)
 }
 
+var (
+	handleExitFunc = func() {
+		klog.Flush()
+	}
+
+	exitWithErrorFunc = func() {
+		handleExitFunc()
+		os.Exit(1)
+	}
+)
+
 func main() {
 	flag.Parse()
 	utilrand.Seed(time.Now().UnixNano())
-	defer klog.Flush()
+	defer handleExitFunc()
+
+	flag.VisitAll(func(f *flag.Flag) {
+		klog.InfoS("flag:", "name", f.Name, "value", f.Value)
+	})
+
+	// Validate flags
+	if !*enablePlacementV1Alpha1APIs && !*enablePlacementV1Beta1APIs {
+		klog.ErrorS(errors.New("either enable-placement-v1alpha1-apis or enable-placement-v1beta1-apis is required"), "invalid placement APIs flags")
+		exitWithErrorFunc()
+	}
+
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
@@ -86,7 +111,7 @@ func main() {
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
 		klog.ErrorS(errors.New("member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
@@ -118,7 +143,7 @@ func main() {
 
 	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
 		klog.ErrorS(err, "problem running controllers")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 }
 
@@ -254,6 +279,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		os.Exit(1)
 	}
 
+	// TODO replacing the v1alpha1 work controller
 	// create the work controller, so we can pass it to the internal member cluster reconciler
 	workController := workapi.NewApplyWorkReconciler(
 		hubMgr.GetClient(),
@@ -266,8 +292,18 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-		return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
+	if *enablePlacementV1Alpha1APIs {
+		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
+		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+			return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
+		}
+	}
+
+	if *enablePlacementV1Beta1APIs {
+		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
+		if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+			return fmt.Errorf("unable to create controller v1beta1 hub_member: %w", err)
+		}
 	}
 
 	klog.V(3).InfoS("starting hub manager")

@@ -25,6 +25,7 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
+	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
@@ -93,13 +94,25 @@ func main() {
 	}
 
 	klog.V(2).InfoS("starting hubagent")
-
-	if err = (&mcv1alpha1.Reconciler{
-		Client:                  mgr.GetClient(),
-		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
-		exitWithErrorFunc()
+	if opts.EnablePlacementV1Alpha1APIs {
+		klog.Info("Setting up memberCluster v1alpha1 controller")
+		if err = (&mcv1alpha1.Reconciler{
+			Client:                  mgr.GetClient(),
+			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
+			exitWithErrorFunc()
+		}
+	}
+	if opts.EnablePlacementV1Beta1APIs {
+		klog.Info("Setting up memberCluster v1beta1 controller")
+		if err = (&mcv1beta1.Reconciler{
+			Client:                  mgr.GetClient(),
+			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
+			exitWithErrorFunc()
+		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

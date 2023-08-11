@@ -39,16 +39,20 @@ type ChangeDetector struct {
 	// RESTMapper is used to convert between GVK and GVR
 	RESTMapper meta.RESTMapper
 
-	// ClusterResourcePlacementController maintains a rate limited queue which is used to store
-	// the name of the changed clusterResourcePlacement and a reconcile function to consume the items in queue.
-	ClusterResourcePlacementController controller.Controller
+	// ClusterResourcePlacementControllerV1Alpha1 maintains a rate limited queue which is used to store
+	// the name of the changed v1alpha1 clusterResourcePlacement and a reconcile function to consume the items in queue.
+	// Note: V1Beta1 does not rely on this changeDetector to enqueue the CRP events. It uses its own watcher instead.
+	ClusterResourcePlacementControllerV1Alpha1 controller.Controller
 
 	// ClusterResourcePlacementController maintains a rate limited queue which is used to store any resources'
 	// cluster wide key and a reconcile function to consume the items in queue.
+	// This controller will be used by both v1alpha1 & v1beta1 ClusterResourcePlacementController.
 	ResourceChangeController controller.Controller
 
 	// MemberClusterPlacementController maintains a rate limited queue which is used to store
 	// the name of the changed memberCluster and a reconcile function to consume the items in queue.
+	// This controller is used by v1alpha1 ClusterResourcePlacementController only.
+	// For v1beta1 ClusterResourcePlacement, the scheduler will watch the member cluster changes directly.
 	MemberClusterPlacementController controller.Controller
 
 	// InformerManager manages all the dynamic informers created by the discovery client
@@ -77,34 +81,38 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	defer klog.Infof("The api resource change detector is stopped")
 
 	// create the placement informer that handles placement events and enqueues to the placement queue.
-	clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdded,
-		d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
-	d.InformerManager.AddStaticResource(
-		informer.APIResourceMeta{
-			GroupVersionKind:     utils.ClusterResourcePlacementGVK,
-			GroupVersionResource: utils.ClusterResourcePlacementGVR,
-			IsClusterScoped:      true,
-		}, clusterPlacementEventHandler)
+	if d.ClusterResourcePlacementControllerV1Alpha1 != nil {
+		clusterPlacementEventHandler := newHandlerOnEvents(d.onClusterResourcePlacementAdded,
+			d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
+		d.InformerManager.AddStaticResource(
+			informer.APIResourceMeta{
+				GroupVersionKind:     utils.ClusterResourcePlacementGVK,
+				GroupVersionResource: utils.ClusterResourcePlacementGVR,
+				IsClusterScoped:      true,
+			}, clusterPlacementEventHandler)
 
-	// create the work informer that handles work event and enqueues the placement name (stored in its label) to
-	// the placement queue. We don't need to handle the add event as they are placed by the placement controller.
-	workEventHandler := newHandlerOnEvents(nil, d.onWorkUpdated, d.onWorkDeleted)
-	d.InformerManager.AddStaticResource(
-		informer.APIResourceMeta{
-			GroupVersionKind:     utils.WorkGVK,
-			GroupVersionResource: utils.WorkGVR,
-			IsClusterScoped:      false,
-		}, workEventHandler)
+		// create the work informer that handles work event and enqueues the placement name (stored in its label) to
+		// the placement queue. We don't need to handle the add event as they are placed by the placement controller.
+		workEventHandler := newHandlerOnEvents(nil, d.onWorkUpdated, d.onWorkDeleted)
+		d.InformerManager.AddStaticResource(
+			informer.APIResourceMeta{
+				GroupVersionKind:     utils.WorkGVK,
+				GroupVersionResource: utils.WorkGVR,
+				IsClusterScoped:      false,
+			}, workEventHandler)
+	}
 
-	// create the member cluster informer that handles memberCluster add and update. We don't need to handle the
-	// delete event as the work resources in this cluster will all get deleted which will trigger placement reconcile.
-	memberClusterEventHandler := newHandlerOnEvents(nil, d.onMemberClusterUpdated, nil)
-	d.InformerManager.AddStaticResource(
-		informer.APIResourceMeta{
-			GroupVersionKind:     utils.MemberClusterGVK,
-			GroupVersionResource: utils.MemberClusterGVR,
-			IsClusterScoped:      true,
-		}, memberClusterEventHandler)
+	if d.MemberClusterPlacementController != nil {
+		// create the member cluster informer that handles memberCluster add and update. We don't need to handle the
+		// delete event as the work resources in this cluster will all get deleted which will trigger placement reconcile.
+		memberClusterEventHandler := newHandlerOnEvents(nil, d.onMemberClusterUpdated, nil)
+		d.InformerManager.AddStaticResource(
+			informer.APIResourceMeta{
+				GroupVersionKind:     utils.MemberClusterGVK,
+				GroupVersionResource: utils.MemberClusterGVR,
+				IsClusterScoped:      true,
+			}, memberClusterEventHandler)
+	}
 
 	// set up the dynamicResourceChangeEventHandler that enqueue an event to the resource change controller's queue.
 	dynamicResourceChangeEventHandler := newFilteringHandlerOnAllEvents(d.dynamicResourceFilter,
@@ -124,16 +132,19 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 
 	// We run the three controllers in parallel.
 	errs, cctx := errgroup.WithContext(ctx)
-	errs.Go(func() error {
-		return d.ClusterResourcePlacementController.Run(cctx, d.ConcurrentClusterPlacementWorker)
-	})
+	if d.ClusterResourcePlacementControllerV1Alpha1 != nil {
+		errs.Go(func() error {
+			return d.ClusterResourcePlacementControllerV1Alpha1.Run(cctx, d.ConcurrentClusterPlacementWorker)
+		})
+	}
 	errs.Go(func() error {
 		return d.ResourceChangeController.Run(cctx, d.ConcurrentResourceChangeWorker)
 	})
-	errs.Go(func() error {
-		return d.MemberClusterPlacementController.Run(cctx, 1)
-	})
-
+	if d.MemberClusterPlacementController != nil {
+		errs.Go(func() error {
+			return d.MemberClusterPlacementController.Run(cctx, 1)
+		})
+	}
 	return errs.Wait()
 }
 

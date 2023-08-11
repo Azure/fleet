@@ -42,8 +42,11 @@ type Reconciler struct {
 	// InformerManager holds all the informers that we can use to read from
 	InformerManager informer.Manager
 
-	// PlacementController exposes the placement queue for the reconciler to push to
-	PlacementController controller.Controller
+	// PlacementControllerV1Alpha1 exposes the placement queue for the v1alpha1 reconciler to push to
+	PlacementControllerV1Alpha1 controller.Controller
+
+	// PlacementControllerV1Beta1 exposes the placement queue for the v1beta1 reconciler to push to.
+	PlacementControllerV1Beta1 controller.Controller
 
 	// Event recorder to indicate the which placement picks up this object
 	Recorder record.EventRecorder
@@ -98,8 +101,14 @@ func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl
 	}
 	// enqueue each CRP object into the CRP controller queue to get reconciled
 	for crp := range matchedCrps {
-		klog.V(2).InfoS("Change in object triggered placement reconcile", "obj", clusterWideKey, "crp", crp)
-		r.PlacementController.Enqueue(crp)
+		if r.PlacementControllerV1Alpha1 != nil {
+			klog.V(2).InfoS("Change in object triggered v1alpha1 placement reconcile", "obj", clusterWideKey, "crp", crp)
+			r.PlacementControllerV1Alpha1.Enqueue(crp)
+		}
+		if r.PlacementControllerV1Beta1 != nil {
+			klog.V(2).InfoS("Change in object triggered v1beta1 placement reconcile", "obj", clusterWideKey, "crp", crp)
+			r.PlacementControllerV1Beta1.Enqueue(crp)
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -133,8 +142,14 @@ func (r *Reconciler) findPlacementsSelectedDeletedRes(res keys.ClusterWideKey, c
 		return ctrl.Result{}, nil
 	}
 	for _, crp := range matchedCrps {
-		klog.V(2).InfoS("change in deleted object triggered placement reconcile", "obj", res, "crp", crp)
-		r.PlacementController.Enqueue(crp)
+		if r.PlacementControllerV1Alpha1 != nil {
+			klog.V(2).InfoS("change in deleted object triggered v1alpha1 placement reconcile", "obj", res, "crp", crp)
+			r.PlacementControllerV1Alpha1.Enqueue(crp)
+		}
+		if r.PlacementControllerV1Beta1 != nil {
+			klog.V(2).InfoS("change in deleted object triggered v1beta1 placement reconcile", "obj", res, "crp", crp)
+			r.PlacementControllerV1Beta1.Enqueue(crp)
+		}
 	}
 	return ctrl.Result{}, nil
 }
