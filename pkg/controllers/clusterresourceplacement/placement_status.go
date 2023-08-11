@@ -30,10 +30,10 @@ var (
 
 const (
 	// ClusterResourcePlacementStatus condition reasons
-	schedulingUnknownReason = "Scheduling"
+	schedulingUnknownReason = "SchedulePending"
 
-	synchronizedPendingReason   = "SynchronizedPending"
-	synchronizedSucceededReason = "SynchronizedSucceeded"
+	synchronizePendingReason   = "SynchronizePending"
+	synchronizeSucceededReason = "SynchronizeSucceeded"
 
 	// ApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
 	ApplyFailedReason = "ApplyFailed"
@@ -52,8 +52,8 @@ const (
 
 	// workSynchronizePendingReason is the reason string of placement condition when the work(s) are pending to synchronize.
 	workSynchronizePendingReason = "WorkSynchronizePending"
-	// workSynchronizedSucceededReason is the reason string of placement condition when the work(s) are synchronized successfully.
-	workSynchronizedSucceededReason = "WorkSynchronizedSucceeded"
+	// workSynchronizeSucceededReason is the reason string of placement condition when the work(s) are synchronized successfully.
+	workSynchronizeSucceededReason = "WorkSynchronizeSucceeded"
 
 	// ResourcePlacementStatus schedule condition message formats
 	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
@@ -69,7 +69,7 @@ func buildClusterResourcePlacementSyncCondition(crp *fleetv1beta1.ClusterResourc
 		return metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-			Reason:             synchronizedPendingReason,
+			Reason:             synchronizePendingReason,
 			Message:            fmt.Sprintf("There are still %d cluster(s) pending to be sychronized on the hub cluster", pendingCount),
 			ObservedGeneration: crp.Generation,
 		}
@@ -77,7 +77,7 @@ func buildClusterResourcePlacementSyncCondition(crp *fleetv1beta1.ClusterResourc
 	return metav1.Condition{
 		Status:             metav1.ConditionTrue,
 		Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-		Reason:             synchronizedSucceededReason,
+		Reason:             synchronizeSucceededReason,
 		Message:            fmt.Sprintf("All %d cluster(s) are synchronized to the latest resources on the hub cluster", succeededCount),
 		ObservedGeneration: crp.Generation,
 	}
@@ -219,7 +219,7 @@ func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, 
 		return true, metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
-			Reason:             workSynchronizedSucceededReason,
+			Reason:             workSynchronizeSucceededReason,
 			Message:            "Successfully Synchronized work(s) for placement",
 			ObservedGeneration: crp.Generation,
 		}, nil
