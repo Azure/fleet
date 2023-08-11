@@ -14,7 +14,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
@@ -30,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
@@ -298,8 +298,7 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
 	// find the latest applied condition that has the same generation as the binding
 	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-	if appliedCondition != nil && appliedCondition.Status == metav1.ConditionTrue &&
-		appliedCondition.ObservedGeneration == binding.GetGeneration() {
+	if condition.IsConditionStatusTrue(appliedCondition, binding.GetGeneration()) {
 		waitTime := appliedCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
 		if waitTime < 0 {
 			return 0, true
