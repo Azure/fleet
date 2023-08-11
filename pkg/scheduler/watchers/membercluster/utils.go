@@ -7,9 +7,9 @@ package membercluster
 
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 // isCRPFullyScheduled returns whether a CRP is fully scheduled.
@@ -24,17 +24,8 @@ func isCRPFullyScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	// manner.
 
 	scheduledCondition := meta.FindStatusCondition(crp.Status.Conditions, string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))
-	if scheduledCondition == nil {
-		// The scheduled condition is absent.
-		return false
-	}
-
-	if scheduledCondition.Status != metav1.ConditionTrue || scheduledCondition.ObservedGeneration != crp.Generation {
-		// The CRP is not fully scheduled, or its scheduled condition is out of date.
-		return false
-	}
-
-	return true
+	// Check if the CRP is fully scheduled, or its scheduled condition is out of date.
+	return condition.IsConditionStatusTrue(scheduledCondition, crp.Generation)
 }
 
 // classifyCRPs returns a list of CRPs that are affected by cluster side changes in case 1a) and
@@ -51,8 +42,6 @@ func classifyCRPs(crps []fleetv1beta1.ClusterResourcePlacement) (toProcess []fle
 			// type and are affected by cluster side changes in case 1a) and 1b).
 			toProcess = append(toProcess, crp)
 		case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
-			// Note that any CRP with a fixed set of target clusters will be automatically assigned
-			// the PickAll placement type, as it is the default value.
 			if !isCRPFullyScheduled(&crp) {
 				// Any CRP with an non-empty list of target cluster names can be affected by cluster
 				// side changes in case 1b), if it is not yet fully scheduled.
@@ -64,7 +53,7 @@ func classifyCRPs(crps []fleetv1beta1.ClusterResourcePlacement) (toProcess []fle
 			toProcess = append(toProcess, crp)
 		case !isCRPFullyScheduled(&crp):
 			// CRPs of the PickN placement type, which have not been fully scheduled, are affected
-			// by cluster side changes in case 1a) and 1b).
+			// by cluster side changes in case 1a) and 1b) listed in the Reconcile func.
 			toProcess = append(toProcess, crp)
 		}
 	}
