@@ -345,6 +345,7 @@ type ClusterResourcePlacementStatus struct {
 	// In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are
 	// N placement statuses where N = ClusterNames.
 	// In these cases, some of them may not have assigned clusters when we cannot fill the required number of clusters.
+	// TODO, For pickAll type, considering providing unselected clusters info.
 	// +optional
 	PlacementStatuses []ResourcePlacementStatus `json:"placementStatuses,omitempty"`
 
@@ -467,7 +468,7 @@ const (
 	// - In the processing state
 	// - Rollout controller has decided not to create or update the resources in this cluster for now to honor the
 	// rollout strategy configurations specified in the placement.
-	// - Work cannot be created/updated because of the unknown failures.
+	// - Work is not created/updated because of the unknown reasons.
 	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.

@@ -719,7 +719,7 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 			{
 				Status:             metav1.ConditionUnknown,
 				Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-				Reason:             synchronizedPendingReason,
+				Reason:             synchronizePendingReason,
 				Message:            "Scheduling has not completed",
 				ObservedGeneration: crp.Generation,
 			},
@@ -734,6 +734,9 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 		crp.SetConditions(conditions...)
 		// skip populating detailed resourcePlacementStatus & work related conditions
 		// reset other status fields
+		// TODO: need to track whether we have deleted the resources for the last decisions.
+		// The undeleted resources on these old clusters could lead to failed synchronized or applied condition.
+		// Today, we only track the resources progress if the same cluster is selected again.
 		crp.Status.PlacementStatuses = []fleetv1beta1.ResourcePlacementStatus{}
 		return nil
 	}
