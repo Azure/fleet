@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -30,20 +29,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
-)
-
-const (
-	// ApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
-	ApplyFailedReason = "ApplyFailed"
-	// ApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
-	ApplyPendingReason = "ApplyPending"
-	// ApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
-	ApplySucceededReason = "ApplySucceeded"
-
-	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
-	resourcePlacementConditionScheduleFailedWithScoreMessageFormat    = "%s is not selected with clusterScore %+v: %s"
-	resourcePlacementConditionScheduleSucceededMessageFormat          = "Successfully scheduled resources for placement in %s: %s"
-	resourcePlacementConditionScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in %s with clusterScore %+v: %s"
 )
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
@@ -162,7 +147,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	selectedResources, err := r.selectResourcesForPlacement(crp)
+	selectedResources, _, err := r.selectResourcesForPlacement(crp)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -718,32 +703,11 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 	return v, nil
 }
 
-// TODO: handle multiple resourceSnapshots
-func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (*fleetv1beta1.ClusterResourcePlacementStatus, error) {
-	status := &fleetv1beta1.ClusterResourcePlacementStatus{
-		SelectedResources: make([]fleetv1beta1.ResourceIdentifier, 0, len(latestResourceSnapshot.Spec.SelectedResources)),
-		PlacementStatuses: make([]fleetv1beta1.ResourcePlacementStatus, 0, 20), // pre-allocate with a reasonable capacity
-		Conditions:        []metav1.Condition{},
-	}
-	// TODO query the sub resourceSnapshots by using latestResourceSnapshot and then update the status.
-	// Work generator also needs to do this and we need to refactor the code to share the same functionality.
-	for i := range latestResourceSnapshot.Spec.SelectedResources {
-		obj, err := r.decodeResourceContent(&latestResourceSnapshot.Spec.SelectedResources[i])
-		if err != nil {
-			klog.ErrorS(err, "Failed to decode resourceContent of clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-			return nil, controller.NewUnexpectedBehaviorError(err)
-		}
-		ri := fleetv1beta1.ResourceIdentifier{
-			Group:     obj.GroupVersionKind().Group,
-			Version:   obj.GroupVersionKind().Version,
-			Kind:      obj.GroupVersionKind().Kind,
-			Name:      obj.GetName(),
-			Namespace: obj.GetNamespace(),
-		}
-		status.SelectedResources = append(status.SelectedResources, ri)
-	}
+func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, selectedResources []fleetv1beta1.ResourceIdentifier,
+	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
+	crp.Status.SelectedResources = selectedResources
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
-	meta.SetStatusCondition(&status.Conditions, scheduledCondition)
+	meta.SetStatusCondition(&crp.Status.Conditions, scheduledCondition)
 
 	// When scheduledCondition is unknown, appliedCondition should be unknown too.
 	// Note: If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
@@ -751,21 +715,30 @@ func (r *Reconciler) buildPlacementStatus(crp *fleetv1beta1.ClusterResourcePlace
 	// could be true when resources are applied successfully on these 3 clusters and the detailed the resourcePlacementStatuses
 	// need to be populated.
 	if scheduledCondition.Status == metav1.ConditionUnknown {
-		appliedCondition := metav1.Condition{
-			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-			Reason:             ApplyPendingReason,
-			Message:            "Scheduling has not completed",
-			ObservedGeneration: crp.Generation,
+		conditions := []metav1.Condition{
+			{
+				Status:             metav1.ConditionUnknown,
+				Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+				Reason:             synchronizedPendingReason,
+				Message:            "Scheduling has not completed",
+				ObservedGeneration: crp.Generation,
+			},
+			{
+				Status:             metav1.ConditionUnknown,
+				Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+				Reason:             ApplyPendingReason,
+				Message:            "Scheduling has not completed",
+				ObservedGeneration: crp.Generation,
+			},
 		}
-		meta.SetStatusCondition(&status.Conditions, appliedCondition)
-		// skip populating detailed resourcePlacementStatus
-		return status, nil
+		crp.SetConditions(conditions...)
+		// skip populating detailed resourcePlacementStatus & work related conditions
+		// reset other status fields
+		crp.Status.PlacementStatuses = []fleetv1beta1.ResourcePlacementStatus{}
+		return nil
 	}
 
-	// TODO collect works and build appliedCondition & resourcePlacementStatus
-	status.PlacementStatuses = buildResourcePlacementStatus(crp, latestSchedulingPolicySnapshot)
-	return status, nil
+	return r.setResourcePlacementStatusAndResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
 }
 
 func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) metav1.Condition {
@@ -781,8 +754,8 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             "Scheduling",
-			Message:            "Record the intermediate status of the scheduling",
+			Reason:             schedulingUnknownReason,
+			Message:            "Scheduling has not completed",
 			ObservedGeneration: crp.Generation,
 		}
 	}
@@ -809,8 +782,8 @@ func classifyClusterDecisions(decisions []fleetv1beta1.ClusterDecision) (selecte
 	return selected, unselected
 }
 
-func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) []fleetv1beta1.ResourcePlacementStatus {
-	res := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
+func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
+	placementStatuses := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
 	decisions := latestSchedulingPolicySnapshot.Status.ClusterDecisions
 	selected, unselected := classifyClusterDecisions(decisions)
 
@@ -818,11 +791,23 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 	// scheduler schedules the resources on 3 clusters. We'll populate why the other two cannot be scheduled.
 	// Here it is calculating how many unscheduled resources there are.
 	unscheduledClusterCount := 0
-	if crp.Spec.Policy != nil &&
-		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
-		crp.Spec.Policy.NumberOfClusters != nil {
-		unscheduledClusterCount = int(*crp.Spec.Policy.NumberOfClusters) - len(selected)
+	if crp.Spec.Policy != nil {
+		if crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && crp.Spec.Policy.NumberOfClusters != nil {
+			unscheduledClusterCount = int(*crp.Spec.Policy.NumberOfClusters) - len(selected)
+		}
+		if crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType {
+			unscheduledClusterCount = len(crp.Spec.Policy.ClusterNames) - len(selected)
+		}
 	}
+
+	// Used to record each selected cluster placement sync status
+	syncPendingCount := 0
+	syncSucceededCount := 0
+
+	// Used to record each selected cluster placement applied status.
+	appliedPendingCount := 0
+	appliedFailedCount := 0
+	appliedSucceededCount := 0
 
 	for _, c := range selected {
 		var rp fleetv1beta1.ResourcePlacementStatus
@@ -837,10 +822,24 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 		if c.ClusterScore != nil {
 			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
 		}
-
-		// TODO populate the work status
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		res = append(res, rp)
+		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, &rp)
+		if err != nil {
+			return err
+		}
+		if syncCondition == nil || syncCondition.Status != metav1.ConditionTrue {
+			syncPendingCount++
+		} else {
+			syncSucceededCount++
+		}
+		if appliedCondition == nil || appliedCondition.Status == metav1.ConditionUnknown {
+			appliedPendingCount++
+		} else if appliedCondition.Status == metav1.ConditionFalse {
+			appliedFailedCount++
+		} else {
+			appliedSucceededCount++
+		}
+		placementStatuses = append(placementStatuses, rp)
 	}
 
 	for i := 0; i < unscheduledClusterCount && i < len(unselected); i++ {
@@ -858,16 +857,10 @@ func buildResourcePlacementStatus(crp *fleetv1beta1.ClusterResourcePlacement, la
 			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, unselected[i].ClusterName, unselected[i].ClusterScore, unselected[i].Reason)
 		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		res = append(res, rp)
+		placementStatuses = append(placementStatuses, rp)
 	}
-	return res
-}
-
-// decodeResourceContent decodes the resourceContent into usable structs.
-func (r *Reconciler) decodeResourceContent(resourceContent *fleetv1beta1.ResourceContent) (*unstructured.Unstructured, error) {
-	unstructuredObj := &unstructured.Unstructured{}
-	if err := unstructuredObj.UnmarshalJSON(resourceContent.Raw); err != nil {
-		return nil, fmt.Errorf("failed to decode object: %w", err)
-	}
-	return unstructuredObj, nil
+	crp.Status.PlacementStatuses = placementStatuses
+	crp.SetConditions(buildClusterResourcePlacementSyncCondition(crp, syncPendingCount, syncSucceededCount))
+	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, syncPendingCount > 0, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
+	return nil
 }

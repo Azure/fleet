@@ -399,20 +399,29 @@ func generateResourceContent(object *unstructured.Unstructured) (*fleetv1beta1.R
 
 // selectResourcesForPlacement selects the resources according to the placement resourceSelectors.
 // It also generates an array of resource content based on the selected resources.
-func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.ClusterResourcePlacement) ([]fleetv1beta1.ResourceContent, error) {
+func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.ClusterResourcePlacement) ([]fleetv1beta1.ResourceContent, []fleetv1beta1.ResourceIdentifier, error) {
 	selectedObjects, err := r.gatherSelectedResource(placement.GetName(), placement.Spec.ResourceSelectors)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resources := make([]fleetv1beta1.ResourceContent, len(selectedObjects))
+	resourcesIDs := make([]fleetv1beta1.ResourceIdentifier, len(selectedObjects))
 	for i, obj := range selectedObjects {
 		unstructuredObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 		rc, err := generateResourceContent(unstructuredObj)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		resources[i] = *rc
+		ri := fleetv1beta1.ResourceIdentifier{
+			Group:     unstructuredObj.GroupVersionKind().Group,
+			Version:   unstructuredObj.GroupVersionKind().Version,
+			Kind:      unstructuredObj.GroupVersionKind().Kind,
+			Name:      unstructuredObj.GetName(),
+			Namespace: unstructuredObj.GetNamespace(),
+		}
+		resourcesIDs[i] = ri
 	}
-	return resources, nil
+	return resources, resourcesIDs, nil
 }
