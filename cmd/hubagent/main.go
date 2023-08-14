@@ -94,7 +94,7 @@ func main() {
 	}
 
 	klog.V(2).InfoS("starting hubagent")
-	if opts.EnablePlacementV1Alpha1APIs {
+	if opts.EnableV1Alpha1APIs {
 		klog.Info("Setting up memberCluster v1alpha1 controller")
 		if err = (&mcv1alpha1.Reconciler{
 			Client:                  mgr.GetClient(),
@@ -104,7 +104,7 @@ func main() {
 			exitWithErrorFunc()
 		}
 	}
-	if opts.EnablePlacementV1Beta1APIs {
+	if opts.EnableV1Beta1APIs {
 		klog.Info("Setting up memberCluster v1beta1 controller")
 		if err = (&mcv1beta1.Reconciler{
 			Client:                  mgr.GetClient(),

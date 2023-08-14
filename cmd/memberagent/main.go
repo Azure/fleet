@@ -54,9 +54,9 @@ var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8090", "The address the metric endpoint binds to.")
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	leaderElectionNamespace     = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
-	enablePlacementV1Alpha1APIs = flag.Bool("enable-placement-v1alpha1-apis", true, "If set, the agents will watch for the placement v1alpha1 APIs.")
-	enablePlacementV1Beta1APIs  = flag.Bool("enable-placement-v1beta1-apis", false, "If set, the agents will watch for the placement v1beta1 APIs.")
+	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	enableV1Alpha1APIs      = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
+	enableV1Beta1APIs       = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
 )
 
 func init() {
@@ -91,8 +91,8 @@ func main() {
 	})
 
 	// Validate flags
-	if !*enablePlacementV1Alpha1APIs && !*enablePlacementV1Beta1APIs {
-		klog.ErrorS(errors.New("either enable-placement-v1alpha1-apis or enable-placement-v1beta1-apis is required"), "invalid placement APIs flags")
+	if !*enableV1Alpha1APIs && !*enableV1Beta1APIs {
+		klog.ErrorS(errors.New("either enable-v1alpha1-apis or enable-v1beta1-apis is required"), "invalid APIs flags")
 		exitWithErrorFunc()
 	}
 
@@ -100,12 +100,12 @@ func main() {
 
 	if hubURL == "" {
 		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
 	if err != nil {
 		klog.ErrorS(err, "error has occurred building kubernetes client configuration for hub")
-		os.Exit(1)
+		exitWithErrorFunc()
 	}
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
@@ -251,32 +251,32 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 
 	if err := hubMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up health check for hub manager")
-		os.Exit(1)
+		return err
 	}
 	if err := hubMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check for hub manager")
-		os.Exit(1)
+		return err
 	}
 
 	if err := memberMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up health check for member manager")
-		os.Exit(1)
+		return err
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check for member manager")
-		os.Exit(1)
+		return err
 	}
 
 	spokeDynamicClient, err := dynamic.NewForConfig(memberConfig)
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke dynamic client")
-		os.Exit(1)
+		return err
 	}
 
 	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, apiutil.WithLazyDiscovery)
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke rest mapper")
-		os.Exit(1)
+		return err
 	}
 
 	// TODO replacing the v1alpha1 work controller
@@ -292,14 +292,14 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	if *enablePlacementV1Alpha1APIs {
+	if *enableV1Alpha1APIs {
 		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
 		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
 			return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
 		}
 	}
 
-	if *enablePlacementV1Beta1APIs {
+	if *enableV1Beta1APIs {
 		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
 		if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
 			return fmt.Errorf("unable to create controller v1beta1 hub_member: %w", err)

@@ -107,12 +107,12 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 	var clusterResourcePlacementControllerV1Alpha1 controller.Controller
 	var clusterResourcePlacementControllerV1Beta1 controller.Controller
 
-	if opts.EnablePlacementV1Alpha1APIs {
+	if opts.EnableV1Alpha1APIs {
 		klog.Info("Setting up clusterResourcePlacement v1alpha1 controller")
 		clusterResourcePlacementControllerV1Alpha1 = controller.NewController(crpControllerV1Alpha1Name, controller.NamespaceKeyFunc, crpc.ReconcileV1Alpha1, rateLimiter)
 	}
 
-	if opts.EnablePlacementV1Beta1APIs {
+	if opts.EnableV1Beta1APIs {
 		klog.Info("Setting up clusterResourcePlacement v1beta1 controller")
 		clusterResourcePlacementControllerV1Beta1 = controller.NewController(crpControllerV1Beta1Name, controller.NamespaceKeyFunc, crpc.Reconcile, rateLimiter)
 	}
@@ -131,7 +131,7 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 	resourceChangeController := controller.NewController(resourceChangeControllerName, controller.ClusterWideKeyFunc, rcr.Reconcile, rateLimiter)
 
 	var memberClusterPlacementController controller.Controller
-	if opts.EnablePlacementV1Alpha1APIs {
+	if opts.EnableV1Alpha1APIs {
 		klog.Info("Setting up member cluster change controller")
 		mcp := &memberclusterplacement.Reconciler{
 			InformerManager:     dynamicInformerManager,
@@ -140,7 +140,7 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		memberClusterPlacementController = controller.NewController(mcPlacementControllerName, controller.NamespaceKeyFunc, mcp.Reconcile, rateLimiter)
 	}
 
-	if opts.EnablePlacementV1Beta1APIs {
+	if opts.EnableV1Beta1APIs {
 		klog.Info("Setting up clusterResourcePlacement watcher")
 		if err := (&clusterresourceplacementwatcher.Reconciler{
 			PlacementController: clusterResourcePlacementControllerV1Beta1,

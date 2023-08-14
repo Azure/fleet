@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -25,7 +24,7 @@ func newTestOptions(modifyOptions ModifyOptions) Options {
 		WorkPendingGracePeriod:      metav1.Duration{Duration: 10 * time.Second},
 		ClusterUnhealthyThreshold:   metav1.Duration{Duration: 1 * time.Second},
 		WebhookClientConnectionType: "url",
-		EnablePlacementV1Alpha1APIs: true,
+		EnableV1Alpha1APIs:          true,
 	}
 
 	if modifyOptions != nil {
@@ -62,11 +61,11 @@ func TestValidateControllerManagerConfiguration(t *testing.T) {
 			}),
 			want: field.ErrorList{field.Invalid(newPath.Child("WorkPendingGracePeriod"), metav1.Duration{Duration: -40 * time.Second}, "Must be greater than 0")},
 		},
-		"invalid EnablePlacementV1Alpha1APIs": {
+		"invalid EnableV1Alpha1APIs": {
 			opt: newTestOptions(func(option *Options) {
-				option.EnablePlacementV1Alpha1APIs = false
+				option.EnableV1Alpha1APIs = false
 			}),
-			want: field.ErrorList{field.Required(newPath.Child("EnablePlacementV1Alpha1APIs"), "Either EnablePlacementV1Alpha1APIs or EnablePlacementV1Beta1APIs is required")},
+			want: field.ErrorList{field.Required(newPath.Child("EnableV1Alpha1APIs"), "Either EnableV1Alpha1APIs or EnableV1Beta1APIs is required")},
 		},
 	}
 

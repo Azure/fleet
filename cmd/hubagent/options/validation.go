@@ -34,8 +34,8 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.EnableWebhook, err.Error()))
 	}
 
-	if !o.EnablePlacementV1Alpha1APIs && !o.EnablePlacementV1Beta1APIs {
-		errs = append(errs, field.Required(newPath.Child("EnablePlacementV1Alpha1APIs"), "Either EnablePlacementV1Alpha1APIs or EnablePlacementV1Beta1APIs is required"))
+	if !o.EnableV1Alpha1APIs && !o.EnableV1Beta1APIs {
+		errs = append(errs, field.Required(newPath.Child("EnableV1Alpha1APIs"), "Either EnableV1Alpha1APIs or EnableV1Beta1APIs is required"))
 	}
 
 	return errs
