@@ -73,7 +73,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//   - CRPs of the PickN placement type, which have not been fully scheduled yet, may be
 	//     able to select this cluster, and gets a step closer to being fully scheduled;
 	//   - CRPs of the PickFixed placement type, which have not been fully scheduled yet, may
-	//     be able to select this clusters, and gets a step closer to being fully scheduled;
+	//     be able to select this cluster, and gets a step closer to being fully scheduled;
 	//
 	// * 2a) and 2b) require no attention on the scheduler's end, specifically:
 	//   - CRPs which have already selected this cluster, regardless of its placement type, cannot
@@ -164,13 +164,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// CRPs anyway, which will account for any missing updates on the cluster side
 			// during the downtime; in other words, notifications from this controller is not
 			// necessary.
-			klog.V(2).Info("Ignoring the create memberCluster create event", "event", klog.KObj(e.Object))
+			klog.V(2).Info("Ignoring create events for member cluster objects", "eventObject", klog.KObj(e.Object))
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			// Ignore deletion events; the removal of a cluster is first signaled by the join
 			// state change (join -> leave), which is already handled separately.
-			klog.V(2).Info("Ignoring the create memberCluster delete event", "event", klog.KObj(e.Object))
+			klog.V(2).Info("Ignoring delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -194,13 +194,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// Note that the controller runs only when label changes happen on joined clusters.
 			clusterKObj := klog.KObj(newCluster)
 			if newCluster.Spec.State == fleetv1beta1.ClusterStateJoin && !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
-				klog.V(2).Info("Found the labels of joined memberCluster are updated", "memberCluster", clusterKObj)
+				klog.V(2).Info("An member cluster label change has been detected", "memberCluster", clusterKObj)
 				return true
 			}
 
 			// The cluster has left.
 			if oldCluster.Spec.State == fleetv1beta1.ClusterStateJoin && newCluster.Spec.State == fleetv1beta1.ClusterStateLeave {
-				klog.V(2).Info("Found the memberCluster has left", "memberCluster", clusterKObj)
+				klog.V(2).Info("A member cluster has left the fleet", "memberCluster", clusterKObj)
 				return true
 			}
 
@@ -212,12 +212,12 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				// The cluster becomes eligible for resource placement, i.e., match for case 1b).
 				//
 				// The reverse, i.e., eligible -> ineligible, is ignored (case 2b)).
-				klog.V(2).Info("Found the memberCluster becomes eligible for the placement", "memberCluster", clusterKObj)
+				klog.V(2).Info("A member cluster may become eligible for resource placement", "memberCluster", clusterKObj)
 				return true
 			}
 
 			// All the other changes are ignored.
-			klog.V(2).Info("Ignoring other memberCluster update changes", "memberCluster", clusterKObj)
+			klog.V(2).Info("Ignoring update events that are irrelevant to the scheduler", "memberCluster", clusterKObj)
 			return false
 		},
 	}
