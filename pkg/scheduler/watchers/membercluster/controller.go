@@ -164,11 +164,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// CRPs anyway, which will account for any missing updates on the cluster side
 			// during the downtime; in other words, notifications from this controller is not
 			// necessary.
+			klog.V(2).Info("Ignoring the create memberCluster create event", "event", klog.KObj(e.Object))
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			// Ignore deletion events; the removal of a cluster is first signaled by the join
 			// state change (join -> leave), which is already handled separately.
+			klog.V(2).Info("Ignoring the create memberCluster delete event", "event", klog.KObj(e.Object))
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
@@ -190,12 +192,15 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// Capture label changes.
 			//
 			// Note that the controller runs only when label changes happen on joined clusters.
+			clusterKObj := klog.KObj(newCluster)
 			if newCluster.Spec.State == fleetv1beta1.ClusterStateJoin && !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
+				klog.V(2).Info("Found the labels of joined memberCluster are updated", "memberCluster", clusterKObj)
 				return true
 			}
 
 			// The cluster has left.
 			if oldCluster.Spec.State == fleetv1beta1.ClusterStateJoin && newCluster.Spec.State == fleetv1beta1.ClusterStateLeave {
+				klog.V(2).Info("Found the memberCluster has left", "memberCluster", clusterKObj)
 				return true
 			}
 
@@ -207,10 +212,12 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				// The cluster becomes eligible for resource placement, i.e., match for case 1b).
 				//
 				// The reverse, i.e., eligible -> ineligible, is ignored (case 2b)).
+				klog.V(2).Info("Found the memberCluster becomes eligible for the placement", "memberCluster", clusterKObj)
 				return true
 			}
 
 			// All the other changes are ignored.
+			klog.V(2).Info("Ignoring other memberCluster update changes", "memberCluster", clusterKObj)
 			return false
 		},
 	}
