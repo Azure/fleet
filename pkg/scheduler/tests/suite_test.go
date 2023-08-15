@@ -38,6 +38,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	crpwatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
 	pswatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
+	mcwatcher "go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
 )
 
 const (
@@ -280,24 +281,39 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	// Spin up a scheduler work queue.
-	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+	schedulerWorkqueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+
+	// Build a custom cluster eligibility checker.
+	eligibilityChecker := clustereligibilitychecker.New(
+		// Use a (much) larger health check and heartbeat check timeouts as in the test
+		// environment there is no actual agent to report health check status and send heartbeat
+		// signals.
+		clustereligibilitychecker.WithClusterHealthCheckTimeout(time.Hour*24),
+		clustereligibilitychecker.WithClusterHeartbeatCheckTimeout(time.Hour*24),
+	)
 
 	// Register the watchers.
 	crpReconciler := crpwatcher.Reconciler{
 		Client:             hubClient,
-		SchedulerWorkqueue: schedulerWorkQueue,
+		SchedulerWorkqueue: schedulerWorkqueue,
 	}
-	err = crpReconciler.SetupWithManager(ctx, ctrlMgr)
+	err = crpReconciler.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up CRP watcher with controller manager")
 
 	policySnapshotWatcher := pswatcher.Reconciler{
 		Client:             hubClient,
-		SchedulerWorkqueue: schedulerWorkQueue,
+		SchedulerWorkqueue: schedulerWorkqueue,
 	}
-	err = policySnapshotWatcher.SetupWithManager(ctx, ctrlMgr)
+	err = policySnapshotWatcher.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up policy snapshot watcher with controller manager")
 
-	// TO-DO (chenyu1): register the member cluster watcher.
+	memberClusterWatcher := mcwatcher.Reconciler{
+		Client:                    hubClient,
+		SchedulerWorkqueue:        schedulerWorkqueue,
+		ClusterEligibilityChecker: eligibilityChecker,
+	}
+	err = memberClusterWatcher.SetupWithManager(ctrlMgr)
+	Expect(err).NotTo(HaveOccurred(), "Failed to set up member cluster watcher with controller manager")
 
 	// Set up the scheduler.
 
@@ -328,17 +344,10 @@ var _ = BeforeSuite(func() {
 		WithScorePlugin(&topologyspreadconstraintsPlugin)
 
 	// Create a scheduler framework.
-	eligibilityChecker := clustereligibilitychecker.New(
-		// Use a (much) larger health check and heartbeat check timeouts as in the test
-		// environment there is no actual agent to report health check status and send heartbeat
-		// signals.
-		clustereligibilitychecker.WithClusterHealthCheckTimeout(time.Hour*24),
-		clustereligibilitychecker.WithClusterHeartbeatCheckTimeout(time.Hour*24),
-	)
 	framework := fw.NewFramework(profile, ctrlMgr, fw.WithClusterEligibilityChecker(eligibilityChecker))
 
 	// Create a scheduler.
-	scheduler := sched.NewScheduler(defaultSchedulerName, framework, schedulerWorkQueue, ctrlMgr)
+	scheduler := sched.NewScheduler(defaultSchedulerName, framework, schedulerWorkqueue, ctrlMgr)
 
 	// Run the controller manager.
 	go func() {

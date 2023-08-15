@@ -31,8 +31,8 @@ type Reconciler struct {
 	// Client is a (cached) client for accessing the Kubernetes API server.
 	Client client.Client
 
-	// SchedulerWorkQueue is the work queue for the scheduler.
-	SchedulerWorkQueue queue.ClusterResourcePlacementSchedulingQueueWriter
+	// SchedulerWorkqueue is the work queue for the scheduler.
+	SchedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueueWriter
 
 	// clusterEligibilityCheck helps check if a cluster is eligible for resource replacement.
 	ClusterEligibilityChecker *clustereligibilitychecker.ClusterEligibilityChecker
@@ -145,7 +145,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			"Enqueueing CRP for scheduler processing",
 			"memberCluster", memberClusterRef,
 			"clusterResourcePlacement", klog.KObj(crp))
-		r.SchedulerWorkQueue.AddRateLimited(queue.ClusterResourcePlacementKey(crp.Name))
+		r.SchedulerWorkqueue.AddRateLimited(queue.ClusterResourcePlacementKey(crp.Name))
 	}
 
 	// The reconciliation loop completes.
