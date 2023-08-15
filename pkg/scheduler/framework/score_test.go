@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 // TestClusterScoreToAdd tests the Add() method of ClusterScore.
@@ -185,27 +185,27 @@ func TestClusterScoreLessWhenEqual(t *testing.T) {
 }
 
 func TestScoredClustersSort(t *testing.T) {
-	clusterA := &fleetv1beta1.MemberCluster{
+	clusterA := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 		},
 	}
-	clusterB := &fleetv1beta1.MemberCluster{
+	clusterB := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-2",
 		},
 	}
-	clusterC := &fleetv1beta1.MemberCluster{
+	clusterC := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-3",
 		},
 	}
-	clusterD := &fleetv1beta1.MemberCluster{
+	clusterD := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-4",
 		},
 	}
-	clusterE := &fleetv1beta1.MemberCluster{
+	clusterE := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-5",
 		},

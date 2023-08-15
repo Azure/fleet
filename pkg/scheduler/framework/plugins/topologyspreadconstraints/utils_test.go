@@ -12,7 +12,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -47,14 +48,14 @@ func TestCountByDomain(t *testing.T) {
 
 	testCases := []struct {
 		name                       string
-		clusters                   []fleetv1beta1.MemberCluster
-		bindings                   []*fleetv1beta1.ClusterResourceBinding
+		clusters                   []clusterv1beta1.MemberCluster
+		bindings                   []*placementv1beta1.ClusterResourceBinding
 		wantBindingCounterByDomain *bindingCounterByDomain
 	}{
 		{
 			name:     "uninitialized (no clusters)",
-			clusters: []fleetv1beta1.MemberCluster{},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{},
+			clusters: []clusterv1beta1.MemberCluster{},
+			bindings: []*placementv1beta1.ClusterResourceBinding{},
 			wantBindingCounterByDomain: &bindingCounterByDomain{
 				counter:        make(map[domainName]count),
 				smallest:       -1,
@@ -64,14 +65,14 @@ func TestCountByDomain(t *testing.T) {
 		},
 		{
 			name: "uninitialized (no topology key present in clusters)",
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{},
+			bindings: []*placementv1beta1.ClusterResourceBinding{},
 			wantBindingCounterByDomain: &bindingCounterByDomain{
 				counter:        make(map[domainName]count),
 				smallest:       -1,
@@ -81,7 +82,7 @@ func TestCountByDomain(t *testing.T) {
 		},
 		{
 			name: "single domain",
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -99,12 +100,12 @@ func TestCountByDomain(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -120,7 +121,7 @@ func TestCountByDomain(t *testing.T) {
 		},
 		{
 			name: "multiple domains, same count",
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -146,12 +147,12 @@ func TestCountByDomain(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -159,7 +160,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -167,7 +168,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -185,7 +186,7 @@ func TestCountByDomain(t *testing.T) {
 		},
 		{
 			name: "multiple domains, different counts, separate special counts",
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -235,12 +236,12 @@ func TestCountByDomain(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -248,7 +249,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -256,7 +257,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -264,7 +265,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
@@ -272,7 +273,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName5,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName5,
 					},
 				},
@@ -280,7 +281,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName6,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName6,
 					},
 				},
@@ -298,7 +299,7 @@ func TestCountByDomain(t *testing.T) {
 		},
 		{
 			name: "multiple domains, different counts, multiple smallests",
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -348,12 +349,12 @@ func TestCountByDomain(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -361,7 +362,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -369,7 +370,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -377,7 +378,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
@@ -385,7 +386,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName5,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName5,
 					},
 				},
@@ -393,7 +394,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName6,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName6,
 					},
 				},
@@ -411,7 +412,7 @@ func TestCountByDomain(t *testing.T) {
 		},
 		{
 			name: "multiple domains, different counts, multiple largests",
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -453,12 +454,12 @@ func TestCountByDomain(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -466,7 +467,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -474,7 +475,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -482,7 +483,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
@@ -490,7 +491,7 @@ func TestCountByDomain(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName5,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName5,
 					},
 				},
@@ -525,23 +526,23 @@ func TestClassifyConstriants(t *testing.T) {
 
 	testCases := []struct {
 		name               string
-		policy             *fleetv1beta1.ClusterSchedulingPolicySnapshot
-		wantDoNotSchedule  []*fleetv1beta1.TopologySpreadConstraint
-		wantScheduleAnyway []*fleetv1beta1.TopologySpreadConstraint
+		policy             *placementv1beta1.ClusterSchedulingPolicySnapshot
+		wantDoNotSchedule  []*placementv1beta1.TopologySpreadConstraint
+		wantScheduleAnyway []*placementv1beta1.TopologySpreadConstraint
 	}{
 		{
 			name: "all doNotSchedule topology spread constraints",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								MaxSkew:           &maxSkew,
 								TopologyKey:       topologyKey1,
-								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 							},
 							// Use the default value.
 							{
@@ -552,74 +553,74 @@ func TestClassifyConstriants(t *testing.T) {
 					},
 				},
 			},
-			wantDoNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{
+			wantDoNotSchedule: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 				{
 					MaxSkew:     &maxSkew,
 					TopologyKey: topologyKey2,
 				},
 			},
-			wantScheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{},
+			wantScheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{},
 		},
 		{
 			name: "all scheduleAnyway topology spread constraints",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								MaxSkew:           &maxSkew,
 								TopologyKey:       topologyKey1,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 							{
 								MaxSkew:           &maxSkew,
 								TopologyKey:       topologyKey2,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 						},
 					},
 				},
 			},
-			wantDoNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{},
-			wantScheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{
+			wantDoNotSchedule: []*placementv1beta1.TopologySpreadConstraint{},
+			wantScheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 				{
 					MaxSkew:           &maxSkew,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			},
 		},
 		{
 			name: "mixed",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								MaxSkew:           &maxSkew,
 								TopologyKey:       topologyKey1,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 							{
 								MaxSkew:           &maxSkew,
 								TopologyKey:       topologyKey2,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 							// Use the default value.
 							{
@@ -630,22 +631,22 @@ func TestClassifyConstriants(t *testing.T) {
 					},
 				},
 			},
-			wantDoNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{
+			wantDoNotSchedule: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:     &maxSkew,
 					TopologyKey: topologyKey3,
 				},
 			},
-			wantScheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{
+			wantScheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 				{
 					MaxSkew:           &maxSkew,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			},
 		},
@@ -958,10 +959,10 @@ func TestEvaluateAllConstraints(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		clusters       []fleetv1beta1.MemberCluster
-		bindings       []*fleetv1beta1.ClusterResourceBinding
-		doNotSchedule  []*fleetv1beta1.TopologySpreadConstraint
-		scheduleAnyway []*fleetv1beta1.TopologySpreadConstraint
+		clusters       []clusterv1beta1.MemberCluster
+		bindings       []*placementv1beta1.ClusterResourceBinding
+		doNotSchedule  []*placementv1beta1.TopologySpreadConstraint
+		scheduleAnyway []*placementv1beta1.TopologySpreadConstraint
 		wantViolations doNotScheduleViolations
 		wantScores     topologySpreadScores
 	}{
@@ -974,7 +975,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// Topology key 2:
 			// * Domain 1 (topology value 1): 1 binding
 			// * Domain 2 (topology value 2): 2 bindings
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1012,12 +1013,12 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1025,7 +1026,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -1033,24 +1034,24 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew1,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{},
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{},
 			wantViolations: doNotScheduleViolations{
 				clusterName1: violationReasons{
 					fmt.Sprintf(doNotScheduleConstraintViolationReasonTemplate, topologyKey2, maxSkew2),
@@ -1077,7 +1078,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// Topology key 2:
 			// * Domain 1 (topology value 2): 0 binding
 			// * Domain 2 (topology value 3): 0 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1111,29 +1112,29 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew1,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{},
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{},
 			wantViolations: doNotScheduleViolations{},
 			wantScores: topologySpreadScores{
 				clusterName1: 1 * skewChangeScoreFactor,
@@ -1153,7 +1154,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// * Domain 1 (topology value 1): 1 binding
 			// * Domain 2 (topology value 2): 0 binding
 			// * Domain 3 (topology value 3): 1 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1189,12 +1190,12 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1202,24 +1203,24 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{},
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{},
 			wantViolations: doNotScheduleViolations{
 				clusterName1: violationReasons{
 					fmt.Sprintf(doNotScheduleConstraintViolationReasonTemplate, topologyKey1, maxSkew2),
@@ -1242,7 +1243,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// Topology key 2:
 			// * Domain 1 (topology value 1): 1 binding
 			// * Domain 2 (topology value 2): 2 bindings
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1280,12 +1281,12 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1293,7 +1294,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -1301,22 +1302,22 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{},
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew1,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			},
 			wantViolations: doNotScheduleViolations{},
@@ -1337,7 +1338,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// Topology key 2:
 			// * Domain 1 (topology value 2): 0 binding
 			// * Domain 2 (topology value 3): 0 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1371,27 +1372,27 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{},
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew1,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			},
 			wantViolations: doNotScheduleViolations{},
@@ -1413,7 +1414,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// * Domain 1 (topology value 1): 1 binding
 			// * Domain 2 (topology value 2): 0 binding
 			// * Domain 3 (topology value 3): 1 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1449,12 +1450,12 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1462,22 +1463,22 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{},
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			},
 			wantViolations: doNotScheduleViolations{},
@@ -1499,7 +1500,7 @@ func TestEvaluateAllConstraints(t *testing.T) {
 			// Topology key 3:
 			// * Domain 1 (topology value 1): 2 bindings
 			// * Domain 2 (topology value 2): 0 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1549,12 +1550,12 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1562,28 +1563,28 @@ func TestEvaluateAllConstraints(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName5,
 					},
 				},
 			},
-			doNotSchedule: []*fleetv1beta1.TopologySpreadConstraint{
+			doNotSchedule: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey1,
-					WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			},
-			scheduleAnyway: []*fleetv1beta1.TopologySpreadConstraint{
+			scheduleAnyway: []*placementv1beta1.TopologySpreadConstraint{
 				{
 					MaxSkew:           &maxSkew2,
 					TopologyKey:       topologyKey2,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 				{
 					MaxSkew:           &maxSkew1,
 					TopologyKey:       topologyKey3,
-					WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			},
 			wantViolations: doNotScheduleViolations{
@@ -1625,9 +1626,9 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		clusters []fleetv1beta1.MemberCluster
-		bindings []*fleetv1beta1.ClusterResourceBinding
-		policy   *fleetv1beta1.ClusterSchedulingPolicySnapshot
+		clusters []clusterv1beta1.MemberCluster
+		bindings []*placementv1beta1.ClusterResourceBinding
+		policy   *placementv1beta1.ClusterSchedulingPolicySnapshot
 		want     *pluginState
 	}{
 		{
@@ -1641,7 +1642,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 			// * Domain 1 (topology value 1): 1 binding
 			// * Domain 2 (topology value 2): 0 binding
 			// * Domain 3 (topology value 3): 1 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1677,12 +1678,12 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1690,7 +1691,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -1698,46 +1699,46 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								MaxSkew:           &maxSkew2,
 								TopologyKey:       topologyKey1,
-								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 							},
 							{
 								MaxSkew:           &maxSkew2,
 								TopologyKey:       topologyKey2,
-								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 							},
 						},
 					},
 				},
 			},
 			want: &pluginState{
-				doNotScheduleConstraints: []*fleetv1beta1.TopologySpreadConstraint{
+				doNotScheduleConstraints: []*placementv1beta1.TopologySpreadConstraint{
 					{
 						MaxSkew:           &maxSkew2,
 						TopologyKey:       topologyKey1,
-						WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 					},
 					{
 						MaxSkew:           &maxSkew2,
 						TopologyKey:       topologyKey2,
-						WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 					},
 				},
-				scheduleAnywayConstraints: []*fleetv1beta1.TopologySpreadConstraint{},
+				scheduleAnywayConstraints: []*placementv1beta1.TopologySpreadConstraint{},
 				violations: doNotScheduleViolations{
 					clusterName1: violationReasons{
 						fmt.Sprintf(doNotScheduleConstraintViolationReasonTemplate, topologyKey1, maxSkew2),
@@ -1765,7 +1766,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 			// * Domain 1 (topology value 1): 1 binding
 			// * Domain 2 (topology value 2): 1 binding
 			// * Domain 3 (topology value 3): 1 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1801,12 +1802,12 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1814,7 +1815,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1822,44 +1823,44 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								MaxSkew:           &maxSkew2,
 								TopologyKey:       topologyKey1,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 							{
 								MaxSkew:           &maxSkew2,
 								TopologyKey:       topologyKey2,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 						},
 					},
 				},
 			},
 			want: &pluginState{
-				doNotScheduleConstraints: []*fleetv1beta1.TopologySpreadConstraint{},
-				scheduleAnywayConstraints: []*fleetv1beta1.TopologySpreadConstraint{
+				doNotScheduleConstraints: []*placementv1beta1.TopologySpreadConstraint{},
+				scheduleAnywayConstraints: []*placementv1beta1.TopologySpreadConstraint{
 					{
 						MaxSkew:           &maxSkew2,
 						TopologyKey:       topologyKey1,
-						WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 					},
 					{
 						MaxSkew:           &maxSkew2,
 						TopologyKey:       topologyKey2,
-						WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 					},
 				},
 				violations: doNotScheduleViolations{},
@@ -1882,7 +1883,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 			// Topology key 3:
 			// * Domain 1 (topology value 1): 2 bindings
 			// * Domain 2 (topology value 2): 1 binding
-			clusters: []fleetv1beta1.MemberCluster{
+			clusters: []clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName1,
@@ -1932,12 +1933,12 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					},
 				},
 			},
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1945,7 +1946,7 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
@@ -1953,55 +1954,55 @@ func TestPrepareTopologySpreadConstraintsPluginState(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName5,
 					},
 				},
 			},
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								MaxSkew:           &maxSkew2,
 								TopologyKey:       topologyKey1,
-								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 							},
 							{
 								MaxSkew:           &maxSkew2,
 								TopologyKey:       topologyKey2,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 							{
 								MaxSkew:           &maxSkew1,
 								TopologyKey:       topologyKey3,
-								WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+								WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 							},
 						},
 					},
 				},
 			},
 			want: &pluginState{
-				doNotScheduleConstraints: []*fleetv1beta1.TopologySpreadConstraint{
+				doNotScheduleConstraints: []*placementv1beta1.TopologySpreadConstraint{
 					{
 						MaxSkew:           &maxSkew2,
 						TopologyKey:       topologyKey1,
-						WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 					},
 				},
-				scheduleAnywayConstraints: []*fleetv1beta1.TopologySpreadConstraint{
+				scheduleAnywayConstraints: []*placementv1beta1.TopologySpreadConstraint{
 					{
 						MaxSkew:           &maxSkew2,
 						TopologyKey:       topologyKey2,
-						WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 					},
 					{
 						MaxSkew:           &maxSkew1,
 						TopologyKey:       topologyKey3,
-						WhenUnsatisfiable: fleetv1beta1.ScheduleAnyway,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 					},
 				},
 				violations: doNotScheduleViolations{},

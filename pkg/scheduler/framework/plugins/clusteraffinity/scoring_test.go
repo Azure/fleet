@@ -14,14 +14,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
 func TestPreScore(t *testing.T) {
 	tests := []struct {
 		name              string
-		policy            *fleetv1beta1.PlacementPolicy
+		policy            *placementv1beta1.PlacementPolicy
 		ps                *pluginState
 		notSetPluginState bool
 		want              *framework.Status
@@ -32,21 +33,21 @@ func TestPreScore(t *testing.T) {
 		},
 		{
 			name:   "nil affinity",
-			policy: &fleetv1beta1.PlacementPolicy{},
+			policy: &placementv1beta1.PlacementPolicy{},
 			want:   framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "nil cluster affinity",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{},
 			},
 			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "pluginState is not set",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
 				},
 			},
 			notSetPluginState: true,
@@ -54,18 +55,18 @@ func TestPreScore(t *testing.T) {
 		},
 		{
 			name: "nil pluginState",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
 				},
 			},
 			want: framework.FromError(errors.New("invalid state"), defaultPluginName),
 		},
 		{
 			name: "no preferred affinity terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
 				},
 			},
 			ps:   &pluginState{},
@@ -73,9 +74,9 @@ func TestPreScore(t *testing.T) {
 		},
 		{
 			name: "have preferred affinity terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
 				},
 			},
 			ps: &pluginState{
@@ -98,8 +99,8 @@ func TestPreScore(t *testing.T) {
 			if !tc.notSetPluginState {
 				state.Write(framework.StateKey(p.Name()), tc.ps)
 			}
-			snapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+			snapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
 					Policy: tc.policy,
 				},
 			}
@@ -116,7 +117,7 @@ func TestPluginScore(t *testing.T) {
 		name              string
 		ps                *pluginState
 		notSetPluginState bool
-		cluster           *fleetv1beta1.MemberCluster
+		cluster           *clusterv1beta1.MemberCluster
 		wantScore         *framework.ClusterScore
 		wantStatus        *framework.Status
 	}{
@@ -154,7 +155,7 @@ func TestPluginScore(t *testing.T) {
 					},
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{

@@ -6,7 +6,7 @@ Licensed under the MIT license.
 package framework
 
 import (
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 // ClusterScore is the scores the scheduler assigns to a cluster.
@@ -70,7 +70,7 @@ func (s1 *ClusterScore) Less(s2 *ClusterScore) bool {
 
 // ScoredCluster is a cluster with a score.
 type ScoredCluster struct {
-	Cluster *fleetv1beta1.MemberCluster
+	Cluster *clusterv1beta1.MemberCluster
 	Score   *ClusterScore
 }
 

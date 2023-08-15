@@ -12,7 +12,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 const (
@@ -30,48 +30,48 @@ func TestIsClusterEligible(t *testing.T) {
 
 	testCases := []struct {
 		name             string
-		cluster          *fleetv1beta1.MemberCluster
+		cluster          *clusterv1beta1.MemberCluster
 		wantEligible     bool
 		wantReasonPrefix string
 	}{
 		{
 			name: "cluster left",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateLeave,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateLeave,
 				},
 			},
 			wantReasonPrefix: "cluster has left the fleet",
 		},
 		{
 			name: "no member agent status",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{},
+				Status: clusterv1beta1.MemberClusterStatus{},
 			},
 			wantReasonPrefix: "cluster is not connected to the fleet: member agent not online yet",
 		},
 		{
 			name: "no member agent joined condition",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type:                  fleetv1beta1.MemberAgent,
+							Type:                  clusterv1beta1.MemberAgent,
 							LastReceivedHeartbeat: metav1.Now(),
 						},
 					},
@@ -81,20 +81,20 @@ func TestIsClusterEligible(t *testing.T) {
 		},
 		{
 			name: "joined condition is false",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type: fleetv1beta1.MemberAgent,
+							Type: clusterv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1beta1.AgentJoined),
+									Type:   string(clusterv1beta1.AgentJoined),
 									Status: metav1.ConditionFalse,
 								},
 							},
@@ -107,20 +107,20 @@ func TestIsClusterEligible(t *testing.T) {
 		},
 		{
 			name: "no recent heartbeat signals",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type: fleetv1beta1.MemberAgent,
+							Type: clusterv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1beta1.AgentJoined),
+									Type:   string(clusterv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 								},
 							},
@@ -133,20 +133,20 @@ func TestIsClusterEligible(t *testing.T) {
 		},
 		{
 			name: "no health check signals",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type: fleetv1beta1.MemberAgent,
+							Type: clusterv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1beta1.AgentJoined),
+									Type:   string(clusterv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 								},
 							},
@@ -159,24 +159,24 @@ func TestIsClusterEligible(t *testing.T) {
 		},
 		{
 			name: "health check fails for a long period",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type: fleetv1beta1.MemberAgent,
+							Type: clusterv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1beta1.AgentJoined),
+									Type:   string(clusterv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 								},
 								{
-									Type:               string(fleetv1beta1.AgentHealthy),
+									Type:               string(clusterv1beta1.AgentHealthy),
 									Status:             metav1.ConditionFalse,
 									LastTransitionTime: metav1.NewTime(time.Now().Add(time.Minute * (-20))),
 								},
@@ -190,24 +190,24 @@ func TestIsClusterEligible(t *testing.T) {
 		},
 		{
 			name: "recent health check failure",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type: fleetv1beta1.MemberAgent,
+							Type: clusterv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1beta1.AgentJoined),
+									Type:   string(clusterv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 								},
 								{
-									Type:               string(fleetv1beta1.AgentHealthy),
+									Type:               string(clusterv1beta1.AgentHealthy),
 									Status:             metav1.ConditionFalse,
 									LastTransitionTime: metav1.NewTime(time.Now().Add(time.Minute * (-1))),
 								},
@@ -221,24 +221,24 @@ func TestIsClusterEligible(t *testing.T) {
 		},
 		{
 			name: "normal cluster",
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: fleetv1beta1.MemberClusterSpec{
-					State: fleetv1beta1.ClusterStateJoin,
+				Spec: clusterv1beta1.MemberClusterSpec{
+					State: clusterv1beta1.ClusterStateJoin,
 				},
-				Status: fleetv1beta1.MemberClusterStatus{
-					AgentStatus: []fleetv1beta1.AgentStatus{
+				Status: clusterv1beta1.MemberClusterStatus{
+					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
-							Type: fleetv1beta1.MemberAgent,
+							Type: clusterv1beta1.MemberAgent,
 							Conditions: []metav1.Condition{
 								{
-									Type:   string(fleetv1beta1.AgentJoined),
+									Type:   string(clusterv1beta1.AgentJoined),
 									Status: metav1.ConditionTrue,
 								},
 								{
-									Type:               string(fleetv1beta1.AgentHealthy),
+									Type:               string(clusterv1beta1.AgentHealthy),
 									Status:             metav1.ConditionFalse,
 									LastTransitionTime: metav1.NewTime(time.Now()),
 								},

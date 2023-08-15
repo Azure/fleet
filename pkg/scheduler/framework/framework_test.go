@@ -23,7 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 )
@@ -52,7 +53,7 @@ var (
 	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
 	ignoredCondFields                    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
 
-	lessFuncCluster = func(cluster1, cluster2 *fleetv1beta1.MemberCluster) bool {
+	lessFuncCluster = func(cluster1, cluster2 *clusterv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name
 	}
 	lessFuncScoredCluster = func(scored1, scored2 *ScoredCluster) bool {
@@ -67,16 +68,16 @@ var (
 var (
 	defaultFilteredStatus = NewNonErrorStatus(ClusterUnschedulable, dummyPluginName)
 
-	generateResourceBindings = func(count int, startIdx int) []*fleetv1beta1.ClusterResourceBinding {
-		bindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+	generateResourceBindings = func(count int, startIdx int) []*placementv1beta1.ClusterResourceBinding {
+		bindings := make([]*placementv1beta1.ClusterResourceBinding, 0, count)
 
 		for i := 0; i < count; i++ {
-			bindings = append(bindings, &fleetv1beta1.ClusterResourceBinding{
+			bindings = append(bindings, &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(bindingNameTemplate, i+startIdx),
 				},
-				Spec: fleetv1beta1.ResourceBindingSpec{
-					ClusterDecision: fleetv1beta1.ClusterDecision{
+				Spec: placementv1beta1.ResourceBindingSpec{
+					ClusterDecision: placementv1beta1.ClusterDecision{
 						ClusterName: fmt.Sprintf(clusterNameTemplate, i+startIdx),
 						Selected:    true,
 					},
@@ -86,11 +87,11 @@ var (
 		return bindings
 	}
 
-	generateClusterDecisions = func(count int, startIdx int, selected bool) []fleetv1beta1.ClusterDecision {
-		decisions := make([]fleetv1beta1.ClusterDecision, 0, count)
+	generateClusterDecisions = func(count int, startIdx int, selected bool) []placementv1beta1.ClusterDecision {
+		decisions := make([]placementv1beta1.ClusterDecision, 0, count)
 
 		for i := 0; i < count; i++ {
-			newDecision := fleetv1beta1.ClusterDecision{
+			newDecision := placementv1beta1.ClusterDecision{
 				ClusterName: fmt.Sprintf(clusterNameTemplate, i+startIdx),
 				Selected:    selected,
 			}
@@ -109,7 +110,7 @@ var (
 
 		for i := 0; i < count; i++ {
 			filtered = append(filtered, &filteredClusterWithStatus{
-				cluster: &fleetv1beta1.MemberCluster{
+				cluster: &clusterv1beta1.MemberCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(clusterNameTemplate, i+startIdx),
 					},
@@ -126,7 +127,7 @@ var (
 // TestMain sets up the test environment.
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
-	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
+	if err := placementv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
 	}
 
@@ -135,7 +136,7 @@ func TestMain(m *testing.M) {
 
 // TestCollectClusters tests the collectClusters method.
 func TestCollectClusters(t *testing.T) {
-	cluster := fleetv1beta1.MemberCluster{
+	cluster := clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster-1",
 		},
@@ -156,7 +157,7 @@ func TestCollectClusters(t *testing.T) {
 		t.Fatalf("collectClusters() = %v, want no error", err)
 	}
 
-	want := []fleetv1beta1.MemberCluster{cluster}
+	want := []clusterv1beta1.MemberCluster{cluster}
 	if diff := cmp.Diff(clusters, want); diff != "" {
 		t.Fatalf("collectClusters() diff (-got, +want) = %s", diff)
 	}
@@ -164,11 +165,11 @@ func TestCollectClusters(t *testing.T) {
 
 // TestCollectBindings tests the collectBindings method.
 func TestCollectBindings(t *testing.T) {
-	binding := &fleetv1beta1.ClusterResourceBinding{
+	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 			Labels: map[string]string{
-				fleetv1beta1.CRPTrackingLabel: crpName,
+				placementv1beta1.CRPTrackingLabel: crpName,
 			},
 		},
 	}
@@ -176,21 +177,21 @@ func TestCollectBindings(t *testing.T) {
 
 	testCases := []struct {
 		name    string
-		binding *fleetv1beta1.ClusterResourceBinding
+		binding *placementv1beta1.ClusterResourceBinding
 		crpName string
-		want    []fleetv1beta1.ClusterResourceBinding
+		want    []placementv1beta1.ClusterResourceBinding
 	}{
 		{
 			name:    "found matching bindings",
 			binding: binding,
 			crpName: crpName,
-			want:    []fleetv1beta1.ClusterResourceBinding{*binding},
+			want:    []placementv1beta1.ClusterResourceBinding{*binding},
 		},
 		{
 			name:    "no matching bindings",
 			binding: binding,
 			crpName: altCRPName,
-			want:    []fleetv1beta1.ClusterResourceBinding{},
+			want:    []placementv1beta1.ClusterResourceBinding{},
 		},
 	}
 
@@ -220,7 +221,7 @@ func TestCollectBindings(t *testing.T) {
 
 // TestClassifyBindings tests the classifyBindings function.
 func TestClassifyBindings(t *testing.T) {
-	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -230,93 +231,93 @@ func TestClassifyBindings(t *testing.T) {
 	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
 	clusterName3 := fmt.Sprintf(clusterNameTemplate, 3)
 	clusterName4 := fmt.Sprintf(clusterNameTemplate, 4)
-	clusters := []fleetv1beta1.MemberCluster{
+	clusters := []clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName1,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateJoin,
+			Spec: clusterv1beta1.MemberClusterSpec{
+				State: clusterv1beta1.ClusterStateJoin,
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName2,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateJoin,
+			Spec: clusterv1beta1.MemberClusterSpec{
+				State: clusterv1beta1.ClusterStateJoin,
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName3,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateLeave,
+			Spec: clusterv1beta1.MemberClusterSpec{
+				State: clusterv1beta1.ClusterStateLeave,
 			},
 		},
 	}
 
-	unscheduledBinding := fleetv1beta1.ClusterResourceBinding{
+	unscheduledBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-3",
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State: fleetv1beta1.BindingStateUnscheduled,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
 		},
 	}
-	associatedWithLeavingClusterBinding := fleetv1beta1.ClusterResourceBinding{
+	associatedWithLeavingClusterBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-4",
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State:                        fleetv1beta1.BindingStateBound,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State:                        placementv1beta1.BindingStateBound,
 			TargetCluster:                clusterName3,
 			SchedulingPolicySnapshotName: altPolicyName,
 		},
 	}
-	assocaitedWithDisappearedClusterBinding := fleetv1beta1.ClusterResourceBinding{
+	assocaitedWithDisappearedClusterBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-5",
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State:                        fleetv1beta1.BindingStateScheduled,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State:                        placementv1beta1.BindingStateScheduled,
 			TargetCluster:                clusterName4,
 			SchedulingPolicySnapshotName: policyName,
 		},
 	}
-	obsoleteBinding := fleetv1beta1.ClusterResourceBinding{
+	obsoleteBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-6",
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State:                        fleetv1beta1.BindingStateBound,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State:                        placementv1beta1.BindingStateBound,
 			TargetCluster:                clusterName1,
 			SchedulingPolicySnapshotName: altPolicyName,
 		},
 	}
-	boundBinding := fleetv1beta1.ClusterResourceBinding{
+	boundBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-7",
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State:                        fleetv1beta1.BindingStateBound,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State:                        placementv1beta1.BindingStateBound,
 			TargetCluster:                clusterName1,
 			SchedulingPolicySnapshotName: policyName,
 		},
 	}
-	scheduledBinding := fleetv1beta1.ClusterResourceBinding{
+	scheduledBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-8",
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State:                        fleetv1beta1.BindingStateScheduled,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State:                        placementv1beta1.BindingStateScheduled,
 			TargetCluster:                clusterName2,
 			SchedulingPolicySnapshotName: policyName,
 		},
 	}
 
-	bindings := []fleetv1beta1.ClusterResourceBinding{
+	bindings := []placementv1beta1.ClusterResourceBinding{
 		unscheduledBinding,
 		associatedWithLeavingClusterBinding,
 		assocaitedWithDisappearedClusterBinding,
@@ -324,10 +325,10 @@ func TestClassifyBindings(t *testing.T) {
 		boundBinding,
 		scheduledBinding,
 	}
-	wantBound := []*fleetv1beta1.ClusterResourceBinding{&boundBinding}
-	wantScheduled := []*fleetv1beta1.ClusterResourceBinding{&scheduledBinding}
-	wantObsolete := []*fleetv1beta1.ClusterResourceBinding{&obsoleteBinding}
-	wantDangling := []*fleetv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
+	wantBound := []*placementv1beta1.ClusterResourceBinding{&boundBinding}
+	wantScheduled := []*placementv1beta1.ClusterResourceBinding{&scheduledBinding}
+	wantObsolete := []*placementv1beta1.ClusterResourceBinding{&obsoleteBinding}
+	wantDangling := []*placementv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
 
 	bound, scheduled, obsolete, dangling := classifyBindings(policy, bindings, clusters)
 	if diff := cmp.Diff(bound, wantBound); diff != "" {
@@ -349,12 +350,12 @@ func TestClassifyBindings(t *testing.T) {
 
 // TestMarkAsUnscheduledFor tests the markAsUnscheduledFor method.
 func TestMarkAsUnscheduledFor(t *testing.T) {
-	binding := fleetv1beta1.ClusterResourceBinding{
+	binding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State: fleetv1beta1.BindingStateBound,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
 		},
 	}
 
@@ -368,7 +369,7 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := f.markAsUnscheduledFor(ctx, []*fleetv1beta1.ClusterResourceBinding{&binding}); err != nil {
+	if err := f.markAsUnscheduledFor(ctx, []*placementv1beta1.ClusterResourceBinding{&binding}); err != nil {
 		t.Fatalf("markAsUnscheduledFor() = %v, want no error", err)
 	}
 
@@ -376,12 +377,12 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 		t.Fatalf("Get cluster resource binding %s = %v, want no error", bindingName, err)
 	}
 
-	want := fleetv1beta1.ClusterResourceBinding{
+	want := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State: fleetv1beta1.BindingStateUnscheduled,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
 		},
 	}
 	if diff := cmp.Diff(binding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
@@ -405,7 +406,7 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 						return nil
 					},
 				},
@@ -416,13 +417,13 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameB,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return NewNonErrorStatus(Skip, dummyPreFilterPluginNameB)
 					},
 				},
@@ -434,7 +435,7 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 						return FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameA)
 					},
 				},
@@ -446,7 +447,7 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 						return NewNonErrorStatus(ClusterUnschedulable, dummyPreFilterPluginNameA)
 					},
 				},
@@ -467,8 +468,8 @@ func TestRunPreFilterPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -498,7 +499,7 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
@@ -509,13 +510,13 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
 					},
 				},
@@ -527,7 +528,7 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA)
 					},
 				},
@@ -539,13 +540,13 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
@@ -557,7 +558,7 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return NewNonErrorStatus(Skip, dummyFilterPluginNameA)
 					},
 				},
@@ -578,16 +579,16 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
 			for _, name := range tc.skippedPluginNames {
 				state.skippedFilterPlugins.Insert(name)
 			}
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
 			}
-			cluster := &fleetv1beta1.MemberCluster{
+			cluster := &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
@@ -606,7 +607,7 @@ func TestRunFilterPlugins(t *testing.T) {
 	dummyFilterPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
 	dummyFilterPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
 
-	clusters := []fleetv1beta1.MemberCluster{
+	clusters := []clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName,
@@ -627,7 +628,7 @@ func TestRunFilterPlugins(t *testing.T) {
 	testCases := []struct {
 		name           string
 		filterPlugins  []FilterPlugin
-		wantClusters   []*fleetv1beta1.MemberCluster
+		wantClusters   []*clusterv1beta1.MemberCluster
 		wantFiltered   []*filteredClusterWithStatus
 		expectedToFail bool
 	}{
@@ -636,18 +637,18 @@ func TestRunFilterPlugins(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 			},
-			wantClusters: []*fleetv1beta1.MemberCluster{
+			wantClusters: []*clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: clusterName,
@@ -671,7 +672,7 @@ func TestRunFilterPlugins(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == clusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
 						}
@@ -680,7 +681,7 @@ func TestRunFilterPlugins(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == anotherClusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
 						}
@@ -688,7 +689,7 @@ func TestRunFilterPlugins(t *testing.T) {
 					},
 				},
 			},
-			wantClusters: []*fleetv1beta1.MemberCluster{
+			wantClusters: []*clusterv1beta1.MemberCluster{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altClusterName,
@@ -697,7 +698,7 @@ func TestRunFilterPlugins(t *testing.T) {
 			},
 			wantFiltered: []*filteredClusterWithStatus{
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: clusterName,
 						},
@@ -705,7 +706,7 @@ func TestRunFilterPlugins(t *testing.T) {
 					status: NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
 				},
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: anotherClusterName,
 						},
@@ -719,13 +720,13 @@ func TestRunFilterPlugins(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == anotherClusterName {
 							return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameB)
 						}
@@ -749,8 +750,8 @@ func TestRunFilterPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -785,7 +786,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 	dummyFilterPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
 	dummyFilterPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
 
-	clusters := []fleetv1beta1.MemberCluster{
+	clusters := []clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName,
@@ -803,7 +804,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 		},
 	}
 
-	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -822,13 +823,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameB,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameB)
 					},
 				},
@@ -836,13 +837,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
@@ -854,13 +855,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameB,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -868,13 +869,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == altClusterName {
 							return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameB)
 						}
@@ -889,13 +890,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameB,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -903,13 +904,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
@@ -935,13 +936,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameB,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -949,7 +950,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == clusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
 						}
@@ -958,7 +959,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name != clusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
 						}
@@ -987,13 +988,13 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameB,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -1001,7 +1002,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == altClusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
 						}
@@ -1010,7 +1011,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == anotherClusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
 						}
@@ -1052,7 +1053,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
 			scored, filtered, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
 			if tc.expectedToFail {
 				if err == nil {
@@ -1076,7 +1077,7 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 
 // TestCrossReferencePickedClustersAndObsoleteBindings tests the crossReferencePickedClustersAndObsoleteBindings function.
 func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
-	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -1096,7 +1097,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 
 	sorted := ScoredClusters{
 		{
-			Cluster: &fleetv1beta1.MemberCluster{
+			Cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName1,
 				},
@@ -1108,7 +1109,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 			},
 		},
 		{
-			Cluster: &fleetv1beta1.MemberCluster{
+			Cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName2,
 				},
@@ -1120,7 +1121,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 			},
 		},
 		{
-			Cluster: &fleetv1beta1.MemberCluster{
+			Cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName3,
 				},
@@ -1142,40 +1143,40 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 	testCases := []struct {
 		name         string
 		picked       ScoredClusters
-		obsolete     []*fleetv1beta1.ClusterResourceBinding
-		wantToCreate []*fleetv1beta1.ClusterResourceBinding
+		obsolete     []*placementv1beta1.ClusterResourceBinding
+		wantToCreate []*placementv1beta1.ClusterResourceBinding
 		wantToPatch  []*bindingWithPatch
-		wantToDelete []*fleetv1beta1.ClusterResourceBinding
+		wantToDelete []*placementv1beta1.ClusterResourceBinding
 	}{
 		{
 			name:   "no matching obsolete bindings",
 			picked: sorted,
-			obsolete: []*fleetv1beta1.ClusterResourceBinding{
+			obsolete: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{
+			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.CRPTrackingLabel: crpName,
 						},
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:                        fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
 						SchedulingPolicySnapshotName: policyName,
 						TargetCluster:                clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								AffinityScore:       &affinityScore1,
 								TopologySpreadScore: &topologySpreadScore1,
 							},
@@ -1187,17 +1188,17 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.CRPTrackingLabel: crpName,
 						},
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:                        fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
 						SchedulingPolicySnapshotName: policyName,
 						TargetCluster:                clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								AffinityScore:       &affinityScore2,
 								TopologySpreadScore: &topologySpreadScore2,
 							},
@@ -1209,17 +1210,17 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.CRPTrackingLabel: crpName,
 						},
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:                        fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
 						SchedulingPolicySnapshotName: policyName,
 						TargetCluster:                clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								AffinityScore:       &affinityScore3,
 								TopologySpreadScore: &topologySpreadScore3,
 							},
@@ -1229,12 +1230,12 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				},
 			},
 			wantToPatch: []*bindingWithPatch{},
-			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{
+			wantToDelete: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
@@ -1243,12 +1244,12 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 		{
 			name:   "all matching obsolete bindings",
 			picked: sorted,
-			obsolete: []*fleetv1beta1.ClusterResourceBinding{
+			obsolete: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1256,7 +1257,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1264,25 +1265,25 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName3,
 					},
 				},
 			},
-			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{},
+			wantToCreate: []*placementv1beta1.ClusterResourceBinding{},
 			wantToPatch: []*bindingWithPatch{
 				{
-					updated: &fleetv1beta1.ClusterResourceBinding{
+					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName1,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName1,
 							SchedulingPolicySnapshotName: policyName,
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName1,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore1,
 									TopologySpreadScore: &topologySpreadScore1,
 								},
@@ -1290,27 +1291,27 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 							},
 						},
 					},
-					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName1,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster: clusterName1,
 						},
 					}),
 				},
 				{
-					updated: &fleetv1beta1.ClusterResourceBinding{
+					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName2,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName2,
 							SchedulingPolicySnapshotName: policyName,
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName2,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore2,
 									TopologySpreadScore: &topologySpreadScore2,
 								},
@@ -1318,27 +1319,27 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 							},
 						},
 					},
-					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName2,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster: clusterName2,
 						},
 					}),
 				},
 				{
-					updated: &fleetv1beta1.ClusterResourceBinding{
+					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName3,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName3,
 							SchedulingPolicySnapshotName: policyName,
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName3,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore3,
 									TopologySpreadScore: &topologySpreadScore3,
 								},
@@ -1346,27 +1347,27 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 							},
 						},
 					},
-					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName3,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster: clusterName3,
 						},
 					}),
 				},
 			},
-			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{},
+			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
 		},
 		{
 			name:   "mixed",
 			picked: sorted,
-			obsolete: []*fleetv1beta1.ClusterResourceBinding{
+			obsolete: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1374,7 +1375,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1382,27 +1383,27 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
 			},
-			wantToCreate: []*fleetv1beta1.ClusterResourceBinding{
+			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel: crpName,
+							placementv1beta1.CRPTrackingLabel: crpName,
 						},
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:                        fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
 						SchedulingPolicySnapshotName: policyName,
 						TargetCluster:                clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								AffinityScore:       &affinityScore3,
 								TopologySpreadScore: &topologySpreadScore3,
 							},
@@ -1413,17 +1414,17 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 			},
 			wantToPatch: []*bindingWithPatch{
 				{
-					updated: &fleetv1beta1.ClusterResourceBinding{
+					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName1,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName1,
 							SchedulingPolicySnapshotName: policyName,
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName1,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore1,
 									TopologySpreadScore: &topologySpreadScore1,
 								},
@@ -1431,27 +1432,27 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 							},
 						},
 					},
-					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName1,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster: clusterName1,
 						},
 					}),
 				},
 				{
-					updated: &fleetv1beta1.ClusterResourceBinding{
+					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName2,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName2,
 							SchedulingPolicySnapshotName: policyName,
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName2,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore2,
 									TopologySpreadScore: &topologySpreadScore2,
 								},
@@ -1459,22 +1460,22 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 							},
 						},
 					},
-					patch: client.MergeFrom(&fleetv1beta1.ClusterResourceBinding{
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName2,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
+						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster: clusterName2,
 						},
 					}),
 				},
 			},
-			wantToDelete: []*fleetv1beta1.ClusterResourceBinding{
+			wantToDelete: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName4,
 					},
 				},
@@ -1524,7 +1525,7 @@ func TestCreateBindings(t *testing.T) {
 		client: fakeClient,
 	}
 
-	toCreate := []*fleetv1beta1.ClusterResourceBinding{
+	toCreate := []*placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: bindingName,
@@ -1537,7 +1538,7 @@ func TestCreateBindings(t *testing.T) {
 		t.Fatalf("createBindings() = %v, want no error", err)
 	}
 
-	binding := &fleetv1beta1.ClusterResourceBinding{}
+	binding := &placementv1beta1.ClusterResourceBinding{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, binding); err != nil {
 		t.Fatalf("Get binding (%s) = %v, want no error", bindingName, err)
 	}
@@ -1549,14 +1550,14 @@ func TestCreateBindings(t *testing.T) {
 
 // TestUpdateBindings tests the updateBindings method.
 func TestPatchBindings(t *testing.T) {
-	binding := &fleetv1beta1.ClusterResourceBinding{
+	binding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 			// Set the resource version; this is needed so that the calculated patch will not
 			// include the resource version field.
 			ResourceVersion: resourceVersion,
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
+		Spec: placementv1beta1.ResourceBindingSpec{
 			TargetCluster: clusterName,
 		},
 	}
@@ -1572,20 +1573,20 @@ func TestPatchBindings(t *testing.T) {
 
 	topologySpreadScore := int32(0)
 	affinityScore := int32(1)
-	updated := &fleetv1beta1.ClusterResourceBinding{
+	updated := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 			// Set the resource version; this is needed so that the calculated patch will not
 			// include the resource version field.
 			ResourceVersion: resourceVersion,
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
+		Spec: placementv1beta1.ResourceBindingSpec{
 			TargetCluster:                clusterName,
 			SchedulingPolicySnapshotName: policyName,
-			ClusterDecision: fleetv1beta1.ClusterDecision{
+			ClusterDecision: placementv1beta1.ClusterDecision{
 				ClusterName: clusterName,
 				Selected:    true,
-				ClusterScore: &fleetv1beta1.ClusterScore{
+				ClusterScore: &placementv1beta1.ClusterScore{
 					TopologySpreadScore: &topologySpreadScore,
 					AffinityScore:       &affinityScore,
 				},
@@ -1606,7 +1607,7 @@ func TestPatchBindings(t *testing.T) {
 		t.Fatalf("patchBindings() = %v, want no error", err)
 	}
 
-	current := &fleetv1beta1.ClusterResourceBinding{}
+	current := &placementv1beta1.ClusterResourceBinding{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, current); err != nil {
 		t.Fatalf("Get binding (%s) = %v, want no error", bindingName, err)
 	}
@@ -1618,18 +1619,18 @@ func TestPatchBindings(t *testing.T) {
 
 // TestManipulateBindings tests the manipulateBindings method.
 func TestManipulateBindings(t *testing.T) {
-	toCreateBinding := &fleetv1beta1.ClusterResourceBinding{
+	toCreateBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 		},
 	}
-	toPatchBinding := &fleetv1beta1.ClusterResourceBinding{
+	toPatchBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            altBindingName,
 			ResourceVersion: resourceVersion,
 		},
 	}
-	toDeleteBinding := &fleetv1beta1.ClusterResourceBinding{
+	toDeleteBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: anotherBindingName,
 		},
@@ -1637,20 +1638,20 @@ func TestManipulateBindings(t *testing.T) {
 
 	topologySpreadScore := int32(0)
 	affinityScore := int32(1)
-	updatedBinding := &fleetv1beta1.ClusterResourceBinding{
+	updatedBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: altBindingName,
 			// Set the resource version; this is needed so that the calculated patch will not
 			// include the resource version field.
 			ResourceVersion: resourceVersion,
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
+		Spec: placementv1beta1.ResourceBindingSpec{
 			TargetCluster:                clusterName,
 			SchedulingPolicySnapshotName: policyName,
-			ClusterDecision: fleetv1beta1.ClusterDecision{
+			ClusterDecision: placementv1beta1.ClusterDecision{
 				ClusterName: clusterName,
 				Selected:    true,
-				ClusterScore: &fleetv1beta1.ClusterScore{
+				ClusterScore: &placementv1beta1.ClusterScore{
 					TopologySpreadScore: &topologySpreadScore,
 					AffinityScore:       &affinityScore,
 				},
@@ -1659,16 +1660,16 @@ func TestManipulateBindings(t *testing.T) {
 		},
 	}
 
-	unscheduledBinding := &fleetv1beta1.ClusterResourceBinding{
+	unscheduledBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: anotherBindingName,
 		},
-		Spec: fleetv1beta1.ResourceBindingSpec{
-			State: fleetv1beta1.BindingStateUnscheduled,
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
 		},
 	}
 
-	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -1685,20 +1686,20 @@ func TestManipulateBindings(t *testing.T) {
 
 	ctx := context.Background()
 
-	toCreate := []*fleetv1beta1.ClusterResourceBinding{toCreateBinding}
+	toCreate := []*placementv1beta1.ClusterResourceBinding{toCreateBinding}
 	toPatch := []*bindingWithPatch{
 		{
 			updated: updatedBinding,
 			patch:   client.MergeFrom(toPatchBinding),
 		},
 	}
-	toDelete := []*fleetv1beta1.ClusterResourceBinding{toDeleteBinding}
+	toDelete := []*placementv1beta1.ClusterResourceBinding{toDeleteBinding}
 	if err := f.manipulateBindings(ctx, policy, toCreate, toDelete, toPatch); err != nil {
 		t.Fatalf("manipulateBindings() = %v, want no error", err)
 	}
 
 	// Check if the requested binding has been created.
-	createdBinding := &fleetv1beta1.ClusterResourceBinding{}
+	createdBinding := &placementv1beta1.ClusterResourceBinding{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, createdBinding); err != nil {
 		t.Errorf("Get() binding %s = %v, want no error", bindingName, err)
 	}
@@ -1707,7 +1708,7 @@ func TestManipulateBindings(t *testing.T) {
 	}
 
 	// Check if the requested binding has been patched.
-	patchedBinding := &fleetv1beta1.ClusterResourceBinding{}
+	patchedBinding := &placementv1beta1.ClusterResourceBinding{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: altBindingName}, patchedBinding); err != nil {
 		t.Errorf("Get() binding %s = %v, want no error", altBindingName, err)
 	}
@@ -1716,7 +1717,7 @@ func TestManipulateBindings(t *testing.T) {
 	}
 
 	// Check if the requested binding has been deleted.
-	deletedBinding := &fleetv1beta1.ClusterResourceBinding{}
+	deletedBinding := &placementv1beta1.ClusterResourceBinding{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: anotherBindingName}, deletedBinding); err != nil {
 		t.Errorf("Get() binding %s = %v, want no error", anotherBindingName, err)
 	}
@@ -1737,11 +1738,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPluginName, "filtered")
 
 	crpGeneration := 1
-	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 			Annotations: map[string]string{
-				fleetv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration),
+				placementv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration),
 			},
 		},
 	}
@@ -1750,24 +1751,24 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 		name                              string
 		maxUnselectedClusterDecisionCount int
 		filtered                          []*filteredClusterWithStatus
-		existing                          [][]*fleetv1beta1.ClusterResourceBinding
-		wantDecisions                     []fleetv1beta1.ClusterDecision
+		existing                          [][]*placementv1beta1.ClusterResourceBinding
+		wantDecisions                     []placementv1beta1.ClusterDecision
 		wantCondition                     metav1.Condition
 	}{
 		{
 			name:                              "no filtered",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
-			existing: [][]*fleetv1beta1.ClusterResourceBinding{
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore1,
 									TopologySpreadScore: &topologySpreadScore1,
 								},
@@ -1775,15 +1776,15 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 							},
 						},
 					},
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altBindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: altClusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore2,
 									TopologySpreadScore: &topologySpreadScore2,
 								},
@@ -1793,11 +1794,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantDecisions: []fleetv1beta1.ClusterDecision{
+			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore1,
 						TopologySpreadScore: &topologySpreadScore1,
 					},
@@ -1806,7 +1807,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				{
 					ClusterName: altClusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore2,
 						TopologySpreadScore: &topologySpreadScore2,
 					},
@@ -1818,17 +1819,17 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 		{
 			name:                              "filtered and existing",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
-			existing: [][]*fleetv1beta1.ClusterResourceBinding{
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore1,
 									TopologySpreadScore: &topologySpreadScore1,
 								},
@@ -1836,15 +1837,15 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 							},
 						},
 					},
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altBindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: altClusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore2,
 									TopologySpreadScore: &topologySpreadScore2,
 								},
@@ -1856,7 +1857,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			},
 			filtered: []*filteredClusterWithStatus{
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: anotherClusterName,
 						},
@@ -1864,11 +1865,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
-			wantDecisions: []fleetv1beta1.ClusterDecision{
+			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore1,
 						TopologySpreadScore: &topologySpreadScore1,
 					},
@@ -1877,7 +1878,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				{
 					ClusterName: altClusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore2,
 						TopologySpreadScore: &topologySpreadScore2,
 					},
@@ -1899,17 +1900,17 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 		{
 			name:                              "too many filtered",
 			maxUnselectedClusterDecisionCount: 1,
-			existing: [][]*fleetv1beta1.ClusterResourceBinding{
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									AffinityScore:       &affinityScore1,
 									TopologySpreadScore: &topologySpreadScore1,
 								},
@@ -1921,7 +1922,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			},
 			filtered: []*filteredClusterWithStatus{
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altClusterName,
 						},
@@ -1929,7 +1930,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: anotherClusterName,
 						},
@@ -1937,11 +1938,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
-			wantDecisions: []fleetv1beta1.ClusterDecision{
+			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						AffinityScore:       &affinityScore1,
 						TopologySpreadScore: &topologySpreadScore1,
 					},
@@ -1978,7 +1979,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				t.Fatalf("updatePolicySnapshotStatusFrom() = %v, want no error", err)
 			}
 
-			updatedPolicy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{}
+			updatedPolicy := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
 			if err := f.client.Get(ctx, types.NamespacedName{Name: policyName}, updatedPolicy); err != nil {
 				t.Fatalf("Get policy snapshot, got %v, want no error", err)
 			}
@@ -1987,7 +1988,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				t.Errorf("policy snapshot status cluster decisions not equal (-got, +want): %s", diff)
 			}
 
-			updatedCondition := meta.FindStatusCondition(updatedPolicy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
+			updatedCondition := meta.FindStatusCondition(updatedPolicy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
 			if diff := cmp.Diff(updatedCondition, &tc.wantCondition, ignoredCondFields); diff != "" {
 				t.Errorf("policy snapshot scheduled condition not equal (-got, +want): %s", diff)
 			}
@@ -2003,7 +2004,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 func TestShouldDownscale(t *testing.T) {
 	testCases := []struct {
 		name      string
-		policy    *fleetv1beta1.ClusterSchedulingPolicySnapshot
+		policy    *placementv1beta1.ClusterSchedulingPolicySnapshot
 		desired   int
 		present   int
 		obsolete  int
@@ -2012,26 +2013,26 @@ func TestShouldDownscale(t *testing.T) {
 	}{
 		{
 			name: "should not downscale (pick all)",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickAllPlacementType,
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
 					},
 				},
 			},
 		},
 		{
 			name: "should not downscale (enough bindings)",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickNPlacementType,
 					},
 				},
 			},
@@ -2040,13 +2041,13 @@ func TestShouldDownscale(t *testing.T) {
 		},
 		{
 			name: "should downscale (not enough bindings)",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickNPlacementType,
 					},
 				},
 			},
@@ -2057,13 +2058,13 @@ func TestShouldDownscale(t *testing.T) {
 		},
 		{
 			name: "should downscale (obsolete bindings)",
-			policy: &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickNPlacementType,
 					},
 				},
 			},
@@ -2096,17 +2097,17 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		bindings []*fleetv1beta1.ClusterResourceBinding
-		want     []*fleetv1beta1.ClusterResourceBinding
+		bindings []*placementv1beta1.ClusterResourceBinding
+		want     []*placementv1beta1.ClusterResourceBinding
 	}{
 		{
 			name: "no scores assigned to any cluster",
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
 					},
 				},
@@ -2114,17 +2115,17 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
 					},
 				},
 			},
-			want: []*fleetv1beta1.ClusterResourceBinding{
+			want: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
 					},
 				},
@@ -2132,7 +2133,7 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
 					},
 				},
@@ -2140,15 +2141,15 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 		},
 		{
 			name: "no scores assigned to one cluster",
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2159,17 +2160,17 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
 					},
 				},
 			},
-			want: []*fleetv1beta1.ClusterResourceBinding{
+			want: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
 					},
 				},
@@ -2177,10 +2178,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2191,15 +2192,15 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 		},
 		{
 			name: "different scores",
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2210,10 +2211,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -2224,10 +2225,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: anotherBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: anotherClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore3,
 								AffinityScore:       &affinityScore3,
 							},
@@ -2235,15 +2236,15 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					},
 				},
 			},
-			want: []*fleetv1beta1.ClusterResourceBinding{
+			want: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: anotherBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: anotherClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore3,
 								AffinityScore:       &affinityScore3,
 							},
@@ -2254,10 +2255,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2268,10 +2269,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -2282,15 +2283,15 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 		},
 		{
 			name: "same score, different names",
-			bindings: []*fleetv1beta1.ClusterResourceBinding{
+			bindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2301,10 +2302,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2315,10 +2316,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: anotherBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: anotherClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2326,15 +2327,15 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					},
 				},
 			},
-			want: []*fleetv1beta1.ClusterResourceBinding{
+			want: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2345,10 +2346,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: anotherBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: anotherClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2359,10 +2360,10 @@ func TestSortByClusterScoreAndName(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: altBindingName,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: altClusterName,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
-							ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -2396,23 +2397,23 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 		name                              string
 		maxUnselectedClusterDecisionCount int
 		filtered                          []*filteredClusterWithStatus
-		existing                          [][]*fleetv1beta1.ClusterResourceBinding
-		want                              []fleetv1beta1.ClusterDecision
+		existing                          [][]*placementv1beta1.ClusterResourceBinding
+		want                              []placementv1beta1.ClusterDecision
 	}{
 		{
 			name:                              "no filtered clusters, small number of existing bindings",
 			maxUnselectedClusterDecisionCount: 20,
-			existing: [][]*fleetv1beta1.ClusterResourceBinding{
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									TopologySpreadScore: &topologySpreadScore1,
 									AffinityScore:       &affinityScore1,
 								},
@@ -2420,15 +2421,15 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 							},
 						},
 					},
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altBindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: altClusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									TopologySpreadScore: &topologySpreadScore2,
 									AffinityScore:       &affinityScore2,
 								},
@@ -2438,11 +2439,11 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterDecision{
+			want: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore1,
 						AffinityScore:       &affinityScore1,
 					},
@@ -2451,7 +2452,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				{
 					ClusterName: altClusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore2,
 						AffinityScore:       &affinityScore2,
 					},
@@ -2464,7 +2465,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 			maxUnselectedClusterDecisionCount: 20,
 			filtered: []*filteredClusterWithStatus{
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: anotherClusterName,
 						},
@@ -2472,17 +2473,17 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
-			existing: [][]*fleetv1beta1.ClusterResourceBinding{
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									TopologySpreadScore: &topologySpreadScore1,
 									AffinityScore:       &affinityScore1,
 								},
@@ -2490,15 +2491,15 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 							},
 						},
 					},
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altBindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: altClusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									TopologySpreadScore: &topologySpreadScore2,
 									AffinityScore:       &affinityScore2,
 								},
@@ -2508,11 +2509,11 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterDecision{
+			want: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore1,
 						AffinityScore:       &affinityScore1,
 					},
@@ -2521,7 +2522,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				{
 					ClusterName: altClusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore2,
 						AffinityScore:       &affinityScore2,
 					},
@@ -2539,7 +2540,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 			maxUnselectedClusterDecisionCount: 0,
 			filtered: []*filteredClusterWithStatus{
 				{
-					cluster: &fleetv1beta1.MemberCluster{
+					cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: anotherClusterName,
 						},
@@ -2547,17 +2548,17 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
-			existing: [][]*fleetv1beta1.ClusterResourceBinding{
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									TopologySpreadScore: &topologySpreadScore1,
 									AffinityScore:       &affinityScore1,
 								},
@@ -2565,15 +2566,15 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 							},
 						},
 					},
-					&fleetv1beta1.ClusterResourceBinding{
+					&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altBindingName,
 						},
-						Spec: fleetv1beta1.ResourceBindingSpec{
-							ClusterDecision: fleetv1beta1.ClusterDecision{
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: altClusterName,
 								Selected:    true,
-								ClusterScore: &fleetv1beta1.ClusterScore{
+								ClusterScore: &placementv1beta1.ClusterScore{
 									TopologySpreadScore: &topologySpreadScore2,
 									AffinityScore:       &affinityScore2,
 								},
@@ -2583,11 +2584,11 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterDecision{
+			want: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore1,
 						AffinityScore:       &affinityScore1,
 					},
@@ -2596,7 +2597,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				{
 					ClusterName: altClusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore2,
 						AffinityScore:       &affinityScore2,
 					},
@@ -2619,7 +2620,7 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 // TestNewSchedulingDecisionsFrom tests a special case in the newSchedulingDecisionsFrom function,
 // specifically the case where the number of new decisions exceeds the API limit.
 func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
-	wantSelectedAndUnselectedDecisons := make([]fleetv1beta1.ClusterDecision, 0, 1000)
+	wantSelectedAndUnselectedDecisons := make([]placementv1beta1.ClusterDecision, 0, 1000)
 	wantSelectedDecisions := generateClusterDecisions(980, 0, true)
 	wantUnselectedDecisions := generateClusterDecisions(20, 980, false)
 	wantSelectedAndUnselectedDecisons = append(wantSelectedAndUnselectedDecisons, wantSelectedDecisions...)
@@ -2629,13 +2630,13 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 		name                              string
 		maxUnselectedClusterDecisionCount int
 		filtered                          []*filteredClusterWithStatus
-		bindingSets                       [][]*fleetv1beta1.ClusterResourceBinding
-		wantDecisions                     []fleetv1beta1.ClusterDecision
+		bindingSets                       [][]*placementv1beta1.ClusterResourceBinding
+		wantDecisions                     []placementv1beta1.ClusterDecision
 	}{
 		{
 			name:                              "too many selected clusters",
 			maxUnselectedClusterDecisionCount: 20,
-			bindingSets: [][]*fleetv1beta1.ClusterResourceBinding{
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
 				generateResourceBindings(550, 0),
 				generateResourceBindings(550, 550),
 			},
@@ -2645,7 +2646,7 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 			name:                              "too many selected + unselected clusters",
 			maxUnselectedClusterDecisionCount: 50,
 			filtered:                          generatedFilterdClusterWithStatus(60, 980),
-			bindingSets: [][]*fleetv1beta1.ClusterResourceBinding{
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
 				generateResourceBindings(490, 0),
 				generateResourceBindings(490, 490),
 			},
@@ -2674,18 +2675,18 @@ func TestEqualDecisions(t *testing.T) {
 
 	testCases := []struct {
 		name    string
-		current []fleetv1beta1.ClusterDecision
-		desired []fleetv1beta1.ClusterDecision
+		current []placementv1beta1.ClusterDecision
+		desired []placementv1beta1.ClusterDecision
 		want    bool
 	}{
 		{
 			name:    "not equal (different lengths)",
-			current: []fleetv1beta1.ClusterDecision{},
-			desired: []fleetv1beta1.ClusterDecision{
+			current: []placementv1beta1.ClusterDecision{},
+			desired: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore1,
 						AffinityScore:       &affinityScore1,
 					},
@@ -2695,22 +2696,22 @@ func TestEqualDecisions(t *testing.T) {
 		},
 		{
 			name: "not equal (same length, different contents)",
-			current: []fleetv1beta1.ClusterDecision{
+			current: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore2,
 						AffinityScore:       &affinityScore2,
 					},
 					Reason: pickedByPolicyReason,
 				},
 			},
-			desired: []fleetv1beta1.ClusterDecision{
+			desired: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore1,
 						AffinityScore:       &affinityScore1,
 					},
@@ -2720,22 +2721,22 @@ func TestEqualDecisions(t *testing.T) {
 		},
 		{
 			name: "equal",
-			current: []fleetv1beta1.ClusterDecision{
+			current: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore3,
 						AffinityScore:       &affinityScore3,
 					},
 					Reason: pickedByPolicyReason,
 				},
 			},
-			desired: []fleetv1beta1.ClusterDecision{
+			desired: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
 					Selected:    true,
-					ClusterScore: &fleetv1beta1.ClusterScore{
+					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore1,
 						AffinityScore:       &affinityScore1,
 					},
@@ -2772,7 +2773,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 1, nil
 					},
 				},
@@ -2785,7 +2786,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 15, nil
 					},
 				},
@@ -2798,13 +2799,13 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 2, nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameB,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 1, nil
 					},
 				},
@@ -2817,13 +2818,13 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 0, FromError(fmt.Errorf("internal error"), dummyPostBatchPluginNameA)
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameB,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 1, nil
 					},
 				},
@@ -2836,7 +2837,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 0, NewNonErrorStatus(Skip, dummyPostBatchPluginNameA)
 					},
 				},
@@ -2849,7 +2850,7 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 1, NewNonErrorStatus(ClusterUnschedulable, dummyPostBatchPluginNameA)
 					},
 				},
@@ -2870,9 +2871,9 @@ func TestRunPostBatchPlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
 			state.desiredBatchSize = tc.desiredBatchSize
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -2904,7 +2905,7 @@ func TestRunPreScorePlugins(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 						return nil
 					},
 				},
@@ -2915,13 +2916,13 @@ func TestRunPreScorePlugins(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 						return nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameB,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return NewNonErrorStatus(Skip, dummyPreScorePluginNameB)
 					},
 				},
@@ -2933,7 +2934,7 @@ func TestRunPreScorePlugins(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return FromError(fmt.Errorf("internal error"), dummyPreScorePluginNameA)
 					},
 				},
@@ -2945,7 +2946,7 @@ func TestRunPreScorePlugins(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return NewNonErrorStatus(ClusterUnschedulable, dummyPreScorePluginNameA)
 					},
 				},
@@ -2965,8 +2966,8 @@ func TestRunPreScorePlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -3003,78 +3004,78 @@ func TestDownscale(t *testing.T) {
 
 	testCases := []struct {
 		name                 string
-		scheduled            []*fleetv1beta1.ClusterResourceBinding
-		bound                []*fleetv1beta1.ClusterResourceBinding
+		scheduled            []*placementv1beta1.ClusterResourceBinding
+		bound                []*placementv1beta1.ClusterResourceBinding
 		count                int
-		wantUpdatedScheduled []*fleetv1beta1.ClusterResourceBinding
-		wantUpdatedBound     []*fleetv1beta1.ClusterResourceBinding
-		wantUnscheduled      []*fleetv1beta1.ClusterResourceBinding
+		wantUpdatedScheduled []*placementv1beta1.ClusterResourceBinding
+		wantUpdatedBound     []*placementv1beta1.ClusterResourceBinding
+		wantUnscheduled      []*placementv1beta1.ClusterResourceBinding
 		expectedToFail       bool
 	}{
 		{
 			name: "downscale count is zero",
-			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+			scheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateScheduled,
 					},
 				},
 			},
-			bound: []*fleetv1beta1.ClusterResourceBinding{
+			bound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
 			count: 0,
-			wantUpdatedScheduled: []*fleetv1beta1.ClusterResourceBinding{
+			wantUpdatedScheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateScheduled,
 					},
 				},
 			},
-			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+			wantUpdatedBound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
-			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{},
+			wantUnscheduled: []*placementv1beta1.ClusterResourceBinding{},
 		},
 		{
 			name: "invalid downscale count",
-			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+			scheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateScheduled,
 					},
 				},
 			},
-			bound: []*fleetv1beta1.ClusterResourceBinding{
+			bound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
@@ -3083,18 +3084,18 @@ func TestDownscale(t *testing.T) {
 		},
 		{
 			name: "trim part of scheduled bindings only",
-			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+			scheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3106,13 +3107,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3124,13 +3125,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3139,29 +3140,29 @@ func TestDownscale(t *testing.T) {
 					},
 				},
 			},
-			bound: []*fleetv1beta1.ClusterResourceBinding{
+			bound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
 			count: 2,
-			wantUpdatedScheduled: []*fleetv1beta1.ClusterResourceBinding{
+			wantUpdatedScheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3170,28 +3171,28 @@ func TestDownscale(t *testing.T) {
 					},
 				},
 			},
-			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+			wantUpdatedBound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
-			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+			wantUnscheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3203,13 +3204,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3221,18 +3222,18 @@ func TestDownscale(t *testing.T) {
 		},
 		{
 			name: "trim all scheduled bindings",
-			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+			scheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3244,13 +3245,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3262,13 +3263,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3277,40 +3278,40 @@ func TestDownscale(t *testing.T) {
 					},
 				},
 			},
-			bound: []*fleetv1beta1.ClusterResourceBinding{
+			bound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
 			count:                3,
 			wantUpdatedScheduled: nil,
-			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+			wantUpdatedBound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State: fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State: placementv1beta1.BindingStateBound,
 					},
 				},
 			},
-			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+			wantUnscheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3322,13 +3323,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3340,13 +3341,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3358,18 +3359,18 @@ func TestDownscale(t *testing.T) {
 		},
 		{
 			name: "trim all scheduled bindings + part of bound bindings",
-			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+			scheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3381,13 +3382,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3399,13 +3400,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3414,18 +3415,18 @@ func TestDownscale(t *testing.T) {
 					},
 				},
 			},
-			bound: []*fleetv1beta1.ClusterResourceBinding{
+			bound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName5,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName5,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3437,13 +3438,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName5,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName6,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName6,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3455,13 +3456,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName6,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName4,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName4,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3472,18 +3473,18 @@ func TestDownscale(t *testing.T) {
 			},
 			count:                4,
 			wantUpdatedScheduled: nil,
-			wantUpdatedBound: []*fleetv1beta1.ClusterResourceBinding{
+			wantUpdatedBound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName6,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName4,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName4,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3495,13 +3496,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName4,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName5,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName5,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3510,18 +3511,18 @@ func TestDownscale(t *testing.T) {
 					},
 				},
 			},
-			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+			wantUnscheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3533,13 +3534,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3551,13 +3552,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3569,13 +3570,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName5,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName6,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName6,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore2,
 								AffinityScore:       &affinityScore2,
 							},
@@ -3587,18 +3588,18 @@ func TestDownscale(t *testing.T) {
 		},
 		{
 			name: "trim all bindings",
-			scheduled: []*fleetv1beta1.ClusterResourceBinding{
+			scheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3610,13 +3611,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateScheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3625,18 +3626,18 @@ func TestDownscale(t *testing.T) {
 					},
 				},
 			},
-			bound: []*fleetv1beta1.ClusterResourceBinding{
+			bound: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateBound,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3648,18 +3649,18 @@ func TestDownscale(t *testing.T) {
 			count:                3,
 			wantUpdatedScheduled: nil,
 			wantUpdatedBound:     nil,
-			wantUnscheduled: []*fleetv1beta1.ClusterResourceBinding{
+			wantUnscheduled: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName1,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName1,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName1,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3671,13 +3672,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName2,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName2,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName2,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3689,13 +3690,13 @@ func TestDownscale(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: bindingName3,
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
-						State:         fleetv1beta1.BindingStateUnscheduled,
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateUnscheduled,
 						TargetCluster: clusterName3,
-						ClusterDecision: fleetv1beta1.ClusterDecision{
+						ClusterDecision: placementv1beta1.ClusterDecision{
 							ClusterName: clusterName3,
 							Selected:    true,
-							ClusterScore: &fleetv1beta1.ClusterScore{
+							ClusterScore: &placementv1beta1.ClusterScore{
 								TopologySpreadScore: &topologySpreadScore1,
 								AffinityScore:       &affinityScore1,
 							},
@@ -3743,7 +3744,7 @@ func TestDownscale(t *testing.T) {
 
 			// Verify that some bindings have been set to the unscheduled state.
 			for _, wantUnscheduledBinding := range tc.wantUnscheduled {
-				unscheduledBinding := &fleetv1beta1.ClusterResourceBinding{}
+				unscheduledBinding := &placementv1beta1.ClusterResourceBinding{}
 				if err := fakeClient.Get(ctx, types.NamespacedName{Name: wantUnscheduledBinding.Name}, unscheduledBinding); err != nil {
 					t.Errorf("Get() binding %s = %v, want no error", wantUnscheduledBinding.Name, err)
 				}
@@ -3773,7 +3774,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return &ClusterScore{
 							TopologySpreadScore: 1,
 							AffinityScore:       20,
@@ -3793,7 +3794,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return &ClusterScore{
 							TopologySpreadScore: 1,
 							AffinityScore:       20,
@@ -3802,7 +3803,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginB,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return &ClusterScore{
 							TopologySpreadScore: 0,
 							AffinityScore:       10,
@@ -3826,7 +3827,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return &ClusterScore{
 							TopologySpreadScore: 1,
 							AffinityScore:       20,
@@ -3835,7 +3836,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginB,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return &ClusterScore{
 							TopologySpreadScore: 0,
 							AffinityScore:       10,
@@ -3856,7 +3857,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginA)
 					},
 				},
@@ -3868,7 +3869,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return nil, NewNonErrorStatus(Skip, dummyScorePluginA)
 					},
 				},
@@ -3880,7 +3881,7 @@ func TestRunScorePluginsFor(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return nil, NewNonErrorStatus(ClusterUnschedulable, dummyScorePluginA)
 					},
 				},
@@ -3900,16 +3901,16 @@ func TestRunScorePluginsFor(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
 			for _, name := range tc.skippedPluginNames {
 				state.skippedScorePlugins.Insert(name)
 			}
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
 			}
-			cluster := &fleetv1beta1.MemberCluster{
+			cluster := &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
@@ -3932,7 +3933,7 @@ func TestRunScorePlugins(t *testing.T) {
 	dummyScorePluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
 	dummyScorePluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
 
-	clusters := []*fleetv1beta1.MemberCluster{
+	clusters := []*clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName,
@@ -3953,7 +3954,7 @@ func TestRunScorePlugins(t *testing.T) {
 	testCases := []struct {
 		name               string
 		scorePlugins       []ScorePlugin
-		clusters           []*fleetv1beta1.MemberCluster
+		clusters           []*clusterv1beta1.MemberCluster
 		wantScoredClusters ScoredClusters
 		expectedToFail     bool
 	}{
@@ -3962,7 +3963,7 @@ func TestRunScorePlugins(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -3982,7 +3983,7 @@ func TestRunScorePlugins(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameB,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -4031,7 +4032,7 @@ func TestRunScorePlugins(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -4051,7 +4052,7 @@ func TestRunScorePlugins(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameB,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -4076,7 +4077,7 @@ func TestRunScorePlugins(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -4095,7 +4096,7 @@ func TestRunScorePlugins(t *testing.T) {
 					},
 				},
 			},
-			clusters:           []*fleetv1beta1.MemberCluster{},
+			clusters:           []*clusterv1beta1.MemberCluster{},
 			wantScoredClusters: ScoredClusters{},
 		},
 	}
@@ -4112,8 +4113,8 @@ func TestRunScorePlugins(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			state := NewCycleState([]fleetv1beta1.MemberCluster{}, []*fleetv1beta1.ClusterResourceBinding{})
-			policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			state := NewCycleState([]clusterv1beta1.MemberCluster{}, []*placementv1beta1.ClusterResourceBinding{})
+			policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policyName,
 				},
@@ -4186,7 +4187,7 @@ func TestCalcNumOfClustersToSelect(t *testing.T) {
 func TestPickTopNScoredClusters(t *testing.T) {
 	scs := ScoredClusters{
 		{
-			Cluster: &fleetv1beta1.MemberCluster{
+			Cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
@@ -4198,7 +4199,7 @@ func TestPickTopNScoredClusters(t *testing.T) {
 			},
 		},
 		{
-			Cluster: &fleetv1beta1.MemberCluster{
+			Cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: altClusterName,
 				},
@@ -4235,7 +4236,7 @@ func TestPickTopNScoredClusters(t *testing.T) {
 			picks:          10,
 			wantScoredClusters: ScoredClusters{
 				{
-					Cluster: &fleetv1beta1.MemberCluster{
+					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altClusterName,
 						},
@@ -4247,7 +4248,7 @@ func TestPickTopNScoredClusters(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &fleetv1beta1.MemberCluster{
+					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: clusterName,
 						},
@@ -4266,7 +4267,7 @@ func TestPickTopNScoredClusters(t *testing.T) {
 			picks:          1,
 			wantScoredClusters: ScoredClusters{
 				{
-					Cluster: &fleetv1beta1.MemberCluster{
+					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: altClusterName,
 						},
@@ -4346,25 +4347,25 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 	clusterName5 := fmt.Sprintf(clusterNameTemplate, 5)
 	clusterName6 := fmt.Sprintf(clusterNameTemplate, 6)
 
-	current := []fleetv1beta1.MemberCluster{
+	current := []clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName1,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateJoin,
+			Spec: clusterv1beta1.MemberClusterSpec{
+				State: clusterv1beta1.ClusterStateJoin,
 			},
-			Status: fleetv1beta1.MemberClusterStatus{
-				AgentStatus: []fleetv1beta1.AgentStatus{
+			Status: clusterv1beta1.MemberClusterStatus{
+				AgentStatus: []clusterv1beta1.AgentStatus{
 					{
-						Type: fleetv1beta1.MemberAgent,
+						Type: clusterv1beta1.MemberAgent,
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(fleetv1beta1.AgentJoined),
+								Type:   string(clusterv1beta1.AgentJoined),
 								Status: metav1.ConditionTrue,
 							},
 							{
-								Type:               string(fleetv1beta1.AgentHealthy),
+								Type:               string(clusterv1beta1.AgentHealthy),
 								Status:             metav1.ConditionFalse,
 								LastTransitionTime: metav1.NewTime(time.Now()),
 							},
@@ -4378,20 +4379,20 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName2,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateJoin,
+			Spec: clusterv1beta1.MemberClusterSpec{
+				State: clusterv1beta1.ClusterStateJoin,
 			},
-			Status: fleetv1beta1.MemberClusterStatus{
-				AgentStatus: []fleetv1beta1.AgentStatus{
+			Status: clusterv1beta1.MemberClusterStatus{
+				AgentStatus: []clusterv1beta1.AgentStatus{
 					{
-						Type: fleetv1beta1.MemberAgent,
+						Type: clusterv1beta1.MemberAgent,
 						Conditions: []metav1.Condition{
 							{
-								Type:   string(fleetv1beta1.AgentJoined),
+								Type:   string(clusterv1beta1.AgentJoined),
 								Status: metav1.ConditionTrue,
 							},
 							{
-								Type:               string(fleetv1beta1.AgentHealthy),
+								Type:               string(clusterv1beta1.AgentHealthy),
 								Status:             metav1.ConditionFalse,
 								LastTransitionTime: metav1.NewTime(time.Now()),
 							},
@@ -4410,8 +4411,8 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName4,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateLeave,
+			Spec: clusterv1beta1.MemberClusterSpec{
+				State: clusterv1beta1.ClusterStateLeave,
 			},
 		},
 	}
@@ -4419,7 +4420,7 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 	testCases := []struct {
 		name         string
 		target       []string
-		wantValid    []*fleetv1beta1.MemberCluster
+		wantValid    []*clusterv1beta1.MemberCluster
 		wantInvalid  []*invalidClusterWithReason
 		wantNotFound []string
 	}{
@@ -4427,7 +4428,7 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 			// This case normally should never occur.
 			name:         "no target",
 			target:       []string{},
-			wantValid:    []*fleetv1beta1.MemberCluster{},
+			wantValid:    []*clusterv1beta1.MemberCluster{},
 			wantInvalid:  []*invalidClusterWithReason{},
 			wantNotFound: []string{},
 		},
@@ -4437,7 +4438,7 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 				clusterName1,
 				clusterName2,
 			},
-			wantValid: []*fleetv1beta1.MemberCluster{
+			wantValid: []*clusterv1beta1.MemberCluster{
 				&current[0],
 				&current[1],
 			},
@@ -4450,7 +4451,7 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 				clusterName3,
 				clusterName4,
 			},
-			wantValid: []*fleetv1beta1.MemberCluster{},
+			wantValid: []*clusterv1beta1.MemberCluster{},
 			wantInvalid: []*invalidClusterWithReason{
 				{
 					cluster: &current[2],
@@ -4469,7 +4470,7 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 				clusterName5,
 				clusterName6,
 			},
-			wantValid:   []*fleetv1beta1.MemberCluster{},
+			wantValid:   []*clusterv1beta1.MemberCluster{},
 			wantInvalid: []*invalidClusterWithReason{},
 			wantNotFound: []string{
 				clusterName5,
@@ -4483,7 +4484,7 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 				clusterName3,
 				clusterName5,
 			},
-			wantValid: []*fleetv1beta1.MemberCluster{
+			wantValid: []*clusterv1beta1.MemberCluster{
 				&current[0],
 			},
 			wantInvalid: []*invalidClusterWithReason{

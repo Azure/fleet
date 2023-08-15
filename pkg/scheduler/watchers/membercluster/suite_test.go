@@ -21,7 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/test/utils/keycollector"
@@ -36,7 +37,7 @@ var (
 )
 
 var (
-	defaultResourceSelectors = []fleetv1beta1.ClusterResourceSelector{
+	defaultResourceSelectors = []placementv1beta1.ClusterResourceSelector{
 		{
 			Group:   "core",
 			Kind:    "Namespace",
@@ -47,23 +48,23 @@ var (
 )
 
 var (
-	newMemberCluster = func(name string, state fleetv1beta1.ClusterState) *fleetv1beta1.MemberCluster {
-		return &fleetv1beta1.MemberCluster{
+	newMemberCluster = func(name string, state clusterv1beta1.ClusterState) *clusterv1beta1.MemberCluster {
+		return &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
+			Spec: clusterv1beta1.MemberClusterSpec{
 				State: state,
 			},
 		}
 	}
 
-	newCRP = func(name string, policy *fleetv1beta1.PlacementPolicy) *fleetv1beta1.ClusterResourcePlacement {
-		return &fleetv1beta1.ClusterResourcePlacement{
+	newCRP = func(name string, policy *placementv1beta1.PlacementPolicy) *placementv1beta1.ClusterResourcePlacement {
+		return &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 			},
-			Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				ResourceSelectors: defaultResourceSelectors,
 				Policy:            policy,
 			},
@@ -80,31 +81,31 @@ func TestAPIs(t *testing.T) {
 // setupResources adds resources required for this test suite to the hub cluster.
 func setupResources() {
 	// Create a member cluster that has just joined the fleet.
-	Expect(hubClient.Create(ctx, newMemberCluster(clusterName1, fleetv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
+	Expect(hubClient.Create(ctx, newMemberCluster(clusterName1, clusterv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
 	// Create a member cluster that has left the fleet.
-	Expect(hubClient.Create(ctx, newMemberCluster(clusterName2, fleetv1beta1.ClusterStateLeave))).Should(Succeed(), "Failed to create member cluster")
+	Expect(hubClient.Create(ctx, newMemberCluster(clusterName2, clusterv1beta1.ClusterStateLeave))).Should(Succeed(), "Failed to create member cluster")
 
 	// Create a CRP that has no placement policy specified.
 	Expect(hubClient.Create(ctx, newCRP(crpName1, nil))).Should(Succeed(), "Failed to create CRP")
 	// Create a CRP that is of the PickAll placement type.
-	Expect(hubClient.Create(ctx, newCRP(crpName2, &fleetv1beta1.PlacementPolicy{
-		PlacementType: fleetv1beta1.PickAllPlacementType,
+	Expect(hubClient.Create(ctx, newCRP(crpName2, &placementv1beta1.PlacementPolicy{
+		PlacementType: placementv1beta1.PickAllPlacementType,
 	}))).Should(Succeed(), "Failed to create CRP")
 	// Create a CRP that is of the PickFixed placement type and has not been fully scheduled.
-	Expect(hubClient.Create(ctx, newCRP(crpName3, &fleetv1beta1.PlacementPolicy{
-		PlacementType: fleetv1beta1.PickFixedPlacementType,
+	Expect(hubClient.Create(ctx, newCRP(crpName3, &placementv1beta1.PlacementPolicy{
+		PlacementType: placementv1beta1.PickFixedPlacementType,
 		ClusterNames:  []string{clusterName1},
 	}))).Should(Succeed(), "Failed to create CRP")
 
 	// Create a CRP that is of the PickFixed placement type and has been fully scheduled.
-	crp := newCRP(crpName4, &fleetv1beta1.PlacementPolicy{
-		PlacementType: fleetv1beta1.PickFixedPlacementType,
+	crp := newCRP(crpName4, &placementv1beta1.PlacementPolicy{
+		PlacementType: placementv1beta1.PickFixedPlacementType,
 		ClusterNames:  []string{clusterName1},
 	})
 	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
 	// Update the status.
 	meta.SetStatusCondition(&crp.Status.Conditions, metav1.Condition{
-		Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+		Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: crp.Generation,
 		Reason:             dummyReason,
@@ -112,14 +113,14 @@ func setupResources() {
 	Expect(hubClient.Status().Update(ctx, crp)).Should(Succeed(), "Failed to update CRP status")
 
 	// Create a CRP that is of the PickN placement type and has been fully scheduled.
-	crp = newCRP(crpName5, &fleetv1beta1.PlacementPolicy{
-		PlacementType:    fleetv1beta1.PickNPlacementType,
+	crp = newCRP(crpName5, &placementv1beta1.PlacementPolicy{
+		PlacementType:    placementv1beta1.PickNPlacementType,
 		NumberOfClusters: &numOfClusters,
 	})
 	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
 	// Update the status.
 	meta.SetStatusCondition(&crp.Status.Conditions, metav1.Condition{
-		Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+		Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: crp.Generation,
 		Reason:             dummyReason,
@@ -127,8 +128,8 @@ func setupResources() {
 	Expect(hubClient.Status().Update(ctx, crp)).Should(Succeed(), "Failed to update CRP status")
 
 	// Create a CRP that is of the PickN placement type and has not been fully scheduled.
-	Expect(hubClient.Create(ctx, newCRP(crpName6, &fleetv1beta1.PlacementPolicy{
-		PlacementType:    fleetv1beta1.PickNPlacementType,
+	Expect(hubClient.Create(ctx, newCRP(crpName6, &placementv1beta1.PlacementPolicy{
+		PlacementType:    placementv1beta1.PickNPlacementType,
 		NumberOfClusters: &numOfClusters,
 	}))).Should(Succeed(), "Failed to create CRP")
 }
@@ -150,7 +151,7 @@ var _ = BeforeSuite(func() {
 	Expect(hubCfg).ToNot(BeNil(), "Hub cluster configuration is nil")
 
 	// Add custom APIs to the runtime scheme.
-	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	// Set up a client for the hub cluster..
 	hubClient, err = client.New(hubCfg, client.Options{Scheme: scheme.Scheme})

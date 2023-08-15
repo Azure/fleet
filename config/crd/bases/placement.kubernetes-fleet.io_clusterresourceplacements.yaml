@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterresourceplacements.kubernetes-fleet.io
+  name: clusterresourceplacements.placement.kubernetes-fleet.io
 spec:
-  group: kubernetes-fleet.io
+  group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet-workload
@@ -559,7 +559,8 @@ spec:
                   are N placement statuses where N = NumberOfClusters; Or in the pickFixed
                   case, there are N placement statuses where N = ClusterNames. In
                   these cases, some of them may not have assigned clusters when we
-                  cannot fill the required number of clusters.
+                  cannot fill the required number of clusters. TODO, For pickAll type,
+                  considering providing unselected clusters info.
                 items:
                   description: ResourcePlacementStatus represents the placement status
                     of selected resources for one target cluster.

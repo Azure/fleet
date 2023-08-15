@@ -18,7 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 const (
@@ -73,7 +74,7 @@ var (
 
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
-	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
+	if err := placementv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
 	}
 
@@ -93,7 +94,7 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName2}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the labels
@@ -118,11 +119,11 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName2}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the spec as join
-			memberCluster.Spec.State = fleetv1beta1.ClusterStateJoin
+			memberCluster.Spec.State = clusterv1beta1.ClusterStateJoin
 			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster spec")
 		})
 
@@ -141,22 +142,22 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the status; mark the cluster as ready.
-			memberCluster.Status.AgentStatus = []fleetv1beta1.AgentStatus{
+			memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
 				{
-					Type: fleetv1beta1.MemberAgent,
+					Type: clusterv1beta1.MemberAgent,
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.AgentJoined),
+							Type:               string(clusterv1beta1.AgentJoined),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(time.Now()),
 							Reason:             dummyReason,
 						},
 						{
-							Type:               string(fleetv1beta1.AgentHealthy),
+							Type:               string(clusterv1beta1.AgentHealthy),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(time.Now()),
 							Reason:             dummyReason,
@@ -183,7 +184,7 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the labels.
@@ -208,22 +209,22 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the status; mark the cluster as out of sync.
-			memberCluster.Status.AgentStatus = []fleetv1beta1.AgentStatus{
+			memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
 				{
-					Type: fleetv1beta1.MemberAgent,
+					Type: clusterv1beta1.MemberAgent,
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.AgentJoined),
+							Type:               string(clusterv1beta1.AgentJoined),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour)),
 							Reason:             dummyReason,
 						},
 						{
-							Type:               string(fleetv1beta1.AgentHealthy),
+							Type:               string(clusterv1beta1.AgentHealthy),
 							Status:             metav1.ConditionFalse,
 							LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour)),
 							Reason:             dummyReason,
@@ -250,22 +251,22 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the status; mark the cluster as ready.
-			memberCluster.Status.AgentStatus = []fleetv1beta1.AgentStatus{
+			memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
 				{
-					Type: fleetv1beta1.MemberAgent,
+					Type: clusterv1beta1.MemberAgent,
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.AgentJoined),
+							Type:               string(clusterv1beta1.AgentJoined),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(time.Now()),
 							Reason:             dummyReason,
 						},
 						{
-							Type:               string(fleetv1beta1.AgentHealthy),
+							Type:               string(clusterv1beta1.AgentHealthy),
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.NewTime(time.Now()),
 							Reason:             dummyReason,
@@ -292,11 +293,11 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			// Retrieve the cluster.
-			memberCluster := &fleetv1beta1.MemberCluster{}
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Update the spec as leave.
-			memberCluster.Spec.State = fleetv1beta1.ClusterStateLeave
+			memberCluster.Spec.State = clusterv1beta1.ClusterStateLeave
 			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster spec")
 		})
 

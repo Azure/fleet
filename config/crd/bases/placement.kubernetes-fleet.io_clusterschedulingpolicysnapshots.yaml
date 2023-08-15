@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.4
-  name: clusterschedulingpolicysnapshots.kubernetes-fleet.io
+  name: clusterschedulingpolicysnapshots.placement.kubernetes-fleet.io
 spec:
-  group: kubernetes-fleet.io
+  group: placement.kubernetes-fleet.io
   names:
     categories:
     - fleet-workload
