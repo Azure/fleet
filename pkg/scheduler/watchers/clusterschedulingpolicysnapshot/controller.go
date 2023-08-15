@@ -26,10 +26,10 @@ import (
 
 // Reconciler reconciles the change in scheduling policy snapshots.
 type Reconciler struct {
-	// client is the client the controller uses to access the hub cluster.
-	client client.Client
-	// schedulerWorkqueue is the workqueue in use by the scheduler.
-	schedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueueWriter
+	// Client is the client the controller uses to access the hub cluster.
+	Client client.Client
+	// SchedulerWorkqueue is the workqueue in use by the scheduler.
+	SchedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueueWriter
 }
 
 // Reconcile reconciles the cluster scheduling policy snapshot.
@@ -44,7 +44,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Retrieve the policy snapshot.
 	policySnapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{}
-	if err := r.client.Get(ctx, req.NamespacedName, policySnapshot); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, policySnapshot); err != nil {
 		klog.ErrorS(err, "Failed to get cluster scheduling policy snapshot", "clusterSchedulingPolicySnapshot", policySnapshotRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 	}
@@ -98,7 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// Enqueue the CRP name for scheduler processing.
-	r.schedulerWorkqueue.AddRateLimited(queue.ClusterResourcePlacementKey(crpName))
+	r.SchedulerWorkqueue.AddRateLimited(queue.ClusterResourcePlacementKey(crpName))
 
 	// The reconciliation loop ends.
 	return ctrl.Result{}, nil
