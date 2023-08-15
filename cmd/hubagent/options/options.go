@@ -87,6 +87,7 @@ func NewOptions() *Options {
 		ConcurrentClusterPlacementSyncs: 1,
 		ConcurrentResourceChangeSyncs:   1,
 		ConcurrentMemberClusterSyncs:    1,
+		EnableV1Alpha1APIs:              true,
 	}
 }
 

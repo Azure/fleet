@@ -105,7 +105,6 @@ var _ = BeforeSuite(func() {
 	By("Setup custom controllers")
 	opts := options.NewOptions()
 	opts.LeaderElection.LeaderElect = false
-	opts.EnableV1Alpha1APIs = true
 	err = workload.SetupControllers(ctx, mgr, cfg, opts)
 	Expect(err).Should(Succeed())
 

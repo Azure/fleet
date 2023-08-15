@@ -70,21 +70,10 @@ func init() {
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.WorkApplyTime)
 }
 
-var (
-	handleExitFunc = func() {
-		klog.Flush()
-	}
-
-	exitWithErrorFunc = func() {
-		handleExitFunc()
-		os.Exit(1)
-	}
-)
-
 func main() {
 	flag.Parse()
 	utilrand.Seed(time.Now().UnixNano())
-	defer handleExitFunc()
+	defer klog.Flush()
 
 	flag.VisitAll(func(f *flag.Flag) {
 		klog.InfoS("flag:", "name", f.Name, "value", f.Value)
@@ -93,25 +82,25 @@ func main() {
 	// Validate flags
 	if !*enableV1Alpha1APIs && !*enableV1Beta1APIs {
 		klog.ErrorS(errors.New("either enable-v1alpha1-apis or enable-v1beta1-apis is required"), "invalid APIs flags")
-		exitWithErrorFunc()
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
 		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
-		exitWithErrorFunc()
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
 	if err != nil {
 		klog.ErrorS(err, "error has occurred building kubernetes client configuration for hub")
-		exitWithErrorFunc()
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
 		klog.ErrorS(errors.New("member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
-		exitWithErrorFunc()
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
@@ -143,7 +132,7 @@ func main() {
 
 	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
 		klog.ErrorS(err, "problem running controllers")
-		exitWithErrorFunc()
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 }
 

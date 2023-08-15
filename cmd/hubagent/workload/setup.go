@@ -26,11 +26,13 @@ import (
 	"go.goms.io/fleet/pkg/controllers/workgenerator"
 	"go.goms.io/fleet/pkg/resourcewatcher"
 	"go.goms.io/fleet/pkg/scheduler"
+	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/profile"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	schedulercrpwatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
 	schedulercspswatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
+	"go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -204,7 +206,16 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 			klog.ErrorS(err, "Unable to set up clusterSchedulingPolicySnapshot watcher for scheduler")
 			return err
 		}
-		// TODO add the membercluster watcher for scheduler
+
+		klog.Info("Setting up the memberCluster watcher for scheduler")
+		if err := (&membercluster.Reconciler{
+			Client:                    mgr.GetClient(),
+			SchedulerWorkQueue:        defaultSchedulingQueue,
+			ClusterEligibilityChecker: clustereligibilitychecker.New(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "Unable to set up memberCluster watcher for scheduler")
+			return err
+		}
 	}
 
 	// Set up a runner that starts all the custom controllers we created above
