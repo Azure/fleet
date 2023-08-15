@@ -152,8 +152,9 @@ var _ = BeforeSuite(func() {
 
 	// Add custom APIs to the runtime scheme.
 	Expect(placementv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(clusterv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
-	// Set up a client for the hub cluster..
+	// Set up a client for the hub cluster.
 	hubClient, err = client.New(hubCfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred(), "Failed to create hub cluster client")
 	Expect(hubClient).ToNot(BeNil(), "Hub cluster client is nil")

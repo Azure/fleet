@@ -22,7 +22,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var (
@@ -58,9 +59,11 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 
-		err = fleetv1beta1.AddToScheme(scheme.Scheme)
+		// register types to scheme
+		err = placementv1beta1.AddToScheme(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
-
+		err = clusterv1beta1.AddToScheme(scheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
 		err = workv1alpha1.AddToScheme(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
 

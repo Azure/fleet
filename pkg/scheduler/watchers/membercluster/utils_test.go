@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 const (
@@ -35,42 +35,42 @@ var (
 func TestIsPickNCRPFullyScheduled(t *testing.T) {
 	testCases := []struct {
 		name string
-		crp  *fleetv1beta1.ClusterResourcePlacement
+		crp  *placementv1beta1.ClusterResourcePlacement
 		want bool
 	}{
 		{
 			name: "no scheduled condition",
-			crp: &fleetv1beta1.ClusterResourcePlacement{
+			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType:    fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
 						NumberOfClusters: &numOfClusters,
 					},
 				},
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
 					Conditions: []metav1.Condition{},
 				},
 			},
 		},
 		{
 			name: "scheduled condition is false",
-			crp: &fleetv1beta1.ClusterResourcePlacement{
+			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: crpName,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType:    fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
 						NumberOfClusters: &numOfClusters,
 					},
 				},
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Status: metav1.ConditionFalse,
 						},
 					},
@@ -79,21 +79,21 @@ func TestIsPickNCRPFullyScheduled(t *testing.T) {
 		},
 		{
 			name: "scheduled condition is true, observed generation is out of date",
-			crp: &fleetv1beta1.ClusterResourcePlacement{
+			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       crpName,
 					Generation: 1,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType:    fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
 						NumberOfClusters: &numOfClusters,
 					},
 				},
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 0,
 						},
@@ -103,21 +103,21 @@ func TestIsPickNCRPFullyScheduled(t *testing.T) {
 		},
 		{
 			name: "fully scheduled",
-			crp: &fleetv1beta1.ClusterResourcePlacement{
+			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       crpName,
 					Generation: 1,
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType:    fleetv1beta1.PickNPlacementType,
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
 						NumberOfClusters: &numOfClusters,
 					},
 				},
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+				Status: placementv1beta1.ClusterResourcePlacementStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+							Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 1,
 						},
@@ -142,19 +142,19 @@ func TestIsPickNCRPFullyScheduled(t *testing.T) {
 func TestClassifyCRPs(t *testing.T) {
 	testCases := []struct {
 		name string
-		crps []fleetv1beta1.ClusterResourcePlacement
-		want []fleetv1beta1.ClusterResourcePlacement
+		crps []placementv1beta1.ClusterResourcePlacement
+		want []placementv1beta1.ClusterResourcePlacement
 	}{
 		{
 			name: "single crp, no policy",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{
+			want: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
@@ -164,25 +164,25 @@ func TestClassifyCRPs(t *testing.T) {
 		},
 		{
 			name: "single crp, fixed list of clusters, not fully scheduled",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
 							ClusterNames: []string{clusterName1},
 						},
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{
+			want: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
 							ClusterNames: []string{clusterName1},
 						},
 					},
@@ -191,21 +191,21 @@ func TestClassifyCRPs(t *testing.T) {
 		},
 		{
 			name: "single crp, fixed list of clusters, fully scheduled",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       crpName,
 						Generation: 1,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
 							ClusterNames: []string{clusterName1},
 						},
 					},
-					Status: fleetv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.ClusterResourcePlacementStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+								Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1,
 							},
@@ -213,30 +213,30 @@ func TestClassifyCRPs(t *testing.T) {
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{},
+			want: []placementv1beta1.ClusterResourcePlacement{},
 		},
 		{
 			name: "single crp, pick all placement type",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType: fleetv1beta1.PickAllPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType: placementv1beta1.PickAllPlacementType,
 						},
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{
+			want: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType: fleetv1beta1.PickAllPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType: placementv1beta1.PickAllPlacementType,
 						},
 					},
 				},
@@ -244,27 +244,27 @@ func TestClassifyCRPs(t *testing.T) {
 		},
 		{
 			name: "single crp, pick N placement type, not fully scheduled",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType:    fleetv1beta1.PickNPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType:    placementv1beta1.PickNPlacementType,
 							NumberOfClusters: &numOfClusters,
 						},
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{
+			want: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType:    fleetv1beta1.PickNPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType:    placementv1beta1.PickNPlacementType,
 							NumberOfClusters: &numOfClusters,
 						},
 					},
@@ -273,22 +273,22 @@ func TestClassifyCRPs(t *testing.T) {
 		},
 		{
 			name: "single crp, pick N placement type, fully scheduled",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       crpName,
 						Generation: 1,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType:    fleetv1beta1.PickNPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType:    placementv1beta1.PickNPlacementType,
 							NumberOfClusters: &numOfClusters,
 						},
 					},
-					Status: fleetv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.ClusterResourcePlacementStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+								Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1,
 							},
@@ -296,17 +296,17 @@ func TestClassifyCRPs(t *testing.T) {
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{},
+			want: []placementv1beta1.ClusterResourcePlacement{},
 		},
 		{
 			name: "mixed",
-			crps: []fleetv1beta1.ClusterResourcePlacement{
+			crps: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName2,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
 							ClusterNames: []string{clusterName1},
 						},
 					},
@@ -321,16 +321,16 @@ func TestClassifyCRPs(t *testing.T) {
 						Name:       crpName5,
 						Generation: 1,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType:    fleetv1beta1.PickNPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType:    placementv1beta1.PickNPlacementType,
 							NumberOfClusters: &numOfClusters,
 						},
 					},
-					Status: fleetv1beta1.ClusterResourcePlacementStatus{
+					Status: placementv1beta1.ClusterResourcePlacementStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+								Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1,
 							},
@@ -341,9 +341,9 @@ func TestClassifyCRPs(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName4,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType: fleetv1beta1.PickAllPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType: placementv1beta1.PickAllPlacementType,
 						},
 					},
 				},
@@ -351,21 +351,21 @@ func TestClassifyCRPs(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName3,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType:    fleetv1beta1.PickNPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType:    placementv1beta1.PickNPlacementType,
 							NumberOfClusters: &numOfClusters,
 						},
 					},
 				},
 			},
-			want: []fleetv1beta1.ClusterResourcePlacement{
+			want: []placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName2,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
 							ClusterNames: []string{clusterName1},
 						},
 					},
@@ -379,9 +379,9 @@ func TestClassifyCRPs(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName4,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType: fleetv1beta1.PickAllPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType: placementv1beta1.PickAllPlacementType,
 						},
 					},
 				},
@@ -389,9 +389,9 @@ func TestClassifyCRPs(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: crpName3,
 					},
-					Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-						Policy: &fleetv1beta1.PlacementPolicy{
-							PlacementType:    fleetv1beta1.PickNPlacementType,
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						Policy: &placementv1beta1.PlacementPolicy{
+							PlacementType:    placementv1beta1.PickNPlacementType,
 							NumberOfClusters: &numOfClusters,
 						},
 					},

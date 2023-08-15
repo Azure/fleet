@@ -130,6 +130,9 @@ func TestMain(m *testing.M) {
 	if err := placementv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
 	}
+	if err := clusterv1beta1.AddToScheme(scheme.Scheme); err != nil {
+		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
+	}
 
 	os.Exit(m.Run())
 }

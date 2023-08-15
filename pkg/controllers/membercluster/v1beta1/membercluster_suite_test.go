@@ -21,7 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var (
@@ -51,7 +52,9 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 
-		err = v1beta1.AddToScheme(scheme.Scheme)
+		err = placementv1beta1.AddToScheme(scheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
+		err = clusterv1beta1.AddToScheme(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		//+kubebuilder:scaffold:scheme
