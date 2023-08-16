@@ -25,6 +25,11 @@ var ResourceInformer informer.Manager
 func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
+	// we leverage the informer manager to do the resource scope validation
+	if ResourceInformer == nil {
+		allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
+	}
+
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
 		if selector.LabelSelector != nil {
 			if len(selector.Name) != 0 {
@@ -34,10 +39,7 @@ func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alph
 				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
 			}
 		}
-		// we leverage the informer manager to do the resource scope validation
-		if ResourceInformer == nil {
-			allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
-		} else {
+		if ResourceInformer != nil {
 			gvk := schema.GroupVersionKind{
 				Group:   selector.Group,
 				Version: selector.Version,
