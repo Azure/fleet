@@ -26,10 +26,10 @@ import (
 
 // Reconciler reconciles the deletion of a CRP.
 type Reconciler struct {
-	// client is the client the controller uses to access the hub cluster.
-	client client.Client
-	// schedulerWorkqueue is the workqueue in use by the scheduler.
-	schedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueueWriter
+	// Client is the client the controller uses to access the hub cluster.
+	client.Client
+	// SchedulerWorkqueue is the workqueue in use by the scheduler.
+	SchedulerWorkqueue queue.ClusterResourcePlacementSchedulingQueueWriter
 }
 
 // Reconcile reconciles the CRP.
@@ -44,7 +44,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Retrieve the CRP.
 	crp := &fleetv1beta1.ClusterResourcePlacement{}
-	if err := r.client.Get(ctx, req.NamespacedName, crp); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, crp); err != nil {
 		klog.ErrorS(err, "Failed to get cluster resource placement", "clusterResourcePlacement", crpRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, client.IgnoreNotFound(err))
 	}
@@ -53,15 +53,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if crp.DeletionTimestamp != nil && controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer) {
 		// The CRP has been deleted and still has the scheduler finalizer;
 		// enqueue it for the scheduler to process.
-		r.schedulerWorkqueue.AddRateLimited(queue.ClusterResourcePlacementKey(crp.Name))
+		r.SchedulerWorkqueue.AddRateLimited(queue.ClusterResourcePlacementKey(crp.Name))
 	}
 
 	// No action is needed for the scheduler to take in other cases.
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManger sets up the controller with the manager.
-func (r *Reconciler) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
+// SetupWithManager sets up the controller with the manager.
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	customPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Ignore creation events.

@@ -23,15 +23,19 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("SkippedPropagatingAPIs"), o.SkippedPropagatingAPIs, "Invalid API string"))
 	}
 	if o.ClusterUnhealthyThreshold.Duration <= 0 {
-		errs = append(errs, field.Invalid(newPath.Child("ClusterUnhealthyThreshold"), o.ClusterUnhealthyThreshold, "must be greater than 0"))
+		errs = append(errs, field.Invalid(newPath.Child("ClusterUnhealthyThreshold"), o.ClusterUnhealthyThreshold, "Must be greater than 0"))
 	}
 	if o.WorkPendingGracePeriod.Duration <= 0 {
-		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "must be greater than 0"))
+		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "Must be greater than 0"))
 	}
 
 	connectionType := o.WebhookClientConnectionType
 	if _, err := parseWebhookClientConnectionString(connectionType); err != nil {
 		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.EnableWebhook, err.Error()))
+	}
+
+	if !o.EnableV1Alpha1APIs && !o.EnableV1Beta1APIs {
+		errs = append(errs, field.Required(newPath.Child("EnableV1Alpha1APIs"), "Either EnableV1Alpha1APIs or EnableV1Beta1APIs is required"))
 	}
 
 	return errs

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -16,11 +17,14 @@ import (
 // a callback function to modify options
 type ModifyOptions func(option *Options)
 
-// New an Options with default parameters
-func New(modifyOptions ModifyOptions) Options {
+// newTestOptions creates an Options with default parameters.
+func newTestOptions(modifyOptions ModifyOptions) Options {
 	option := Options{
-		SkippedPropagatingAPIs: "fleet.azure.com;multicluster.x-k8s.io",
-		WorkPendingGracePeriod: metav1.Duration{Duration: 10 * time.Second},
+		SkippedPropagatingAPIs:      "fleet.azure.com;multicluster.x-k8s.io",
+		WorkPendingGracePeriod:      metav1.Duration{Duration: 10 * time.Second},
+		ClusterUnhealthyThreshold:   metav1.Duration{Duration: 1 * time.Second},
+		WebhookClientConnectionType: "url",
+		EnableV1Alpha1APIs:          true,
 	}
 
 	if modifyOptions != nil {
@@ -30,44 +34,47 @@ func New(modifyOptions ModifyOptions) Options {
 }
 
 func TestValidateControllerManagerConfiguration(t *testing.T) {
-	successCases := []Options{
-		New(nil),
-	}
-
-	for _, successCase := range successCases {
-		if errs := successCase.Validate(); len(errs) != 0 {
-			t.Errorf("expected success: %v", errs)
-		}
-	}
-
 	newPath := field.NewPath("Options")
 	testCases := map[string]struct {
-		opt          Options
-		expectedErrs field.ErrorList
+		opt  Options
+		want field.ErrorList
 	}{
+		"valid Options": {
+			opt:  newTestOptions(nil),
+			want: field.ErrorList{},
+		},
 		"invalid SkippedPropagatingAPIs": {
-			opt: New(func(options *Options) {
+			opt: newTestOptions(func(options *Options) {
 				options.SkippedPropagatingAPIs = "a/b/c/d?"
 			}),
-			expectedErrs: field.ErrorList{field.Invalid(newPath.Child("SkippedPropagatingAPIs"), "a/b/c/d?", "Invalid API string")},
+			want: field.ErrorList{field.Invalid(newPath.Child("SkippedPropagatingAPIs"), "a/b/c/d?", "Invalid API string")},
+		},
+		"invalid ClusterUnhealthyThreshold": {
+			opt: newTestOptions(func(options *Options) {
+				options.ClusterUnhealthyThreshold.Duration = -40 * time.Second
+			}),
+			want: field.ErrorList{field.Invalid(newPath.Child("ClusterUnhealthyThreshold"), metav1.Duration{Duration: -40 * time.Second}, "Must be greater than 0")},
 		},
 		"invalid WorkPendingGracePeriod": {
-			opt: New(func(options *Options) {
+			opt: newTestOptions(func(options *Options) {
 				options.WorkPendingGracePeriod.Duration = -40 * time.Second
 			}),
-			expectedErrs: field.ErrorList{field.Invalid(newPath.Child("WorkPendingGracePeriod"), metav1.Duration{Duration: -40 * time.Second}, "must be greater than 0")},
+			want: field.ErrorList{field.Invalid(newPath.Child("WorkPendingGracePeriod"), metav1.Duration{Duration: -40 * time.Second}, "Must be greater than 0")},
+		},
+		"invalid EnableV1Alpha1APIs": {
+			opt: newTestOptions(func(option *Options) {
+				option.EnableV1Alpha1APIs = false
+			}),
+			want: field.ErrorList{field.Required(newPath.Child("EnableV1Alpha1APIs"), "Either EnableV1Alpha1APIs or EnableV1Beta1APIs is required")},
 		},
 	}
 
-	for _, testCase := range testCases {
-		errs := testCase.opt.Validate()
-		if len(testCase.expectedErrs) != len(errs) {
-			t.Fatalf("Expected %d errors, got %d errors: %v", len(testCase.expectedErrs), len(errs), errs)
-		}
-		for i, err := range errs {
-			if err.Error() != testCase.expectedErrs[i].Error() {
-				t.Fatalf("Expected error: %s, got %s", testCase.expectedErrs[i], err.Error())
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			got := tc.opt.Validate()
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("Validate() errs mismatch (-want, +got):\n%s", diff)
 			}
-		}
+		})
 	}
 }

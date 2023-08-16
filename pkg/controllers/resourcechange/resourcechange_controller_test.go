@@ -136,7 +136,7 @@ func TestFindPlacementsSelectedDeletedRes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			placementController := fakeController{}
 			r := &Reconciler{
-				PlacementController: &placementController,
+				PlacementControllerV1Alpha1: &placementController,
 			}
 			var crpList []runtime.Object
 			for _, crp := range tt.crpList {

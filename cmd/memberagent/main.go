@@ -34,8 +34,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
+	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -54,6 +56,8 @@ var (
 	enableLeaderElection = flag.Bool("leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
+	enableV1Alpha1APIs      = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
+	enableV1Beta1APIs       = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
 )
 
 func init() {
@@ -62,6 +66,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
 	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.WorkApplyTime)
@@ -71,22 +76,33 @@ func main() {
 	flag.Parse()
 	utilrand.Seed(time.Now().UnixNano())
 	defer klog.Flush()
+
+	flag.VisitAll(func(f *flag.Flag) {
+		klog.InfoS("flag:", "name", f.Name, "value", f.Value)
+	})
+
+	// Validate flags
+	if !*enableV1Alpha1APIs && !*enableV1Beta1APIs {
+		klog.ErrorS(errors.New("either enable-v1alpha1-apis or enable-v1beta1-apis is required"), "invalid APIs flags")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	}
+
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
 		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
-		os.Exit(1)
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
 	if err != nil {
 		klog.ErrorS(err, "error has occurred building kubernetes client configuration for hub")
-		os.Exit(1)
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
 		klog.ErrorS(errors.New("member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
-		os.Exit(1)
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	mcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
@@ -118,7 +134,7 @@ func main() {
 
 	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
 		klog.ErrorS(err, "problem running controllers")
-		os.Exit(1)
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 }
 
@@ -226,34 +242,35 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 
 	if err := hubMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up health check for hub manager")
-		os.Exit(1)
+		return err
 	}
 	if err := hubMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check for hub manager")
-		os.Exit(1)
+		return err
 	}
 
 	if err := memberMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up health check for member manager")
-		os.Exit(1)
+		return err
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		klog.ErrorS(err, "unable to set up ready check for member manager")
-		os.Exit(1)
+		return err
 	}
 
 	spokeDynamicClient, err := dynamic.NewForConfig(memberConfig)
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke dynamic client")
-		os.Exit(1)
+		return err
 	}
 
 	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, apiutil.WithLazyDiscovery)
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke rest mapper")
-		os.Exit(1)
+		return err
 	}
 
+	// TODO replacing the v1alpha1 work controller
 	// create the work controller, so we can pass it to the internal member cluster reconciler
 	workController := workapi.NewApplyWorkReconciler(
 		hubMgr.GetClient(),
@@ -266,8 +283,18 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-		return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
+	if *enableV1Alpha1APIs {
+		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
+		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+			return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
+		}
+	}
+
+	if *enableV1Beta1APIs {
+		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
+		if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+			return fmt.Errorf("unable to create controller v1beta1 hub_member: %w", err)
+		}
 	}
 
 	klog.V(3).InfoS("starting hub manager")

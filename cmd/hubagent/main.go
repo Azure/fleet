@@ -20,11 +20,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/cmd/hubagent/workload"
 	mcv1alpha1 "go.goms.io/fleet/pkg/controllers/membercluster/v1alpha1"
+	mcv1beta1 "go.goms.io/fleet/pkg/controllers/membercluster/v1beta1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/webhook"
 	// +kubebuilder:scaffold:imports
@@ -51,7 +53,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(fleetv1beta1.AddToScheme(scheme))
+	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
@@ -93,13 +96,25 @@ func main() {
 	}
 
 	klog.V(2).InfoS("starting hubagent")
-
-	if err = (&mcv1alpha1.Reconciler{
-		Client:                  mgr.GetClient(),
-		NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
-	}).SetupWithManager(mgr); err != nil {
-		klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
-		exitWithErrorFunc()
+	if opts.EnableV1Alpha1APIs {
+		klog.Info("Setting up memberCluster v1alpha1 controller")
+		if err = (&mcv1alpha1.Reconciler{
+			Client:                  mgr.GetClient(),
+			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "MemberCluster")
+			exitWithErrorFunc()
+		}
+	}
+	if opts.EnableV1Beta1APIs {
+		klog.Info("Setting up memberCluster v1beta1 controller")
+		if err = (&mcv1beta1.Reconciler{
+			Client:                  mgr.GetClient(),
+			NetworkingAgentsEnabled: opts.NetworkingAgentsEnabled,
+		}).SetupWithManager(mgr); err != nil {
+			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "MemberCluster")
+			exitWithErrorFunc()
+		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -126,7 +126,7 @@ test: manifests generate fmt vet local-unit-test integration-test## Run tests.
 
 .PHONY: local-unit-test
 local-unit-test: $(ENVTEST) ## Run tests.
-	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... -race -coverprofile=ut-coverage.xml -covermode=atomic -v
+	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... ./cmd/... -race -coverprofile=ut-coverage.xml -covermode=atomic -v
 
 .PHONY: integration-test
 integration-test: $(ENVTEST) ## Run tests.
