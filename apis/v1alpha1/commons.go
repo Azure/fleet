@@ -22,7 +22,6 @@ const (
 	MemberClusterResource            = "memberclusters"
 	InternalMemberClusterKind        = "InternalMemberCluster"
 	ClusterResourcePlacementResource = "clusterresourceplacements"
-	ClusterResourcePlacementKind     = "ClusterResourcePlacement"
 )
 
 // ResourceUsage contains the observed resource usage of a member cluster.
