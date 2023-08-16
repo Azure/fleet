@@ -38,17 +38,14 @@ func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alph
 		if ResourceInformer == nil {
 			allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
 		} else {
-			for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
-				gvk := schema.GroupVersionKind{
-					Group:   selector.Group,
-					Version: selector.Version,
-					Kind:    selector.Kind,
-				}
-
-				// TODO: Ensure gvk created from resource selector is valid.
-				if !ResourceInformer.IsClusterScopedResources(gvk) {
-					allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
-				}
+			gvk := schema.GroupVersionKind{
+				Group:   selector.Group,
+				Version: selector.Version,
+				Kind:    selector.Kind,
+			}
+			// TODO: Ensure gvk created from resource selector is valid.
+			if !ResourceInformer.IsClusterScopedResources(gvk) {
+				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
 			}
 		}
 	}
