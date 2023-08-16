@@ -14,7 +14,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework/uniquename"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
@@ -29,15 +30,15 @@ import (
 //     yet has not been marked as unscheduled by the scheduler; and
 //   - obsolete bindings, i.e., bindings that are no longer associated with the latest scheduling
 //     policy.
-func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bindings []fleetv1beta1.ClusterResourceBinding, clusters []fleetv1beta1.MemberCluster) (bound, scheduled, obsolete, dangling []*fleetv1beta1.ClusterResourceBinding) {
+func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, dangling []*placementv1beta1.ClusterResourceBinding) {
 	// Pre-allocate arrays.
-	bound = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
-	scheduled = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
-	obsolete = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
-	dangling = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindings))
+	bound = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
+	scheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
+	obsolete = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
+	dangling = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 
 	// Build a map for clusters for quick loopup.
-	clusterMap := make(map[string]fleetv1beta1.MemberCluster)
+	clusterMap := make(map[string]clusterv1beta1.MemberCluster)
 	for _, cluster := range clusters {
 		clusterMap[cluster.Name] = cluster
 	}
@@ -53,9 +54,9 @@ func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bind
 			// Note that the scheduler will not add any cleanup scheduler to a binding, as
 			// in normal operations bound and scheduled bindings will not be deleted, and
 			// unscheduled bindings are disregarded by the scheduler.
-		case binding.Spec.State == fleetv1beta1.BindingStateUnscheduled:
+		case binding.Spec.State == placementv1beta1.BindingStateUnscheduled:
 			// Ignore any binding that is of the unscheduled state.
-		case !isTargetClusterPresent || targetCluster.Spec.State == fleetv1beta1.ClusterStateLeave:
+		case !isTargetClusterPresent || targetCluster.Spec.State == clusterv1beta1.ClusterStateLeave:
 			// Check if the binding is now dangling, i.e., it is associated with a cluster that
 			// is no longer in normal operations, but is still of a scheduled or bound state.
 			//
@@ -67,10 +68,10 @@ func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bind
 			// The binding is in the scheduled or bound state, but is no longer associated
 			// with the latest scheduling policy snapshot.
 			obsolete = append(obsolete, &binding)
-		case binding.Spec.State == fleetv1beta1.BindingStateScheduled:
+		case binding.Spec.State == placementv1beta1.BindingStateScheduled:
 			// Check if the binding is of the scheduled state.
 			scheduled = append(scheduled, &binding)
-		case binding.Spec.State == fleetv1beta1.BindingStateBound:
+		case binding.Spec.State == placementv1beta1.BindingStateBound:
 			// Check if the binding is of the bound state.
 			bound = append(bound, &binding)
 			// At this stage all states are already accounted for, so there is no need for a default
@@ -85,7 +86,7 @@ func classifyBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, bind
 // patch itself.
 type bindingWithPatch struct {
 	// updated is the modified binding.
-	updated *fleetv1beta1.ClusterResourceBinding
+	updated *placementv1beta1.ClusterResourceBinding
 	// patch is the patch that will be applied to the binding object.
 	patch client.Patch
 }
@@ -103,14 +104,14 @@ type bindingWithPatch struct {
 // Note that this function will return bindings with all fields fulfilled/refreshed, as applicable.
 func crossReferencePickedCustersAndObsoleteBindings(
 	crpName string,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	picked ScoredClusters,
-	obsolete []*fleetv1beta1.ClusterResourceBinding,
-) (toCreate, toDelete []*fleetv1beta1.ClusterResourceBinding, toPatch []*bindingWithPatch, err error) {
+	obsolete []*placementv1beta1.ClusterResourceBinding,
+) (toCreate, toDelete []*placementv1beta1.ClusterResourceBinding, toPatch []*bindingWithPatch, err error) {
 	// Pre-allocate with a reasonable capacity.
-	toCreate = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(picked))
+	toCreate = make([]*placementv1beta1.ClusterResourceBinding, 0, len(picked))
 	toPatch = make([]*bindingWithPatch, 0, 20)
-	toDelete = make([]*fleetv1beta1.ClusterResourceBinding, 0, 20)
+	toDelete = make([]*placementv1beta1.ClusterResourceBinding, 0, 20)
 
 	// Build a map of picked scored clusters for quick lookup.
 	pickedMap := make(map[string]*ScoredCluster)
@@ -139,10 +140,10 @@ func crossReferencePickedCustersAndObsoleteBindings(
 		updated := binding.DeepCopy()
 		affinityScore := int32(scored.Score.AffinityScore)
 		topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-		updated.Spec.ClusterDecision = fleetv1beta1.ClusterDecision{
+		updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
 			ClusterName: scored.Cluster.Name,
 			Selected:    true,
-			ClusterScore: &fleetv1beta1.ClusterScore{
+			ClusterScore: &placementv1beta1.ClusterScore{
 				AffinityScore:       &affinityScore,
 				TopologySpreadScore: &topologySpreadScore,
 			},
@@ -170,23 +171,23 @@ func crossReferencePickedCustersAndObsoleteBindings(
 			}
 			affinityScore := int32(scored.Score.AffinityScore)
 			topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-			binding := &fleetv1beta1.ClusterResourceBinding{
+			binding := &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: crpName,
+						placementv1beta1.CRPTrackingLabel: crpName,
 					},
 				},
-				Spec: fleetv1beta1.ResourceBindingSpec{
-					State: fleetv1beta1.BindingStateScheduled,
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State: placementv1beta1.BindingStateScheduled,
 					// Leave the associated resource snapshot name empty; it is up to another controller
 					// to fulfill this field.
 					SchedulingPolicySnapshotName: policy.Name,
 					TargetCluster:                scored.Cluster.Name,
-					ClusterDecision: fleetv1beta1.ClusterDecision{
+					ClusterDecision: placementv1beta1.ClusterDecision{
 						ClusterName: scored.Cluster.Name,
 						Selected:    true,
-						ClusterScore: &fleetv1beta1.ClusterScore{
+						ClusterScore: &placementv1beta1.ClusterScore{
 							AffinityScore:       &affinityScore,
 							TopologySpreadScore: &topologySpreadScore,
 						},
@@ -204,9 +205,9 @@ func crossReferencePickedCustersAndObsoleteBindings(
 
 // newSchedulingDecisionsFromBindings returns a list of scheduling decisions, based on the newly manipulated list of
 // bindings and (if applicable) a list of filtered clusters.
-func newSchedulingDecisionsFromBindings(maxUnselectedClusterDecisionCount int, filtered []*filteredClusterWithStatus, existing ...[]*fleetv1beta1.ClusterResourceBinding) []fleetv1beta1.ClusterDecision {
+func newSchedulingDecisionsFromBindings(maxUnselectedClusterDecisionCount int, filtered []*filteredClusterWithStatus, existing ...[]*placementv1beta1.ClusterResourceBinding) []placementv1beta1.ClusterDecision {
 	// Pre-allocate with a reasonable capacity.
-	newDecisions := make([]fleetv1beta1.ClusterDecision, 0, maxUnselectedClusterDecisionCount)
+	newDecisions := make([]placementv1beta1.ClusterDecision, 0, maxUnselectedClusterDecisionCount)
 
 	// Build new scheduling decisions.
 	slotsLeft := clustersDecisionArrayLengthLimitInAPI
@@ -226,7 +227,7 @@ func newSchedulingDecisionsFromBindings(maxUnselectedClusterDecisionCount int, f
 	// Move some decisions from unbound clusters, if there are still enough room.
 	for i := 0; i < maxUnselectedClusterDecisionCount && i < len(filtered) && i < slotsLeft; i++ {
 		clusterWithStatus := filtered[i]
-		newDecisions = append(newDecisions, fleetv1beta1.ClusterDecision{
+		newDecisions = append(newDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: clusterWithStatus.cluster.Name,
 			Selected:    false,
 			Reason:      clusterWithStatus.status.String(),
@@ -237,9 +238,9 @@ func newSchedulingDecisionsFromBindings(maxUnselectedClusterDecisionCount int, f
 }
 
 // newSchedulingCondition returns a new scheduling condition.
-func newScheduledCondition(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, status metav1.ConditionStatus, reason, message string) metav1.Condition {
+func newScheduledCondition(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, status metav1.ConditionStatus, reason, message string) metav1.Condition {
 	return metav1.Condition{
-		Type:               string(fleetv1beta1.PolicySnapshotScheduled),
+		Type:               string(placementv1beta1.PolicySnapshotScheduled),
 		Status:             status,
 		ObservedGeneration: policy.Generation,
 		Reason:             reason,
@@ -249,7 +250,7 @@ func newScheduledCondition(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
 
 // newScheduledConditionFromBindings prepares a scheduling condition by comparing the desired
 // number of cluster and the count of existing bindings.
-func newScheduledConditionFromBindings(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, numOfClusters int, existing ...[]*fleetv1beta1.ClusterResourceBinding) metav1.Condition {
+func newScheduledConditionFromBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, numOfClusters int, existing ...[]*placementv1beta1.ClusterResourceBinding) metav1.Condition {
 	count := 0
 	for _, bindingSet := range existing {
 		count += len(bindingSet)
@@ -265,13 +266,13 @@ func newScheduledConditionFromBindings(policy *fleetv1beta1.ClusterSchedulingPol
 
 // newSchedulingDecisionsForPickFixedPlacementType returns a list of scheduling decisions, based on different
 // types of target clusters.
-func newSchedulingDecisionsForPickFixedPlacementType(valid []*fleetv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) []fleetv1beta1.ClusterDecision {
+func newSchedulingDecisionsForPickFixedPlacementType(valid []*clusterv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) []placementv1beta1.ClusterDecision {
 	// Pre-allocate with a reasonable capacity.
-	clusterDecisions := make([]fleetv1beta1.ClusterDecision, 0, len(valid))
+	clusterDecisions := make([]placementv1beta1.ClusterDecision, 0, len(valid))
 
 	// Add decisions from valid target clusters.
 	for _, cluster := range valid {
-		clusterDecisions = append(clusterDecisions, fleetv1beta1.ClusterDecision{
+		clusterDecisions = append(clusterDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: cluster.Name,
 			Selected:    true,
 			// Scoring does not apply in this placement type.
@@ -281,7 +282,7 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*fleetv1beta1.Membe
 
 	// Add decisions from invalid target clusters.
 	for _, clusterWithReason := range invalid {
-		clusterDecisions = append(clusterDecisions, fleetv1beta1.ClusterDecision{
+		clusterDecisions = append(clusterDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: clusterWithReason.cluster.Name,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
@@ -291,7 +292,7 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*fleetv1beta1.Membe
 
 	// Add decisions from not found target clusters.
 	for _, clusterName := range notFound {
-		clusterDecisions = append(clusterDecisions, fleetv1beta1.ClusterDecision{
+		clusterDecisions = append(clusterDecisions, placementv1beta1.ClusterDecision{
 			ClusterName: clusterName,
 			Selected:    false,
 			// Scoring does not apply in this placement type.
@@ -305,13 +306,13 @@ func newSchedulingDecisionsForPickFixedPlacementType(valid []*fleetv1beta1.Membe
 // equalDecisions returns if two arrays of ClusterDecisions are equal; it returns true if
 // every decision in one array is also present in the other array regardless of their indexes,
 // and vice versa.
-func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
+func equalDecisions(current, desired []placementv1beta1.ClusterDecision) bool {
 	// As a shortcut, decisions are not equal if the two arrays are not of the same length.
 	if len(current) != len(desired) {
 		return false
 	}
 
-	desiredDecisionByCluster := make(map[string]fleetv1beta1.ClusterDecision, len(desired))
+	desiredDecisionByCluster := make(map[string]placementv1beta1.ClusterDecision, len(desired))
 	for _, decision := range desired {
 		desiredDecisionByCluster[decision.ClusterName] = decision
 	}
@@ -334,8 +335,8 @@ func equalDecisions(current, desired []fleetv1beta1.ClusterDecision) bool {
 
 // shouldDownscale checks if the scheduler needs to perform some downscaling, and (if so) how
 // many scheduled or bound bindings it should remove.
-func shouldDownscale(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, desired, present, obsolete int) (act bool, count int) {
-	if policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && desired <= present {
+func shouldDownscale(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, desired, present, obsolete int) (act bool, count int) {
+	if policy.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType && desired <= present {
 		// Downscale only applies to CRPs of the Pick N placement type; and it only applies when the number of
 		// clusters requested by the user is less than the number of currently bound + scheduled bindings combined;
 		// or there are the right number of bound + scheduled bindings, yet some obsolete bindings still linger
@@ -351,7 +352,7 @@ func shouldDownscale(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, desir
 
 // sortByClusterScoreAndName sorts a list of ClusterResourceBindings by their cluster scores and
 // target cluster names.
-func sortByClusterScoreAndName(bindings []*fleetv1beta1.ClusterResourceBinding) (sorted []*fleetv1beta1.ClusterResourceBinding) {
+func sortByClusterScoreAndName(bindings []*placementv1beta1.ClusterResourceBinding) (sorted []*placementv1beta1.ClusterResourceBinding) {
 	lessFunc := func(i, j int) bool {
 		bindingA := bindings[i]
 		bindingB := bindings[j]
@@ -487,19 +488,19 @@ func shouldRequeue(desiredBatchSize, batchSizeLimit, bindingCount int) bool {
 // Note that this function will return bindings with all fields fulfilled/refreshed, as applicable.
 func crossReferenceValidTargetsWithBindings(
 	crpName string,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	valid []*fleetv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	valid []*clusterv1beta1.MemberCluster,
+	bound, scheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (
-	toCreate []*fleetv1beta1.ClusterResourceBinding,
-	toDelete []*fleetv1beta1.ClusterResourceBinding,
+	toCreate []*placementv1beta1.ClusterResourceBinding,
+	toDelete []*placementv1beta1.ClusterResourceBinding,
 	toPatch []*bindingWithPatch,
 	err error,
 ) {
 	// Pre-allocate with a reasonable capacity.
-	toCreate = make([]*fleetv1beta1.ClusterResourceBinding, 0, len(valid))
+	toCreate = make([]*placementv1beta1.ClusterResourceBinding, 0, len(valid))
 	toPatch = make([]*bindingWithPatch, 0, 20)
-	toDelete = make([]*fleetv1beta1.ClusterResourceBinding, 0, 20)
+	toDelete = make([]*placementv1beta1.ClusterResourceBinding, 0, 20)
 
 	// Build maps for quick lookup.
 	scheduledOrBoundClusterMap := make(map[string]bool)
@@ -510,7 +511,7 @@ func crossReferenceValidTargetsWithBindings(
 		scheduledOrBoundClusterMap[binding.Spec.TargetCluster] = true
 	}
 
-	obsoleteClusterMap := make(map[string]*fleetv1beta1.ClusterResourceBinding)
+	obsoleteClusterMap := make(map[string]*placementv1beta1.ClusterResourceBinding)
 	for _, binding := range obsolete {
 		obsoleteClusterMap[binding.Spec.TargetCluster] = binding
 	}
@@ -537,7 +538,7 @@ func crossReferenceValidTargetsWithBindings(
 			// Technically speaking, overwriting the cluster decision is not needed, as the same value
 			// should have been set in the previous run. Here the scheduler writes the information
 			// again just in case.
-			updated.Spec.ClusterDecision = fleetv1beta1.ClusterDecision{
+			updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
 				ClusterName: cluster.Name,
 				Selected:    true,
 				// Scoring does not apply in this placement type.
@@ -560,20 +561,20 @@ func crossReferenceValidTargetsWithBindings(
 				return nil, nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to cross reference picked clusters and existing bindings: %w", err))
 			}
 
-			newBinding := &fleetv1beta1.ClusterResourceBinding{
+			newBinding := &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 					Labels: map[string]string{
-						fleetv1beta1.CRPTrackingLabel: crpName,
+						placementv1beta1.CRPTrackingLabel: crpName,
 					},
 				},
-				Spec: fleetv1beta1.ResourceBindingSpec{
-					State: fleetv1beta1.BindingStateScheduled,
+				Spec: placementv1beta1.ResourceBindingSpec{
+					State: placementv1beta1.BindingStateScheduled,
 					// Leave the associated resource snapshot name empty; it is up to another controller
 					// to fulfill this field.
 					SchedulingPolicySnapshotName: policy.Name,
 					TargetCluster:                cluster.Name,
-					ClusterDecision: fleetv1beta1.ClusterDecision{
+					ClusterDecision: placementv1beta1.ClusterDecision{
 						ClusterName: cluster.Name,
 						Selected:    true,
 						// Scoring does not apply in this placement type.

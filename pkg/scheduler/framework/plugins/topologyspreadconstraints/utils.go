@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"sort"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
 // countByDomain counts the number of scheduled or bound bindings in each domain per a given
 // topology key.
-func countByDomain(clusters []fleetv1beta1.MemberCluster, state framework.CycleStatePluginReadWriter, topologyKey string) *bindingCounterByDomain {
+func countByDomain(clusters []clusterv1beta1.MemberCluster, state framework.CycleStatePluginReadWriter, topologyKey string) *bindingCounterByDomain {
 	// Calculate the number of bindings in each domain.
 	//
 	// Note that all domains will have their corresponding counts, even if the counts are zero.
@@ -146,14 +147,14 @@ func willViolate(counter *bindingCounterByDomain, name domainName, maxSkew int) 
 
 // classifyConstraints classifies topology spread constraints in a policy based on their
 // whenUnsatisfiable requirements.
-func classifyConstraints(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (doNotSchedule, scheduleAnyway []*fleetv1beta1.TopologySpreadConstraint) {
+func classifyConstraints(policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (doNotSchedule, scheduleAnyway []*placementv1beta1.TopologySpreadConstraint) {
 	// Pre-allocate arrays.
-	doNotSchedule = make([]*fleetv1beta1.TopologySpreadConstraint, 0, len(policy.Spec.Policy.TopologySpreadConstraints))
-	scheduleAnyway = make([]*fleetv1beta1.TopologySpreadConstraint, 0, len(policy.Spec.Policy.TopologySpreadConstraints))
+	doNotSchedule = make([]*placementv1beta1.TopologySpreadConstraint, 0, len(policy.Spec.Policy.TopologySpreadConstraints))
+	scheduleAnyway = make([]*placementv1beta1.TopologySpreadConstraint, 0, len(policy.Spec.Policy.TopologySpreadConstraints))
 
 	for idx := range policy.Spec.Policy.TopologySpreadConstraints {
 		constraint := policy.Spec.Policy.TopologySpreadConstraints[idx]
-		if constraint.WhenUnsatisfiable == fleetv1beta1.ScheduleAnyway {
+		if constraint.WhenUnsatisfiable == placementv1beta1.ScheduleAnyway {
 			scheduleAnyway = append(scheduleAnyway, &constraint)
 			continue
 		}
@@ -173,7 +174,7 @@ func classifyConstraints(policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (
 // the cluster does not concern any of the topology spread constraints.
 func evaluateAllConstraints(
 	state framework.CycleStatePluginReadWriter,
-	doNotSchedule, scheduleAnyway []*fleetv1beta1.TopologySpreadConstraint,
+	doNotSchedule, scheduleAnyway []*placementv1beta1.TopologySpreadConstraint,
 ) (violations doNotScheduleViolations, scores topologySpreadScores, err error) {
 	violations = make(doNotScheduleViolations)
 	// Note that this function guarantees that all clusters that do not lead to violations of
@@ -286,7 +287,7 @@ func evaluateAllConstraints(
 
 // prepareTopologySpreadConstraintsPluginState initializes the state for the plugin to use
 // in the scheduling cycle.
-func prepareTopologySpreadConstraintsPluginState(state framework.CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
+func prepareTopologySpreadConstraintsPluginState(state framework.CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
 	// Classify the topology spread constraints.
 	doNotSchedule, scheduleAnyway := classifyConstraints(policy)
 

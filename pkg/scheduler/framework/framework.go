@@ -22,7 +22,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/framework/parallelizer"
 	"go.goms.io/fleet/pkg/utils/annotations"
@@ -72,7 +73,7 @@ type Framework interface {
 
 	// RunSchedulingCycleFor performs scheduling for a cluster resource placement, specifically
 	// its associated latest scheduling policy snapshot.
-	RunSchedulingCycleFor(ctx context.Context, crpName string, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (result ctrl.Result, err error)
+	RunSchedulingCycleFor(ctx context.Context, crpName string, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (result ctrl.Result, err error)
 }
 
 // framework implements the Framework interface.
@@ -221,7 +222,7 @@ func (f *framework) ClusterEligibilityChecker() *clustereligibilitychecker.Clust
 
 // RunSchedulingCycleFor performs scheduling for a cluster resource placement
 // (more specifically, its associated scheduling policy snapshot).
-func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (result ctrl.Result, err error) {
+func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (result ctrl.Result, err error) {
 	startTime := time.Now()
 	policyRef := klog.KObj(policy)
 	klog.V(2).InfoS("Scheduling cycle starts", "clusterSchedulingPolicySnapshot", policyRef)
@@ -297,14 +298,14 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 		// The placement policy is not set; in such cases the policy is considered to be of
 		// the PickAll placement type.
 		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
-	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
+	case policy.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType:
 		// The placement policy features a fixed set of clusters to select; in such cases, the
 		// scheduler will bind to these clusters directly.
 		return f.runSchedulingCycleForPickFixedPlacementType(ctx, crpName, policy, clusters, bound, scheduled, obsolete)
-	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
+	case policy.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType:
 		// Run the scheduling cycle for policy of the PickAll placement type.
 		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
-	case policy.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType:
+	case policy.Spec.Policy.PlacementType == placementv1beta1.PickNPlacementType:
 		// Run the scheduling cycle for policy of the PickN placement type.
 		return f.runSchedulingCycleForPickNPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, obsolete)
 	default:
@@ -315,8 +316,8 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 }
 
 // collectClusters lists all clusters in the cache.
-func (f *framework) collectClusters(ctx context.Context) ([]fleetv1beta1.MemberCluster, error) {
-	clusterList := &fleetv1beta1.MemberClusterList{}
+func (f *framework) collectClusters(ctx context.Context) ([]clusterv1beta1.MemberCluster, error) {
+	clusterList := &clusterv1beta1.MemberClusterList{}
 	if err := f.client.List(ctx, clusterList, &client.ListOptions{}); err != nil {
 		return nil, controller.NewAPIServerError(true, err)
 	}
@@ -324,9 +325,9 @@ func (f *framework) collectClusters(ctx context.Context) ([]fleetv1beta1.MemberC
 }
 
 // collectBindings lists all bindings associated with a CRP **using the uncached client**.
-func (f *framework) collectBindings(ctx context.Context, crpName string) ([]fleetv1beta1.ClusterResourceBinding, error) {
-	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
-	labelSelector := labels.SelectorFromSet(labels.Set{fleetv1beta1.CRPTrackingLabel: crpName})
+func (f *framework) collectBindings(ctx context.Context, crpName string) ([]placementv1beta1.ClusterResourceBinding, error) {
+	bindingList := &placementv1beta1.ClusterResourceBindingList{}
+	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
 	// List bindings directly from the API server.
 	if err := f.uncachedReader.List(ctx, bindingList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
 		return nil, controller.NewAPIServerError(false, err)
@@ -335,12 +336,12 @@ func (f *framework) collectBindings(ctx context.Context, crpName string) ([]flee
 }
 
 // markAsUnscheduledFor marks a list of bindings as unscheduled.
-func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
+func (f *framework) markAsUnscheduledFor(ctx context.Context, bindings []*placementv1beta1.ClusterResourceBinding) error {
 	for _, binding := range bindings {
 		// Note that Unscheduled is a terminal state for a binding; since there is no point of return,
 		// and the scheduler has acknowledged its fate at this moment, any binding marked as
 		// deletion will be disregarded by the scheduler from this point onwards.
-		binding.Spec.State = fleetv1beta1.BindingStateUnscheduled
+		binding.Spec.State = placementv1beta1.BindingStateUnscheduled
 		if err := f.client.Update(ctx, binding, &client.UpdateOptions{}); err != nil {
 			return controller.NewAPIServerError(false, fmt.Errorf("failed to mark binding %s as unscheduled: %w", binding.Name, err))
 		}
@@ -356,9 +357,9 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	ctx context.Context,
 	state *CycleState,
 	crpName string,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	clusters []fleetv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	clusters []clusterv1beta1.MemberCluster,
+	bound, scheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (result ctrl.Result, err error) {
 	policyRef := klog.KObj(policy)
 
@@ -405,7 +406,7 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	}
 
 	// Extract the patched bindings.
-	patched := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(toPatch))
+	patched := make([]*placementv1beta1.ClusterResourceBinding, 0, len(toPatch))
 	for _, p := range toPatch {
 		patched = append(patched, p.updated)
 	}
@@ -436,8 +437,8 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 func (f *framework) runAllPluginsForPickAllPlacementType(
 	ctx context.Context,
 	state *CycleState,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	clusters []fleetv1beta1.MemberCluster,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	clusters []clusterv1beta1.MemberCluster,
 ) (scored ScoredClusters, filtered []*filteredClusterWithStatus, err error) {
 	policyRef := klog.KObj(policy)
 
@@ -479,7 +480,7 @@ func (f *framework) runAllPluginsForPickAllPlacementType(
 }
 
 // runPreFilterPlugins runs all pre filter plugins sequentially.
-func (f *framework) runPreFilterPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+func (f *framework) runPreFilterPlugins(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 	for _, pl := range f.profile.preFilterPlugins {
 		status := pl.PreFilter(ctx, state, policy)
 		switch {
@@ -498,7 +499,7 @@ func (f *framework) runPreFilterPlugins(ctx context.Context, state *CycleState, 
 }
 
 // runFilterPluginsFor runs filter plugins for a single cluster.
-func (f *framework) runFilterPluginsFor(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) *Status {
+func (f *framework) runFilterPluginsFor(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) *Status {
 	for _, pl := range f.profile.filterPlugins {
 		// Skip the plugin if it is not needed.
 		if state.skippedFilterPlugins.Has(pl.Name()) {
@@ -526,17 +527,17 @@ func (f *framework) runFilterPluginsFor(ctx context.Context, state *CycleState, 
 // This struct is used for the purpose of keeping reasons for returning scheduling decision to
 // the user.
 type filteredClusterWithStatus struct {
-	cluster *fleetv1beta1.MemberCluster
+	cluster *clusterv1beta1.MemberCluster
 	status  *Status
 }
 
 // runFilterPlugins runs filter plugins on clusters in parallel.
-func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, clusters []fleetv1beta1.MemberCluster) (passed []*fleetv1beta1.MemberCluster, filtered []*filteredClusterWithStatus, err error) {
+func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, clusters []clusterv1beta1.MemberCluster) (passed []*clusterv1beta1.MemberCluster, filtered []*filteredClusterWithStatus, err error) {
 	// Create a child context.
 	childCtx, cancel := context.WithCancel(ctx)
 
 	// Pre-allocate slices to avoid races.
-	passed = make([]*fleetv1beta1.MemberCluster, len(clusters))
+	passed = make([]*clusterv1beta1.MemberCluster, len(clusters))
 	var passedIdx int32 = -1
 	filtered = make([]*filteredClusterWithStatus, len(clusters))
 	var filteredIdx int32 = -1
@@ -584,8 +585,8 @@ func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, pol
 // manipulateBindings creates, patches, and deletes bindings.
 func (f *framework) manipulateBindings(
 	ctx context.Context,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	toCreate, toDelete []*fleetv1beta1.ClusterResourceBinding,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	toCreate, toDelete []*placementv1beta1.ClusterResourceBinding,
 	toPatch []*bindingWithPatch,
 ) error {
 	policyRef := klog.KObj(policy)
@@ -622,7 +623,7 @@ func (f *framework) manipulateBindings(
 }
 
 // createBindings creates a list of new bindings.
-func (f *framework) createBindings(ctx context.Context, toCreate []*fleetv1beta1.ClusterResourceBinding) error {
+func (f *framework) createBindings(ctx context.Context, toCreate []*placementv1beta1.ClusterResourceBinding) error {
 	for _, binding := range toCreate {
 		// TO-DO (chenyu1): Add some jitters here to avoid swarming the API when there is a large number of
 		// bindings to create.
@@ -651,10 +652,10 @@ func (f *framework) patchBindings(ctx context.Context, toPatch []*bindingWithPat
 // clusters filtered out by the scheduler, and the list of bindings provisioned by the scheduler.
 func (f *framework) updatePolicySnapshotStatusFromBindings(
 	ctx context.Context,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	numOfClusters int,
 	filtered []*filteredClusterWithStatus,
-	existing ...[]*fleetv1beta1.ClusterResourceBinding,
+	existing ...[]*placementv1beta1.ClusterResourceBinding,
 ) error {
 	policyRef := klog.KObj(policy)
 
@@ -665,7 +666,7 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 
 	// Compare the new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
-	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
+	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
 	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
 		// Skip if there is no change in decisions and conditions.
 		return nil
@@ -695,9 +696,9 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	ctx context.Context,
 	state *CycleState,
 	crpName string,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	clusters []fleetv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	clusters []clusterv1beta1.MemberCluster,
+	bound, scheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (result ctrl.Result, err error) {
 	policyRef := klog.KObj(policy)
 
@@ -852,7 +853,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	}
 
 	// Extract the patched bindings.
-	patched := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(toPatch))
+	patched := make([]*placementv1beta1.ClusterResourceBinding, 0, len(toPatch))
 	for _, p := range toPatch {
 		patched = append(patched, p.updated)
 	}
@@ -873,7 +874,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 // To minimize interruptions, the scheduler picks scheduled bindings first (in any order); if there
 // are still more bindings to trim, the scheduler will move onto bound bindings, and it prefers
 // ones with a lower cluster score and a smaller name (in alphabetical order) .
-func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1beta1.ClusterResourceBinding, count int) (updatedScheduled, updatedBound []*fleetv1beta1.ClusterResourceBinding, err error) {
+func (f *framework) downscale(ctx context.Context, scheduled, bound []*placementv1beta1.ClusterResourceBinding, count int) (updatedScheduled, updatedBound []*placementv1beta1.ClusterResourceBinding, err error) {
 	if count == 0 {
 		// Skip if the downscale count is zero.
 		return scheduled, bound, nil
@@ -901,7 +902,7 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 		sortedScheduled := sortByClusterScoreAndName(scheduled)
 
 		// Trim scheduled bindings.
-		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+		bindingsToDelete := make([]*placementv1beta1.ClusterResourceBinding, 0, count)
 		for i := 0; i < len(sortedScheduled) && i < count; i++ {
 			bindingsToDelete = append(bindingsToDelete, sortedScheduled[i])
 		}
@@ -912,7 +913,7 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 		return nil, bound, f.markAsUnscheduledFor(ctx, scheduled)
 	case count < len(scheduled)+len(bound):
 		// Trim all scheduled bindings and part of bound bindings.
-		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+		bindingsToDelete := make([]*placementv1beta1.ClusterResourceBinding, 0, count)
 		bindingsToDelete = append(bindingsToDelete, scheduled...)
 
 		left := count - len(bindingsToDelete)
@@ -933,7 +934,7 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 		return nil, sortedBound[left:], f.markAsUnscheduledFor(ctx, bindingsToDelete)
 	case count == len(scheduled)+len(bound):
 		// Trim all scheduled and bound bindings.
-		bindingsToDelete := make([]*fleetv1beta1.ClusterResourceBinding, 0, count)
+		bindingsToDelete := make([]*placementv1beta1.ClusterResourceBinding, 0, count)
 		bindingsToDelete = append(bindingsToDelete, scheduled...)
 		bindingsToDelete = append(bindingsToDelete, bound...)
 		return nil, nil, f.markAsUnscheduledFor(ctx, bindingsToDelete)
@@ -950,10 +951,10 @@ func (f *framework) downscale(ctx context.Context, scheduled, bound []*fleetv1be
 func (f *framework) runAllPluginsForPickNPlacementType(
 	ctx context.Context,
 	state *CycleState,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	numOfClusters int,
 	numOfBoundOrScheduledBindings int,
-	clusters []fleetv1beta1.MemberCluster,
+	clusters []clusterv1beta1.MemberCluster,
 ) (scored ScoredClusters, filtered []*filteredClusterWithStatus, err error) {
 	policyRef := klog.KObj(policy)
 
@@ -1040,7 +1041,7 @@ func (f *framework) runAllPluginsForPickNPlacementType(
 }
 
 // runPostBatchPlugins runs all post batch plugins sequentially.
-func (f *framework) runPostBatchPlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (int, *Status) {
+func (f *framework) runPostBatchPlugins(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (int, *Status) {
 	minBatchSizeLimit := state.desiredBatchSize
 	for _, pl := range f.profile.postBatchPlugins {
 		batchSizeLimit, status := pl.PostBatch(ctx, state, policy)
@@ -1062,7 +1063,7 @@ func (f *framework) runPostBatchPlugins(ctx context.Context, state *CycleState, 
 }
 
 // runPreScorePlugins runs all pre score plugins sequentially.
-func (f *framework) runPreScorePlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) *Status {
+func (f *framework) runPreScorePlugins(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *Status {
 	for _, pl := range f.profile.preScorePlugins {
 		status := pl.PreScore(ctx, state, policy)
 		switch {
@@ -1081,7 +1082,7 @@ func (f *framework) runPreScorePlugins(ctx context.Context, state *CycleState, p
 }
 
 // runScorePluginsFor runs score plugins for a single cluster.
-func (f *framework) runScorePluginsFor(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (scoreList map[string]*ClusterScore, status *Status) {
+func (f *framework) runScorePluginsFor(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (scoreList map[string]*ClusterScore, status *Status) {
 	// Pre-allocate score list to avoid races.
 	scoreList = make(map[string]*ClusterScore, len(f.profile.scorePlugins))
 
@@ -1106,7 +1107,7 @@ func (f *framework) runScorePluginsFor(ctx context.Context, state *CycleState, p
 }
 
 // runScorePlugins runs score plugins on clusters in parallel.
-func (f *framework) runScorePlugins(ctx context.Context, state *CycleState, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, clusters []*fleetv1beta1.MemberCluster) (ScoredClusters, error) {
+func (f *framework) runScorePlugins(ctx context.Context, state *CycleState, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, clusters []*clusterv1beta1.MemberCluster) (ScoredClusters, error) {
 	// Pre-allocate slices to avoid races.
 	scoredClusters := make(ScoredClusters, len(clusters))
 
@@ -1166,20 +1167,20 @@ func (f *framework) runScorePlugins(ctx context.Context, state *CycleState, poli
 // This struct is used for the purpose of keeping reasons for returning scheduling decision to
 // the user.
 type invalidClusterWithReason struct {
-	cluster *fleetv1beta1.MemberCluster
+	cluster *clusterv1beta1.MemberCluster
 	reason  string
 }
 
 // crossReferenceClustersWithTargetNames cross-references the current list of clusters in the fleet
 // and the list of target clusters user specifies in the placement policy.
-func (f *framework) crossReferenceClustersWithTargetNames(current []fleetv1beta1.MemberCluster, target []string) (valid []*fleetv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) {
+func (f *framework) crossReferenceClustersWithTargetNames(current []clusterv1beta1.MemberCluster, target []string) (valid []*clusterv1beta1.MemberCluster, invalid []*invalidClusterWithReason, notFound []string) {
 	// Pre-allocate with a reasonable capacity.
-	valid = make([]*fleetv1beta1.MemberCluster, 0, len(target))
+	valid = make([]*clusterv1beta1.MemberCluster, 0, len(target))
 	invalid = make([]*invalidClusterWithReason, 0, len(target))
 	notFound = make([]string, 0, len(target))
 
 	// Build a map of current clusters for quick lookup.
-	currentMap := make(map[string]fleetv1beta1.MemberCluster)
+	currentMap := make(map[string]clusterv1beta1.MemberCluster)
 	for idx := range current {
 		cluster := current[idx]
 		currentMap[cluster.Name] = cluster
@@ -1226,8 +1227,8 @@ func (f *framework) crossReferenceClustersWithTargetNames(current []fleetv1beta1
 //     an error.
 func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 	ctx context.Context,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	valid []*fleetv1beta1.MemberCluster,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	valid []*clusterv1beta1.MemberCluster,
 	invalid []*invalidClusterWithReason,
 	notFound []string,
 ) error {
@@ -1247,7 +1248,7 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 
 	// Compare new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
-	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(fleetv1beta1.PolicySnapshotScheduled))
+	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
 	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
 		// Skip if there is no change in decisions and conditions.
 		return nil
@@ -1277,9 +1278,9 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 func (f *framework) runSchedulingCycleForPickFixedPlacementType(
 	ctx context.Context,
 	crpName string,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	clusters []fleetv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*fleetv1beta1.ClusterResourceBinding,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	clusters []clusterv1beta1.MemberCluster,
+	bound, scheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (ctrl.Result, error) {
 	policyRef := klog.KObj(policy)
 

@@ -9,7 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // affinityTerm is a processed version of ClusterSelectorTerm.
@@ -18,7 +19,7 @@ type affinityTerm struct {
 }
 
 // Matches returns true if the cluster matches the label selector.
-func (at *affinityTerm) Matches(cluster *fleetv1beta1.MemberCluster) bool {
+func (at *affinityTerm) Matches(cluster *clusterv1beta1.MemberCluster) bool {
 	return at.selector.Matches(labels.Set(cluster.Labels))
 }
 
@@ -27,7 +28,7 @@ func (at *affinityTerm) Matches(cluster *fleetv1beta1.MemberCluster) bool {
 type AffinityTerms []affinityTerm
 
 // Matches returns true if the cluster matches one of the terms.
-func (at AffinityTerms) Matches(cluster *fleetv1beta1.MemberCluster) bool {
+func (at AffinityTerms) Matches(cluster *clusterv1beta1.MemberCluster) bool {
 	for _, term := range at {
 		if term.Matches(cluster) {
 			return true
@@ -46,7 +47,7 @@ type preferredAffinityTerm struct {
 type PreferredAffinityTerms []preferredAffinityTerm
 
 // Score returns a score for a cluster: the sum of the weights of the terms that match the cluster.
-func (t PreferredAffinityTerms) Score(cluster *fleetv1beta1.MemberCluster) int32 {
+func (t PreferredAffinityTerms) Score(cluster *clusterv1beta1.MemberCluster) int32 {
 	var score int32
 	for _, term := range t {
 		if term.affinityTerm.Matches(cluster) {
@@ -56,7 +57,7 @@ func (t PreferredAffinityTerms) Score(cluster *fleetv1beta1.MemberCluster) int32
 	return score
 }
 
-func newAffinityTerm(term *fleetv1beta1.ClusterSelectorTerm) (*affinityTerm, error) {
+func newAffinityTerm(term *placementv1beta1.ClusterSelectorTerm) (*affinityTerm, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&term.LabelSelector)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func newAffinityTerm(term *fleetv1beta1.ClusterSelectorTerm) (*affinityTerm, err
 }
 
 // NewAffinityTerms returns the list of processed affinity terms.
-func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) (AffinityTerms, error) {
+func NewAffinityTerms(terms []placementv1beta1.ClusterSelectorTerm) (AffinityTerms, error) {
 	res := make([]affinityTerm, 0, len(terms))
 	for i := range terms {
 		// skipping for empty terms
@@ -83,7 +84,7 @@ func NewAffinityTerms(terms []fleetv1beta1.ClusterSelectorTerm) (AffinityTerms, 
 }
 
 // NewPreferredAffinityTerms returns the list of processed preferred affinity terms.
-func NewPreferredAffinityTerms(terms []fleetv1beta1.PreferredClusterSelector) (PreferredAffinityTerms, error) {
+func NewPreferredAffinityTerms(terms []placementv1beta1.PreferredClusterSelector) (PreferredAffinityTerms, error) {
 	res := make([]preferredAffinityTerm, 0, len(terms))
 	for i, term := range terms {
 		// skipping for weight == 0 or empty terms
@@ -100,6 +101,6 @@ func NewPreferredAffinityTerms(terms []fleetv1beta1.PreferredClusterSelector) (P
 	return res, nil
 }
 
-func isEmptyClusterSelectorTerm(term fleetv1beta1.ClusterSelectorTerm) bool {
+func isEmptyClusterSelectorTerm(term placementv1beta1.ClusterSelectorTerm) bool {
 	return len(term.LabelSelector.MatchLabels) == 0 && len(term.LabelSelector.MatchExpressions) == 0
 }

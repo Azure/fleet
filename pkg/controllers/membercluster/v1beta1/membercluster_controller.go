@@ -28,7 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -56,12 +57,12 @@ type Reconciler struct {
 	// Need to update MC based on the IMC conditions based on the agent list.
 	NetworkingAgentsEnabled bool
 	// agents are used as hashset to query the expected agent type, so the value will be ignored.
-	agents map[fleetv1beta1.AgentType]bool
+	agents map[clusterv1beta1.AgentType]bool
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconcile", "memberCluster", req.NamespacedName)
-	var oldMC fleetv1beta1.MemberCluster
+	var oldMC clusterv1beta1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &oldMC); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -84,7 +85,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Get current internal member cluster.
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: mc.Name}
-	var imc fleetv1beta1.InternalMemberCluster
+	var imc clusterv1beta1.InternalMemberCluster
 	currentImc := &imc
 	if err := r.Client.Get(ctx, imcNamespacedName, &imc); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -96,13 +97,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	switch mc.Spec.State {
-	case fleetv1beta1.ClusterStateJoin:
+	case clusterv1beta1.ClusterStateJoin:
 		if err := r.join(ctx, mc, currentImc); err != nil {
 			klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
 			return ctrl.Result{}, err
 		}
 
-	case fleetv1beta1.ClusterStateLeave:
+	case clusterv1beta1.ClusterStateLeave:
 		if err := r.leave(ctx, mc, currentImc); err != nil {
 			klog.ErrorS(err, "failed to leave", "memberCluster", mcObjRef)
 			return ctrl.Result{}, err
@@ -128,7 +129,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 // garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
-func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *fleetv1beta1.MemberCluster) (ctrl.Result, error) {
+func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
 	var works workv1alpha1.WorkList
 	var clusterNS corev1.Namespace
 	// check if the namespace still exist
@@ -162,7 +163,7 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *fleetv1beta1.Me
 }
 
 // ensureFinalizer makes sure that the member cluster CR has a finalizer on it
-func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *fleetv1beta1.MemberCluster) error {
+func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
 	if controllerutil.ContainsFinalizer(mc, utils.MemberClusterFinalizer) {
 		return nil
 	}
@@ -179,7 +180,7 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *fleetv1beta1.Membe
 //
 // Condition ReadyToJoin == true means all the above actions have been done successfully at least once.
 // It will never turn false after true.
-func (r *Reconciler) join(ctx context.Context, mc *fleetv1beta1.MemberCluster, imc *fleetv1beta1.InternalMemberCluster) error {
+func (r *Reconciler) join(ctx context.Context, mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) error {
 	klog.V(2).InfoS("join", "memberCluster", klog.KObj(mc))
 
 	namespaceName, err := r.syncNamespace(ctx, mc)
@@ -208,7 +209,7 @@ func (r *Reconciler) join(ctx context.Context, mc *fleetv1beta1.MemberCluster, i
 // leave notifies member cluster to leave by setting InternalMemberCluster's state to Leave.
 //
 // Note that leave doesn't delete any of the resources created by join(). Instead, deleting MemberCluster will delete them.
-func (r *Reconciler) leave(ctx context.Context, mc *fleetv1beta1.MemberCluster, imc *fleetv1beta1.InternalMemberCluster) error {
+func (r *Reconciler) leave(ctx context.Context, mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) error {
 	klog.V(2).InfoS("leave", "memberCluster", klog.KObj(mc))
 	// Never joined successfully before.
 	if imc == nil {
@@ -225,7 +226,7 @@ func (r *Reconciler) leave(ctx context.Context, mc *fleetv1beta1.MemberCluster, 
 }
 
 // syncNamespace creates or updates the namespace for member cluster.
-func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1beta1.MemberCluster) (string, error) {
+func (r *Reconciler) syncNamespace(ctx context.Context, mc *clusterv1beta1.MemberCluster) (string, error) {
 	klog.V(2).InfoS("syncNamespace", "memberCluster", klog.KObj(mc))
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	fleetNamespaceLabelValue := "true"
@@ -233,7 +234,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1beta1.MemberC
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
-			Labels:          map[string]string{fleetv1beta1.FleetResourceLabelKey: fleetNamespaceLabelValue},
+			Labels:          map[string]string{placementv1beta1.FleetResourceLabelKey: fleetNamespaceLabelValue},
 		},
 	}
 
@@ -254,10 +255,10 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1beta1.MemberC
 	}
 
 	// migration: To add new label to all existing member cluster namespaces.
-	if currentNS.GetLabels()[fleetv1beta1.FleetResourceLabelKey] == "" {
+	if currentNS.GetLabels()[placementv1beta1.FleetResourceLabelKey] == "" {
 		klog.V(2).InfoS("patching namespace", "memberCluster", klog.KObj(mc), "namespace", namespaceName)
 		patch := client.MergeFrom(currentNS.DeepCopy())
-		currentNS.ObjectMeta.Labels[fleetv1beta1.FleetResourceLabelKey] = fleetNamespaceLabelValue
+		currentNS.ObjectMeta.Labels[placementv1beta1.FleetResourceLabelKey] = fleetNamespaceLabelValue
 		if err := r.Client.Patch(ctx, &currentNS, patch, client.FieldOwner(utils.MCControllerFieldManagerName)); err != nil {
 			return "", fmt.Errorf("failed to patch namespace %s: %w", namespaceName, err)
 		}
@@ -268,7 +269,7 @@ func (r *Reconciler) syncNamespace(ctx context.Context, mc *fleetv1beta1.MemberC
 }
 
 // syncRole creates or updates the role for member cluster to access its namespace in hub cluster.
-func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1beta1.MemberCluster, namespaceName string) (string, error) {
+func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberCluster, namespaceName string) (string, error) {
 	klog.V(2).InfoS("syncRole", "memberCluster", klog.KObj(mc))
 	// Role name is created using member cluster name.
 	roleName := fmt.Sprintf(utils.RoleNameFormat, mc.Name)
@@ -311,7 +312,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1beta1.MemberCluste
 }
 
 // syncRoleBinding creates or updates the role binding for member cluster to access its namespace in hub cluster.
-func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1beta1.MemberCluster, namespaceName string, roleName string) error {
+func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *clusterv1beta1.MemberCluster, namespaceName string, roleName string) error {
 	klog.V(2).InfoS("syncRoleBinding", "memberCluster", klog.KObj(mc))
 	// Role binding name is created using member cluster name
 	roleBindingName := fmt.Sprintf(utils.RoleBindingNameFormat, mc.Name)
@@ -360,16 +361,16 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1beta1.Membe
 }
 
 // syncInternalMemberCluster is used to sync spec from MemberCluster to InternalMemberCluster.
-func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1beta1.MemberCluster,
-	namespaceName string, currentImc *fleetv1beta1.InternalMemberCluster) (*fleetv1beta1.InternalMemberCluster, error) {
+func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv1beta1.MemberCluster,
+	namespaceName string, currentImc *clusterv1beta1.InternalMemberCluster) (*clusterv1beta1.InternalMemberCluster, error) {
 	klog.V(2).InfoS("syncInternalMemberCluster", "memberCluster", klog.KObj(mc))
-	expectedImc := fleetv1beta1.InternalMemberCluster{
+	expectedImc := clusterv1beta1.InternalMemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mc.Name,
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
-		Spec: fleetv1beta1.InternalMemberClusterSpec{
+		Spec: clusterv1beta1.InternalMemberClusterSpec{
 			State:                  mc.Spec.State,
 			HeartbeatPeriodSeconds: mc.Spec.HeartbeatPeriodSeconds,
 		},
@@ -400,19 +401,19 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1b
 	return currentImc, nil
 }
 
-func toOwnerReference(memberCluster *fleetv1beta1.MemberCluster) *metav1.OwnerReference {
-	return &metav1.OwnerReference{APIVersion: fleetv1beta1.GroupVersion.String(), Kind: fleetv1beta1.MemberClusterKind,
+func toOwnerReference(memberCluster *clusterv1beta1.MemberCluster) *metav1.OwnerReference {
+	return &metav1.OwnerReference{APIVersion: placementv1beta1.GroupVersion.String(), Kind: clusterv1beta1.MemberClusterKind,
 		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 }
 
 // syncInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
-func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1beta1.InternalMemberCluster, mc *fleetv1beta1.MemberCluster) {
+func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.InternalMemberCluster, mc *clusterv1beta1.MemberCluster) {
 	klog.V(2).InfoS("syncInternalMemberClusterStatus", "memberCluster", klog.KObj(mc))
 	if imc == nil {
 		return
 	}
 
-	// TODO: We didn't handle condition type: fleetv1beta1.ConditionTypeMemberClusterHealthy.
+	// TODO: We didn't handle condition type: placementv1beta1.ConditionTypeMemberClusterHealthy.
 	// Copy Agent status.
 	mc.Status.AgentStatus = imc.Status.AgentStatus
 	r.aggregateJoinedCondition(mc)
@@ -421,7 +422,7 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *fleetv1beta1.InternalM
 }
 
 // updateMemberClusterStatus is used to update member cluster status.
-func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1beta1.MemberCluster) error {
+func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
 	klog.V(2).InfoS("updateMemberClusterStatus", "memberCluster", klog.KObj(mc))
 	backOffPeriod := retry.DefaultRetry
 	backOffPeriod.Cap = time.Second * time.Duration(mc.Spec.HeartbeatPeriodSeconds/2)
@@ -436,7 +437,7 @@ func (r *Reconciler) updateMemberClusterStatus(ctx context.Context, mc *fleetv1b
 }
 
 // aggregateJoinedCondition is used to calculate and mark the joined or left status for member cluster based on join conditions from all agents.
-func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1beta1.MemberCluster) {
+func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) {
 	klog.V(2).InfoS("syncJoinedCondition", "memberCluster", klog.KObj(mc))
 	if len(mc.Status.AgentStatus) < len(r.agents) {
 		markMemberClusterUnknown(r.recorder, mc)
@@ -444,13 +445,13 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1beta1.MemberCluster) {
 	}
 	joined := true
 	left := true
-	reportedAgents := make(map[fleetv1beta1.AgentType]bool)
+	reportedAgents := make(map[clusterv1beta1.AgentType]bool)
 	for _, agentStatus := range mc.Status.AgentStatus {
 		if !r.agents[agentStatus.Type] {
 			klog.V(2).InfoS("Ignoring unexpected agent type status", "agentStatus", agentStatus)
 			continue // ignore any unexpected agent type
 		}
-		condition := meta.FindStatusCondition(agentStatus.Conditions, string(fleetv1beta1.AgentJoined))
+		condition := meta.FindStatusCondition(agentStatus.Conditions, string(clusterv1beta1.AgentJoined))
 		if condition == nil {
 			markMemberClusterUnknown(r.recorder, mc)
 			return
@@ -476,10 +477,10 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1beta1.MemberCluster) {
 }
 
 // markMemberClusterReadyToJoin is used to update the ReadyToJoin condition as true of member cluster.
-func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc fleetv1beta1.ConditionedObj) {
+func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
+		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterReadyToJoin,
 		ObservedGeneration: mc.GetGeneration(),
@@ -496,10 +497,10 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc fleetv1beta1
 }
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
-func markMemberClusterJoined(recorder record.EventRecorder, mc fleetv1beta1.ConditionedObj) {
+func markMemberClusterJoined(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterJoined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
+		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionTrue,
 		Reason:             reasonMemberClusterJoined,
 		ObservedGeneration: mc.GetGeneration(),
@@ -517,16 +518,16 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc fleetv1beta1.Cond
 }
 
 // markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
-func markMemberClusterLeft(recorder record.EventRecorder, mc fleetv1beta1.ConditionedObj) {
+func markMemberClusterLeft(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
+		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterLeft,
 		ObservedGeneration: mc.GetGeneration(),
 	}
 	notReadyCondition := metav1.Condition{
-		Type:               string(fleetv1beta1.ConditionTypeMemberClusterReadyToJoin),
+		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
 		Status:             metav1.ConditionFalse,
 		Reason:             reasonMemberClusterNotReadyToJoin,
 		ObservedGeneration: mc.GetGeneration(),
@@ -544,10 +545,10 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc fleetv1beta1.Condit
 }
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
-func markMemberClusterUnknown(recorder record.EventRecorder, mc fleetv1beta1.ConditionedObj) {
+func markMemberClusterUnknown(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
-		Type:               string(fleetv1beta1.ConditionTypeMemberClusterJoined),
+		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
 		Status:             metav1.ConditionUnknown,
 		Reason:             reasonMemberClusterUnknown,
 		ObservedGeneration: mc.GetGeneration(),
@@ -566,15 +567,15 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc fleetv1beta1.Con
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("mcv1beta1")
-	r.agents = make(map[fleetv1beta1.AgentType]bool)
-	r.agents[fleetv1beta1.MemberAgent] = true
+	r.agents = make(map[clusterv1beta1.AgentType]bool)
+	r.agents[clusterv1beta1.MemberAgent] = true
 
 	if r.NetworkingAgentsEnabled {
-		r.agents[fleetv1beta1.MultiClusterServiceAgent] = true
-		r.agents[fleetv1beta1.ServiceExportImportAgent] = true
+		r.agents[clusterv1beta1.MultiClusterServiceAgent] = true
+		r.agents[clusterv1beta1.ServiceExportImportAgent] = true
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1beta1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Owns(&fleetv1beta1.InternalMemberCluster{}).
+		For(&clusterv1beta1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&clusterv1beta1.InternalMemberCluster{}).
 		Complete(r)
 }

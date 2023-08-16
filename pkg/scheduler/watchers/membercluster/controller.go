@@ -20,7 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -99,7 +100,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// process the CRPs accordingly.
 
 	// Retrieve the member cluster.
-	memberCluster := &fleetv1beta1.MemberCluster{}
+	memberCluster := &clusterv1beta1.MemberCluster{}
 	memberClusterKey := types.NamespacedName{Name: req.Name}
 	isMemberClusterMissing := false
 
@@ -120,14 +121,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// List all CRPs.
 	//
 	// Note that this controller reads CRPs from the same cache as the scheduler.
-	crpList := &fleetv1beta1.ClusterResourcePlacementList{}
+	crpList := &placementv1beta1.ClusterResourcePlacementList{}
 	if err := r.Client.List(ctx, crpList); err != nil {
 		klog.ErrorS(err, "Failed to list CRPs", "memberCluster", memberClusterRef)
 		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
 
 	crps := crpList.Items
-	if !isMemberClusterMissing && memberCluster.Spec.State == fleetv1beta1.ClusterStateJoin {
+	if !isMemberClusterMissing && memberCluster.Spec.State == clusterv1beta1.ClusterStateJoin {
 		// If the member cluster is set to the left state, the scheduler needs to process all
 		// CRPs (case 2c)); otherwise, only CRPs of the PickAll type + CRPs of the PickN type,
 		// which have not been fully scheduled, need to be processed (case 1a) and 1b)).
@@ -181,8 +182,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return false
 			}
 
-			oldCluster, oldOk := e.ObjectOld.(*fleetv1beta1.MemberCluster)
-			newCluster, newOk := e.ObjectNew.(*fleetv1beta1.MemberCluster)
+			oldCluster, oldOk := e.ObjectOld.(*clusterv1beta1.MemberCluster)
+			newCluster, newOk := e.ObjectNew.(*clusterv1beta1.MemberCluster)
 			if !oldOk || !newOk {
 				err := controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to cast runtime objects in update event to member cluster objects"))
 				klog.ErrorS(err, "Failed to process update event")
@@ -193,13 +194,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			//
 			// Note that the controller runs only when label changes happen on joined clusters.
 			clusterKObj := klog.KObj(newCluster)
-			if newCluster.Spec.State == fleetv1beta1.ClusterStateJoin && !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
+			if newCluster.Spec.State == clusterv1beta1.ClusterStateJoin && !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				klog.V(2).Info("An member cluster label change has been detected", "memberCluster", clusterKObj)
 				return true
 			}
 
 			// The cluster has left.
-			if oldCluster.Spec.State == fleetv1beta1.ClusterStateJoin && newCluster.Spec.State == fleetv1beta1.ClusterStateLeave {
+			if oldCluster.Spec.State == clusterv1beta1.ClusterStateJoin && newCluster.Spec.State == clusterv1beta1.ClusterStateLeave {
 				klog.V(2).Info("A member cluster has left the fleet", "memberCluster", clusterKObj)
 				return true
 			}
@@ -223,7 +224,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&fleetv1beta1.MemberCluster{}).
+		For(&clusterv1beta1.MemberCluster{}).
 		WithEventFilter(customPredicate).
 		Complete(r)
 }

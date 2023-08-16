@@ -11,9 +11,9 @@ import (
 	"context"
 	"fmt"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
-
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 const (
@@ -133,7 +133,7 @@ func (p *Plugin) readPluginState(state framework.CycleStatePluginReadWriter) (*p
 func (p *Plugin) PostBatch(
 	_ context.Context,
 	_ framework.CycleStatePluginReadWriter,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 ) (int, *framework.Status) {
 	if policy.Spec.Policy == nil {
 		// The policy does not exist; note that this normally will not occur as in this case
@@ -161,7 +161,7 @@ func (p *Plugin) PostBatch(
 func (p *Plugin) PreFilter(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
 	if policy.Spec.Policy == nil {
 		// The policy does not exist; in this case the policy is considered of the PickAll
@@ -209,8 +209,8 @@ func (p *Plugin) PreFilter(
 func (p *Plugin) Filter(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	cluster *fleetv1beta1.MemberCluster,
+	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
 	// Read the plugin state.
 	ps, err := p.readPluginState(state)
@@ -236,7 +236,7 @@ func (p *Plugin) Filter(
 func (p *Plugin) PreScore(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	policy *fleetv1beta1.ClusterSchedulingPolicySnapshot,
+	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
 	if policy.Spec.Policy == nil {
 		// The policy does not exist; in this case the policy is considered of the PickAll
@@ -277,8 +277,8 @@ func (p *Plugin) PreScore(
 func (p *Plugin) Score(
 	_ context.Context,
 	state framework.CycleStatePluginReadWriter,
-	_ *fleetv1beta1.ClusterSchedulingPolicySnapshot,
-	cluster *fleetv1beta1.MemberCluster,
+	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	cluster *clusterv1beta1.MemberCluster,
 ) (score *framework.ClusterScore, status *framework.Status) {
 	// Read the plugin state.
 	ps, err := p.readPluginState(state)

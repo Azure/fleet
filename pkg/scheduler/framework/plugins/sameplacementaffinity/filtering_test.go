@@ -13,7 +13,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -32,28 +33,28 @@ var (
 func TestFilter(t *testing.T) {
 	tests := []struct {
 		name                     string
-		scheduledOrBoundBindings []*fleetv1beta1.ClusterResourceBinding
+		scheduledOrBoundBindings []*placementv1beta1.ClusterResourceBinding
 		want                     *framework.Status
 	}{
 		{
 			name: "placement has already been scheduled",
-			scheduledOrBoundBindings: []*fleetv1beta1.ClusterResourceBinding{
+			scheduledOrBoundBindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding1",
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						State:         fleetv1beta1.BindingStateScheduled,
+						State:         placementv1beta1.BindingStateScheduled,
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding2",
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: "another-cluster",
-						State:         fleetv1beta1.BindingStateScheduled,
+						State:         placementv1beta1.BindingStateScheduled,
 					},
 				},
 			},
@@ -61,14 +62,14 @@ func TestFilter(t *testing.T) {
 		},
 		{
 			name: "placement has already been bounded",
-			scheduledOrBoundBindings: []*fleetv1beta1.ClusterResourceBinding{
+			scheduledOrBoundBindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding1",
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: clusterName,
-						State:         fleetv1beta1.BindingStateBound,
+						State:         placementv1beta1.BindingStateBound,
 					},
 				},
 			},
@@ -76,19 +77,19 @@ func TestFilter(t *testing.T) {
 		},
 		{
 			name:                     "no bindings",
-			scheduledOrBoundBindings: []*fleetv1beta1.ClusterResourceBinding{},
+			scheduledOrBoundBindings: []*placementv1beta1.ClusterResourceBinding{},
 			want:                     nil,
 		},
 		{
 			name: "placement has been bounded/scheduled on other cluster",
-			scheduledOrBoundBindings: []*fleetv1beta1.ClusterResourceBinding{
+			scheduledOrBoundBindings: []*placementv1beta1.ClusterResourceBinding{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "binding1",
 					},
-					Spec: fleetv1beta1.ResourceBindingSpec{
+					Spec: placementv1beta1.ResourceBindingSpec{
 						TargetCluster: "another-cluster",
-						State:         fleetv1beta1.BindingStateBound,
+						State:         placementv1beta1.BindingStateBound,
 					},
 				},
 			},
@@ -99,7 +100,7 @@ func TestFilter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := New()
 			state := framework.NewCycleState(nil, nil, tc.scheduledOrBoundBindings)
-			cluster := fleetv1beta1.MemberCluster{
+			cluster := clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},

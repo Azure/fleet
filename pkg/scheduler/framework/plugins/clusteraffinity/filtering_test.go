@@ -15,7 +15,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
@@ -33,7 +34,7 @@ var (
 func TestPreFilter(t *testing.T) {
 	tests := []struct {
 		name            string
-		policy          *fleetv1beta1.PlacementPolicy
+		policy          *placementv1beta1.PlacementPolicy
 		want            *framework.Status
 		wantPluginState *pluginState
 	}{
@@ -43,21 +44,21 @@ func TestPreFilter(t *testing.T) {
 		},
 		{
 			name:   "nil affinity",
-			policy: &fleetv1beta1.PlacementPolicy{},
+			policy: &placementv1beta1.PlacementPolicy{},
 			want:   framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "nil cluster affinity",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{},
 			},
 			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
 		},
 		{
 			name: "no cluster affinity",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{},
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{},
 				},
 			},
 			want: framework.NewNonErrorStatus(framework.Skip, defaultPluginName),
@@ -68,14 +69,14 @@ func TestPreFilter(t *testing.T) {
 		},
 		{
 			name: "no required terms and empty preferred terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{},
-						PreferredDuringSchedulingIgnoredDuringExecution: []fleetv1beta1.PreferredClusterSelector{
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{},
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
 								Weight: 0,
-								Preference: fleetv1beta1.ClusterSelectorTerm{
+								Preference: placementv1beta1.ClusterSelectorTerm{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"region": "us-west",
@@ -95,14 +96,14 @@ func TestPreFilter(t *testing.T) {
 		},
 		{
 			name: "no required terms and multiple preferred terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{},
-						PreferredDuringSchedulingIgnoredDuringExecution: []fleetv1beta1.PreferredClusterSelector{
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{},
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
 								Weight: 5,
-								Preference: fleetv1beta1.ClusterSelectorTerm{
+								Preference: placementv1beta1.ClusterSelectorTerm{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"region": "us-west",
@@ -112,7 +113,7 @@ func TestPreFilter(t *testing.T) {
 							},
 							{
 								Weight: 1,
-								Preference: fleetv1beta1.ClusterSelectorTerm{
+								Preference: placementv1beta1.ClusterSelectorTerm{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{},
 									},
@@ -137,11 +138,11 @@ func TestPreFilter(t *testing.T) {
 		},
 		{
 			name: "empty required terms and no preferred terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{},
@@ -160,11 +161,11 @@ func TestPreFilter(t *testing.T) {
 		},
 		{
 			name: "multiple required terms and no preferred terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{"region": "us-west"},
@@ -190,11 +191,11 @@ func TestPreFilter(t *testing.T) {
 		},
 		{
 			name: "multiple required terms and preferred terms",
-			policy: &fleetv1beta1.PlacementPolicy{
-				Affinity: &fleetv1beta1.Affinity{
-					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+			policy: &placementv1beta1.PlacementPolicy{
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{"region": "us-west"},
@@ -202,10 +203,10 @@ func TestPreFilter(t *testing.T) {
 								},
 							},
 						},
-						PreferredDuringSchedulingIgnoredDuringExecution: []fleetv1beta1.PreferredClusterSelector{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
 								Weight: 5,
-								Preference: fleetv1beta1.ClusterSelectorTerm{
+								Preference: placementv1beta1.ClusterSelectorTerm{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"region": "us-west",
@@ -215,7 +216,7 @@ func TestPreFilter(t *testing.T) {
 							},
 							{
 								Weight: 1,
-								Preference: fleetv1beta1.ClusterSelectorTerm{
+								Preference: placementv1beta1.ClusterSelectorTerm{
 									LabelSelector: metav1.LabelSelector{
 										MatchLabels: map[string]string{},
 									},
@@ -246,8 +247,8 @@ func TestPreFilter(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			state := framework.NewCycleState(nil, nil)
-			snapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+			snapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
 					Policy: tc.policy,
 				},
 			}
@@ -275,7 +276,7 @@ func TestFilter(t *testing.T) {
 		name              string
 		ps                *pluginState
 		notSetPluginState bool
-		cluster           *fleetv1beta1.MemberCluster
+		cluster           *clusterv1beta1.MemberCluster
 		want              *framework.Status
 	}{
 		{
@@ -296,7 +297,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -316,7 +317,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{

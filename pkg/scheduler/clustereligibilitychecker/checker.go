@@ -13,7 +13,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 const (
@@ -87,9 +87,9 @@ func New(opts ...Option) *ClusterEligibilityChecker {
 
 // IsEligible returns if a cluster is eligible for resource placement; if not, it will
 // also return the reason.
-func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.MemberCluster) (eligible bool, reason string) {
+func (checker *ClusterEligibilityChecker) IsEligible(cluster *clusterv1beta1.MemberCluster) (eligible bool, reason string) {
 	// Filter out clusters that have left the fleet.
-	if cluster.Spec.State == fleetv1beta1.ClusterStateLeave {
+	if cluster.Spec.State == clusterv1beta1.ClusterStateLeave {
 		return false, "cluster has left the fleet"
 	}
 
@@ -99,7 +99,7 @@ func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.Membe
 
 	// Filter out clusters that are no longer connected to the fleet, i.e., its heartbeat signals
 	// have stopped for a prolonged period of time.
-	memberAgentStatus := cluster.GetAgentStatus(fleetv1beta1.MemberAgent)
+	memberAgentStatus := cluster.GetAgentStatus(clusterv1beta1.MemberAgent)
 	if memberAgentStatus == nil {
 		// The member agent has not updated its status with the hub cluster yet.
 		return false, "cluster is not connected to the fleet: member agent not online yet"
@@ -113,7 +113,7 @@ func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.Membe
 		return false, fmt.Sprintf("cluster is not connected to the fleet: no recent heartbeat signals (last received %.2f minutes ago)", sinceLastHeartbeat.Minutes())
 	}
 
-	memberAgentJoinedCond := cluster.GetAgentCondition(fleetv1beta1.MemberAgent, fleetv1beta1.AgentJoined)
+	memberAgentJoinedCond := cluster.GetAgentCondition(clusterv1beta1.MemberAgent, clusterv1beta1.AgentJoined)
 	if memberAgentJoinedCond == nil || memberAgentJoinedCond.Status != metav1.ConditionTrue {
 		// The member agent has not joined yet; i.e., some of the controllers have not been
 		// spun up.
@@ -125,7 +125,7 @@ func (checker *ClusterEligibilityChecker) IsEligible(cluster *fleetv1beta1.Membe
 		return false, "cluster is not connected to the fleet: member agent not joined yet"
 	}
 
-	memberAgentHealthyCond := cluster.GetAgentCondition(fleetv1beta1.MemberAgent, fleetv1beta1.AgentHealthy)
+	memberAgentHealthyCond := cluster.GetAgentCondition(clusterv1beta1.MemberAgent, clusterv1beta1.AgentHealthy)
 	if memberAgentHealthyCond == nil {
 		// The health condition is absent.
 		return false, "cluster is not connected to the fleet: health condition from member agent is not available"

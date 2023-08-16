@@ -12,7 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 const (
@@ -23,7 +24,7 @@ func TestMatches(t *testing.T) {
 	tests := []struct {
 		name    string
 		term    *affinityTerm
-		cluster *fleetv1beta1.MemberCluster
+		cluster *clusterv1beta1.MemberCluster
 		want    bool
 	}{
 		{
@@ -31,7 +32,7 @@ func TestMatches(t *testing.T) {
 			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -46,7 +47,7 @@ func TestMatches(t *testing.T) {
 			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -61,7 +62,7 @@ func TestMatches(t *testing.T) {
 			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{}),
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -76,7 +77,7 @@ func TestMatches(t *testing.T) {
 			term: &affinityTerm{
 				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -101,7 +102,7 @@ func TestAffinityTermsMatches(t *testing.T) {
 	tests := []struct {
 		name    string
 		terms   AffinityTerms
-		cluster *fleetv1beta1.MemberCluster
+		cluster *clusterv1beta1.MemberCluster
 		want    bool
 	}{
 		{
@@ -111,7 +112,7 @@ func TestAffinityTermsMatches(t *testing.T) {
 					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -131,7 +132,7 @@ func TestAffinityTermsMatches(t *testing.T) {
 					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -151,7 +152,7 @@ func TestAffinityTermsMatches(t *testing.T) {
 					selector: labels.SelectorFromSet(map[string]string{"region": "us-east"}),
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -168,7 +169,7 @@ func TestAffinityTermsMatches(t *testing.T) {
 					selector: labels.SelectorFromSet(map[string]string{"region": "us-east"}),
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -181,7 +182,7 @@ func TestAffinityTermsMatches(t *testing.T) {
 		{
 			name:  "empty terms",
 			terms: []affinityTerm{},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -206,13 +207,13 @@ func TestScore(t *testing.T) {
 	tests := []struct {
 		name    string
 		terms   PreferredAffinityTerms
-		cluster *fleetv1beta1.MemberCluster
+		cluster *clusterv1beta1.MemberCluster
 		want    int32
 	}{
 		{
 			name:  "empty terms",
 			terms: []preferredAffinityTerm{},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -238,7 +239,7 @@ func TestScore(t *testing.T) {
 					weight: -8,
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -264,7 +265,7 @@ func TestScore(t *testing.T) {
 					weight: -8,
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -291,7 +292,7 @@ func TestScore(t *testing.T) {
 					weight: -8,
 				},
 			},
-			cluster: &fleetv1beta1.MemberCluster{
+			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 					Labels: map[string]string{
@@ -316,7 +317,7 @@ func TestScore(t *testing.T) {
 func TestNewAffinityTerms(t *testing.T) {
 	tests := []struct {
 		name  string
-		terms []fleetv1beta1.ClusterSelectorTerm
+		terms []placementv1beta1.ClusterSelectorTerm
 		want  AffinityTerms
 	}{
 		{
@@ -325,12 +326,12 @@ func TestNewAffinityTerms(t *testing.T) {
 		},
 		{
 			name:  "empty terms",
-			terms: []fleetv1beta1.ClusterSelectorTerm{},
+			terms: []placementv1beta1.ClusterSelectorTerm{},
 			want:  []affinityTerm{},
 		},
 		{
 			name: "nonempty terms have empty term",
-			terms: []fleetv1beta1.ClusterSelectorTerm{
+			terms: []placementv1beta1.ClusterSelectorTerm{
 				{
 					LabelSelector: metav1.LabelSelector{},
 				},
@@ -349,7 +350,7 @@ func TestNewAffinityTerms(t *testing.T) {
 		},
 		{
 			name: "nonempty terms",
-			terms: []fleetv1beta1.ClusterSelectorTerm{
+			terms: []placementv1beta1.ClusterSelectorTerm{
 				{
 					LabelSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -381,7 +382,7 @@ func TestNewAffinityTerms(t *testing.T) {
 func TestNewPreferredAffinityTerms(t *testing.T) {
 	tests := []struct {
 		name  string
-		terms []fleetv1beta1.PreferredClusterSelector
+		terms []placementv1beta1.PreferredClusterSelector
 		want  PreferredAffinityTerms
 	}{
 		{
@@ -390,14 +391,14 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 		},
 		{
 			name:  "empty terms",
-			terms: []fleetv1beta1.PreferredClusterSelector{},
+			terms: []placementv1beta1.PreferredClusterSelector{},
 			want:  []preferredAffinityTerm{},
 		},
 		{
 			name: "nonempty terms have empty term",
-			terms: []fleetv1beta1.PreferredClusterSelector{
+			terms: []placementv1beta1.PreferredClusterSelector{
 				{
-					Preference: fleetv1beta1.ClusterSelectorTerm{
+					Preference: placementv1beta1.ClusterSelectorTerm{
 						LabelSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{},
 						},
@@ -405,7 +406,7 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 					Weight: 5,
 				},
 				{
-					Preference: fleetv1beta1.ClusterSelectorTerm{
+					Preference: placementv1beta1.ClusterSelectorTerm{
 						LabelSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"region": "us-west",
@@ -419,9 +420,9 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 		},
 		{
 			name: "nonempty terms",
-			terms: []fleetv1beta1.PreferredClusterSelector{
+			terms: []placementv1beta1.PreferredClusterSelector{
 				{
-					Preference: fleetv1beta1.ClusterSelectorTerm{
+					Preference: placementv1beta1.ClusterSelectorTerm{
 						LabelSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"region": "us-west",

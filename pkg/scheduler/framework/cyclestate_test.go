@@ -11,45 +11,46 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // TestCycleStateBasicOps tests the basic ops of a CycleState.
 func TestCycleStateBasicOps(t *testing.T) {
-	clusters := []fleetv1beta1.MemberCluster{
+	clusters := []clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName,
 			},
 		},
 	}
-	scheduledOrBoundBindings := []*fleetv1beta1.ClusterResourceBinding{
+	scheduledOrBoundBindings := []*placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: bindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: clusterName,
-				State:         fleetv1beta1.BindingStateBound,
+				State:         placementv1beta1.BindingStateBound,
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: altBindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: altClusterName,
-				State:         fleetv1beta1.BindingStateScheduled,
+				State:         placementv1beta1.BindingStateScheduled,
 			},
 		},
 	}
 
-	obsoleteBindings := []*fleetv1beta1.ClusterResourceBinding{
+	obsoleteBindings := []*placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: anotherBindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: anotherClusterName,
 			},
 		},
@@ -87,22 +88,22 @@ func TestCycleStateBasicOps(t *testing.T) {
 
 // TestPrepareScheduledOrBoundBindingsMap tests the prepareScheduledOrBoundBindingsMap function.
 func TestPrepareScheduledOrBoundBindingsMap(t *testing.T) {
-	scheduled := []*fleetv1beta1.ClusterResourceBinding{
+	scheduled := []*placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: bindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: clusterName,
 			},
 		},
 	}
-	bound := []*fleetv1beta1.ClusterResourceBinding{
+	bound := []*placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: altBindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: altClusterName,
 			},
 		},
@@ -121,12 +122,12 @@ func TestPrepareScheduledOrBoundBindingsMap(t *testing.T) {
 
 // TestPrepareObsoleteBindingsMap tests the prepareObsoleteBindingsMap function.
 func TestPrepareObsoleteBindingsMap(t *testing.T) {
-	obsolete := []*fleetv1beta1.ClusterResourceBinding{
+	obsolete := []*placementv1beta1.ClusterResourceBinding{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: bindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: clusterName,
 			},
 		},
@@ -134,7 +135,7 @@ func TestPrepareObsoleteBindingsMap(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: altBindingName,
 			},
-			Spec: fleetv1beta1.ResourceBindingSpec{
+			Spec: placementv1beta1.ResourceBindingSpec{
 				TargetCluster: altClusterName,
 			},
 		},
