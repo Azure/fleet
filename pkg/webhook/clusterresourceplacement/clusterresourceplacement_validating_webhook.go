@@ -33,7 +33,7 @@ func Add(mgr manager.Manager, _ []string) error {
 	return nil
 }
 
-// Handle replicaSetValidator denies all creation requests.
+// Handle clusterResourcePlacementValidator handles create, update CRP requests.
 func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	var crp fleetv1alpha1.ClusterResourcePlacement
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
