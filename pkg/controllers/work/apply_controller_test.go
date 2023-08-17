@@ -208,7 +208,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 		"manifest has a different spec, need update": {
 			manifestObj: func() *appsv1.Deployment {
 				alterObj := manifestObj.DeepCopy()
-				alterObj.Spec.Replicas = pointer.Int32Ptr(100)
+				alterObj.Spec.Replicas = pointer.Int32(100)
 				return alterObj
 			}(),
 			isSame: false,
@@ -854,7 +854,7 @@ func TestReconcile(t *testing.T) {
 					MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 						return nil
 					},
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
@@ -863,7 +863,7 @@ func TestReconcile(t *testing.T) {
 					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 						return nil
 					},
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
@@ -903,7 +903,7 @@ func TestReconcile(t *testing.T) {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
 					MockGet: getMock,
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
@@ -919,7 +919,7 @@ func TestReconcile(t *testing.T) {
 					MockCreate: func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 						return nil
 					},
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
@@ -934,14 +934,14 @@ func TestReconcile(t *testing.T) {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
 					MockGet: getMock,
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
 				spokeDynamicClient: clientFailDynamicClient,
 				spokeClient: &test.MockClient{
 					MockGet: getMockAppliedWork,
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
@@ -956,7 +956,7 @@ func TestReconcile(t *testing.T) {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
 					MockGet: getMock,
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return errors.New("failed")
 					},
 				},
@@ -975,14 +975,14 @@ func TestReconcile(t *testing.T) {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
 					MockGet: getMock,
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},
 				spokeDynamicClient: happyDynamicClient,
 				spokeClient: &test.MockClient{
 					MockGet: getMockAppliedWork,
-					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 						return nil
 					},
 				},

@@ -58,17 +58,10 @@ type CycleState struct {
 	obsoleteBindings map[string]bool
 
 	// skippedFilterPlugins is a set of Filter plugins that should be skipped in the current scheduling cycle.
-	//
-	// TO-DO (chenyu1): the sets package has added support for Go generic types in 1.26, and
-	// the String set has been deprecated; transition to the generic set when the new version
-	// becomes available.
-	skippedFilterPlugins sets.String
+	skippedFilterPlugins sets.Set[string]
+
 	// skippedScorePlugins is a set of Score plugins that should be skipped in the current scheduling cycle.
-	//
-	// TO-DO (chenyu1): the sets package has added support for Go generic types in 1.26, and
-	// the String set has been deprecated; transition to the generic set when the new version
-	// becomes available.
-	skippedScorePlugins sets.String
+	skippedScorePlugins sets.Set[string]
 	// desiredBatchSize is the desired batch size for the current scheduling cycle.
 	//
 	// This is set when scheduling policies of the PickN placement type.
@@ -142,7 +135,7 @@ func NewCycleState(clusters []clusterv1beta1.MemberCluster, obsoleteBindings []*
 		clusters:                 clusters,
 		scheduledOrBoundBindings: prepareScheduledOrBoundBindingsMap(scheduledOrBoundBindings...),
 		obsoleteBindings:         prepareObsoleteBindingsMap(obsoleteBindings),
-		skippedFilterPlugins:     sets.NewString(),
-		skippedScorePlugins:      sets.NewString(),
+		skippedFilterPlugins:     sets.New[string](),
+		skippedScorePlugins:      sets.New[string](),
 	}
 }
