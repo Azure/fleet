@@ -7,7 +7,7 @@ import (
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
@@ -109,7 +109,7 @@ func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool,
 	currentMC.SetUID("")
 	currentMC.SetResourceVersion("")
 	currentMC.SetGeneration(0)
-	currentMC.SetCreationTimestamp(v1.Time{})
+	currentMC.SetCreationTimestamp(metav1.Time{})
 	currentMC.SetDeletionTimestamp(nil)
 	currentMC.SetDeletionGracePeriodSeconds(nil)
 	currentMC.SetManagedFields(nil)
@@ -118,7 +118,7 @@ func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool,
 	oldMC.SetUID("")
 	oldMC.SetResourceVersion("")
 	oldMC.SetGeneration(0)
-	oldMC.SetCreationTimestamp(v1.Time{})
+	oldMC.SetCreationTimestamp(metav1.Time{})
 	oldMC.SetDeletionTimestamp(nil)
 	oldMC.SetDeletionGracePeriodSeconds(nil)
 	oldMC.SetManagedFields(nil)
