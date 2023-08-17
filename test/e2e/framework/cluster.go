@@ -2,6 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
+
 package framework
 
 import (
@@ -64,7 +65,7 @@ func GetClusterClient(cluster *Cluster) {
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Rest Mapper")
 
 	cluster.ImpersonateKubeClient, err = client.New(impersonateRestConfig, client.Options{Scheme: cluster.Scheme})
-	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Kube Client")
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Impersonate Kube Client")
 }
 
 func GetClientConfig(cluster *Cluster) clientcmd.ClientConfig {

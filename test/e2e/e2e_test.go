@@ -186,7 +186,7 @@ var _ = BeforeSuite(func() {
 
 	By("deploy member cluster in the hub cluster")
 	identity := rbacv1.Subject{
-		Name:      "member-agent-sa",
+		Name:      "hub-agent-sa",
 		Kind:      "ServiceAccount",
 		Namespace: utils.FleetSystemNamespace,
 	}

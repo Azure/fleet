@@ -18,6 +18,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -44,8 +45,9 @@ const (
 	testRole        = "wh-test-role"
 	testRoleBinding = "wh-test-role-binding"
 
-	crdStatusErrFormat      = `user: %s in groups: %v is not allowed to modify fleet CRD: %+v`
-	resourceStatusErrFormat = `user: %s in groups: %v is not allowed to modify fleet resource %s: %+v`
+	crdStatusErrFormat              = `user: %s in groups: %v is not allowed to modify fleet CRD: %+v`
+	resourceStatusErrFormat         = `user: %s in groups: %v is not allowed to modify fleet resource %s: %+v`
+	imcStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update IMC status: %+v"
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
@@ -703,6 +705,98 @@ var _ = Describe("Fleet's CR Resource Handler webhook tests", Ordered, func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "MemberCluster", types.NamespacedName{Name: mc.Name})))
 		})
+
+		It("should deny CREATE operation on internal member cluster CR for user not in system:masters group", func() {
+			imc := fleetv1alpha1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mc",
+					Namespace: "fleet-member-test-mc",
+				},
+				Spec: fleetv1alpha1.InternalMemberClusterSpec{
+					State:                  fleetv1alpha1.ClusterStateJoin,
+					HeartbeatPeriodSeconds: 30,
+				},
+			}
+
+			By("expecting denial of operation CREATE of Internal Member Cluster")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &imc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "InternalMemberCluster", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		})
+
+		It("should deny UPDATE operation on internal member cluster CR for user not in system:masters group", func() {
+			var imc fleetv1alpha1.InternalMemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc)).Should(Succeed())
+			imc.Spec.HeartbeatPeriodSeconds = 25
+
+			By("expecting denial of operation UPDATE of Internal Member Cluster")
+			err := HubCluster.ImpersonateKubeClient.Update(ctx, &imc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "InternalMemberCluster", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		})
+
+		It("should deny DELETE operation on internal member cluster CR for user not in system:masters group", func() {
+			var imc fleetv1alpha1.InternalMemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc)).Should(Succeed())
+
+			By("expecting denial of operation UPDATE of Internal Member Cluster")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &imc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "InternalMemberCluster", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		})
+
+		It("should deny UPDATE operation on internal member cluster CR status for user in system:masters group", func() {
+			var imc fleetv1alpha1.InternalMemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc)).Should(Succeed())
+			imc.Status = fleetv1alpha1.InternalMemberClusterStatus{
+				ResourceUsage: fleetv1alpha1.ResourceUsage{
+					Capacity: map[corev1.ResourceName]resource.Quantity{
+						corev1.ResourceCPU: {
+							Format: "testFormat",
+						},
+					},
+				},
+				AgentStatus: nil,
+			}
+			By("expecting denial of operation UPDATE of internal member cluster CR status")
+			err := HubCluster.KubeClient.Status().Update(ctx, &imc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, "kubernetes-admin", []string{"system:masters", "system:authenticated"}, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		})
+
+		// Without Ordered this test cause other updates to have conflicts especially the test above cause we are expecting a different error.
+		It("should allow UPDATE operation on internal member cluster CR spec for user in system:masters group", func() {
+			var imc fleetv1alpha1.InternalMemberCluster
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc)).Should(Succeed())
+			imc.Spec.HeartbeatPeriodSeconds = 25
+
+			By("expecting successful UPDATE of Internal Member Cluster Spec")
+			Expect(HubCluster.KubeClient.Update(ctx, &imc)).Should(Succeed())
+		})
+
+		It("should allow UPDATE operation on internal member cluster CR status for user in mc identity", func() {
+			Eventually(func() error {
+				var imc fleetv1alpha1.InternalMemberCluster
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc)).Should(Succeed())
+				imc.Status = fleetv1alpha1.InternalMemberClusterStatus{
+					ResourceUsage: fleetv1alpha1.ResourceUsage{
+						Capacity: map[corev1.ResourceName]resource.Quantity{
+							corev1.ResourceCPU: {
+								Format: "testFormat",
+							},
+						},
+					},
+					AgentStatus: nil,
+				}
+				By("expecting successful UPDATE of Internal Member Cluster Status")
+				err := HubCluster.ImpersonateKubeClient.Status().Update(ctx, &imc)
+				return err
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
 	})
 })
 
@@ -727,7 +821,6 @@ var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Create(ctx, &r)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create role call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			fmt.Println(string(statusErr.Status().Reason))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Role", types.NamespacedName{Name: r.Name, Namespace: r.Namespace})))
 		})
 
@@ -809,7 +902,6 @@ var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
 			err := HubCluster.ImpersonateKubeClient.Create(ctx, &rb)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create role binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			fmt.Println(string(statusErr.Status().Reason))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "RoleBinding", types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace})))
 		})
 
