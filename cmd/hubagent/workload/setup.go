@@ -104,6 +104,7 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		DisabledResourceConfig: disabledResourceConfig,
 		SkippedNamespaces:      skippedNamespaces,
 		Scheme:                 mgr.GetScheme(),
+		UncachedReader:         mgr.GetAPIReader(),
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)

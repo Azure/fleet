@@ -46,6 +46,7 @@ type Reconciler struct {
 
 	// UncachedReader is the uncached read-only client for accessing Kubernetes API server; in most cases client should
 	// be used instead, unless consistency becomes a serious concern.
+	// It's only needed by v1beta1 APIs.
 	UncachedReader client.Reader
 
 	// DisabledResourceConfig contains all the api resources that we won't select.
