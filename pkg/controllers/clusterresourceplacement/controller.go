@@ -192,10 +192,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		klog.V(2).InfoS("Placement has been synchronized", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
 		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementSyncSuccess", "Successfully synchronized the placement")
 	}
-	if !isCRPApplied(oldCRP) && isCRPApplied(crp) {
-		klog.V(2).InfoS("Placement has been applied", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementApplySuccess", "Successfully applied the placement")
-	}
+
+	// There is no need to check if the CRP is applied or not.
+	// If the applied condition is true, it means the scheduling is done & works have been synchronized.
+	// So that the rollout should be completed, and it will never reach to this line.
 
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status)
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
