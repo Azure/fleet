@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -720,7 +721,11 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{Client: fakeClient, Scheme: scheme}
+			r := Reconciler{
+				Client:   fakeClient,
+				Scheme:   scheme,
+				Recorder: record.NewFakeRecorder(10),
+			}
 			limit := fleetv1beta1.RevisionHistoryLimitDefaultValue
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
@@ -1012,7 +1017,11 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{Client: fakeClient, Scheme: scheme}
+			r := Reconciler{
+				Client:   fakeClient,
+				Scheme:   scheme,
+				Recorder: record.NewFakeRecorder(10),
+			}
 			_, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
@@ -1619,8 +1628,9 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 			r := Reconciler{
-				Client: fakeClient,
-				Scheme: scheme,
+				Client:   fakeClient,
+				Scheme:   scheme,
+				Recorder: record.NewFakeRecorder(10),
 			}
 			limit := fleetv1beta1.RevisionHistoryLimitDefaultValue
 			if tc.revisionHistoryLimit != nil {
@@ -2249,7 +2259,12 @@ func TestHandleDelete(t *testing.T) {
 				WithScheme(scheme).
 				WithObjects(objects...).
 				Build()
-			r := Reconciler{Client: fakeClient, Scheme: scheme, UncachedReader: fakeClient}
+			r := Reconciler{
+				Client:         fakeClient,
+				Scheme:         scheme,
+				UncachedReader: fakeClient,
+				Recorder:       record.NewFakeRecorder(10),
+			}
 			got, err := r.handleDelete(ctx, crp)
 			if err != nil {
 				t.Fatalf("failed to handle delete: %v", err)
@@ -2275,6 +2290,113 @@ func TestHandleDelete(t *testing.T) {
 			gotCRP := fleetv1beta1.ClusterResourcePlacement{}
 			if err := fakeClient.Get(ctx, types.NamespacedName{Name: crp.GetName()}, &gotCRP); !apierrors.IsNotFound(err) {
 				t.Errorf("clusterResourcePlacement Get() = %+v, got error %v, want not found error", gotCRP, err)
+			}
+		})
+	}
+}
+
+func TestIsRolloutComplete(t *testing.T) {
+	crpGeneration := int64(25)
+	tests := []struct {
+		name       string
+		conditions []metav1.Condition
+		want       bool
+	}{
+		{
+			name: "rollout is completed",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+		},
+		{
+			name: "schedule has not completed",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionUnknown,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "sync has not completed",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration - 1,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "apply has not completed",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration - 1,
+				},
+				{
+					Status:             metav1.ConditionFalse,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			crp := &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testName,
+					Generation: crpGeneration,
+				},
+			}
+			got := isRolloutCompleted(crp)
+			if got != tc.want {
+				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
 			}
 		})
 	}
