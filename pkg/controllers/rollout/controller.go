@@ -364,25 +364,7 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 // It reconciles on the CRP when a new resource resourceBinding is created or an existing resource binding is created/updated.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("rollout-controller")
-	// TODO: consider converting this to a customized controller with a queue
-	return ctrl.NewControllerManagedBy(mgr).
-		// This is a hack, we don't actually watch the CRP but the controller runtime requires us to specify a for type
-		For(&fleetv1beta1.ClusterResourcePlacement{}, builder.WithPredicates(
-			&predicate.Funcs{
-				CreateFunc: func(createEvent event.CreateEvent) bool {
-					return false
-				},
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					return false
-				},
-				DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
-					return false
-				},
-				GenericFunc: func(genericEvent event.GenericEvent) bool {
-					return false
-				},
-			},
-		)).
+	return ctrl.NewControllerManagedBy(mgr).Named("rollout_controller").
 		Watches(&source.Kind{Type: &fleetv1beta1.ClusterResourceSnapshot{}}, handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceSnapshot create event", "resourceSnapshot", klog.KObj(e.Object))

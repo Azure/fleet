@@ -405,7 +405,7 @@ var _ = Describe("Work Controller", func() {
 					Values:   []string{"us", "asia", "eu"},
 				},
 			}
-			cloneSet.Spec.Replicas = pointer.Int32Ptr(10)
+			cloneSet.Spec.Replicas = pointer.Int32(10)
 			cloneSet.Spec.MinReadySeconds = 1
 			maxuavail := intstr.FromInt(10)
 			cloneSet.Spec.ScaleStrategy.MaxUnavailable = &maxuavail
@@ -427,7 +427,7 @@ var _ = Describe("Work Controller", func() {
 			}
 			Expect(cmp.Diff(appliedCloneSet.Spec.ScaleStrategy, expectStrategy)).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.Selector, cloneSet.Spec.Selector)).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, pointer.Int32Ptr(10))).Should(BeEmpty())
+			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, pointer.Int32(10))).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.MinReadySeconds, int32(1))).Should(BeEmpty())
 		})
 

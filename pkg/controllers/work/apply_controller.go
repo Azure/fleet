@@ -166,7 +166,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	errs := r.generateWorkCondition(results, work)
 
 	// update the work status
-	if err = r.client.Status().Update(ctx, work, &client.UpdateOptions{}); err != nil {
+	if err = r.client.Status().Update(ctx, work, &client.SubResourceUpdateOptions{}); err != nil {
 		klog.ErrorS(err, "failed to update work status", "work", logObjRef)
 		return ctrl.Result{}, err
 	}
@@ -195,7 +195,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// update the appliedWork with the new work after the stales are deleted
 	appliedWork.Status.AppliedResources = newRes
-	if err = r.spokeClient.Status().Update(ctx, appliedWork, &client.UpdateOptions{}); err != nil {
+	if err = r.spokeClient.Status().Update(ctx, appliedWork, &client.SubResourceUpdateOptions{}); err != nil {
 		klog.ErrorS(err, "failed to update appliedWork status", appliedWork.Kind, appliedWork.GetName())
 		return ctrl.Result{}, err
 	}

@@ -8,7 +8,6 @@ package v1beta1
 import (
 	"context"
 	"errors"
-
 	"testing"
 	"time"
 
@@ -124,7 +123,7 @@ func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
 		"succeed without retries if no errors": {
 			retries: 0,
 			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					return nil
 				}}},
 			internalMemberCluster: &clusterv1beta1.InternalMemberCluster{},
@@ -132,7 +131,7 @@ func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
 		},
 		"succeed with retries for retriable errors: TooManyRequests": {
 			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					lessRetriesForRetriable++
 					if lessRetriesForRetriable >= 3 {
 						return nil
@@ -146,7 +145,7 @@ func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
 		},
 		"fail without retries for non-retriable errors: Invalid": {
 			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					lessRetriesForNonRetriable++
 					if lessRetriesForNonRetriable >= 3 {
 						return nil
@@ -158,7 +157,7 @@ func TestUpdateInternalMemberClusterWithRetry(t *testing.T) {
 		},
 		"fail if too many retries for retirable errors: TooManyRequests": {
 			r: &Reconciler{hubClient: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					moreRetriesForRetriable++
 					if moreRetriesForRetriable >= 100 {
 						return nil

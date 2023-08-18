@@ -117,12 +117,14 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 		if !exist {
 			newRes.isPresent = true
 			s.apiResources[newRes.GroupVersionKind] = &newRes
-			s.informerFactory.ForResource(newRes.GroupVersionResource).Informer().AddEventHandler(handler)
+			// TODO (rzhang): remember the ResourceEventHandlerRegistration and remove it when the resource is deleted
+			// TODO: handle error which only happens if the informer is stopped
+			_, _ = s.informerFactory.ForResource(newRes.GroupVersionResource).Informer().AddEventHandler(handler)
 			klog.InfoS("Added an informer for a new resource", "res", newRes)
 		} else if !dynRes.isPresent {
 			// we just mark it as enabled as we should not add another eventhandler to the informer as it's still
 			// in the informerFactory
-			// TODO: we have to find a way to stop/delete the informer from the informerFactory
+			// TODO: add the Event handler back
 			dynRes.isPresent = true
 			klog.InfoS("Reactivated an informer for a reappeared resource", "res", dynRes)
 		}
@@ -145,7 +147,7 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 	// mark the disappeared dynResources from the handler map
 	for gvk, dynRes := range s.apiResources {
 		if !newGVKs[gvk] && !dynRes.isStaticResource && dynRes.isPresent {
-			// TODO: Disable the informer associated with the resource
+			// TODO: Remove the Event handler from the informer using the resourceEventHandlerRegistration during creat
 			dynRes.isPresent = false
 			klog.InfoS("Disabled an informer for a disappeared resource", "res", dynRes)
 		}
@@ -163,7 +165,7 @@ func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handle
 
 	resource.isStaticResource = true
 	s.apiResources[resource.GroupVersionKind] = &resource
-	s.informerFactory.ForResource(resource.GroupVersionResource).Informer().AddEventHandler(handler)
+	_, _ = s.informerFactory.ForResource(resource.GroupVersionResource).Informer().AddEventHandler(handler)
 }
 
 func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionResource) bool {

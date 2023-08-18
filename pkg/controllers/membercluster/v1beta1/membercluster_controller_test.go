@@ -1374,7 +1374,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 	}{
 		"update member cluster status": {
 			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					count++
 					return nil
 				}},
@@ -1388,7 +1388,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 		},
 		"update member cluster status within cap": {
 			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					count++
 					if count == 3 {
 						return nil
@@ -1405,7 +1405,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 		},
 		"error updating exceeding cap for exponential backoff": {
 			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					count++
 					return apierrors.NewServerTimeout(schema.GroupResource{}, "", 1)
 				}},
@@ -1419,7 +1419,7 @@ func TestUpdateMemberClusterStatus(t *testing.T) {
 		},
 		"error updating within cap with error different from conflict/serverTimeout": {
 			r: &Reconciler{Client: &test.MockClient{
-				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				MockStatusUpdate: func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 					count++
 					return errors.New("random update error")
 				}},

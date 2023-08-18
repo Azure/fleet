@@ -683,7 +683,7 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	policy.Status.ClusterDecisions = newDecisions
 	policy.Status.ObservedCRPGeneration = observedCRPGeneration
 	meta.SetStatusCondition(&policy.Status.Conditions, newCondition)
-	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
+	if err := f.client.Status().Update(ctx, policy, &client.SubResourceUpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewAPIServerError(false, err)
 	}
@@ -1265,7 +1265,7 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 	policy.Status.ClusterDecisions = newDecisions
 	policy.Status.ObservedCRPGeneration = observedCRPGeneration
 	meta.SetStatusCondition(&policy.Status.Conditions, newCondition)
-	if err := f.client.Status().Update(ctx, policy, &client.UpdateOptions{}); err != nil {
+	if err := f.client.Status().Update(ctx, policy, &client.SubResourceUpdateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to update policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
 		return controller.NewAPIServerError(false, err)
 	}

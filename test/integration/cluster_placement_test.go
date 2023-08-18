@@ -116,8 +116,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				AddressType: discoveryv1.AddressTypeIPv4,
 				Ports: []discoveryv1.EndpointPort{
 					{
-						Name: pointer.StringPtr("https"),
-						Port: pointer.Int32Ptr(443),
+						Name: pointer.String("https"),
+						Port: pointer.Int32(443),
 					},
 				},
 			}
