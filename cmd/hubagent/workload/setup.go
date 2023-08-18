@@ -20,7 +20,7 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
-	"go.goms.io/fleet/pkg/controllers/clustershedulingpolicysnapshot"
+	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/controllers/memberclusterplacement"
 	"go.goms.io/fleet/pkg/controllers/resourcechange"
 	"go.goms.io/fleet/pkg/controllers/rollout"
@@ -155,7 +155,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}
 
 		klog.Info("Setting up clusterSchedulingPolicySnapshot controller")
-		if err := (&clustershedulingpolicysnapshot.Reconciler{
+		if err := (&clusterschedulingpolicysnapshot.Reconciler{
 			Client:              mgr.GetClient(),
 			PlacementController: clusterResourcePlacementControllerV1Beta1,
 		}).SetupWithManager(mgr); err != nil {
