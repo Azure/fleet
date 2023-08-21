@@ -4540,7 +4540,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 	dummyScorePluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 6)
 	dummyScorePluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 7)
 
-	clusters := []fleetv1beta1.MemberCluster{
+	clusters := []clusterv1beta1.MemberCluster{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName,
@@ -4558,7 +4558,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 		},
 	}
 
-	policy := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -4585,7 +4585,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 0, FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA)
 					},
 				},
@@ -4599,7 +4599,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameA)
 					},
 				},
@@ -4613,7 +4613,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA)
 					},
 				},
@@ -4627,7 +4627,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return FromError(fmt.Errorf("internal error"), dummyPreScorePluginNameA)
 					},
 				},
@@ -4641,7 +4641,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
 					},
 				},
@@ -4658,7 +4658,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -4666,7 +4666,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -4687,7 +4687,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameB,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return &ClusterScore{
@@ -4747,7 +4747,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -4755,7 +4755,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
@@ -4768,7 +4768,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == altClusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
 						}
@@ -4780,7 +4780,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
 					},
 				},
@@ -4812,13 +4812,13 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			postBatchPlugins: []PostBatchPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameA,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 1, nil
 					},
 				},
 				&DummyAllPurposePlugin{
 					name: dummyPostBatchPluginNameB,
-					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
 						return 2, nil
 					},
 				},
@@ -4826,7 +4826,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			preFilterPlugins: []PreFilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreFilterPluginNameA,
-					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -4834,7 +4834,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			filterPlugins: []FilterPlugin{
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameA,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						if cluster.Name == clusterName {
 							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
 						}
@@ -4843,7 +4843,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyFilterPluginNameB,
-					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (status *Status) {
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
 						return nil
 					},
 				},
@@ -4851,7 +4851,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			preScorePlugins: []PreScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyPreScorePluginNameA,
-					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
 						return nil
 					},
 				},
@@ -4859,7 +4859,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			scorePlugins: []ScorePlugin{
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameA,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
@@ -4878,7 +4878,7 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 				},
 				&DummyAllPurposePlugin{
 					name: dummyScorePluginNameB,
-					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *fleetv1beta1.ClusterSchedulingPolicySnapshot, cluster *fleetv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
 						switch cluster.Name {
 						case clusterName:
 							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameB)
