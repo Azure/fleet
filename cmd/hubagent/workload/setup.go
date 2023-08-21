@@ -188,7 +188,10 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
 		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr)
 		klog.Info("Starting the scheduler")
-		defaultScheduler.Run(ctx)
+		// Scheduler must run in a separate goroutine as Run() is a blocking call.
+		go func() {
+			defaultScheduler.Run(ctx)
+		}()
 
 		// Set up the watchers for the controller
 		klog.Info("Setting up the clusterResourcePlacement watcher for scheduler")
