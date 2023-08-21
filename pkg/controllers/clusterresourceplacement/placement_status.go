@@ -30,6 +30,9 @@ var (
 
 const (
 	// ClusterResourcePlacementStatus condition reasons
+	validResourceSelectorsReason   = "ResourceEligible"
+	invalidResourceSelectorsReason = "ResourceIneligible"
+
 	schedulingUnknownReason = "SchedulePending"
 
 	synchronizePendingReason   = "SynchronizePending"

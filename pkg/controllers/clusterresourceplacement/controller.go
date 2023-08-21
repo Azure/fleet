@@ -9,13 +9,14 @@ package clusterresourceplacement
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,7 +50,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ct
 
 	crp := fleetv1beta1.ClusterResourcePlacement{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: name}, &crp); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			klog.V(4).InfoS("Ignoring NotFound clusterResourcePlacement", "clusterResourcePlacement", name)
 			return ctrl.Result{}, nil
 		}
@@ -105,7 +106,7 @@ func (r *Reconciler) deleteClusterSchedulingPolicySnapshots(ctx context.Context,
 		return controller.NewAPIServerError(false, err)
 	}
 	for i := range snapshotList.Items {
-		if err := r.Client.Delete(ctx, &snapshotList.Items[i]); err != nil && !errors.IsNotFound(err) {
+		if err := r.Client.Delete(ctx, &snapshotList.Items[i]); err != nil && !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to delete clusterSchedulingPolicySnapshot", "clusterResourcePlacement", crpKObj, "clusterSchedulingPolicySnapshot", klog.KObj(&snapshotList.Items[i]))
 			return controller.NewAPIServerError(false, err)
 		}
@@ -122,7 +123,7 @@ func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fl
 		return controller.NewAPIServerError(false, err)
 	}
 	for i := range snapshotList.Items {
-		if err := r.Client.Delete(ctx, &snapshotList.Items[i]); err != nil && !errors.IsNotFound(err) {
+		if err := r.Client.Delete(ctx, &snapshotList.Items[i]); err != nil && !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to delete clusterResourceSnapshots", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(&snapshotList.Items[i]))
 			return controller.NewAPIServerError(false, err)
 		}
@@ -149,11 +150,33 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		}
 	}
 
-	latestSchedulingPolicySnapshot, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(revisionLimit))
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	// validate the resource selectors first before creating any snapshot
 	selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
+	if err != nil {
+		klog.ErrorS(err, "Failed to select the resources", "clusterResourcePlacement", crpKObj)
+		if !errors.Is(err, controller.ErrUserError) {
+			return ctrl.Result{}, err
+		}
+
+		// TODO, create a separate user type error struct to improve the user facing messages
+		r.Recorder.Eventf(crp, corev1.EventTypeWarning, "InvalidResourceSelectors", "The selected resources are not eligible: %v", err)
+		validResourceSelectorCondition := metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementValidResourceSelectorsConditionType),
+			Reason:             invalidResourceSelectorsReason,
+			Message:            fmt.Sprintf("Resources are not eligible: %v", err),
+			ObservedGeneration: crp.Generation,
+		}
+		crp.SetConditions(validResourceSelectorCondition)
+		if updateErr := r.Client.Status().Update(ctx, crp); updateErr != nil {
+			klog.ErrorS(updateErr, "Failed to update the status", "clusterResourcePlacement", crpKObj)
+			return ctrl.Result{}, updateErr
+		}
+		// We requeue here to check if the runtime resources are fixed.
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+	}
+
+	latestSchedulingPolicySnapshot, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(revisionLimit))
 	if err != nil {
 		klog.ErrorS(err, "Failed to select resources for placement", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{}, err
@@ -183,6 +206,11 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		// We keep a slow reconcile loop here to periodically update the work status in case the applied works change the status.
 		klog.V(2).InfoS("Placement rollout has finished and requeue the request in case of works change", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+
+	if !resourceSelectorsValid(oldCRP) && resourceSelectorsValid(crp) {
+		klog.V(2).InfoS("Resource selectors have been validated", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
+		r.Recorder.Event(crp, corev1.EventTypeNormal, "ValidResourceSelectors", "The selected resources are eligible to place")
 	}
 
 	if !isCRPScheduled(oldCRP) && isCRPScheduled(crp) {
@@ -309,7 +337,7 @@ func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Contex
 	// We just need to delete one policySnapshot before creating a new one.
 	// As a result of defensive programming, it will delete any redundant snapshots which could be more than one.
 	for i := 0; i <= len(sortedList.Items)-revisionHistoryLimit; i++ { // need to reserve one slot for the new snapshot
-		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !errors.IsNotFound(err) {
+		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to delete clusterSchedulingPolicySnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterSchedulingPolicySnapshot", klog.KObj(&sortedList.Items[i]))
 			return controller.NewAPIServerError(false, err)
 		}
@@ -352,7 +380,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 			// When the number of group is less than the revision limit, skipping deleting the snapshot.
 			continue
 		}
-		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !errors.IsNotFound(err) {
+		if err := r.Client.Delete(ctx, &sortedList.Items[i]); err != nil && !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to delete clusterResourceSnapshot", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", snapshotKObj)
 			return controller.NewAPIServerError(false, err)
 		}
@@ -751,8 +779,15 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
 	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
 	crp.Status.SelectedResources = selectedResourceIDs
+	validResourceSelectorCondition := metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               string(fleetv1beta1.ClusterResourcePlacementValidResourceSelectorsConditionType),
+		Reason:             validResourceSelectorsReason,
+		Message:            "Resources selected are eligible to place",
+		ObservedGeneration: crp.Generation,
+	}
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
-	meta.SetStatusCondition(&crp.Status.Conditions, scheduledCondition)
+	crp.SetConditions(validResourceSelectorCondition, scheduledCondition)
 
 	// When scheduledCondition is unknown, appliedCondition should be unknown too.
 	// Note: If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
@@ -927,4 +962,8 @@ func isCRPSynchronized(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 
 func isCRPApplied(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType)), crp.Generation)
+}
+
+func resourceSelectorsValid(crp *fleetv1beta1.ClusterResourcePlacement) bool {
+	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementValidResourceSelectorsConditionType)), crp.Generation)
 }
