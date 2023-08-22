@@ -120,6 +120,30 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	if opts.EnableV1Beta1APIs {
 		klog.Info("Setting up clusterResourcePlacement v1beta1 controller")
 		clusterResourcePlacementControllerV1Beta1 = controller.NewController(crpControllerV1Beta1Name, controller.NamespaceKeyFunc, crpc.Reconcile, rateLimiter)
+
+		// Start up the controller.
+		//
+		// Note that, with v1alpha1 controllers, all custom ones are started up alongside the
+		// resource change detector, when its Start() method is invoked by the controller
+		// manager. This is no longer the case with v1beta1 controllers, specifically, the
+		// v1beta1 CRP controller, as it depends on its own watchers. As a result, here
+		// this controller is spun up separately.
+		//
+		// The controller must run in a separate goroutine as Run() is a blocking call.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			err := clusterResourcePlacementControllerV1Beta1.Run(ctx, opts.ConcurrentClusterPlacementSyncs)
+			if err != nil {
+				// Normally this will never happen as the Run() method only returns an error when the
+				// controller is started up multiple times.
+				klog.ErrorS(err, "Failed to start the cluster resource placement controller")
+				klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			}
+
+			klog.InfoS("The cluster resource placement controller has exited")
+		}()
 	}
 
 	// Set up  a new controller to reconcile any resources in the cluster
