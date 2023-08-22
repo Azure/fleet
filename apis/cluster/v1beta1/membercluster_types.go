@@ -35,10 +35,6 @@ type MemberCluster struct {
 type MemberClusterSpec struct {
 	// +kubebuilder:validation:Required,Enum=Join;Leave
 
-	// The desired state of the member cluster. Possible values: Join, Leave.
-	// +required
-	State ClusterState `json:"state"`
-
 	// The identity used by the member cluster to access the hub cluster.
 	// The hub agents deployed on the hub cluster will automatically grant the minimal required permissions to this identity for the member agents deployed on the member cluster to access the hub cluster.
 	// +required

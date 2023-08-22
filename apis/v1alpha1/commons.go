@@ -13,8 +13,9 @@ import (
 type ClusterState string
 
 const (
-	ClusterStateJoin  ClusterState = "Join"
-	ClusterStateLeave ClusterState = "Leave"
+	ClusterStateJoin       ClusterState = "Join"
+	ClusterStateLeave      ClusterState = "Leave"
+	MemberClusterFinalizer              = "work.fleet.azure.com/membercluster-finalizer"
 )
 
 const (

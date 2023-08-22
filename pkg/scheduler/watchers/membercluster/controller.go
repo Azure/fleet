@@ -65,7 +65,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//
 	//     a) the cluster setting, specifically its labels, has changed; and/or
 	//     b) an unexpected development (e.g., agents failing, network partition, etc.) has occurred.
-	//     c) the cluster, which may or may not have resources placed on it, has left the fleet.
+	//     c) the cluster, which may or may not have resources placed on it, has left the fleet (deleting).
 	//
 	// Among the cases,
 	//
@@ -128,7 +128,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	crps := crpList.Items
-	if !isMemberClusterMissing && memberCluster.Spec.State == clusterv1beta1.ClusterStateJoin {
+	if !isMemberClusterMissing && memberCluster.GetDeletionTimestamp().IsZero() {
 		// If the member cluster is set to the left state, the scheduler needs to process all
 		// CRPs (case 2c)); otherwise, only CRPs of the PickAll type + CRPs of the PickN type,
 		// which have not been fully scheduled, need to be processed (case 1a) and 1b)).
@@ -169,10 +169,9 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			// Ignore deletion events; the removal of a cluster is first signaled by the join
-			// state change (join -> leave), which is already handled separately.
-			klog.V(2).InfoS("Ignoring delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
-			return false
+			// the cluster is leaving the fleet
+			klog.V(2).InfoS("delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
+			return true
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			// Check if the update event is valid.
@@ -194,14 +193,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			//
 			// Note that the controller runs only when label changes happen on joined clusters.
 			clusterKObj := klog.KObj(newCluster)
-			if newCluster.Spec.State == clusterv1beta1.ClusterStateJoin && !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
-				klog.V(2).InfoS("An member cluster label change has been detected", "memberCluster", clusterKObj)
-				return true
-			}
-
-			// The cluster has left.
-			if oldCluster.Spec.State == clusterv1beta1.ClusterStateJoin && newCluster.Spec.State == clusterv1beta1.ClusterStateLeave {
-				klog.V(2).InfoS("A member cluster has left the fleet", "memberCluster", clusterKObj)
+			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
+				klog.V(2).InfoS("A member cluster label change has been detected", "memberCluster", clusterKObj)
 				return true
 			}
 

@@ -85,13 +85,8 @@ spec:
                 - name
                 type: object
                 x-kubernetes-map-type: atomic
-              state:
-                description: 'The desired state of the member cluster. Possible values:
-                  Join, Leave.'
-                type: string
             required:
             - identity
-            - state
             type: object
           status:
             description: The observed status of MemberCluster.

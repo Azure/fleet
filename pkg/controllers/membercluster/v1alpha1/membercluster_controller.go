@@ -158,17 +158,17 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *fleetv1alpha1.M
 	}
 	klog.V(2).InfoS("successfully removed all the work finalizers in the cluster namespace",
 		"memberCluster", klog.KObj(mc), "number of work", len(works.Items))
-	controllerutil.RemoveFinalizer(mc, utils.MemberClusterFinalizer)
+	controllerutil.RemoveFinalizer(mc, fleetv1alpha1.MemberClusterFinalizer)
 	return ctrl.Result{}, r.Update(ctx, mc, &client.UpdateOptions{})
 }
 
 // ensureFinalizer makes sure that the member cluster CR has a finalizer on it
 func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *fleetv1alpha1.MemberCluster) error {
-	if controllerutil.ContainsFinalizer(mc, utils.MemberClusterFinalizer) {
+	if controllerutil.ContainsFinalizer(mc, fleetv1alpha1.MemberClusterFinalizer) {
 		return nil
 	}
 	klog.InfoS("add the member cluster finalizer", "memberCluster", klog.KObj(mc))
-	controllerutil.AddFinalizer(mc, utils.MemberClusterFinalizer)
+	controllerutil.AddFinalizer(mc, fleetv1alpha1.MemberClusterFinalizer)
 	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
 

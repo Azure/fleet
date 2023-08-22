@@ -230,6 +230,7 @@ func TestClassifyBindings(t *testing.T) {
 			Name: policyName,
 		},
 	}
+	deleteTime := metav1.Now()
 
 	clusterName1 := fmt.Sprintf(clusterNameTemplate, 1)
 	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
@@ -240,24 +241,16 @@ func TestClassifyBindings(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName1,
 			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: clusterv1beta1.ClusterStateJoin,
-			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName2,
 			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: clusterv1beta1.ClusterStateJoin,
-			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterName3,
-			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: clusterv1beta1.ClusterStateLeave,
+				Name:              clusterName3,
+				DeletionTimestamp: &deleteTime,
 			},
 		},
 	}
@@ -4344,6 +4337,8 @@ func TestShouldRequeue(t *testing.T) {
 
 // TestCrossReferenceClustersWithTargetNames tests the crossReferenceClustersWithTargetNames method.
 func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
+	deleteTime := metav1.Now()
+
 	clusterName1 := fmt.Sprintf(clusterNameTemplate, 1)
 	clusterName2 := fmt.Sprintf(clusterNameTemplate, 2)
 	clusterName3 := fmt.Sprintf(clusterNameTemplate, 3)
@@ -4355,9 +4350,6 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName1,
-			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: clusterv1beta1.ClusterStateJoin,
 			},
 			Status: clusterv1beta1.MemberClusterStatus{
 				AgentStatus: []clusterv1beta1.AgentStatus{
@@ -4382,9 +4374,6 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName2,
-			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: clusterv1beta1.ClusterStateJoin,
 			},
 			Status: clusterv1beta1.MemberClusterStatus{
 				AgentStatus: []clusterv1beta1.AgentStatus{
@@ -4413,10 +4402,8 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterName4,
-			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: clusterv1beta1.ClusterStateLeave,
+				Name:              clusterName4,
+				DeletionTimestamp: &deleteTime,
 			},
 		},
 	}

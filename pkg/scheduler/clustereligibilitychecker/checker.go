@@ -89,7 +89,7 @@ func New(opts ...Option) *ClusterEligibilityChecker {
 // also return the reason.
 func (checker *ClusterEligibilityChecker) IsEligible(cluster *clusterv1beta1.MemberCluster) (eligible bool, reason string) {
 	// Filter out clusters that have left the fleet.
-	if cluster.Spec.State == clusterv1beta1.ClusterStateLeave {
+	if !cluster.GetDeletionTimestamp().IsZero() {
 		return false, "cluster has left the fleet"
 	}
 

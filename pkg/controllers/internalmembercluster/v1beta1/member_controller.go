@@ -26,6 +26,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
@@ -319,8 +320,7 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.Con
 	}
 
 	// Joined status changed.
-	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
-	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
+	if !condition.IsConditionStatusTrue(imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type), imc.GetGeneration()) {
 		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterFailedToLeave, "internal member cluster failed to leave")
 		klog.ErrorS(err, "agent leave failed", "InternalMemberCluster", klog.KObj(imc))
 	}

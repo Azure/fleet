@@ -24,7 +24,6 @@ const (
 	crpName4     = "crp-4"
 	crpName5     = "crp-5"
 	crpName6     = "crp-6"
-	crpName7     = "crp-7"
 )
 
 var (

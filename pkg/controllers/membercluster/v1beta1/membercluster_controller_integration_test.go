@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -66,7 +68,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 					Name: memberClusterName,
 				},
 				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 					Identity: rbacv1.Subject{
 						Kind: rbacv1.ServiceAccountKind,
 						Name: "hub-access",
@@ -146,11 +147,10 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		})
 
 		It("member cluster is marked as left after leave workflow is completed", func() {
-			By("Update member cluster's spec to leave")
+			By("Delete member cluster to initiate leave workflow")
 			var mc clusterv1beta1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-			mc.Spec.State = clusterv1beta1.ClusterStateLeave
-			Expect(k8sClient.Update(ctx, &mc))
+			Expect(k8sClient.Delete(ctx, &mc))
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err := r.Reconcile(ctx, ctrl.Request{
@@ -162,6 +162,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			var imc clusterv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 			Expect(imc.Spec.State).To(Equal(clusterv1beta1.ClusterStateLeave))
+			// check mc still exist
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
 
 			By("mark Internal Member Cluster as left")
 			imcLeftCondition := metav1.Condition{
@@ -179,28 +181,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			})
 			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
-
-			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-
-			wantMC := clusterv1beta1.MemberClusterStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
-						Status:             metav1.ConditionFalse,
-						Reason:             reasonMemberClusterNotReadyToJoin,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
-						Status:             metav1.ConditionFalse,
-						Reason:             reasonMemberClusterLeft,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-				},
-				ResourceUsage: imc.Status.ResourceUsage,
-				AgentStatus:   imc.Status.AgentStatus,
-			}
-			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
+			// check mc is deleted
+			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, memberClusterNamespacedName, &mc))).Should(BeTrue())
 		})
 
 		It("remove label from namespace and trigger reconcile to patch the namespace with the new label", func() {
@@ -249,7 +231,6 @@ var _ = Describe("Test MemberCluster Controller", func() {
 					Name: memberClusterName,
 				},
 				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 					Identity: rbacv1.Subject{
 						Kind: rbacv1.ServiceAccountKind,
 						Name: "hub-access",
@@ -469,11 +450,10 @@ var _ = Describe("Test MemberCluster Controller", func() {
 		})
 
 		It("member cluster is marked as left after leave workflow is completed", func() {
-			By("Update member cluster's spec to leave")
+			By("Delete member cluster to initiate leave workflow")
 			var mc clusterv1beta1.MemberCluster
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-			mc.Spec.State = clusterv1beta1.ClusterStateLeave
-			Expect(k8sClient.Update(ctx, &mc))
+			Expect(k8sClient.Delete(ctx, &mc))
 
 			By("trigger reconcile again to initiate leave workflow")
 			result, err := r.Reconcile(ctx, ctrl.Request{
@@ -482,12 +462,10 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
+			By("getting imc status")
 			var imc clusterv1beta1.InternalMemberCluster
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 			Expect(imc.Spec.State).To(Equal(clusterv1beta1.ClusterStateLeave))
-
-			By("getting imc status")
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: memberClusterName, Namespace: namespaceName}, &imc)).Should(Succeed())
 
 			By("member agent marks Internal Member Cluster as left")
 			imcLeftCondition := metav1.Condition{
@@ -512,16 +490,14 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			wantMC := clusterv1beta1.MemberClusterStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
-						Status:             metav1.ConditionTrue,
-						Reason:             reasonMemberClusterReadyToJoin,
-						ObservedGeneration: mc.GetGeneration(), // should be old observedGeneration
+						Type:   string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
+						Status: metav1.ConditionTrue,
+						Reason: reasonMemberClusterReadyToJoin,
 					},
 					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
-						Status:             metav1.ConditionUnknown,
-						Reason:             reasonMemberClusterUnknown,
-						ObservedGeneration: mc.GetGeneration(),
+						Type:   string(clusterv1beta1.ConditionTypeMemberClusterJoined),
+						Status: metav1.ConditionUnknown,
+						Reason: reasonMemberClusterUnknown,
 					},
 				},
 				ResourceUsage: imc.Status.ResourceUsage,
@@ -597,28 +573,8 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(result).Should(Equal(ctrl.Result{}))
 			Expect(err).Should(Succeed())
 
-			By("checking mc status")
-			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
-
-			wantMC = clusterv1beta1.MemberClusterStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
-						Status:             metav1.ConditionFalse,
-						Reason:             reasonMemberClusterNotReadyToJoin,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-					{
-						Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
-						Status:             metav1.ConditionFalse,
-						Reason:             reasonMemberClusterLeft,
-						ObservedGeneration: mc.GetGeneration(),
-					},
-				},
-				ResourceUsage: imc.Status.ResourceUsage,
-				AgentStatus:   imc.Status.AgentStatus,
-			}
-			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
+			By("checking mc is deleted")
+			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, memberClusterNamespacedName, &mc))).Should(BeTrue())
 		})
 	})
 

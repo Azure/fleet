@@ -516,6 +516,7 @@ func TestSyncRoleBinding(t *testing.T) {
 }
 
 func TestSyncInternalMemberCluster(t *testing.T) {
+	deleteTime := metav1.Now()
 	updateMock := func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o := obj.(*clusterv1beta1.InternalMemberCluster)
 		if o.Name == "mc3" {
@@ -532,19 +533,19 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 		return nil
 	}
 
-	expectedMemberCluster1 := clusterv1beta1.MemberCluster{
+	expectedLeavingMemberCluster := clusterv1beta1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: clusterv1beta1.GroupVersion.Version},
-		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID"},
-		Spec:       clusterv1beta1.MemberClusterSpec{State: clusterv1beta1.ClusterStateLeave, HeartbeatPeriodSeconds: 10},
+		ObjectMeta: metav1.ObjectMeta{Name: "mc1", UID: "mc1-UID", DeletionTimestamp: &deleteTime},
+		Spec:       clusterv1beta1.MemberClusterSpec{HeartbeatPeriodSeconds: 10},
 	}
 
 	expectedMemberCluster2 := clusterv1beta1.MemberCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: clusterv1beta1.GroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{Name: "mc4", UID: "mc4-UID"},
-		Spec:       clusterv1beta1.MemberClusterSpec{State: clusterv1beta1.ClusterStateJoin, HeartbeatPeriodSeconds: 30},
+		Spec:       clusterv1beta1.MemberClusterSpec{HeartbeatPeriodSeconds: 30},
 	}
 
-	expectedEvent1 := utils.GetEventString(&expectedMemberCluster1, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
+	expectedEvent1 := utils.GetEventString(&expectedLeavingMemberCluster, corev1.EventTypeNormal, eventReasonIMCSpecUpdated, "internal member cluster spec updated")
 	expectedEvent2 := utils.GetEventString(&expectedMemberCluster2, corev1.EventTypeNormal, eventReasonIMCCreated, "Internal member cluster was created")
 
 	tests := map[string]struct {
@@ -562,7 +563,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 					MockUpdate: updateMock},
 				recorder: utils.NewFakeRecorder(1),
 			},
-			memberCluster: &expectedMemberCluster1,
+			memberCluster: &expectedLeavingMemberCluster,
 			namespaceName: namespace1,
 			internalMemberCluster: &clusterv1beta1.InternalMemberCluster{
 				Spec:       clusterv1beta1.InternalMemberClusterSpec{State: clusterv1beta1.ClusterStateJoin},
@@ -579,8 +580,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			},
 			memberCluster: &clusterv1beta1.MemberCluster{
 				TypeMeta:   metav1.TypeMeta{Kind: "MemberCluster", APIVersion: clusterv1beta1.GroupVersion.Version},
-				ObjectMeta: metav1.ObjectMeta{Name: "mc2", UID: "mc2-UID"},
-				Spec:       clusterv1beta1.MemberClusterSpec{State: clusterv1beta1.ClusterStateLeave},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc2", UID: "mc2-UID", DeletionTimestamp: &deleteTime},
 			},
 			namespaceName: namespace2,
 			internalMemberCluster: &clusterv1beta1.InternalMemberCluster{
@@ -594,8 +594,7 @@ func TestSyncInternalMemberCluster(t *testing.T) {
 			r: &Reconciler{Client: &test.MockClient{
 				MockUpdate: updateMock}},
 			memberCluster: &clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "mc3"},
-				Spec:       clusterv1beta1.MemberClusterSpec{State: clusterv1beta1.ClusterStateLeave},
+				ObjectMeta: metav1.ObjectMeta{Name: "mc3", DeletionTimestamp: &deleteTime},
 			},
 			namespaceName: namespace3,
 			internalMemberCluster: &clusterv1beta1.InternalMemberCluster{
