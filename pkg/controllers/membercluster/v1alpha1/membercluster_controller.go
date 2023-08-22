@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	"go.goms.io/fleet/apis"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
@@ -477,7 +478,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *fleetv1alpha1.MemberCluster) {
 }
 
 // markMemberClusterReadyToJoin is used to update the ReadyToJoin condition as true of member cluster.
-func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc fleetv1alpha1.ConditionedObj) {
+func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterReadyToJoin),
@@ -497,7 +498,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc fleetv1alpha
 }
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
-func markMemberClusterJoined(recorder record.EventRecorder, mc fleetv1alpha1.ConditionedObj) {
+func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterJoined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
@@ -518,7 +519,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc fleetv1alpha1.Con
 }
 
 // markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
-func markMemberClusterLeft(recorder record.EventRecorder, mc fleetv1alpha1.ConditionedObj) {
+func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
@@ -545,7 +546,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc fleetv1alpha1.Condi
 }
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
-func markMemberClusterUnknown(recorder record.EventRecorder, mc fleetv1alpha1.ConditionedObj) {
+func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(fleetv1alpha1.ConditionTypeMemberClusterJoined),
