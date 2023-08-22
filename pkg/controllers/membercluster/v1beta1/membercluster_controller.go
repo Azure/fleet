@@ -402,7 +402,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 }
 
 func toOwnerReference(memberCluster *clusterv1beta1.MemberCluster) *metav1.OwnerReference {
-	return &metav1.OwnerReference{APIVersion: placementv1beta1.GroupVersion.String(), Kind: clusterv1beta1.MemberClusterKind,
+	return &metav1.OwnerReference{APIVersion: clusterv1beta1.GroupVersion.String(), Kind: clusterv1beta1.MemberClusterKind,
 		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
 }
 
@@ -413,7 +413,7 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 		return
 	}
 
-	// TODO: We didn't handle condition type: placementv1beta1.ConditionTypeMemberClusterHealthy.
+	// TODO: We didn't handle condition type: clusterv1beta1.ConditionTypeMemberClusterHealthy.
 	// Copy Agent status.
 	mc.Status.AgentStatus = imc.Status.AgentStatus
 	r.aggregateJoinedCondition(mc)
