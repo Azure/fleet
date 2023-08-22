@@ -155,6 +155,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
 	if err != nil {
+		klog.ErrorS(err, "Failed to select resources for placement", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{}, err
 	}
 	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
