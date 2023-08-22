@@ -27,8 +27,8 @@ const (
 	imcAllowedGetMCFailed           = "user: %s in groups: %v is allowed to update IMC: %+v because we failed to get MC"
 	crdAllowedFormat                = "user: %s in groups: %v is allowed to modify fleet CRD: %+v"
 	crdDeniedFormat                 = "user: %s in groups: %v is not allowed to modify fleet CRD: %+v"
-	fleetResourceAllowedFormat      = "user: %s in groups: %v is allowed to modify fleet resource %s: %+v"
-	fleetResourceDeniedFormat       = "user: %s in groups: %v is not allowed to modify fleet resource %s: %+v"
+	resourceAllowedFormat           = "user: %s in groups: %v is allowed to modify resource %s: %+v"
+	resourceDeniedFormat            = "user: %s in groups: %v is not allowed to modify resource %s: %+v"
 )
 
 var (
@@ -45,14 +45,14 @@ func ValidateUserForFleetCRD(group string, namespacedName types.NamespacedName, 
 	return admission.Allowed(fmt.Sprintf(crdAllowedFormat, userInfo.Username, userInfo.Groups, namespacedName))
 }
 
-// ValidateUserForFleetResource checks to see if user is allowed to modify argued fleet resource.
-func ValidateUserForFleetResource(resKind string, namespacedName types.NamespacedName, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+// ValidateUserForResource checks to see if user is allowed to modify argued resource.
+func ValidateUserForResource(resKind string, namespacedName types.NamespacedName, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
 	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) {
 		klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resKind, "namespacedName", namespacedName)
-		return admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
+		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 	}
 	klog.V(2).InfoS("user in groups is not allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resKind, "namespacedName", namespacedName)
-	return admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
+	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 }
 
 // ValidateMemberClusterUpdate checks to see if user is allowed to update argued member cluster resource.
@@ -68,10 +68,10 @@ func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, w
 	if (isMCLabelUpdated || isMCAnnotationUpdated) && !isMCUpdated {
 		// we allow any user to modify MemberCluster labels/annotations.
 		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
-		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
+		response = admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
 	}
 	if isMCUpdated {
-		response = ValidateUserForFleetResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
+		response = ValidateUserForResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
 	}
 	return response
 }
@@ -93,12 +93,12 @@ func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Clie
 		// For the upstream E2E we use hub agent service account's token which allows member agent to modify IMC status, hence we use serviceAccountFmt to make the check.
 		if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
 			klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
-			return admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, "InternalMemberCluster", namespacedName))
+			return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, "InternalMemberCluster", namespacedName))
 		}
 		klog.V(2).InfoS("user is not allowed to update IMC status", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
 		return admission.Denied(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, userInfo.Username, userInfo.Groups, namespacedName))
 	}
-	return ValidateUserForFleetResource(currentIMC.Kind, namespacedName, whiteListedUsers, userInfo)
+	return ValidateUserForResource(currentIMC.Kind, namespacedName, whiteListedUsers, userInfo)
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.

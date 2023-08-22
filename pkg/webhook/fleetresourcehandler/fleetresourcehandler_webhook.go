@@ -3,6 +3,7 @@ package fleetresourcehandler
 import (
 	"context"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"net/http"
 	"regexp"
 
@@ -26,6 +27,8 @@ const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
 	ValidationPath = "/validate-v1-fleetresourcehandler"
 	groupMatch     = `^[^.]*\.(.*)`
+	fleetMatch     = `^fleet`
+	kubeMatch      = `^kube`
 )
 
 var (
@@ -34,6 +37,7 @@ var (
 	imcGVK         = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	roleGVK        = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "Role"}
 	roleBindingGVK = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
+	namespaceGVK   = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -70,6 +74,9 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case roleBindingGVK:
 			klog.V(2).InfoS("handling Role binding resource", "GVK", roleBindingGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleRoleBinding(req)
+		case namespaceGVK:
+			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleNamespace(req)
 		default:
 			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
@@ -102,7 +109,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		}
 		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, v.whiteListedUsers, req.UserInfo)
 	}
-	return validation.ValidateUserForFleetResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
@@ -118,7 +125,7 @@ func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context
 		}
 		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, currentIMC, oldIMC, v.whiteListedUsers, req.UserInfo)
 	}
-	return validation.ValidateUserForFleetResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleRole allows/denies the request to modify role after validation.
@@ -127,7 +134,7 @@ func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Res
 	if err := v.decodeRequestObject(req, &role); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	return validation.ValidateUserForFleetResource(role.Kind, types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(role.Kind, types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleRoleBinding allows/denies the request to modify role after validation.
@@ -136,7 +143,26 @@ func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admiss
 	if err := v.decodeRequestObject(req, &rb); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	return validation.ValidateUserForFleetResource(rb.Kind, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(rb.Kind, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, v.whiteListedUsers, req.UserInfo)
+}
+
+func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
+	var currentNS corev1.Namespace
+	if err := v.decodeRequestObject(req, &currentNS); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	fleetMatchResult := regexp.MustCompile(fleetMatch).FindStringSubmatch(currentNS.Name)
+	kubeMatchResult := regexp.MustCompile(kubeMatch).FindStringSubmatch(currentNS.Name)
+	if len(fleetMatchResult) > 0 {
+		if req.Operation == admissionv1.Update {
+
+		}
+		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
+	} else if len(kubeMatchResult) > 0 {
+		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
+	}
+	// only handling reserved namespaces with prefix fleet/kube.
+	return admission.Allowed("namespace name doesn't begin with fleet/kube so we allow all operations on these namespaces")
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.

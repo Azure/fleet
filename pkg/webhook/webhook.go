@@ -51,6 +51,7 @@ const (
 	crdResourceName                   = "customresourcedefinitions"
 	memberClusterResourceName         = "memberclusters"
 	internalMemberClusterResourceName = "internalmemberclusters"
+	namespaceResouceName              = "namespaces"
 	replicaSetResourceName            = "replicasets"
 	podResourceName                   = "pods"
 	roleResourceName                  = "roles"
@@ -217,7 +218,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 	}
 
 	if w.enableGuardRail {
-		namespaceSelector := &metav1.LabelSelector{
+		fleetNamespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
 					Key:      fleetv1beta1.FleetResourceLabelKey,
@@ -266,7 +267,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
-				NamespaceSelector:       namespaceSelector,
+				NamespaceSelector:       fleetNamespaceSelector,
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: cudOperations,
@@ -277,6 +278,19 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
 					},
 					// TODO: (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
+				},
+			},
+			{
+				Name:                    "fleet.namespace.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResouceName}, &clusterScope),
+					},
 				},
 			},
 		}
