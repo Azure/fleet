@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -59,8 +60,8 @@ func ValidateUserForResource(resKind string, namespacedName types.NamespacedName
 func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
 	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely updated read-only field/fields of member cluster resource, so no field/fields will be updated", userInfo.Username, userInfo.Groups))
 	namespacedName := types.NamespacedName{Name: currentMC.Name}
-	isMCLabelUpdated := isMemberClusterMapFieldUpdated(currentMC.Labels, oldMC.Labels)
-	isMCAnnotationUpdated := isMemberClusterMapFieldUpdated(currentMC.Annotations, oldMC.Annotations)
+	isMCLabelUpdated := isMapFieldUpdated(currentMC.Labels, oldMC.Labels)
+	isMCAnnotationUpdated := isMapFieldUpdated(currentMC.Annotations, oldMC.Annotations)
 	isMCUpdated, err := isMemberClusterUpdated(currentMC, oldMC)
 	if err != nil {
 		return admission.Denied(err.Error())
@@ -72,6 +73,27 @@ func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, w
 	}
 	if isMCUpdated {
 		response = ValidateUserForResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
+	}
+	return response
+}
+
+// ValidateNamespaceUpdate checks to see if user is allowed to update argued member cluster resource.
+func ValidateNamespaceUpdate(currentNS, oldNS corev1.Namespace, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely updated read-only field/fields of namespace resource, so no field/fields will be updated", userInfo.Username, userInfo.Groups))
+	namespacedName := types.NamespacedName{Name: currentNS.Name}
+	isMCLabelUpdated := isMapFieldUpdated(currentNS.Labels, oldNS.Labels)
+	isMCAnnotationUpdated := isMapFieldUpdated(currentNS.Annotations, oldNS.Annotations)
+	isMCUpdated, err := isNSUpdated(currentNS, oldNS)
+	if err != nil {
+		return admission.Denied(err.Error())
+	}
+	if (isMCLabelUpdated || isMCAnnotationUpdated) && !isMCUpdated {
+		// we allow any user to modify namespace labels/annotations.
+		klog.V(2).InfoS("user in groups is allowed to modify namespace labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentNS.Kind, "namespacedName", namespacedName)
+		response = admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, currentNS.Kind, namespacedName))
+	}
+	if isMCUpdated {
+		response = ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, whiteListedUsers, userInfo)
 	}
 	return response
 }
@@ -112,7 +134,7 @@ func isUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool 
 }
 
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.
-func isMemberClusterMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
+func isMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
 	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
 }
 
@@ -158,6 +180,46 @@ func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool,
 		return false, err
 	}
 	oldMCBytes, err := json.Marshal(oldMC)
+	if err != nil {
+		return false, err
+	}
+	currentMCHash := sha256.Sum256(currentMCBytes)
+	oldMCHash := sha256.Sum256(oldMCBytes)
+
+	return currentMCHash != oldMCHash, nil
+}
+
+// isNSUpdated returns true namespace spec or status is updated.
+func isNSUpdated(currentNS, oldNS corev1.Namespace) (bool, error) {
+	// Set labels, annotations to be nil. Read-only field updates are not received by the admission webhook.
+	currentNS.SetLabels(nil)
+	currentNS.SetAnnotations(nil)
+	oldNS.SetLabels(nil)
+	oldNS.SetAnnotations(nil)
+	// Remove all live fields from current MC objectMeta.
+	currentNS.SetSelfLink("")
+	currentNS.SetUID("")
+	currentNS.SetResourceVersion("")
+	currentNS.SetGeneration(0)
+	currentNS.SetCreationTimestamp(metav1.Time{})
+	currentNS.SetDeletionTimestamp(nil)
+	currentNS.SetDeletionGracePeriodSeconds(nil)
+	currentNS.SetManagedFields(nil)
+	// Remove all live fields from old MC objectMeta.
+	oldNS.SetSelfLink("")
+	oldNS.SetUID("")
+	oldNS.SetResourceVersion("")
+	oldNS.SetGeneration(0)
+	oldNS.SetCreationTimestamp(metav1.Time{})
+	oldNS.SetDeletionTimestamp(nil)
+	oldNS.SetDeletionGracePeriodSeconds(nil)
+	oldNS.SetManagedFields(nil)
+
+	currentMCBytes, err := json.Marshal(currentNS)
+	if err != nil {
+		return false, err
+	}
+	oldMCBytes, err := json.Marshal(oldNS)
 	if err != nil {
 		return false, err
 	}

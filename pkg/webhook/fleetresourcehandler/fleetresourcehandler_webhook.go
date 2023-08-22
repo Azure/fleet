@@ -155,7 +155,11 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	kubeMatchResult := regexp.MustCompile(kubeMatch).FindStringSubmatch(currentNS.Name)
 	if len(fleetMatchResult) > 0 {
 		if req.Operation == admissionv1.Update {
-
+			var oldNS corev1.Namespace
+			if err := v.decoder.DecodeRaw(req.OldObject, &oldNS); err != nil {
+				return admission.Errored(http.StatusBadRequest, err)
+			}
+			return validation.ValidateNamespaceUpdate(currentNS, oldNS, v.whiteListedUsers, req.UserInfo)
 		}
 		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
 	} else if len(kubeMatchResult) > 0 {
