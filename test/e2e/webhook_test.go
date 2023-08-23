@@ -46,7 +46,7 @@ const (
 	testRoleBinding = "wh-test-role-binding"
 
 	crdStatusErrFormat              = `user: %s in groups: %v is not allowed to modify fleet CRD: %+v`
-	resourceStatusErrFormat         = `user: %s in groups: %v is not allowed to modify fleet resource %s: %+v`
+	resourceStatusErrFormat         = `user: %s in groups: %v is not allowed to modify resource %s: %+v`
 	imcStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update IMC status: %+v"
 )
 
