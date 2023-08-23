@@ -21,7 +21,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-func TestValidateUserForFleetResource(t *testing.T) {
+func TestValidateUserForResource(t *testing.T) {
 	testCases := map[string]struct {
 		resKind          string
 		namespacedName   types.NamespacedName
@@ -36,7 +36,7 @@ func TestValidateUserForFleetResource(t *testing.T) {
 			},
 			resKind:        "Role",
 			namespacedName: types.NamespacedName{Name: "test-role", Namespace: "test-namespace"},
-			wantResponse:   admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{mastersGroup}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse:   admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{mastersGroup}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 		"allow white listed user not in system:masters group": {
 			userInfo: authenticationv1.UserInfo{
@@ -46,7 +46,7 @@ func TestValidateUserForFleetResource(t *testing.T) {
 			resKind:          "RoleBinding",
 			namespacedName:   types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"},
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow valid service account": {
 			userInfo: authenticationv1.UserInfo{
@@ -55,7 +55,7 @@ func TestValidateUserForFleetResource(t *testing.T) {
 			},
 			resKind:        "RoleBinding",
 			namespacedName: types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"},
-			wantResponse:   admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse:   admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: authenticationv1.UserInfo{
@@ -64,13 +64,13 @@ func TestValidateUserForFleetResource(t *testing.T) {
 			},
 			resKind:        "Role",
 			namespacedName: types.NamespacedName{Name: "test-role", Namespace: "test-namespace"},
-			wantResponse:   admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "test-user", []string{"test-group"}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse:   admission.Denied(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateUserForFleetResource(testCase.resKind, testCase.namespacedName, testCase.whiteListedUsers, testCase.userInfo)
+			gotResult := ValidateUserForResource(testCase.resKind, testCase.namespacedName, testCase.whiteListedUsers, testCase.userInfo)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
@@ -131,16 +131,16 @@ func TestValidateUserForFleetCRD(t *testing.T) {
 	}
 }
 
-func TestValidateMemberClusterUpdate(t *testing.T) {
+func TestValidateMCOrNSUpdate(t *testing.T) {
 	testCases := map[string]struct {
-		currentMC        fleetv1alpha1.MemberCluster
-		oldMC            fleetv1alpha1.MemberCluster
+		currentObj       client.Object
+		oldObj           client.Object
 		whiteListedUsers []string
 		userInfo         authenticationv1.UserInfo
 		wantResponse     admission.Response
 	}{
 		"allow any user to modify MC labels": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -149,7 +149,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					Labels: map[string]string{"test-key": "test-value"},
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -161,10 +161,34 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify Namespace labels": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-ns",
+					Labels: map[string]string{"test-key": "test-value"},
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"allow any user to modify MC annotations": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -173,7 +197,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					Annotations: map[string]string{"test-key": "test-value"},
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -185,10 +209,34 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify NS annotations": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-ns",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"allow system:masters group user to modify MC spec": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -200,7 +248,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					State: fleetv1alpha1.ClusterStateLeave,
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -215,10 +263,37 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow system:masters group user to modify NS spec": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-ns",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+				Spec: corev1.NamespaceSpec{
+					Finalizers: []corev1.FinalizerName{"test-finalizer"},
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"system:masters"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"allow system:masters group user to modify MC status": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -234,7 +309,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					},
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -246,10 +321,36 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow system:masters group user to modify NS status": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+				Status: corev1.NamespaceStatus{
+					Phase: "active",
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"system:masters"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"allow whitelisted user to modify MC status": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -268,7 +369,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					},
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -284,10 +385,37 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow whitelisted user to modify NS status": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+				Status: corev1.NamespaceStatus{
+					Phase: "active",
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			whiteListedUsers: []string{"test-user"},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"deny update of member cluster spec by non system:masters group": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -299,7 +427,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					State: fleetv1alpha1.ClusterStateLeave,
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -314,10 +442,37 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of namespace spec by non system:masters group": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-ns",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+				Spec: corev1.NamespaceSpec{
+					Finalizers: []corev1.FinalizerName{"test-finalizer"},
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"deny update of member cluster spec by non whitelisted user ": {
-			currentMC: fleetv1alpha1.MemberCluster{
+			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -329,7 +484,7 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 					State: fleetv1alpha1.ClusterStateLeave,
 				},
 			},
-			oldMC: fleetv1alpha1.MemberCluster{
+			oldObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "MemberCluster",
 				},
@@ -345,13 +500,41 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 				Username: "test-user",
 				Groups:   []string{"test-group"},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
+		},
+		"deny update of namespace spec by non whitelisted user ": {
+			currentObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-ns",
+					Annotations: map[string]string{"test-key": "test-value"},
+				},
+				Spec: corev1.NamespaceSpec{
+					Finalizers: []corev1.FinalizerName{"test-finalizer"},
+				},
+			},
+			oldObj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			whiteListedUsers: []string{"test-user1"},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{"test-group"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateMemberClusterUpdate(testCase.currentMC, testCase.oldMC, testCase.whiteListedUsers, testCase.userInfo)
+			gotResult := ValidateMCOrNSUpdate(testCase.currentObj, testCase.oldObj, testCase.whiteListedUsers, testCase.userInfo)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
@@ -416,7 +599,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Username: "test-identity",
 				Groups:   []string{"test-group"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow hub-agent-sa in IMC identity with status update": {
 			client: &test.MockClient{
@@ -468,7 +651,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Username: "system:serviceaccount:fleet-system:hub-agent-sa",
 				Groups:   []string{"system:serviceaccounts"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"deny user in system:masters group with status update": {
 			client: &test.MockClient{
@@ -564,7 +747,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Username: "testUser",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"deny user not in system:masters group with spec update": {
 			client: &test.MockClient{
@@ -608,7 +791,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Username: "testUser",
 				Groups:   []string{"testGroup"},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow user in system:masters group with object meta update": {
 			client: &test.MockClient{
@@ -647,7 +830,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Username: "testUser",
 				Groups:   []string{"system:masters"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow request if MC get fails": {
 			client: &test.MockClient{

@@ -107,7 +107,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, v.whiteListedUsers, req.UserInfo)
+		return validation.ValidateMCOrNSUpdate(&currentMC, &oldMC, v.whiteListedUsers, req.UserInfo)
 	}
 	return validation.ValidateUserForResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, v.whiteListedUsers, req.UserInfo)
 }
@@ -159,14 +159,14 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 			if err := v.decoder.DecodeRaw(req.OldObject, &oldNS); err != nil {
 				return admission.Errored(http.StatusBadRequest, err)
 			}
-			return validation.ValidateNamespaceUpdate(currentNS, oldNS, v.whiteListedUsers, req.UserInfo)
+			return validation.ValidateMCOrNSUpdate(&currentNS, &oldNS, v.whiteListedUsers, req.UserInfo)
 		}
 		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
 	} else if len(kubeMatchResult) > 0 {
 		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
-	return admission.Allowed("namespace name doesn't begin with fleet/kube so we allow all operations on these namespaces")
+	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
