@@ -12,7 +12,7 @@ import (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Cluster,categories={fleet},shortName=cluster
+// +kubebuilder:resource:scope=Cluster,categories={fleet-cluster},shortName=cluster
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Joined")].status`,name="Joined",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date

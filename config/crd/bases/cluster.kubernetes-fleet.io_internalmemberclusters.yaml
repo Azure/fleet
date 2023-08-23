@@ -9,7 +9,7 @@ spec:
   group: cluster.kubernetes-fleet.io
   names:
     categories:
-    - fleet
+    - fleet-cluster
     kind: InternalMemberCluster
     listKind: InternalMemberClusterList
     plural: internalmemberclusters
