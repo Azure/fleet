@@ -64,7 +64,7 @@ func TestValidateUserForResource(t *testing.T) {
 			},
 			resKind:        "Role",
 			namespacedName: types.NamespacedName{Name: "test-role", Namespace: "test-namespace"},
-			wantResponse:   admission.Denied(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse:   admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "Role", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 	}
 
