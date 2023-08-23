@@ -41,8 +41,14 @@ type ChangeDetector struct {
 
 	// ClusterResourcePlacementControllerV1Alpha1 maintains a rate limited queue which is used to store
 	// the name of the changed v1alpha1 clusterResourcePlacement and a reconcile function to consume the items in queue.
-	// Note: V1Beta1 does not rely on this changeDetector to enqueue the CRP events. It uses its own watcher instead.
 	ClusterResourcePlacementControllerV1Alpha1 controller.Controller
+
+	// ClusterResourcePlacementControllerV1Beta1 maintains a rate limited queue which is used to store
+	// the name of the changed v1beta1 clusterResourcePlacement and a reconcile function to consume the items in queue.
+	//
+	// Note that the v1beta1 controller, different from the v1alpha1 controller, features its own set of
+	// watchers and does not rely on this struct to detect changes.
+	ClusterResourcePlacementControllerV1Beta1 controller.Controller
 
 	// ClusterResourcePlacementController maintains a rate limited queue which is used to store any resources'
 	// cluster wide key and a reconcile function to consume the items in queue.
@@ -130,11 +136,16 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 	// continue the resource type list loop in the background to discovery resources change.
 	go d.discoverAPIResourcesLoop(ctx, 30*time.Second, dynamicResourceChangeEventHandler)
 
-	// We run the three controllers in parallel.
+	// Run the following controllers (if applicable) in parallel.
 	errs, cctx := errgroup.WithContext(ctx)
 	if d.ClusterResourcePlacementControllerV1Alpha1 != nil {
 		errs.Go(func() error {
 			return d.ClusterResourcePlacementControllerV1Alpha1.Run(cctx, d.ConcurrentClusterPlacementWorker)
+		})
+	}
+	if d.ClusterResourcePlacementControllerV1Beta1 != nil {
+		errs.Go(func() error {
+			return d.ClusterResourcePlacementControllerV1Beta1.Run(cctx, d.ConcurrentClusterPlacementWorker)
 		})
 	}
 	errs.Go(func() error {

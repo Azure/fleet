@@ -43,8 +43,6 @@ var (
 		handleExitFunc()
 		os.Exit(1)
 	}
-
-	wg sync.WaitGroup
 )
 
 const (
