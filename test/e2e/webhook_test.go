@@ -1022,7 +1022,8 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			var ns corev1.Namespace
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "kube-node-lease"}, &ns)).Should(Succeed())
 			By("expecting denial of operation DELETE of namespace")
-			// trying to delete kube-system/kube-public returns forbidden looks like k8s intercepts the call before webhook.
+			// trying to delete kube-system/kube-public returns forbidden looks like k8s intercepts the call before webhook. error returned namespaces "kube-system" is forbidden: this namespace may not be deleted
+			// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle/admission.go#L80
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &ns)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
