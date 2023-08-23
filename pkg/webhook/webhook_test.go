@@ -33,7 +33,7 @@ func TestBuildValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enableGuardRail:      true,
 			},
-			wantLength: 7,
+			wantLength: 9,
 		},
 	}
 

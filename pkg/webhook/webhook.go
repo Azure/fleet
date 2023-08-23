@@ -23,6 +23,7 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -54,8 +55,6 @@ const (
 	namespaceResouceName              = "namespaces"
 	replicaSetResourceName            = "replicasets"
 	podResourceName                   = "pods"
-	roleResourceName                  = "roles"
-	roleBindingResourceName           = "rolebindings"
 )
 
 var (
@@ -218,7 +217,8 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 	}
 
 	if w.enableGuardRail {
-		fleetNamespaceSelector := &metav1.LabelSelector{
+		// MatchLabels/MatchExpressions values are ANDed to select resources.
+		fleetMemberNamespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
 					Key:      fleetv1beta1.FleetResourceLabelKey,
@@ -227,12 +227,37 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				},
 			},
 		}
-
+		fleetSystemNamespaceSelector := &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      corev1.LabelMetadataName,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"fleet-system"},
+				},
+			},
+		}
+		kubeNamespaceSelector := &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      corev1.LabelMetadataName,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"kube-system", "kube-public", "kube-node-lease"},
+				},
+			},
+		}
 		cudOperations := []admv1.OperationType{
 			admv1.Create,
 			admv1.Update,
 			admv1.Delete,
 		}
+		kubeNamespacedResourcesRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
+		fleetSystemNamespacedResourceRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
+		fleetMemberNamespacedResourceRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
+		internalMemberClusterResourceRule := admv1.RuleWithOperations{
+			Operations: cudOperations,
+			Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
+		}
+		fleetMemberNamespacedResourceRules = append(fleetMemberNamespacedResourceRules, internalMemberClusterResourceRule)
 
 		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 			{
@@ -262,23 +287,31 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				},
 			},
 			{
-				Name:                    "fleet.namespacedresources.validating",
+				Name:                    "fleet.fleetmembernamespacedresources.validating",
 				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
-				NamespaceSelector:       fleetNamespaceSelector,
-				Rules: []admv1.RuleWithOperations{
-					{
-						Operations: cudOperations,
-						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
-					},
-					{
-						Operations: cudOperations,
-						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
-					},
-					// TODO: (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
-				},
+				NamespaceSelector:       fleetMemberNamespaceSelector,
+				Rules:                   fleetMemberNamespacedResourceRules,
+			},
+			{
+				Name:                    "fleet.fleetsystemnamespacedresources.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				NamespaceSelector:       fleetSystemNamespaceSelector,
+				Rules:                   fleetSystemNamespacedResourceRules,
+			},
+			{
+				Name:                    "fleet.kubenamespacedresources.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				NamespaceSelector:       kubeNamespaceSelector,
+				Rules:                   kubeNamespacedResourcesRules,
 			},
 			{
 				Name:                    "fleet.namespace.validating",
@@ -492,6 +525,27 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 
 	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}
 	return nil
+}
+
+func getGeneralRulesForNamespacedResources(cudOperations []admv1.OperationType, scope admv1.ScopeType) []admv1.RuleWithOperations {
+	return []admv1.RuleWithOperations{
+		{
+			Operations: cudOperations,
+			Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
+		},
+		{
+			Operations: cudOperations,
+			Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
+		},
+		{
+			Operations: cudOperations,
+			Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
+		},
+		{
+			Operations: cudOperations,
+			Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
+		},
+	}
 }
 
 // createRule returns a admission rule using the arguments passed.

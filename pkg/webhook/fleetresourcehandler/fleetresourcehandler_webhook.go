@@ -8,11 +8,14 @@ import (
 	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,15 +34,18 @@ const (
 )
 
 var (
-	crdGVK         = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	mcGVK          = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	imcGVK         = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	roleGVK        = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "Role"}
-	roleBindingGVK = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
-	namespaceGVK   = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	crdGVK       = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	mcGVK        = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
+	namespaceGVK = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+
+	appsV1GV        = schema.GroupVersion{Group: appsv1.SchemeGroupVersion.Group, Version: appsv1.SchemeGroupVersion.Version}
+	rbacV1GV        = schema.GroupVersion{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version}
+	coreV1GV        = schema.GroupVersion{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version}
+	batchV1GV       = schema.GroupVersion{Group: batchv1.SchemeGroupVersion.Group, Version: batchv1.SchemeGroupVersion.Version}
+	fleetV1Alpha1GV = schema.GroupVersion{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version}
 )
 
-// Add registers the webhook for K8s bulit-in object types.
+// Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager, whiteListedUsers []string) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &fleetResourceValidator{client: mgr.GetClient(), whiteListedUsers: whiteListedUsers}})
@@ -54,26 +60,23 @@ type fleetResourceValidator struct {
 
 // Handle receives the request then allows/denies the request to modify fleet resources.
 func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+	// special case for Kind:Namespace resources req.Name and req.Namespace has the same value the ObjectMeta.Name of Namespace.
+	if req.Kind.Kind == "Namespace" {
+		req.Namespace = ""
+	}
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
-		switch req.Kind {
-		case crdGVK:
+		switch {
+		case req.Namespace != "":
+			response = v.handleNamespacedResources(ctx, req)
+		case req.Kind == crdGVK:
 			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleCRD(req)
-		case mcGVK:
-			klog.V(2).InfoS("handling Member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation)
+		case req.Kind == mcGVK:
+			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleMemberCluster(req)
-		case imcGVK:
-			klog.V(2).InfoS("handling Internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation)
-			response = v.handleInternalMemberCluster(ctx, req)
-		case roleGVK:
-			klog.V(2).InfoS("handling Role resource", "GVK", roleGVK, "namespacedName", namespacedName, "operation", req.Operation)
-			response = v.handleRole(req)
-		case roleBindingGVK:
-			klog.V(2).InfoS("handling Role binding resource", "GVK", roleBindingGVK, "namespacedName", namespacedName, "operation", req.Operation)
-			response = v.handleRoleBinding(req)
-		case namespaceGVK:
+		case req.Kind == namespaceGVK:
 			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleNamespace(req)
 		default:
@@ -127,24 +130,7 @@ func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context
 	return validation.ValidateUserForResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
-// handleRole allows/denies the request to modify role after validation.
-func (v *fleetResourceValidator) handleRole(req admission.Request) admission.Response {
-	var role rbacv1.Role
-	if err := v.decodeRequestObject(req, &role); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
-	}
-	return validation.ValidateUserForResource(role.Kind, types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, v.whiteListedUsers, req.UserInfo)
-}
-
-// handleRoleBinding allows/denies the request to modify role after validation.
-func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admission.Response {
-	var rb rbacv1.RoleBinding
-	if err := v.decodeRequestObject(req, &rb); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
-	}
-	return validation.ValidateUserForResource(rb.Kind, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, v.whiteListedUsers, req.UserInfo)
-}
-
+// handlerNamespace allows/denies request to modify namespace after validation.
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
 	var currentNS corev1.Namespace
 	if err := v.decodeRequestObject(req, &currentNS); err != nil {
@@ -157,6 +143,29 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
 	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
+}
+
+// handleResource allows/denies request to modify resource after validation.
+func (v *fleetResourceValidator) handleResource(req admission.Request) admission.Response {
+	return validation.ValidateUserForResource(req.Kind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
+}
+
+// handleNamespaceResources allows/denies request to modify namespaced resources after validation.
+func (v *fleetResourceValidator) handleNamespacedResources(ctx context.Context, req admission.Request) admission.Response {
+	resourceMsgFormat := fmt.Sprintf("handling %s resource", req.Kind.Kind)
+	reqGroupVersion := schema.GroupVersion{Group: req.Resource.Group, Version: req.Resource.Version}
+	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
+	var response admission.Response
+	if reqGroupVersion == appsV1GV || reqGroupVersion == coreV1GV || reqGroupVersion == rbacV1GV || reqGroupVersion == batchV1GV {
+		klog.V(2).InfoS(resourceMsgFormat, "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation)
+		response = v.handleResource(req)
+	} else if reqGroupVersion == fleetV1Alpha1GV {
+		if req.Kind.Kind == "InternalMemberCluster" {
+			klog.V(2).InfoS(resourceMsgFormat, "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleInternalMemberCluster(ctx, req)
+		}
+	}
+	return response
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
