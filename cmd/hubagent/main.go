@@ -9,6 +9,7 @@ import (
 	"flag"
 	"os"
 	"strings"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -62,6 +63,9 @@ func init() {
 }
 
 func main() {
+	// The wait group for synchronizing the steps (esp. the exit) of the controller manager and the scheduler.
+	var wg sync.WaitGroup
+
 	opts := options.NewOptions()
 	opts.AddFlags(flag.CommandLine)
 
@@ -135,17 +139,28 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	if err := workload.SetupControllers(ctx, mgr, config, opts); err != nil {
+	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
 		klog.ErrorS(err, "unable to set up ready check")
 		exitWithErrorFunc()
 	}
 
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.Start(ctx); err != nil {
-		klog.ErrorS(err, "problem starting manager")
-		exitWithErrorFunc()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Start() is a blocking call and it is set to exit on context cancellation.
+		if err := mgr.Start(ctx); err != nil {
+			klog.ErrorS(err, "problem starting manager")
+			exitWithErrorFunc()
+		}
+
+		klog.InfoS("The controller manager has exited")
+	}()
+
+	// Wait for the controller manager and the scheduler to exit.
+	wg.Wait()
 }
 
 // SetupWebhook generates the webhook cert and then set up the webhook configurator.

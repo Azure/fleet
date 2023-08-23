@@ -105,7 +105,7 @@ var _ = BeforeSuite(func() {
 	By("Setup custom controllers")
 	opts := options.NewOptions()
 	opts.LeaderElection.LeaderElect = false
-	err = workload.SetupControllers(ctx, mgr, cfg, opts)
+	err = workload.SetupControllers(ctx, nil, mgr, cfg, opts)
 	Expect(err).Should(Succeed())
 
 	By("Start the controller manager")
