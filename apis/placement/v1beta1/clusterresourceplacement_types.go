@@ -418,11 +418,6 @@ type FailedResourcePlacement struct {
 type ClusterResourcePlacementConditionType string
 
 const (
-	// ClusterResourcePlacementValidResourceSelectorsConditionType indicates whether cluster resource selectors have been
-	// recognized as valid.
-	// This will be false if the resource is not a cluster scope resource, or it's a reserved namespace or GVR is invalid.
-	ClusterResourcePlacementValidResourceSelectorsConditionType ClusterResourcePlacementConditionType = "ValidResourceSelectors"
-
 	// ClusterResourcePlacementScheduledConditionType indicates whether we have successfully scheduled the
 	// ClusterResourcePlacement.
 	// Its condition status can be one of the following:

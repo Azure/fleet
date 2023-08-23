@@ -159,21 +159,19 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		}
 
 		// TODO, create a separate user type error struct to improve the user facing messages
-		r.Recorder.Eventf(crp, corev1.EventTypeWarning, "InvalidResourceSelectors", "The selected resources are not eligible: %v", err)
-		validResourceSelectorCondition := metav1.Condition{
+		scheduleCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementValidResourceSelectorsConditionType),
+			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
 			Reason:             invalidResourceSelectorsReason,
-			Message:            fmt.Sprintf("Resources are not eligible: %v", err),
+			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: crp.Generation,
 		}
-		crp.SetConditions(validResourceSelectorCondition)
+		crp.SetConditions(scheduleCondition)
 		if updateErr := r.Client.Status().Update(ctx, crp); updateErr != nil {
 			klog.ErrorS(updateErr, "Failed to update the status", "clusterResourcePlacement", crpKObj)
-			return ctrl.Result{}, updateErr
+			return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 		}
-		// We requeue here to check if the runtime resources are fixed.
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+		return ctrl.Result{}, err
 	}
 
 	latestSchedulingPolicySnapshot, err := r.getOrCreateClusterSchedulingPolicySnapshot(ctx, crp, int(revisionLimit))
@@ -206,11 +204,6 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		// We keep a slow reconcile loop here to periodically update the work status in case the applied works change the status.
 		klog.V(2).InfoS("Placement rollout has finished and requeue the request in case of works change", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
-	}
-
-	if !resourceSelectorsValid(oldCRP) && resourceSelectorsValid(crp) {
-		klog.V(2).InfoS("Resource selectors have been validated", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-		r.Recorder.Event(crp, corev1.EventTypeNormal, "ValidResourceSelectors", "The selected resources are eligible to place")
 	}
 
 	if !isCRPScheduled(oldCRP) && isCRPScheduled(crp) {
@@ -779,15 +772,8 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
 	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
 	crp.Status.SelectedResources = selectedResourceIDs
-	validResourceSelectorCondition := metav1.Condition{
-		Status:             metav1.ConditionTrue,
-		Type:               string(fleetv1beta1.ClusterResourcePlacementValidResourceSelectorsConditionType),
-		Reason:             validResourceSelectorsReason,
-		Message:            "Resources selected are eligible to place",
-		ObservedGeneration: crp.Generation,
-	}
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
-	crp.SetConditions(validResourceSelectorCondition, scheduledCondition)
+	crp.SetConditions(scheduledCondition)
 
 	// When scheduledCondition is unknown, appliedCondition should be unknown too.
 	// Note: If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
@@ -962,8 +948,4 @@ func isCRPSynchronized(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 
 func isCRPApplied(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType)), crp.Generation)
-}
-
-func resourceSelectorsValid(crp *fleetv1beta1.ClusterResourcePlacement) bool {
-	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementValidResourceSelectorsConditionType)), crp.Generation)
 }
