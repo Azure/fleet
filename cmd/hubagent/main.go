@@ -43,8 +43,6 @@ var (
 		handleExitFunc()
 		os.Exit(1)
 	}
-
-	wg sync.WaitGroup
 )
 
 const (
@@ -65,6 +63,9 @@ func init() {
 }
 
 func main() {
+	// The wait group for synchronizing the steps (esp. the exit) of the controller manager and the scheduler.
+	var wg sync.WaitGroup
+
 	opts := options.NewOptions()
 	opts.AddFlags(flag.CommandLine)
 
