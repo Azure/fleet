@@ -8,6 +8,7 @@ package workload
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -49,7 +50,7 @@ const (
 )
 
 // SetupControllers set up the customized controllers we developed
-func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
+func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		klog.ErrorS(err, "unable to create the dynamic client")
@@ -188,7 +189,16 @@ func SetupControllers(ctx context.Context, mgr ctrl.Manager, config *rest.Config
 		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
 		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr)
 		klog.Info("Starting the scheduler")
-		defaultScheduler.Run(ctx)
+		// Scheduler must run in a separate goroutine as Run() is a blocking call.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Run() blocks and is set to exit on context cancellation.
+			defaultScheduler.Run(ctx)
+
+			klog.InfoS("The scheduler has exited")
+		}()
 
 		// Set up the watchers for the controller
 		klog.Info("Setting up the clusterResourcePlacement watcher for scheduler")
