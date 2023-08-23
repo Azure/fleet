@@ -52,6 +52,7 @@ var (
 	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
 	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
 	ignoredCondFields                    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoreCycleStateFields               = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
 
 	lessFuncCluster = func(cluster1, cluster2 *clusterv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name
@@ -4519,6 +4520,459 @@ func TestCrossReferenceClustersWithTargetNames(t *testing.T) {
 			}
 			if diff := cmp.Diff(notFound, tc.wantNotFound, cmp.AllowUnexported(invalidClusterWithReason{})); diff != "" {
 				t.Errorf("crossReferenceClustersWithTargetNames() notFound diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+// TestRunAllPluginsForPickNPlacementType tests the runAllPluginsForPickNPlacementType method.
+func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
+	dummyPostBatchPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 0)
+	dummyPostBatchPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 1)
+
+	dummyPreFilterPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 2)
+
+	dummyFilterPluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 3)
+	dummyFilterPluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 4)
+
+	dummyPreScorePluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 5)
+
+	dummyScorePluginNameA := fmt.Sprintf(dummyAllPurposePluginNameFormat, 6)
+	dummyScorePluginNameB := fmt.Sprintf(dummyAllPurposePluginNameFormat, 7)
+
+	clusters := []clusterv1beta1.MemberCluster{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: altClusterName,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: anotherClusterName,
+			},
+		},
+	}
+
+	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
+
+	testCases := []struct {
+		name                          string
+		numOfClusters                 int
+		numOfBoundOrScheduledBindings int
+		postBatchPlugins              []PostBatchPlugin
+		preFilterPlugins              []PreFilterPlugin
+		filterPlugins                 []FilterPlugin
+		preScorePlugins               []PreScorePlugin
+		scorePlugins                  []ScorePlugin
+		wantState                     *CycleState
+		wantScoredClusters            ScoredClusters
+		wantFiltered                  []*filteredClusterWithStatus
+		expectedToFail                bool
+	}{
+		{
+			name:                          "a postbatch plugin returns error",
+			numOfClusters:                 2,
+			numOfBoundOrScheduledBindings: 0,
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 0, FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA)
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name:                          "a prefilter plugin returns error",
+			numOfClusters:                 2,
+			numOfBoundOrScheduledBindings: 0,
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return FromError(fmt.Errorf("internal error"), dummyPreFilterPluginNameA)
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name:                          "a filter plugin returns error",
+			numOfClusters:                 2,
+			numOfBoundOrScheduledBindings: 0,
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						return FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA)
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name:                          "a prescore plugin returns error",
+			numOfClusters:                 2,
+			numOfBoundOrScheduledBindings: 0,
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return FromError(fmt.Errorf("internal error"), dummyPreScorePluginNameA)
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name:                          "a score plugin returns error",
+			numOfClusters:                 2,
+			numOfBoundOrScheduledBindings: 0,
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
+					},
+				},
+			},
+			expectedToFail: true,
+		},
+		{
+			name:                          "no batch limit set, all clusters scored",
+			numOfClusters:                 3,
+			numOfBoundOrScheduledBindings: 1,
+			postBatchPlugins:              []PostBatchPlugin{},
+			preFilterPlugins:              []PreFilterPlugin{},
+			filterPlugins:                 []FilterPlugin{},
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 1,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: -1,
+							}, nil
+						default:
+							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
+						}
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameB,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return &ClusterScore{
+								AffinityScore: 10,
+							}, nil
+						case altClusterName:
+							return &ClusterScore{
+								AffinityScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								AffinityScore: 50,
+							}, nil
+						default:
+							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameB)
+						}
+					},
+				},
+			},
+			wantState: &CycleState{
+				desiredBatchSize: 2,
+				batchSizeLimit:   2,
+			},
+			wantScoredClusters: ScoredClusters{
+				{
+					Cluster: &clusters[0],
+					Score: &ClusterScore{
+						TopologySpreadScore:            1,
+						AffinityScore:                  10,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+				{
+					Cluster: &clusters[1],
+					Score: &ClusterScore{
+						TopologySpreadScore:            0,
+						AffinityScore:                  0,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+				{
+					Cluster: &clusters[2],
+					Score: &ClusterScore{
+						TopologySpreadScore:            -1,
+						AffinityScore:                  50,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{},
+		},
+		{
+			name:                          "no batch limit set, all clusters filtered",
+			numOfClusters:                 3,
+			numOfBoundOrScheduledBindings: 1,
+			postBatchPlugins:              []PostBatchPlugin{},
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+						case anotherClusterName:
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+						default:
+							return nil
+						}
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == altClusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			preScorePlugins: []PreScorePlugin{},
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
+					},
+				},
+			},
+			wantState: &CycleState{
+				desiredBatchSize: 2,
+				batchSizeLimit:   2,
+			},
+			wantScoredClusters: ScoredClusters{},
+			wantFiltered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusters[0],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+				},
+				{
+					cluster: &clusters[1],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
+				},
+				{
+					cluster: &clusters[2],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+				},
+			},
+		},
+		{
+			name:                          "batch limit set, mixed",
+			numOfClusters:                 3,
+			numOfBoundOrScheduledBindings: 1,
+			postBatchPlugins: []PostBatchPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameA,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 1, nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyPostBatchPluginNameB,
+					postBatchRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (size int, status *Status) {
+						return 2, nil
+					},
+				},
+			},
+			preFilterPlugins: []PreFilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreFilterPluginNameA,
+					preFilterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == clusterName {
+							return NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA)
+						}
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+			},
+			preScorePlugins: []PreScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyPreScorePluginNameA,
+					preScoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (status *Status) {
+						return nil
+					},
+				},
+			},
+			scorePlugins: []ScorePlugin{
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameA,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
+						case altClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								TopologySpreadScore: -1,
+							}, nil
+						default:
+							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameA)
+						}
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyScorePluginNameB,
+					scoreRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (score *ClusterScore, status *Status) {
+						switch cluster.Name {
+						case clusterName:
+							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameB)
+						case altClusterName:
+							return &ClusterScore{
+								AffinityScore: 0,
+							}, nil
+						case anotherClusterName:
+							return &ClusterScore{
+								AffinityScore: 50,
+							}, nil
+						default:
+							return nil, FromError(fmt.Errorf("internal error"), dummyScorePluginNameB)
+						}
+					},
+				},
+			},
+			wantState: &CycleState{
+				desiredBatchSize: 2,
+				batchSizeLimit:   1,
+			},
+			wantScoredClusters: ScoredClusters{
+				{
+					Cluster: &clusters[1],
+					Score: &ClusterScore{
+						TopologySpreadScore:            0,
+						AffinityScore:                  0,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+				{
+					Cluster: &clusters[2],
+					Score: &ClusterScore{
+						TopologySpreadScore:            -1,
+						AffinityScore:                  50,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusters[0],
+					status:  NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameA),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := NewProfile(dummyProfileName)
+			for _, p := range tc.postBatchPlugins {
+				profile.WithPostBatchPlugin(p)
+			}
+			for _, p := range tc.preFilterPlugins {
+				profile.WithPreFilterPlugin(p)
+			}
+			for _, p := range tc.filterPlugins {
+				profile.WithFilterPlugin(p)
+			}
+			for _, p := range tc.preScorePlugins {
+				profile.WithPreScorePlugin(p)
+			}
+			for _, p := range tc.scorePlugins {
+				profile.WithScorePlugin(p)
+			}
+
+			f := &framework{
+				profile:      profile,
+				parallelizer: parallelizer.NewParallelizer(parallelizer.DefaultNumOfWorkers),
+			}
+
+			ctx := context.Background()
+			state := NewCycleState(clusters, nil)
+			scored, filtered, err := f.runAllPluginsForPickNPlacementType(ctx, state, policy, tc.numOfClusters, tc.numOfBoundOrScheduledBindings, clusters)
+			if tc.expectedToFail {
+				if err == nil {
+					t.Errorf("runAllPluginsForPickNPlacementType() returned no error, want error")
+				}
+
+				return
+			}
+
+			if diff := cmp.Diff(state, tc.wantState, cmp.AllowUnexported(CycleState{}), ignoreCycleStateFields); diff != "" {
+				t.Errorf("runAllPluginsForPickNPlacementType() state diff (-got, +want): %s", diff)
+			}
+
+			// The method runs in parallel; as a result the order cannot be guaranteed.
+			// Sort the results by cluster name for comparison.
+			if diff := cmp.Diff(scored, tc.wantScoredClusters, cmpopts.SortSlices(lessFuncScoredCluster)); diff != "" {
+				t.Errorf("runAllPluginsForPickNPlacementType() scored diff (-got, +want): %s", diff)
+			}
+			if diff := cmp.Diff(filtered, tc.wantFiltered, cmpopts.SortSlices(lessFuncFilteredCluster), cmp.AllowUnexported(filteredClusterWithStatus{}, Status{})); diff != "" {
+				t.Errorf("runAllPluginsForPickNPlacementType() filtered diff (-got, +want): %s", diff)
 			}
 		})
 	}
