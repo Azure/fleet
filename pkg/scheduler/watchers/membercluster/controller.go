@@ -169,9 +169,10 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			// the cluster is leaving the fleet
-			klog.V(2).InfoS("delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
-			return true
+			// Ignore deletion events; the removal of a cluster is first signaled by adding a deleteTimeStamp,
+			// which is an update event
+			klog.V(2).InfoS("Ignoring delete events for member cluster objects", "eventObject", klog.KObj(e.Object))
+			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			// Check if the update event is valid.
@@ -191,8 +192,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 			// Capture label changes.
 			//
-			// Note that the controller runs only when label changes happen on joined clusters.
 			clusterKObj := klog.KObj(newCluster)
+			// The cluster is to be deleted.
+			if !newCluster.GetDeletionTimestamp().IsZero() {
+				klog.V(2).InfoS("A member cluster is leaving the fleet", "memberCluster", clusterKObj)
+				return true
+			}
+			// Note that the controller runs only when label changes happen on joined clusters.
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				klog.V(2).InfoS("A member cluster label change has been detected", "memberCluster", clusterKObj)
 				return true

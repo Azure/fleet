@@ -82,17 +82,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		klog.ErrorS(err, "failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
 		return ctrl.Result{}, err
 	}
-	currentImc, err := r.getInternalMemberCluster(ctx, mc.GetName())
+	currentIMC, err := r.getInternalMemberCluster(ctx, mc.GetName())
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.join(ctx, &mc, currentImc); err != nil {
+	if err := r.join(ctx, &mc, currentIMC); err != nil {
 		klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
 		return ctrl.Result{}, err
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
-	r.syncInternalMemberClusterStatus(currentImc, &mc)
+	r.syncInternalMemberClusterStatus(currentIMC, &mc)
 	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
 		if apierrors.IsConflict(err) {
 			klog.V(2).InfoS("failed to update status due to conflicts", "memberCluster", mcObjRef)
@@ -105,8 +105,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return ctrl.Result{}, nil
 }
 
-// handle the delete event of the member cluster, make sure the agent has finished leaving the fleet first and
-// then garbage collect all the resources in the cluster namespace
+// handleDelete handles the delete event of the member cluster, makes sure the agent has finished leaving the fleet first and
+// then garbage collects all the resources in the cluster namespace.
 func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
 	mcObjRef := klog.KObj(mc)
 	if !controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {

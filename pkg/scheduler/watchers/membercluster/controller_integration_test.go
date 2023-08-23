@@ -7,7 +7,6 @@ package membercluster
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -17,7 +16,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -74,20 +72,14 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	// Add custom APIs to the runtime scheme.
-	if err := placementv1beta1.AddToScheme(scheme.Scheme); err != nil {
-		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
-	}
-
 	os.Exit(m.Run())
 }
 
+// TODO (ryanzhang): Fix the tests so that they don't rely on the order of execution.
 var _ = Describe("scheduler member cluster source controller", Serial, Ordered, func() {
 	BeforeAll(func() {
 		Eventually(noKeyEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Workqueue is not empty")
 		Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
-
-		keyCollector.Reset()
 	})
 
 	Context("member cluster gets ready", func() {
@@ -140,7 +132,8 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			memberCluster := &clusterv1beta1.MemberCluster{}
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
-			// Update the labels.
+			// Update the labels and finalizers
+			memberCluster.Finalizers = append(memberCluster.Finalizers, placementv1beta1.MemberClusterFinalizer)
 			memberCluster.Labels = map[string]string{
 				dummyLabel: dummyLabelValue,
 			}
