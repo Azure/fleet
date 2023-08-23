@@ -975,6 +975,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
 		})
+
 		It("should deny CREATE operation on namespace with kube prefix for user not in system:masters group", func() {
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -987,6 +988,15 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
 		})
+
+		It("should allow UPDATE operation on namespace label/annotation with fleet prefix for user not in system:masters group", func() {
+			var ns corev1.Namespace
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "fleet-member-kind-member-testing"}, &ns)).Should(Succeed())
+			ns.Labels = map[string]string{"test-key": "test-value"}
+			By("expecting successful UPDATE of namespace label")
+			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &ns)).Should(Succeed())
+		})
+
 		It("should deny UPDATE operation on namespace with kube prefix for user not in system:masters group", func() {
 			var ns corev1.Namespace
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "kube-system"}, &ns)).Should(Succeed())
@@ -997,6 +1007,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
 		})
+
 		It("should deny DELETE operation on namespace with fleet prefix for user not in system:masters group", func() {
 			var ns corev1.Namespace
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "fleet-system"}, &ns)).Should(Succeed())
@@ -1006,6 +1017,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
 		})
+
 		It("should deny DELETE operation on namespace with kube prefix for user not in system:masters group", func() {
 			var ns corev1.Namespace
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "kube-node-lease"}, &ns)).Should(Succeed())
@@ -1015,6 +1027,21 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
+		})
+
+		It("should allow create/update/delete operation on namespace without fleet/kube prefix for user not in system:masters group", func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+				},
+			}
+			Expect(HubCluster.ImpersonateKubeClient.Create(ctx, &ns)).Should(Succeed())
+			By("expecting successful UPDATE on namespace")
+			Expect(HubCluster.ImpersonateKubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns)).Should(Succeed())
+			ns.Spec.Finalizers = []corev1.FinalizerName{"test-finalizer"}
+			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &ns)).Should(Succeed())
+			By("expecting successful DELETE of namespace")
+			Expect(HubCluster.ImpersonateKubeClient.Delete(ctx, &ns)).Should(Succeed())
 		})
 	})
 })
