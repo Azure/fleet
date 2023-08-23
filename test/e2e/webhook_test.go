@@ -960,3 +960,61 @@ var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
 		})
 	})
 })
+
+var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
+	Context("deny requests to modify namespace with fleet/kube prefix", func() {
+		It("should deny CREATE operation on namespace with fleet prefix for user not in system:masters group", func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "fleet-namespace",
+				},
+			}
+			By("expecting denial of operation CREATE of namespace")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &ns)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
+		})
+		It("should deny CREATE operation on namespace with kube prefix for user not in system:masters group", func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kube-namespace",
+				},
+			}
+			By("expecting denial of operation CREATE of namespace")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &ns)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
+		})
+		It("should deny UPDATE operation on namespace with kube prefix for user not in system:masters group", func() {
+			var ns corev1.Namespace
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "kube-system"}, &ns)).Should(Succeed())
+			ns.Spec.Finalizers[0] = "test-finalizer"
+			By("expecting denial of operation UPDATE of namespace")
+			err := HubCluster.ImpersonateKubeClient.Update(ctx, &ns)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
+		})
+		It("should deny DELETE operation on namespace with fleet prefix for user not in system:masters group", func() {
+			var ns corev1.Namespace
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "fleet-system"}, &ns)).Should(Succeed())
+			By("expecting denial of operation DELETE of namespace")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &ns)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
+		})
+		It("should deny DELETE operation on namespace with kube prefix for user not in system:masters group", func() {
+			var ns corev1.Namespace
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "kube-node-lease"}, &ns)).Should(Succeed())
+			By("expecting denial of operation DELETE of namespace")
+			// trying to delete kube-system/kube-public returns forbidden looks like k8s intercepts the call before webhook.
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &ns)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Namespace", types.NamespacedName{Name: ns.Name})))
+		})
+	})
+})
