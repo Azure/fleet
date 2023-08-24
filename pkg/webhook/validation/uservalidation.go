@@ -55,14 +55,14 @@ func ValidateUserForResource(resKind string, namespacedName types.NamespacedName
 	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 }
 
-// ValidateMCOrNSUpdate checks to see if user is allowed to update argued member cluster or namespace resource.
-func ValidateMCOrNSUpdate(currentObj, oldObj client.Object, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+// ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
+func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
 	kind := currentObj.GetObjectKind().GroupVersionKind().Kind
 	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely updated read-only field/fields of member cluster resource, so no field/fields will be updated", userInfo.Username, userInfo.Groups))
 	namespacedName := types.NamespacedName{Name: currentObj.GetName()}
 	isLabelUpdated := isMapFieldUpdated(currentObj.GetLabels(), oldObj.GetLabels())
 	isAnnotationUpdated := isMapFieldUpdated(currentObj.GetAnnotations(), oldObj.GetAnnotations())
-	isObjUpdated, err := isMCOrNSUpdated(currentObj, oldObj)
+	isObjUpdated, err := isMemberClusterUpdated(currentObj, oldObj)
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
@@ -129,7 +129,7 @@ func isInternalMemberClusterStatusUpdated(currentIMCStatus, oldIMCStatus fleetv1
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.
-func isMCOrNSUpdated(currentObj, oldObj client.Object) (bool, error) {
+func isMemberClusterUpdated(currentObj, oldObj client.Object) (bool, error) {
 	// Set labels, annotations to be nil. Read-only field updates are not received by the admission webhook.
 	currentObj.SetLabels(nil)
 	currentObj.SetAnnotations(nil)

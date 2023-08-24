@@ -131,7 +131,7 @@ func TestValidateUserForFleetCRD(t *testing.T) {
 	}
 }
 
-func TestValidateMCOrNSUpdate(t *testing.T) {
+func TestValidateMemberClusterUpdate(t *testing.T) {
 	testCases := map[string]struct {
 		currentObj       client.Object
 		oldObj           client.Object
@@ -163,30 +163,6 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow any user to modify Namespace labels": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "test-ns",
-					Labels: map[string]string{"test-key": "test-value"},
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"test-group"},
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
-		},
 		"allow any user to modify MC annotations": {
 			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
@@ -210,30 +186,6 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 				Groups:   []string{"test-group"},
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
-		},
-		"allow any user to modify NS annotations": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-ns",
-					Annotations: map[string]string{"test-key": "test-value"},
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"test-group"},
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"allow system:masters group user to modify MC spec": {
 			currentObj: &fleetv1alpha1.MemberCluster{
@@ -265,33 +217,6 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow system:masters group user to modify NS spec": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-ns",
-					Annotations: map[string]string{"test-key": "test-value"},
-				},
-				Spec: corev1.NamespaceSpec{
-					Finalizers: []corev1.FinalizerName{"test-finalizer"},
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"system:masters"},
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
-		},
 		"allow system:masters group user to modify MC status": {
 			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
@@ -322,32 +247,6 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 				Groups:   []string{"system:masters"},
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
-		},
-		"allow system:masters group user to modify NS status": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-				Status: corev1.NamespaceStatus{
-					Phase: "active",
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"system:masters"},
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"allow whitelisted user to modify MC status": {
 			currentObj: &fleetv1alpha1.MemberCluster{
@@ -387,33 +286,6 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
 		},
-		"allow whitelisted user to modify NS status": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-				Status: corev1.NamespaceStatus{
-					Phase: "active",
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			whiteListedUsers: []string{"test-user"},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"test-group"},
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
-		},
 		"deny update of member cluster spec by non system:masters group": {
 			currentObj: &fleetv1alpha1.MemberCluster{
 				TypeMeta: metav1.TypeMeta{
@@ -443,33 +315,6 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 				Groups:   []string{"test-group"},
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
-		},
-		"deny update of namespace spec by non system:masters group": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-ns",
-					Annotations: map[string]string{"test-key": "test-value"},
-				},
-				Spec: corev1.NamespaceSpec{
-					Finalizers: []corev1.FinalizerName{"test-finalizer"},
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"test-group"},
-			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
 		},
 		"deny update of member cluster spec by non whitelisted user ": {
 			currentObj: &fleetv1alpha1.MemberCluster{
@@ -502,39 +347,11 @@ func TestValidateMCOrNSUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", types.NamespacedName{Name: "test-mc"})),
 		},
-		"deny update of namespace spec by non whitelisted user ": {
-			currentObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-ns",
-					Annotations: map[string]string{"test-key": "test-value"},
-				},
-				Spec: corev1.NamespaceSpec{
-					Finalizers: []corev1.FinalizerName{"test-finalizer"},
-				},
-			},
-			oldObj: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind: "Namespace",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-ns",
-				},
-			},
-			whiteListedUsers: []string{"test-user1"},
-			userInfo: authenticationv1.UserInfo{
-				Username: "test-user",
-				Groups:   []string{"test-group"},
-			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "Namespace", types.NamespacedName{Name: "test-ns"})),
-		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateMCOrNSUpdate(testCase.currentObj, testCase.oldObj, testCase.whiteListedUsers, testCase.userInfo)
+			gotResult := ValidateMemberClusterUpdate(testCase.currentObj, testCase.oldObj, testCase.whiteListedUsers, testCase.userInfo)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}

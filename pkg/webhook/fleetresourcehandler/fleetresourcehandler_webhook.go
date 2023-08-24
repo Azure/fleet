@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -107,7 +108,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMCOrNSUpdate(&currentMC, &oldMC, v.whiteListedUsers, req.UserInfo)
+		return validation.ValidateMemberClusterUpdate(&currentMC, &oldMC, v.whiteListedUsers, req.UserInfo)
 	}
 	return validation.ValidateUserForResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, v.whiteListedUsers, req.UserInfo)
 }
@@ -151,18 +152,9 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	if err := v.decodeRequestObject(req, &currentNS); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	fleetMatchResult := regexp.MustCompile(fleetMatch).FindStringSubmatch(currentNS.Name)
-	kubeMatchResult := regexp.MustCompile(kubeMatch).FindStringSubmatch(currentNS.Name)
-	if len(fleetMatchResult) > 0 {
-		if req.Operation == admissionv1.Update {
-			var oldNS corev1.Namespace
-			if err := v.decoder.DecodeRaw(req.OldObject, &oldNS); err != nil {
-				return admission.Errored(http.StatusBadRequest, err)
-			}
-			return validation.ValidateMCOrNSUpdate(&currentNS, &oldNS, v.whiteListedUsers, req.UserInfo)
-		}
-		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
-	} else if len(kubeMatchResult) > 0 {
+	fleetMatchResult := strings.HasPrefix(currentNS.Name, "fleet")
+	kubeMatchResult := strings.HasPrefix(currentNS.Name, "kube")
+	if fleetMatchResult || kubeMatchResult {
 		return validation.ValidateUserForResource(currentNS.Kind, types.NamespacedName{Name: currentNS.Name}, v.whiteListedUsers, req.UserInfo)
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
