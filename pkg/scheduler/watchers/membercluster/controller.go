@@ -193,8 +193,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// Capture label changes.
 			//
 			clusterKObj := klog.KObj(newCluster)
-			// The cluster is to be deleted.
-			if !newCluster.GetDeletionTimestamp().IsZero() {
+			// The cluster is being deleted.
+			if oldCluster.GetDeletionTimestamp().IsZero() && !newCluster.GetDeletionTimestamp().IsZero() {
 				klog.V(2).InfoS("A member cluster is leaving the fleet", "memberCluster", clusterKObj)
 				return true
 			}
