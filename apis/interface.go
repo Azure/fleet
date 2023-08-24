@@ -1,4 +1,10 @@
-package v1beta1
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+// Package apis contains API interfaces for the fleet API group.
+package apis
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

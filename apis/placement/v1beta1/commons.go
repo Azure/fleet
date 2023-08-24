@@ -11,6 +11,9 @@ const (
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions
 	fleetPrefix = "kubernetes-fleet.io/"
 
+	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster.
+	MemberClusterFinalizer = fleetPrefix + "membercluster-finalizer"
+
 	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
 	CRPTrackingLabel = fleetPrefix + "parentCRP"
 

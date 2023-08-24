@@ -29,8 +29,8 @@ const (
 )
 
 const (
-	crpName1 = "crp-1"
-	crpName2 = "crp-2"
+	crpName        = "crp-1"
+	noFinalizerCRP = "crp-2"
 )
 
 var (
@@ -46,7 +46,7 @@ var (
 
 var (
 	expectedKeySetEnqueuedActual = func() error {
-		if isAllPresent, absentKeys := keyCollector.IsPresent(crpName1); !isAllPresent {
+		if isAllPresent, absentKeys := keyCollector.IsPresent(crpName); !isAllPresent {
 			return fmt.Errorf("expected key(s) %v is not found", absentKeys)
 		}
 
@@ -74,12 +74,18 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// TODO (ryanzhang): fix tests so that they are not serial and ordered. Each test should be independent and run by itself.
+// The whole point of ginkgo is that we can order tests in a way that the common setup/teardown can be pulled together at
+// the correct level. There should not be empty nested structs like Describe/Context/It.
+// The serial nature of the tests also makes it hard to reason. For example, the CRP gets a finalizer in a previous test
+// while the finalizer related test has no mention of it.
+
 var _ = Describe("scheduler cluster resource placement source controller", Serial, Ordered, func() {
 	Context("crp created", func() {
 		BeforeAll(func() {
 			crp := &fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName1,
+					Name: crpName,
 				},
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: resourceSelectors,
@@ -102,7 +108,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			crp := &fleetv1beta1.ClusterResourcePlacement{}
-			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName1}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
 
 			crp.Spec.Policy = &fleetv1beta1.PlacementPolicy{
 				PlacementType: fleetv1beta1.PickAllPlacementType,
@@ -129,7 +135,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 
-		AfterAll(func() {
+		AfterEach(func() {
 			keyCollector.Reset()
 		})
 	})
@@ -139,7 +145,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			crp := &fleetv1beta1.ClusterResourcePlacement{}
-			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName1}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
 
 			crp.Finalizers = append(crp.Finalizers, fleetv1beta1.SchedulerCRPCleanupFinalizer)
 			Expect(hubClient.Update(ctx, crp)).Should(Succeed(), "Failed to update cluster resource placement")
@@ -149,7 +155,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 
-		AfterAll(func() {
+		AfterEach(func() {
 			keyCollector.Reset()
 		})
 	})
@@ -160,7 +166,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 
 			crp := &fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName1,
+					Name: crpName,
 				},
 			}
 			Expect(hubClient.Delete(ctx, crp)).Should(Succeed(), "Failed to delete cluster resource placement")
@@ -171,7 +177,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(expectedKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is empty")
 		})
 
-		AfterAll(func() {
+		AfterEach(func() {
 			keyCollector.Reset()
 		})
 	})
@@ -181,7 +187,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			crp := &fleetv1beta1.ClusterResourcePlacement{}
-			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName1}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: crpName}, crp)).Should(Succeed(), "Failed to get cluster resource placement")
 
 			crp.Finalizers = []string{}
 			Expect(hubClient.Update(ctx, crp)).Should(Succeed(), "Failed to update cluster resource placement")
@@ -191,18 +197,18 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 
-		AfterAll(func() {
+		AfterEach(func() {
 			keyCollector.Reset()
 		})
 	})
 
-	Context("crp without finalizer is deleted", func() {
+	PContext("crp without finalizer is deleted", func() {
 		BeforeAll(func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
 			crp := &fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName2,
+					Name: noFinalizerCRP,
 				},
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: resourceSelectors,
@@ -216,7 +222,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 		})
 
-		AfterAll(func() {
+		AfterEach(func() {
 			keyCollector.Reset()
 		})
 	})

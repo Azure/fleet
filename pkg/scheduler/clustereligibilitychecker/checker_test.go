@@ -27,7 +27,7 @@ func TestIsClusterEligible(t *testing.T) {
 		WithClusterHeartbeatCheckTimeout(clusterHeartbeatCheckTimeout),
 		WithClusterHealthCheckTimeout(clusterHealthCheckTimeout),
 	)
-
+	deleteTime := metav1.Now()
 	testCases := []struct {
 		name             string
 		cluster          *clusterv1beta1.MemberCluster
@@ -38,10 +38,8 @@ func TestIsClusterEligible(t *testing.T) {
 			name: "cluster left",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateLeave,
+					Name:              clusterName,
+					DeletionTimestamp: &deleteTime,
 				},
 			},
 			wantReasonPrefix: "cluster has left the fleet",
@@ -52,9 +50,6 @@ func TestIsClusterEligible(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{},
 			},
 			wantReasonPrefix: "cluster is not connected to the fleet: member agent not online yet",
@@ -64,9 +59,6 @@ func TestIsClusterEligible(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
@@ -84,9 +76,6 @@ func TestIsClusterEligible(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
@@ -111,9 +100,6 @@ func TestIsClusterEligible(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
@@ -137,9 +123,6 @@ func TestIsClusterEligible(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
@@ -162,9 +145,6 @@ func TestIsClusterEligible(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
@@ -194,9 +174,6 @@ func TestIsClusterEligible(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
@@ -224,9 +201,6 @@ func TestIsClusterEligible(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{

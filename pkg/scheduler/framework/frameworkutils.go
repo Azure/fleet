@@ -56,7 +56,7 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 			// unscheduled bindings are disregarded by the scheduler.
 		case binding.Spec.State == placementv1beta1.BindingStateUnscheduled:
 			// Ignore any binding that is of the unscheduled state.
-		case !isTargetClusterPresent || targetCluster.Spec.State == clusterv1beta1.ClusterStateLeave:
+		case !isTargetClusterPresent || !targetCluster.GetDeletionTimestamp().IsZero():
 			// Check if the binding is now dangling, i.e., it is associated with a cluster that
 			// is no longer in normal operations, but is still of a scheduled or bound state.
 			//

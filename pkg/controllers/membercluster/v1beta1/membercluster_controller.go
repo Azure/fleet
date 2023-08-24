@@ -28,10 +28,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	"go.goms.io/fleet/apis"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 const (
@@ -62,61 +64,36 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconcile", "memberCluster", req.NamespacedName)
-	var oldMC clusterv1beta1.MemberCluster
-	if err := r.Client.Get(ctx, req.NamespacedName, &oldMC); err != nil {
+	var mc clusterv1beta1.MemberCluster
+	mcObjRef := klog.KObj(&mc)
+	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Handle deleting member cluster, garbage collect all the resources in the cluster namespace
-	if !oldMC.DeletionTimestamp.IsZero() {
-		klog.V(2).InfoS("the member cluster is in the process of being deleted", "memberCluster", klog.KObj(&oldMC))
-		return r.garbageCollectWork(ctx, &oldMC)
+	// Handle deleting/leaving member cluster, garbage collect all the resources in the cluster namespace
+	if !mc.DeletionTimestamp.IsZero() {
+		klog.V(2).InfoS("the member cluster is leaving", "memberCluster", mcObjRef)
+		return r.handleDelete(ctx, mc.DeepCopy())
 	}
 
-	mc := oldMC.DeepCopy()
-	mcObjRef := klog.KObj(mc)
 	// Add the finalizer to the member cluster
-	if err := r.ensureFinalizer(ctx, mc); err != nil {
+	if err := r.ensureFinalizer(ctx, &mc); err != nil {
 		klog.ErrorS(err, "failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
 		return ctrl.Result{}, err
 	}
-
-	// Get current internal member cluster.
-	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
-	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: mc.Name}
-	var imc clusterv1beta1.InternalMemberCluster
-	currentImc := &imc
-	if err := r.Client.Get(ctx, imcNamespacedName, &imc); err != nil {
-		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
-			return ctrl.Result{}, err
-		}
-		// Not found.
-		currentImc = nil
+	currentIMC, err := r.getInternalMemberCluster(ctx, mc.GetName())
+	if err != nil {
+		return ctrl.Result{}, err
 	}
-
-	switch mc.Spec.State {
-	case clusterv1beta1.ClusterStateJoin:
-		if err := r.join(ctx, mc, currentImc); err != nil {
-			klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
-			return ctrl.Result{}, err
-		}
-
-	case clusterv1beta1.ClusterStateLeave:
-		if err := r.leave(ctx, mc, currentImc); err != nil {
-			klog.ErrorS(err, "failed to leave", "memberCluster", mcObjRef)
-			return ctrl.Result{}, err
-		}
-
-	default:
-		klog.Errorf("encountered a fatal error. unknown state %v in MemberCluster: %s", mc.Spec.State, mcObjRef)
-		return ctrl.Result{}, nil
+	if err := r.join(ctx, &mc, currentIMC); err != nil {
+		klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
+		return ctrl.Result{}, err
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
-	r.syncInternalMemberClusterStatus(currentImc, mc)
-	if err := r.updateMemberClusterStatus(ctx, mc); err != nil {
+	r.syncInternalMemberClusterStatus(currentIMC, &mc)
+	if err := r.updateMemberClusterStatus(ctx, &mc); err != nil {
 		if apierrors.IsConflict(err) {
 			klog.V(2).InfoS("failed to update status due to conflicts", "memberCluster", mcObjRef)
 		} else {
@@ -126,6 +103,54 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// handleDelete handles the delete event of the member cluster, makes sure the agent has finished leaving the fleet first and
+// then garbage collects all the resources in the cluster namespace.
+func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
+	mcObjRef := klog.KObj(mc)
+	if !controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {
+		klog.V(2).InfoS("No need to do anything for the deleting member cluster without a finalizer", "memberCluster", mcObjRef)
+		return ctrl.Result{}, nil
+	}
+	currentImc, err := r.getInternalMemberCluster(ctx, mc.GetName())
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	// calculate the current status of the member cluster from imc status
+	r.syncInternalMemberClusterStatus(currentImc, mc)
+	cond := meta.FindStatusCondition(mc.Status.Conditions, string(clusterv1beta1.AgentJoined))
+	// cluster never joined or already left
+	if cond != nil && cond.Status == metav1.ConditionFalse && cond.ObservedGeneration == mc.GetGeneration() {
+		klog.V(2).InfoS("No need to wait for agent leave, start garbage collecting", "memberCluster", mcObjRef)
+		return r.garbageCollectWork(ctx, mc)
+	}
+
+	// mark the imc as left again to make sure the agent is leaving the fleet
+	if err := r.leave(ctx, mc, currentImc); err != nil {
+		klog.ErrorS(err, "failed to leave", "memberCluster", mcObjRef)
+		return ctrl.Result{}, err
+	}
+	// update the mc status while we wait for all the agents to leave
+	err = r.updateMemberClusterStatus(ctx, mc)
+	return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(err)
+}
+
+func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) (*clusterv1beta1.InternalMemberCluster, error) {
+	// Get current internal member cluster.
+	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, name)
+	imcNamespacedName := types.NamespacedName{Namespace: namespaceName, Name: name}
+	var imc clusterv1beta1.InternalMemberCluster
+	currentImc := &imc
+	if err := r.Client.Get(ctx, imcNamespacedName, &imc); err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "failed to get internal member cluster", "internalMemberCluster", imcNamespacedName)
+			return nil, err
+		}
+		// Not found.
+		currentImc = nil
+	}
+	return currentImc, nil
 }
 
 // garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
@@ -158,17 +183,17 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 	}
 	klog.V(2).InfoS("successfully removed all the work finalizers in the cluster namespace",
 		"memberCluster", klog.KObj(mc), "number of work", len(works.Items))
-	controllerutil.RemoveFinalizer(mc, utils.MemberClusterFinalizer)
+	controllerutil.RemoveFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
 	return ctrl.Result{}, r.Update(ctx, mc, &client.UpdateOptions{})
 }
 
 // ensureFinalizer makes sure that the member cluster CR has a finalizer on it
 func (r *Reconciler) ensureFinalizer(ctx context.Context, mc *clusterv1beta1.MemberCluster) error {
-	if controllerutil.ContainsFinalizer(mc, utils.MemberClusterFinalizer) {
+	if controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {
 		return nil
 	}
 	klog.InfoS("add the member cluster finalizer", "memberCluster", klog.KObj(mc))
-	controllerutil.AddFinalizer(mc, utils.MemberClusterFinalizer)
+	controllerutil.AddFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
 	return r.Update(ctx, mc, client.FieldOwner(utils.MCControllerFieldManagerName))
 }
 
@@ -211,10 +236,6 @@ func (r *Reconciler) join(ctx context.Context, mc *clusterv1beta1.MemberCluster,
 // Note that leave doesn't delete any of the resources created by join(). Instead, deleting MemberCluster will delete them.
 func (r *Reconciler) leave(ctx context.Context, mc *clusterv1beta1.MemberCluster, imc *clusterv1beta1.InternalMemberCluster) error {
 	klog.V(2).InfoS("leave", "memberCluster", klog.KObj(mc))
-	// Never joined successfully before.
-	if imc == nil {
-		return nil
-	}
 
 	// Copy spec from member cluster to internal member cluster.
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
@@ -371,9 +392,13 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
 		Spec: clusterv1beta1.InternalMemberClusterSpec{
-			State:                  mc.Spec.State,
 			HeartbeatPeriodSeconds: mc.Spec.HeartbeatPeriodSeconds,
 		},
+	}
+	if mc.GetDeletionTimestamp().IsZero() {
+		expectedImc.Spec.State = clusterv1beta1.ClusterStateJoin
+	} else {
+		expectedImc.Spec.State = clusterv1beta1.ClusterStateLeave
 	}
 
 	// Creates internal member cluster if not found.
@@ -477,7 +502,7 @@ func (r *Reconciler) aggregateJoinedCondition(mc *clusterv1beta1.MemberCluster) 
 }
 
 // markMemberClusterReadyToJoin is used to update the ReadyToJoin condition as true of member cluster.
-func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
+func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterReadyToJoin", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterReadyToJoin),
@@ -497,7 +522,7 @@ func markMemberClusterReadyToJoin(recorder record.EventRecorder, mc placementv1b
 }
 
 // markMemberClusterJoined is used to the update the status of the member cluster to have the joined condition.
-func markMemberClusterJoined(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
+func markMemberClusterJoined(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterJoined", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
@@ -518,7 +543,7 @@ func markMemberClusterJoined(recorder record.EventRecorder, mc placementv1beta1.
 }
 
 // markMemberClusterLeft is used to update the status of the member cluster to have the left condition and mark member cluster as not ready to join.
-func markMemberClusterLeft(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
+func markMemberClusterLeft(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterLeft", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),
@@ -545,7 +570,7 @@ func markMemberClusterLeft(recorder record.EventRecorder, mc placementv1beta1.Co
 }
 
 // markMemberClusterUnknown is used to update the status of the member cluster to have the left condition.
-func markMemberClusterUnknown(recorder record.EventRecorder, mc placementv1beta1.ConditionedObj) {
+func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.ConditionedObj) {
 	klog.V(2).InfoS("markMemberClusterUnknown", "memberCluster", klog.KObj(mc))
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.ConditionTypeMemberClusterJoined),

@@ -62,7 +62,7 @@ func TestFilter(t *testing.T) {
 			Name: policyName,
 		},
 	}
-
+	deleteTime := metav1.Now()
 	testCases := []struct {
 		name    string
 		cluster *clusterv1beta1.MemberCluster
@@ -72,10 +72,8 @@ func TestFilter(t *testing.T) {
 			name: "cluster left",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateLeave,
+					Name:              clusterName,
+					DeletionTimestamp: &deleteTime,
 				},
 			},
 			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
@@ -86,9 +84,6 @@ func TestFilter(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{},
 			},
 			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName, ""),
@@ -98,9 +93,6 @@ func TestFilter(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
@@ -118,9 +110,6 @@ func TestFilter(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
@@ -145,9 +134,6 @@ func TestFilter(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
@@ -171,9 +157,6 @@ func TestFilter(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
@@ -196,9 +179,6 @@ func TestFilter(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
@@ -228,9 +208,6 @@ func TestFilter(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
-				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{
 						{
@@ -257,9 +234,6 @@ func TestFilter(t *testing.T) {
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
-				},
-				Spec: clusterv1beta1.MemberClusterSpec{
-					State: clusterv1beta1.ClusterStateJoin,
 				},
 				Status: clusterv1beta1.MemberClusterStatus{
 					AgentStatus: []clusterv1beta1.AgentStatus{

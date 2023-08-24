@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -48,13 +49,10 @@ var (
 )
 
 var (
-	newMemberCluster = func(name string, state clusterv1beta1.ClusterState) *clusterv1beta1.MemberCluster {
+	newMemberCluster = func(name string) *clusterv1beta1.MemberCluster {
 		return &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
-			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				State: state,
 			},
 		}
 	}
@@ -81,9 +79,7 @@ func TestAPIs(t *testing.T) {
 // setupResources adds resources required for this test suite to the hub cluster.
 func setupResources() {
 	// Create a member cluster that has just joined the fleet.
-	Expect(hubClient.Create(ctx, newMemberCluster(clusterName1, clusterv1beta1.ClusterStateJoin))).Should(Succeed(), "Failed to create member cluster")
-	// Create a member cluster that has left the fleet.
-	Expect(hubClient.Create(ctx, newMemberCluster(clusterName2, clusterv1beta1.ClusterStateLeave))).Should(Succeed(), "Failed to create member cluster")
+	Expect(hubClient.Create(ctx, newMemberCluster(clusterName1))).Should(Succeed(), "Failed to create member cluster")
 
 	// Create a CRP that has no placement policy specified.
 	Expect(hubClient.Create(ctx, newCRP(crpName1, nil))).Should(Succeed(), "Failed to create CRP")
