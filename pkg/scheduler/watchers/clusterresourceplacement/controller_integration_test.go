@@ -202,7 +202,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 		})
 	})
 
-	PContext("crp without finalizer is deleted", func() {
+	Context("crp without finalizer is deleted", func() {
 		BeforeAll(func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
