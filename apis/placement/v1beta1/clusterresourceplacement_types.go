@@ -36,7 +36,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet-placement}
+// +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Scheduled")].status`,name="Scheduled",type=string

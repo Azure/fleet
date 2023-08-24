@@ -9,6 +9,7 @@ spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
+    - fleet
     - fleet-placement
     kind: ClusterResourceBinding
     listKind: ClusterResourceBindingList
