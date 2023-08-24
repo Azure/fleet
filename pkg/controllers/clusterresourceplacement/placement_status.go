@@ -61,7 +61,7 @@ const (
 	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
 	resourcePlacementConditionScheduleFailedWithScoreMessageFormat    = "%s is not selected with clusterScore %+v: %s"
 	resourcePlacementConditionScheduleSucceededMessageFormat          = "Successfully scheduled resources for placement in %s: %s"
-	resourcePlacementConditionScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in %s with clusterScore %+v: %s"
+	resourcePlacementConditionScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in %s (affinity score: %d, topology spread score: %d): %s"
 )
 
 func buildClusterResourcePlacementSyncCondition(crp *fleetv1beta1.ClusterResourcePlacement, pendingCount, succeededCount int) metav1.Condition {
