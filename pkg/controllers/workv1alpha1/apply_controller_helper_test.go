@@ -1,4 +1,4 @@
-package controllers
+package workv1alpha1
 
 import (
 	"context"

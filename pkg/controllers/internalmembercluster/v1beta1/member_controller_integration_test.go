@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -58,7 +58,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 		}
 
 		By("create the internalMemberCluster reconciler")
-		workController := workapi.NewApplyWorkReconciler(
+		workController := workv1alpha1.NewApplyWorkReconciler(
 			k8sClient, nil, k8sClient, nil, nil, 5, memberClusterNamespace)
 		r = NewReconciler(k8sClient, k8sClient, workController)
 		err := r.SetupWithManager(mgr)
