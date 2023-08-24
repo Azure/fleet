@@ -21,7 +21,7 @@ MEMBER_KIND_CLUSTER_NAME = member-testing
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
-CLUSTER_CONFIG := $(abspath test/e2e/kind-config.yaml)
+CLUSTER_CONFIG := $(abspath test/e2e/v1alpha1/kind-config.yaml)
 
 # Binaries
 # Note: Need to use abspath so we can invoke these from subdirectories
@@ -106,6 +106,8 @@ vet: ## Run go vet against code.
 ## Kind
 ## --------------------------------------
 
+# Note that these targets are only used for E2E tests of the v1alpha1 API.
+
 create-hub-kind-cluster:
 	kind create cluster --name $(HUB_KIND_CLUSTER_NAME) --image=$(KIND_IMAGE) --config=$(CLUSTER_CONFIG) --kubeconfig=$(KUBECONFIG)
 
@@ -117,6 +119,7 @@ load-hub-docker-image:
 
 load-member-docker-image:
 	kind load docker-image  --name $(MEMBER_KIND_CLUSTER_NAME) $(REGISTRY)/$(REFRESH_TOKEN_IMAGE_NAME):$(REFRESH_TOKEN_IMAGE_VERSION) $(REGISTRY)/$(MEMBER_AGENT_IMAGE_NAME):$(MEMBER_AGENT_IMAGE_VERSION)
+
 ## --------------------------------------
 ## test
 ## --------------------------------------
@@ -133,6 +136,9 @@ integration-test: $(ENVTEST) ## Run tests.
 	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
 
 ## e2e tests
+
+# Note that these targets are only used for E2E tests of the v1beta1 API.
+
 install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	helm install hub-agent ./charts/hub-agent/ \
@@ -171,13 +177,13 @@ install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
 	kubectl delete pod --all -n fleet-system
 
 build-e2e:
-	go test -c ./test/e2e
+	go test -c ./test/e2e/v1alpha1
 
 run-e2e: build-e2e
-	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./e2e.test -test.v -ginkgo.v
+	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./v1alpha1.test -test.v -ginkgo.v
 
-.PHONY: creat-kind-cluster
-creat-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
+.PHONY: create-kind-cluster
+create-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-helm
 
 .PHONY: install-helm
 install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
@@ -280,6 +286,8 @@ docker-build-refresh-token: docker-buildx-builder
 clean-bin: ## Remove all generated binaries
 	rm -rf $(TOOLS_BIN_DIR)
 	rm -rf ./bin
+
+# Note that these targets are only used for E2E tests of the v1beta1 API.
 
 .PHONY: uninstall-helm
 uninstall-helm: clean-testing-resources
