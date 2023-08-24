@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package e2e
+package v1alpha1
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 
 	"go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
-	testutils "go.goms.io/fleet/test/e2e/utils"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 var _ = Describe("Work API Controller test", func() {

@@ -2,7 +2,8 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package e2e
+
+package v1alpha1
 
 import (
 	"context"

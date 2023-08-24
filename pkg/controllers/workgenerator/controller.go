@@ -161,6 +161,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 	}
 
 	// delete all the listed works
+<<<<<<< HEAD
 	//
 	// TO-DO: this controller should be able to garbage collect all works automatically via
 	// background/foreground cascade deletion. This may render the finalizer unnecessary.
@@ -168,6 +169,12 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 		work := works[workName]
 
 		if err := r.Client.Delete(ctx, work); err != nil && !apierrors.IsNotFound(err) {
+=======
+	for workName := range works {
+		work := works[workName]
+
+		if err := r.Client.Delete(ctx, work); err != nil {
+>>>>>>> 5c6f485 (Refactored + Added v1beta1 E2E tests)
 			return ctrl.Result{}, controller.NewAPIServerError(false, err)
 		}
 	}

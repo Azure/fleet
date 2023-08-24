@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package e2e
+package v1alpha1
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 	"go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
-	testutils "go.goms.io/fleet/test/e2e/utils"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 var (

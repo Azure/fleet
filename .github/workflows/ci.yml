@@ -53,7 +53,7 @@ jobs:
           ## Comma-separated list of files to upload
           files: ./it-coverage.xml;./ut-coverage.xml
   
-  e2e-tests:
+  e2e-tests-v1alpha1:
     runs-on: ubuntu-latest
     needs: [
       detect-noop,
@@ -74,3 +74,24 @@ jobs:
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
+  
+  e2e-tests-v1beta1:
+    runs-on: ubuntu-latest
+    needs: [
+      detect-noop,
+    ]
+    if: needs.detect-noop.outputs.noop != 'true'
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Run e2e tests
+        run: |
+          cd ./test/e2e/v1beta1 && chmod +x ./setup.sh && ./setup.sh && go test . -test.v -ginkgo.v
+        env:
+          KUBECONFIG: '/home/runner/.kube/config'

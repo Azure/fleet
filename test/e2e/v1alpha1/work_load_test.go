@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package e2e
+package v1alpha1
 
 import (
 	"github.com/google/go-cmp/cmp"
@@ -20,7 +20,7 @@ import (
 
 	"go.goms.io/fleet/apis/v1alpha1"
 	pkgutils "go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/test/e2e/utils"
+	"go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 var _ = Describe("workload orchestration testing", func() {
