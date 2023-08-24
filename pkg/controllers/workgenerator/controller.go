@@ -160,6 +160,16 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// delete all the listed works
+	for workName := range works {
+		work := works[workName]
+
+		if err := r.Client.Delete(ctx, work); err != nil {
+			return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		}
+	}
+
 	// remove the work finalizer on the binding if all the work objects are deleted
 	if len(works) == 0 {
 		controllerutil.RemoveFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
