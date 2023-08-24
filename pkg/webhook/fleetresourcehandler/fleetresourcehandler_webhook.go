@@ -28,8 +28,6 @@ const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
 	ValidationPath = "/validate-v1-fleetresourcehandler"
 	groupMatch     = `^[^.]*\.(.*)`
-	fleetMatch     = `^fleet`
-	kubeMatch      = `^kube`
 )
 
 var (
