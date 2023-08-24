@@ -100,7 +100,7 @@ func buildClusterResourcePlacementApplyCondition(crp *fleetv1beta1.ClusterResour
 		}
 	}
 
-	if !isSync {
+	if !isSync || pendingCount > 0 {
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
