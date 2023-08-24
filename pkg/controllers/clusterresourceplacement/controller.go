@@ -930,7 +930,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 	}
 	crp.Status.PlacementStatuses = placementStatuses
 	crp.SetConditions(buildClusterResourcePlacementSyncCondition(crp, syncPendingCount, syncSucceededCount))
-	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, syncPendingCount > 0, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
+	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, syncPendingCount == 0, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
 	return nil
 }
 
