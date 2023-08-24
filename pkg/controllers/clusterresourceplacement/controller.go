@@ -889,7 +889,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		}
 		rp.ClusterName = c.ClusterName
 		if c.ClusterScore != nil {
-			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, c.ClusterScore, c.Reason)
+			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, *c.ClusterScore.AffinityScore, *c.ClusterScore.TopologySpreadScore, c.Reason)
 		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
 		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, &rp)
