@@ -11,7 +11,7 @@ import (
 )
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced,categories={fleet},shortName=imc
+// +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-cluster},shortName=imc
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 

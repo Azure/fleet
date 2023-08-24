@@ -10,6 +10,7 @@ spec:
   names:
     categories:
     - fleet
+    - fleet-cluster
     kind: InternalMemberCluster
     listKind: InternalMemberClusterList
     plural: internalmemberclusters

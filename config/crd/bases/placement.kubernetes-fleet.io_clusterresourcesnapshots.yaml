@@ -9,7 +9,8 @@ spec:
   group: placement.kubernetes-fleet.io
   names:
     categories:
-    - fleet-workload
+    - fleet
+    - fleet-placement
     kind: ClusterResourceSnapshot
     listKind: ClusterResourceSnapshotList
     plural: clusterresourcesnapshots

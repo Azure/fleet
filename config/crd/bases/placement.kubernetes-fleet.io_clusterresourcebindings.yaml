@@ -10,6 +10,7 @@ spec:
   names:
     categories:
     - fleet
+    - fleet-placement
     kind: ClusterResourceBinding
     listKind: ClusterResourceBindingList
     plural: clusterresourcebindings
