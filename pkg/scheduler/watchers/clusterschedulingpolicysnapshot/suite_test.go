@@ -69,17 +69,17 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
-	schedulerWorkqueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
 
 	reconciler := &Reconciler{
 		Client:             hubClient,
-		SchedulerWorkqueue: schedulerWorkqueue,
+		SchedulerWorkQueue: schedulerWorkQueue,
 	}
 	err = reconciler.SetupWithManager(ctrlMgr)
 	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
 
 	// Start the key collector.
-	keyCollector = keycollector.NewSchedulerWorkqueueKeyCollector(schedulerWorkqueue)
+	keyCollector = keycollector.NewSchedulerWorkqueueKeyCollector(schedulerWorkQueue)
 	go func() {
 		keyCollector.Run(ctx)
 	}()

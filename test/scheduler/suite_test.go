@@ -27,7 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	sched "go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
 	fw "go.goms.io/fleet/pkg/scheduler/framework"
@@ -44,6 +45,8 @@ import (
 const (
 	defaultProfileName   = "defaultProfile"
 	defaultSchedulerName = "defaultScheduler"
+
+	customDeletionBlockerFinalizer = "custom-deletion-blocker"
 
 	dummyReason = "dummyReason"
 
@@ -141,7 +144,10 @@ var (
 
 func TestMain(m *testing.M) {
 	// Add custom APIs to the runtime scheme.
-	if err := fleetv1beta1.AddToScheme(scheme.Scheme); err != nil {
+	if err := placementv1beta1.AddToScheme(scheme.Scheme); err != nil {
+		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
+	}
+	if err := clusterv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		log.Fatalf("failed to add custom APIs to the runtime scheme: %v", err)
 	}
 
@@ -157,12 +163,12 @@ func TestAPIs(t *testing.T) {
 func setupResources() {
 	// Create all member cluster objects.
 	for _, clusterName := range allClusters {
-		memberCluster := fleetv1beta1.MemberCluster{
+		memberCluster := clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterName,
+				Name:       clusterName,
+				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
-			Spec: fleetv1beta1.MemberClusterSpec{
-				State: fleetv1beta1.ClusterStateJoin,
+			Spec: clusterv1beta1.MemberClusterSpec{
 				Identity: rbacv1.Subject{
 					Kind:     "ServiceAccount",
 					APIGroup: "",
@@ -176,22 +182,22 @@ func setupResources() {
 	// Mark all clusters as healthy.
 	for _, clusterName := range allClusters {
 		// Retrieve the cluster object.
-		memberCluster := &fleetv1beta1.MemberCluster{}
+		memberCluster := &clusterv1beta1.MemberCluster{}
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 		// Add health check related information.
-		memberCluster.Status.AgentStatus = []fleetv1beta1.AgentStatus{
+		memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
 			{
-				Type: fleetv1beta1.MemberAgent,
+				Type: clusterv1beta1.MemberAgent,
 				Conditions: []metav1.Condition{
 					{
-						Type:               string(fleetv1beta1.AgentJoined),
+						Type:               string(clusterv1beta1.AgentJoined),
 						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(time.Now()),
 						Reason:             dummyReason,
 					},
 					{
-						Type:               string(fleetv1beta1.AgentHealthy),
+						Type:               string(clusterv1beta1.AgentHealthy),
 						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.NewTime(time.Now()),
 						Reason:             dummyReason,
@@ -204,20 +210,20 @@ func setupResources() {
 	}
 
 	// Mark cluster runningwolf as unhealthy (no recent heartbeats).
-	memberCluster := &fleetv1beta1.MemberCluster{}
+	memberCluster := &clusterv1beta1.MemberCluster{}
 	Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster8}, memberCluster)).To(Succeed(), "Failed to get member cluster")
-	memberCluster.Status.AgentStatus = []fleetv1beta1.AgentStatus{
+	memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
 		{
-			Type: fleetv1beta1.MemberAgent,
+			Type: clusterv1beta1.MemberAgent,
 			Conditions: []metav1.Condition{
 				{
-					Type:               string(fleetv1beta1.AgentJoined),
+					Type:               string(clusterv1beta1.AgentJoined),
 					Status:             metav1.ConditionTrue,
 					LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour * 25)),
 					Reason:             dummyReason,
 				},
 				{
-					Type:               string(fleetv1beta1.AgentHealthy),
+					Type:               string(clusterv1beta1.AgentHealthy),
 					Status:             metav1.ConditionTrue,
 					LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour * 25)),
 					Reason:             dummyReason,
@@ -228,22 +234,24 @@ func setupResources() {
 	}
 	Expect(hubClient.Status().Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster status")
 
-	// Mark cluster walkingeagle as left.
-	memberCluster = &fleetv1beta1.MemberCluster{}
-	Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster9}, memberCluster)).To(Succeed(), "Failed to get member cluster")
-	memberCluster.Spec.State = fleetv1beta1.ClusterStateLeave
-	Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster")
-
 	// Add labels to clusters.
 	for clusterName, labels := range labelsByCluster {
 		// Retrieve the cluster object.
-		memberCluster := &fleetv1beta1.MemberCluster{}
+		memberCluster := &clusterv1beta1.MemberCluster{}
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 		// Add the region label.
 		memberCluster.Labels = labels
 		Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster")
 	}
+
+	// Set cluster walkingeagle to leave by deleting the member cluster object.
+	memberCluster = &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: memberCluster9,
+		},
+	}
+	Expect(hubClient.Delete(ctx, memberCluster)).To(Succeed(), "Failed to delete member cluster")
 }
 
 var _ = BeforeSuite(func() {
@@ -262,9 +270,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred(), "Failed to start test environment")
 	Expect(hubCfg).ToNot(BeNil(), "Hub cluster configuration is nil")
 
-	// Add custom APIs to the runtime scheme.
-	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
-
 	// Set up a client for the hub cluster..
 	hubClient, err = client.New(hubCfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred(), "Failed to create hub cluster client")
@@ -281,7 +286,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create controller manager")
 
 	// Spin up a scheduler work queue.
-	schedulerWorkqueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
 
 	// Build a custom cluster eligibility checker.
 	eligibilityChecker := clustereligibilitychecker.New(
@@ -295,21 +300,21 @@ var _ = BeforeSuite(func() {
 	// Register the watchers.
 	crpReconciler := crpwatcher.Reconciler{
 		Client:             hubClient,
-		SchedulerWorkqueue: schedulerWorkqueue,
+		SchedulerWorkQueue: schedulerWorkQueue,
 	}
 	err = crpReconciler.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up CRP watcher with controller manager")
 
 	policySnapshotWatcher := pswatcher.Reconciler{
 		Client:             hubClient,
-		SchedulerWorkqueue: schedulerWorkqueue,
+		SchedulerWorkQueue: schedulerWorkQueue,
 	}
 	err = policySnapshotWatcher.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up policy snapshot watcher with controller manager")
 
 	memberClusterWatcher := mcwatcher.Reconciler{
 		Client:                    hubClient,
-		SchedulerWorkqueue:        schedulerWorkqueue,
+		SchedulerWorkQueue:        schedulerWorkQueue,
 		ClusterEligibilityChecker: eligibilityChecker,
 	}
 	err = memberClusterWatcher.SetupWithManager(ctrlMgr)
@@ -347,7 +352,7 @@ var _ = BeforeSuite(func() {
 	framework := fw.NewFramework(profile, ctrlMgr, fw.WithClusterEligibilityChecker(eligibilityChecker))
 
 	// Create a scheduler.
-	scheduler := sched.NewScheduler(defaultSchedulerName, framework, schedulerWorkqueue, ctrlMgr)
+	scheduler := sched.NewScheduler(defaultSchedulerName, framework, schedulerWorkQueue, ctrlMgr)
 
 	// Run the controller manager.
 	go func() {
