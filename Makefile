@@ -189,7 +189,7 @@ create-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-
 install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
 
 .PHONY: e2e-tests
-e2e-tests: creat-kind-cluster run-e2e
+e2e-tests: create-kind-cluster run-e2e
 
 ## reviewable
 .PHONY: reviewable

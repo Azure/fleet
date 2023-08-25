@@ -15,7 +15,7 @@ declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_
 
 export REGISTRY="${REGISTRY:-ghcr.io}"
 export TAG="${TAG:-e2e}"
-export OUTPUT_TYPE="${OUTPUT_TYPE:-type=registry}"
+export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
