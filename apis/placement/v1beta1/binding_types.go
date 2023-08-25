@@ -10,11 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	// WorkFinalizer is used to make sure that the binding is not deleted until the work objects it generates are all deleted.
-	WorkFinalizer = fleetPrefix + "work-cleanup"
-)
-
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
 // +kubebuilder:subresource:status

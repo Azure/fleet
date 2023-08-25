@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 )
@@ -751,7 +750,7 @@ func markWorkApplied(work *v1alpha1.Work) {
 	work.Status.Conditions = []metav1.Condition{
 		{
 			Status:             metav1.ConditionTrue,
-			Type:               workapi.ConditionTypeApplied,
+			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Reason:             "appliedManifest",
 			Message:            "fake apply manifest",
 			ObservedGeneration: work.Generation,
