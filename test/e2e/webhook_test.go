@@ -6,6 +6,8 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -1183,6 +1185,118 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster resource snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
+		})
+	})
+
+	Context("fleet guard rail ClusterSchedulingPolicySnapshot e2e tests", func() {
+		BeforeEach(func() {
+			placementPolicy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: pointer.Int32(3),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"key1": "value1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			jsonBytes, err := json.Marshal(placementPolicy)
+			Expect(err).Should(Succeed())
+			policyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
+			csp := placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-scheduling-policy-snapshot",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     placementPolicy,
+					PolicyHash: policyHash,
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &csp)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			csp := placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-scheduling-policy-snapshot",
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &csp)).Should(Succeed())
+		})
+
+		It("should deny CREATE cluster resource snapshot operation for user not in system:masters group", func() {
+			placementPolicy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: pointer.Int32(3),
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"key1": "value1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			jsonBytes, err := json.Marshal(placementPolicy)
+			Expect(err).Should(Succeed())
+			policyHash := []byte(fmt.Sprintf("%x", sha256.Sum256(jsonBytes)))
+			csp := placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-scheduling-policy-snapshot",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy:     placementPolicy,
+					PolicyHash: policyHash,
+				},
+			}
+			By("expecting denial of operation CREATE of cluster scheduling policy snapshot")
+			err = HubCluster.ImpersonateKubeClient.Create(ctx, &csp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create cluster scheduling policy snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterSchedulingPolicySnapshot", types.NamespacedName{Name: csp.Name})))
+		})
+
+		It("should deny UPDATE cluster scheduling policy snapshot operation for user not in system:masters group", func() {
+			Eventually(func() error {
+				var csp placementv1beta1.ClusterSchedulingPolicySnapshot
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-scheduling-policy-snapshot"}, &csp)).Should(Succeed())
+				csp.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of cluster scheduling policy snapshot")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &csp)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster scheduling policy snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterSchedulingPolicySnapshot", types.NamespacedName{Name: csp.Name})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE cluster scheduling policy snapshot for user not in system:masters group", func() {
+			var csp placementv1beta1.ClusterSchedulingPolicySnapshot
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-scheduling-policy-snapshot"}, &csp)).Should(Succeed())
+			By("expecting denial of operation DELETE of cluster scheduling policy snapshot")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &csp)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster scheduling policy snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterSchedulingPolicySnapshot", types.NamespacedName{Name: csp.Name})))
 		})
 	})
 })
