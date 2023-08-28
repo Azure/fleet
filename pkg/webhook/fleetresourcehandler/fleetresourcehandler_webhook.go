@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/webhook/validation"
 )
@@ -37,6 +38,9 @@ var (
 	roleGVK        = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "Role"}
 	roleBindingGVK = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
 	namespaceGVK   = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	crbGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "ClusterResourceBinding"}
+	crsGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "ClusterResourceSnapshot"}
+	cspGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "ClusterSchedulingPolicySnapshot"}
 )
 
 // Add registers the webhook for K8s bulit-in object types.
@@ -61,6 +65,15 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case crdGVK:
 			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleCRD(req)
+		case crbGVK:
+			klog.V(2).InfoS("handling cluster resource binding resource", "GVK", crbGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleClusterResourceBinding(req)
+		case crsGVK:
+			klog.V(2).InfoS("handling cluster resource snapshot resource", "GVK", crsGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleClusterResourceSnapshot(req)
+		case cspGVK:
+			klog.V(2).InfoS("handling cluster scheduling policy snapshot", "GVK", cspGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleClusterSchedulingPolicySnapshot(req)
 		case mcGVK:
 			klog.V(2).InfoS("handling Member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleMemberCluster(req)
@@ -145,6 +158,7 @@ func (v *fleetResourceValidator) handleRoleBinding(req admission.Request) admiss
 	return validation.ValidateUserForResource(rb.Kind, types.NamespacedName{Name: rb.Name, Namespace: rb.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
+// handleNamespace allows/denies the request to modify namespace after validation.
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
 	var currentNS corev1.Namespace
 	if err := v.decodeRequestObject(req, &currentNS); err != nil {
@@ -157,6 +171,33 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
 	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
+}
+
+// handleClusterResourceBinding allows/denies the request to modify cluster resource binding after validation.
+func (v *fleetResourceValidator) handleClusterResourceBinding(req admission.Request) admission.Response {
+	var crb placementv1beta1.ClusterResourceBinding
+	if err := v.decodeRequestObject(req, &crb); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	return validation.ValidateUserForResource(crb.Kind, types.NamespacedName{Name: crb.Name}, v.whiteListedUsers, req.UserInfo)
+}
+
+// handleClusterResourceSnapshot allows/denies the request to modify cluster resource snapshot after validation.
+func (v *fleetResourceValidator) handleClusterResourceSnapshot(req admission.Request) admission.Response {
+	var crs placementv1beta1.ClusterResourceSnapshot
+	if err := v.decodeRequestObject(req, &crs); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	return validation.ValidateUserForResource(crs.Kind, types.NamespacedName{Name: crs.Name}, v.whiteListedUsers, req.UserInfo)
+}
+
+// handleClusterSchedulingPolicySnapshot allows/denies the request to modify cluster scheduling policy snapshot after validation.
+func (v *fleetResourceValidator) handleClusterSchedulingPolicySnapshot(req admission.Request) admission.Response {
+	var csp placementv1beta1.ClusterSchedulingPolicySnapshot
+	if err := v.decodeRequestObject(req, &csp); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	return validation.ValidateUserForResource(csp.Kind, types.NamespacedName{Name: csp.Name}, v.whiteListedUsers, req.UserInfo)
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.

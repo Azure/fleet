@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
@@ -48,14 +48,17 @@ const (
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
 
-	crdResourceName                   = "customresourcedefinitions"
-	memberClusterResourceName         = "memberclusters"
-	internalMemberClusterResourceName = "internalmemberclusters"
-	namespaceResouceName              = "namespaces"
-	replicaSetResourceName            = "replicasets"
-	podResourceName                   = "pods"
-	roleResourceName                  = "roles"
-	roleBindingResourceName           = "rolebindings"
+	crdResourceName                             = "customresourcedefinitions"
+	memberClusterResourceName                   = "memberclusters"
+	internalMemberClusterResourceName           = "internalmemberclusters"
+	clusterResourceBindingResourceName          = "clusterresourcebindings"
+	clusterResourceSnapshotResourceName         = "clusterresourcesnapshots"
+	clusterSchedulingPolicySnapshotResourceName = "clusterschedulingpolicysnapshots"
+	namespaceResouceName                        = "namespaces"
+	replicaSetResourceName                      = "replicasets"
+	podResourceName                             = "pods"
+	roleResourceName                            = "roles"
+	roleBindingResourceName                     = "rolebindings"
 )
 
 var (
@@ -221,7 +224,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 		fleetNamespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
-					Key:      fleetv1beta1.FleetResourceLabelKey,
+					Key:      placementv1beta1.FleetResourceLabelKey,
 					Operator: metav1.LabelSelectorOpIn,
 					Values:   []string{"true"},
 				},
@@ -290,6 +293,19 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 					{
 						Operations: cudOperations,
 						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResouceName}, &clusterScope),
+					},
+				},
+			},
+			{
+				Name:                    "fleet.v1beta1resources.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{clusterResourceBindingResourceName, clusterResourceSnapshotResourceName, clusterSchedulingPolicySnapshotResourceName}, &clusterScope),
 					},
 				},
 			},

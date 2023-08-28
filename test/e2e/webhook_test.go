@@ -24,6 +24,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
@@ -1046,6 +1047,142 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &ns)).Should(Succeed())
 			By("expecting successful DELETE of namespace")
 			Expect(HubCluster.ImpersonateKubeClient.Delete(ctx, &ns)).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
+	Context("fleet guard rail ClusterResourceBinding e2e tests", func() {
+		BeforeEach(func() {
+			crb := placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-resource-binding",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					TargetCluster: "test-cluster",
+					State:         placementv1beta1.BindingStateBound,
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &crb)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			crb := placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-resource-binding",
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &crb)).Should(Succeed())
+		})
+
+		It("should deny CREATE cluster resource binding operation for user not in system:masters group", func() {
+			crb := placementv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-resource-binding",
+				},
+				Spec: placementv1beta1.ResourceBindingSpec{
+					TargetCluster: "test-cluster",
+					State:         placementv1beta1.BindingStateBound,
+				},
+			}
+			By("expecting denial of operation CREATE of cluster resource binding")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &crb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create cluster resource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceBinding", types.NamespacedName{Name: crb.Name})))
+		})
+
+		It("should deny UPDATE cluster resource binding operation for user not in system:masters group", func() {
+			Eventually(func() error {
+				var crb placementv1beta1.ClusterResourceBinding
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-binding"}, &crb)).Should(Succeed())
+				crb.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of cluster resource binding")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &crb)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster ressource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceBinding", types.NamespacedName{Name: crb.Name})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE cluster resource binding operation for user not in system:masters group", func() {
+			var crb placementv1beta1.ClusterResourceBinding
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-binding"}, &crb)).Should(Succeed())
+			By("expecting denial of operation DELETE of cluster resource binding")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &crb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster resource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceBinding", types.NamespacedName{Name: crb.Name})))
+		})
+	})
+
+	Context("fleet guard rail ClusterResourceSnapshot e2e tests", func() {
+		BeforeEach(func() {
+			crs := placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-resource-snapshot",
+				},
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &crs)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			crb := placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-resource-snapshot",
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &crb)).Should(Succeed())
+		})
+
+		It("should deny CREATE cluster resource snapshot operation for user not in system:masters group", func() {
+			crs := placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster-resource-snapshot",
+				},
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{},
+				},
+			}
+			By("expecting denial of operation CREATE of cluster resource snapshot")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &crs)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create cluster resource snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
+		})
+
+		It("should deny UPDATE cluster resource snapshot operation for user not in system:masters group", func() {
+			Eventually(func() error {
+				var crs placementv1beta1.ClusterResourceSnapshot
+				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-snapshot"}, &crs)).Should(Succeed())
+				crs.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of cluster resource snapshot")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &crs)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster ressource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE cluster resource binding snapshot for user not in system:masters group", func() {
+			var crs placementv1beta1.ClusterResourceSnapshot
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-snapshot"}, &crs)).Should(Succeed())
+			By("expecting denial of operation DELETE of cluster resource snapshot")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &crs)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster resource snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
 		})
 	})
 })
