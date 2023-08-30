@@ -27,8 +27,8 @@ const (
 	imcAllowedGetMCFailed           = "user: %s in groups: %v is allowed to update IMC: %+v because we failed to get MC"
 	crdAllowedFormat                = "user: %s in groups: %v is allowed to modify fleet CRD: %+v"
 	crdDeniedFormat                 = "user: %s in groups: %v is not allowed to modify fleet CRD: %+v"
-	fleetResourceAllowedFormat      = "user: %s in groups: %v is allowed to modify fleet resource %s: %+v"
-	fleetResourceDeniedFormat       = "user: %s in groups: %v is not allowed to modify fleet resource %s: %+v"
+	resourceAllowedFormat           = "user: %s in groups: %v is allowed to modify resource %s: %+v"
+	resourceDeniedFormat            = "user: %s in groups: %v is not allowed to modify resource %s: %+v"
 )
 
 var (
@@ -45,33 +45,34 @@ func ValidateUserForFleetCRD(group string, namespacedName types.NamespacedName, 
 	return admission.Allowed(fmt.Sprintf(crdAllowedFormat, userInfo.Username, userInfo.Groups, namespacedName))
 }
 
-// ValidateUserForFleetResource checks to see if user is allowed to modify argued fleet resource.
-func ValidateUserForFleetResource(resKind string, namespacedName types.NamespacedName, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+// ValidateUserForResource checks to see if user is allowed to modify argued resource.
+func ValidateUserForResource(resKind string, namespacedName types.NamespacedName, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
 	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) {
 		klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resKind, "namespacedName", namespacedName)
-		return admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
+		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 	}
 	klog.V(2).InfoS("user in groups is not allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resKind, "namespacedName", namespacedName)
-	return admission.Denied(fmt.Sprintf(fleetResourceDeniedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
+	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 }
 
-// ValidateMemberClusterUpdate checks to see if user is allowed to update argued member cluster resource.
-func ValidateMemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+// ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
+func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+	kind := currentObj.GetObjectKind().GroupVersionKind().Kind
 	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely updated read-only field/fields of member cluster resource, so no field/fields will be updated", userInfo.Username, userInfo.Groups))
-	namespacedName := types.NamespacedName{Name: currentMC.Name}
-	isMCLabelUpdated := isMemberClusterMapFieldUpdated(currentMC.Labels, oldMC.Labels)
-	isMCAnnotationUpdated := isMemberClusterMapFieldUpdated(currentMC.Annotations, oldMC.Annotations)
-	isMCUpdated, err := isMemberClusterUpdated(currentMC, oldMC)
+	namespacedName := types.NamespacedName{Name: currentObj.GetName()}
+	isLabelUpdated := isMapFieldUpdated(currentObj.GetLabels(), oldObj.GetLabels())
+	isAnnotationUpdated := isMapFieldUpdated(currentObj.GetAnnotations(), oldObj.GetAnnotations())
+	isObjUpdated, err := isMemberClusterUpdated(currentObj, oldObj)
 	if err != nil {
 		return admission.Denied(err.Error())
 	}
-	if (isMCLabelUpdated || isMCAnnotationUpdated) && !isMCUpdated {
-		// we allow any user to modify MemberCluster labels/annotations.
-		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", currentMC.Kind, "namespacedName", namespacedName)
-		response = admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, currentMC.Kind, namespacedName))
+	if (isLabelUpdated || isAnnotationUpdated) && !isObjUpdated {
+		// we allow any user to modify MemberCluster/Namespace labels/annotations.
+		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "namespacedName", namespacedName)
+		response = admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, kind, namespacedName))
 	}
-	if isMCUpdated {
-		response = ValidateUserForFleetResource(currentMC.Kind, types.NamespacedName{Name: currentMC.Name}, whiteListedUsers, userInfo)
+	if isObjUpdated {
+		response = ValidateUserForResource(kind, types.NamespacedName{Name: currentObj.GetName()}, whiteListedUsers, userInfo)
 	}
 	return response
 }
@@ -93,12 +94,12 @@ func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Clie
 		// For the upstream E2E we use hub agent service account's token which allows member agent to modify IMC status, hence we use serviceAccountFmt to make the check.
 		if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
 			klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
-			return admission.Allowed(fmt.Sprintf(fleetResourceAllowedFormat, userInfo.Username, userInfo.Groups, "InternalMemberCluster", namespacedName))
+			return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, "InternalMemberCluster", namespacedName))
 		}
 		klog.V(2).InfoS("user is not allowed to update IMC status", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
 		return admission.Denied(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, userInfo.Username, userInfo.Groups, namespacedName))
 	}
-	return ValidateUserForFleetResource(currentIMC.Kind, namespacedName, whiteListedUsers, userInfo)
+	return ValidateUserForResource(currentIMC.Kind, namespacedName, whiteListedUsers, userInfo)
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
@@ -112,7 +113,7 @@ func isUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool 
 }
 
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.
-func isMemberClusterMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
+func isMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
 	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
 }
 
@@ -128,36 +129,36 @@ func isInternalMemberClusterStatusUpdated(currentIMCStatus, oldIMCStatus fleetv1
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.
-func isMemberClusterUpdated(currentMC, oldMC fleetv1alpha1.MemberCluster) (bool, error) {
+func isMemberClusterUpdated(currentObj, oldObj client.Object) (bool, error) {
 	// Set labels, annotations to be nil. Read-only field updates are not received by the admission webhook.
-	currentMC.SetLabels(nil)
-	currentMC.SetAnnotations(nil)
-	oldMC.SetLabels(nil)
-	oldMC.SetAnnotations(nil)
+	currentObj.SetLabels(nil)
+	currentObj.SetAnnotations(nil)
+	oldObj.SetLabels(nil)
+	oldObj.SetAnnotations(nil)
 	// Remove all live fields from current MC objectMeta.
-	currentMC.SetSelfLink("")
-	currentMC.SetUID("")
-	currentMC.SetResourceVersion("")
-	currentMC.SetGeneration(0)
-	currentMC.SetCreationTimestamp(metav1.Time{})
-	currentMC.SetDeletionTimestamp(nil)
-	currentMC.SetDeletionGracePeriodSeconds(nil)
-	currentMC.SetManagedFields(nil)
+	currentObj.SetSelfLink("")
+	currentObj.SetUID("")
+	currentObj.SetResourceVersion("")
+	currentObj.SetGeneration(0)
+	currentObj.SetCreationTimestamp(metav1.Time{})
+	currentObj.SetDeletionTimestamp(nil)
+	currentObj.SetDeletionGracePeriodSeconds(nil)
+	currentObj.SetManagedFields(nil)
 	// Remove all live fields from old MC objectMeta.
-	oldMC.SetSelfLink("")
-	oldMC.SetUID("")
-	oldMC.SetResourceVersion("")
-	oldMC.SetGeneration(0)
-	oldMC.SetCreationTimestamp(metav1.Time{})
-	oldMC.SetDeletionTimestamp(nil)
-	oldMC.SetDeletionGracePeriodSeconds(nil)
-	oldMC.SetManagedFields(nil)
+	oldObj.SetSelfLink("")
+	oldObj.SetUID("")
+	oldObj.SetResourceVersion("")
+	oldObj.SetGeneration(0)
+	oldObj.SetCreationTimestamp(metav1.Time{})
+	oldObj.SetDeletionTimestamp(nil)
+	oldObj.SetDeletionGracePeriodSeconds(nil)
+	oldObj.SetManagedFields(nil)
 
-	currentMCBytes, err := json.Marshal(currentMC)
+	currentMCBytes, err := json.Marshal(currentObj)
 	if err != nil {
 		return false, err
 	}
-	oldMCBytes, err := json.Marshal(oldMC)
+	oldMCBytes, err := json.Marshal(oldObj)
 	if err != nil {
 		return false, err
 	}

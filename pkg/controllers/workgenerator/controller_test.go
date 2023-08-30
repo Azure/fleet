@@ -15,7 +15,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -140,7 +139,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 123,
 							},
@@ -155,7 +154,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 12,
 							},
@@ -181,7 +180,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 122, // not the latest generation
 							},
@@ -196,7 +195,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 12,
 							},
@@ -222,7 +221,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 122, // not the latest generation
 							},
@@ -254,7 +253,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionUnknown,
 								ObservedGeneration: 123,
 							},
@@ -269,7 +268,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 					Status: workv1alpha1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
-								Type:               workapi.ConditionTypeApplied,
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 12,
 							},

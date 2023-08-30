@@ -16,7 +16,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -273,7 +272,7 @@ func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPe
 func buildFailedResourcePlacements(work *workv1alpha1.Work) (isPending bool, res []fleetv1beta1.FailedResourcePlacement) {
 	// check the overall condition
 	workKObj := klog.KObj(work)
-	appliedCond := meta.FindStatusCondition(work.Status.Conditions, workapi.ConditionTypeApplied)
+	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	if appliedCond == nil {
 		klog.V(3).InfoS("The work is never picked up by the member cluster", "work", workKObj)
 		return true, nil
@@ -290,7 +289,7 @@ func buildFailedResourcePlacements(work *workv1alpha1.Work) (isPending bool, res
 
 	res = make([]fleetv1beta1.FailedResourcePlacement, 0, len(work.Status.ManifestConditions))
 	for _, manifestCondition := range work.Status.ManifestConditions {
-		appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workapi.ConditionTypeApplied)
+		appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		// collect if there is an explicit fail
 		if appliedCond != nil && appliedCond.Status != metav1.ConditionTrue {
 			klog.V(2).InfoS("Find a failed to apply manifest",
