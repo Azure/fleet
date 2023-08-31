@@ -19,11 +19,12 @@ import (
 )
 
 const (
-	mastersGroup         = "system:masters"
-	serviceAccountsGroup = "system:serviceaccounts"
-	nodeGroup            = "system:nodes"
-	kubeSchedulerUser    = "system:kube-scheduler"
-	serviceAccountFmt    = "system:serviceaccount:fleet-system:%s"
+	mastersGroup              = "system:masters"
+	serviceAccountsGroup      = "system:serviceaccounts"
+	nodeGroup                 = "system:nodes"
+	kubeSchedulerUser         = "system:kube-scheduler"
+	kubeControllerManagerUser = "system:kube-controller-manager"
+	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
 	imcStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update IMC status: %+v"
 	imcAllowedGetMCFailed           = "user: %s in groups: %v is allowed to update IMC: %+v because we failed to get MC"
@@ -49,7 +50,7 @@ func ValidateUserForFleetCRD(group string, namespacedName types.NamespacedName, 
 
 // ValidateUserForResource checks to see if user is allowed to modify argued resource.
 func ValidateUserForResource(resKind string, namespacedName types.NamespacedName, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
-	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isNodeGroupUser(userInfo) {
+	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) {
 		klog.V(2).InfoS("user in groups is allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resKind, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, resKind, namespacedName))
 	}
@@ -116,7 +117,14 @@ func isUserAuthenticatedServiceAccount(userInfo authenticationv1.UserInfo) bool 
 
 // isUserKubeScheduler returns true if user is kube-scheduler.
 func isUserKubeScheduler(userInfo authenticationv1.UserInfo) bool {
+	// system:kube-scheduler user only belongs to system:authenticated group hence comparing username.
 	return userInfo.Username == kubeSchedulerUser
+}
+
+// isUserKubeControllerManager return true if user is kube-controller-manager.
+func isUserKubeControllerManager(userInfo authenticationv1.UserInfo) bool {
+	// system:kube-controller-manager user only belongs to system:authenticated group hence comparing username.
+	return userInfo.Username == kubeControllerManagerUser
 }
 
 // isNodeGroupUser returns true if user belongs to system:nodes group.

@@ -23,9 +23,7 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -250,15 +248,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 			admv1.Update,
 			admv1.Delete,
 		}
-		kubeNamespacedResourcesRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
-		fleetSystemNamespacedResourceRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
-		fleetMemberNamespacedResourceRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
-		internalMemberClusterResourceRule := admv1.RuleWithOperations{
-			Operations: cudOperations,
-			Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
-		}
-		fleetMemberNamespacedResourceRules = append(fleetMemberNamespacedResourceRules, internalMemberClusterResourceRule)
-
+		namespacedResourcesRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
 		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.customresourcedefinition.validating",
@@ -293,7 +283,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
 				NamespaceSelector:       fleetMemberNamespaceSelector,
-				Rules:                   fleetMemberNamespacedResourceRules,
+				Rules:                   namespacedResourcesRules,
 			},
 			{
 				Name:                    "fleet.fleetsystemnamespacedresources.validating",
@@ -302,7 +292,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
 				NamespaceSelector:       fleetSystemNamespaceSelector,
-				Rules:                   fleetSystemNamespacedResourceRules,
+				Rules:                   namespacedResourcesRules,
 			},
 			{
 				Name:                    "fleet.kubenamespacedresources.validating",
@@ -311,7 +301,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
 				NamespaceSelector:       kubeNamespaceSelector,
-				Rules:                   kubeNamespacedResourcesRules,
+				Rules:                   namespacedResourcesRules,
 			},
 			{
 				Name:                    "fleet.namespace.validating",
@@ -531,19 +521,7 @@ func getGeneralRulesForNamespacedResources(cudOperations []admv1.OperationType, 
 	return []admv1.RuleWithOperations{
 		{
 			Operations: cudOperations,
-			Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
-		},
-		{
-			Operations: cudOperations,
-			Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
-		},
-		{
-			Operations: cudOperations,
-			Rule:       createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
-		},
-		{
-			Operations: cudOperations,
-			Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{"*/*"}, &scope),
+			Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &scope),
 		},
 	}
 }
