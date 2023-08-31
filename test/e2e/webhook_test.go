@@ -1075,6 +1075,9 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 				},
 			}
 			Expect(HubCluster.KubeClient.Delete(ctx, &crb)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: crb.Name}, &crb))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
 		It("should deny CREATE cluster resource binding operation for user not in system:masters group", func() {
@@ -1095,9 +1098,9 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 		})
 
 		It("should deny UPDATE cluster resource binding operation for user not in system:masters group", func() {
-			Eventually(func() error {
+			Eventually(func(g Gomega) error {
 				var crb placementv1beta1.ClusterResourceBinding
-				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-binding"}, &crb)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-binding"}, &crb)).Should(Succeed())
 				crb.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
 				By("expecting denial of operation UPDATE of cluster resource binding")
 				err := HubCluster.ImpersonateKubeClient.Update(ctx, &crb)
@@ -1105,8 +1108,8 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 					return err
 				}
 				var statusErr *k8sErrors.StatusError
-				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster ressource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-				Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceBinding", types.NamespacedName{Name: crb.Name})))
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster ressource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceBinding", types.NamespacedName{Name: crb.Name})))
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
@@ -1119,6 +1122,21 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster resource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceBinding", types.NamespacedName{Name: crb.Name})))
+		})
+
+		It("should allow UPDATE operation on cluster resource binding for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var crb placementv1beta1.ClusterResourceBinding
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-binding"}, &crb)).Should(Succeed())
+				By("update labels in cluster resource binding")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				crb.SetLabels(labels)
+
+				By("expecting successful UPDATE of cluster resource binding")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &crb)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})
 
@@ -1136,12 +1154,15 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 		})
 
 		AfterEach(func() {
-			crb := placementv1beta1.ClusterResourceSnapshot{
+			crs := placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cluster-resource-snapshot",
 				},
 			}
-			Expect(HubCluster.KubeClient.Delete(ctx, &crb)).Should(Succeed())
+			Expect(HubCluster.KubeClient.Delete(ctx, &crs)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: crs.Name}, &crs))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
 		It("should deny CREATE cluster resource snapshot operation for user not in system:masters group", func() {
@@ -1161,9 +1182,9 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 		})
 
 		It("should deny UPDATE cluster resource snapshot operation for user not in system:masters group", func() {
-			Eventually(func() error {
+			Eventually(func(g Gomega) error {
 				var crs placementv1beta1.ClusterResourceSnapshot
-				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-snapshot"}, &crs)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-snapshot"}, &crs)).Should(Succeed())
 				crs.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
 				By("expecting denial of operation UPDATE of cluster resource snapshot")
 				err := HubCluster.ImpersonateKubeClient.Update(ctx, &crs)
@@ -1171,8 +1192,8 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 					return err
 				}
 				var statusErr *k8sErrors.StatusError
-				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster ressource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-				Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster ressource binding call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
@@ -1185,6 +1206,21 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster resource snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterResourceSnapshot", types.NamespacedName{Name: crs.Name})))
+		})
+
+		It("should allow UPDATE operation on cluster resource snapshot for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var crs placementv1beta1.ClusterResourceSnapshot
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-resource-snapshot"}, &crs)).Should(Succeed())
+				By("update labels in cluster resource snapshot")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				crs.SetLabels(labels)
+
+				By("expecting successful UPDATE of cluster resource snapshot")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &crs)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})
 
@@ -1231,6 +1267,9 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 				},
 			}
 			Expect(HubCluster.KubeClient.Delete(ctx, &csp)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: csp.Name}, &csp))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
 		It("should deny CREATE cluster resource snapshot operation for user not in system:masters group", func() {
@@ -1273,9 +1312,9 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 		})
 
 		It("should deny UPDATE cluster scheduling policy snapshot operation for user not in system:masters group", func() {
-			Eventually(func() error {
+			Eventually(func(g Gomega) error {
 				var csp placementv1beta1.ClusterSchedulingPolicySnapshot
-				Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-scheduling-policy-snapshot"}, &csp)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-scheduling-policy-snapshot"}, &csp)).Should(Succeed())
 				csp.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
 				By("expecting denial of operation UPDATE of cluster scheduling policy snapshot")
 				err := HubCluster.ImpersonateKubeClient.Update(ctx, &csp)
@@ -1283,8 +1322,8 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 					return err
 				}
 				var statusErr *k8sErrors.StatusError
-				Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster scheduling policy snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-				Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterSchedulingPolicySnapshot", types.NamespacedName{Name: csp.Name})))
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cluster scheduling policy snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterSchedulingPolicySnapshot", types.NamespacedName{Name: csp.Name})))
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
@@ -1297,6 +1336,21 @@ var _ = Describe("Fleet's v1beta1 Resource Handler webhook tests", func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete cluster scheduling policy snapshot call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "ClusterSchedulingPolicySnapshot", types.NamespacedName{Name: csp.Name})))
+		})
+
+		It("should allow UPDATE operation on cluster scheduling policy snapshot for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var csp placementv1beta1.ClusterSchedulingPolicySnapshot
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-scheduling-policy-snapshot"}, &csp)).Should(Succeed())
+				By("update labels in cluster scheduling policy snapshot")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				csp.SetLabels(labels)
+
+				By("expecting successful UPDATE of cluster scheduling policy snapshot")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &csp)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})
 })
