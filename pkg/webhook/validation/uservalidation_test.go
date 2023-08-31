@@ -499,7 +499,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Groups:   []string{"system:masters"},
 			},
 			subResource:  "status",
-			wantResponse: admission.Denied(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow user in system:masters group with spec update": {
 			client: &test.MockClient{
@@ -626,7 +626,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				Groups:   []string{"system:masters"},
 			},
 			subResource:  "status",
-			wantResponse: admission.Allowed(fmt.Sprintf(imcAllowedGetMCFailed, "testUser", []string{"system:masters"}, types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 	}
 
