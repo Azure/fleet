@@ -641,7 +641,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
 		}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 	})
-	Context("CR validation webhook", func() {
+	Context("fleet guard rail tests for MC, IMC", func() {
 		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
 			mc := &fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
