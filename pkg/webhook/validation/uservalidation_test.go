@@ -57,6 +57,24 @@ func TestValidateUserForResource(t *testing.T) {
 			namespacedName: types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"},
 			wantResponse:   admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, "RoleBinding", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
+		"allow user in system:node group": {
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-user",
+				Groups:   []string{nodeGroup},
+			},
+			resKind:        "Pod",
+			namespacedName: types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"},
+			wantResponse:   admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{nodeGroup}, "Pod", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+		},
+		"allow system:kube-scheduler user": {
+			userInfo: authenticationv1.UserInfo{
+				Username: "system:kube-scheduler",
+				Groups:   []string{"system:authenticated"},
+			},
+			resKind:        "Pod",
+			namespacedName: types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"},
+			wantResponse:   admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", []string{"system:authenticated"}, "Pod", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+		},
 		"fail to validate user with invalid username, groups": {
 			userInfo: authenticationv1.UserInfo{
 				Username: "test-user",
