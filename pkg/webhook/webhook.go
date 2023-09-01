@@ -47,12 +47,11 @@ const (
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
 
-	crdResourceName                   = "customresourcedefinitions"
-	memberClusterResourceName         = "memberclusters"
-	internalMemberClusterResourceName = "internalmemberclusters"
-	namespaceResouceName              = "namespaces"
-	replicaSetResourceName            = "replicasets"
-	podResourceName                   = "pods"
+	crdResourceName           = "customresourcedefinitions"
+	memberClusterResourceName = "memberclusters"
+	namespaceResouceName      = "namespaces"
+	replicaSetResourceName    = "replicasets"
+	podResourceName           = "pods"
 )
 
 var (
