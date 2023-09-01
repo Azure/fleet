@@ -1848,7 +1848,7 @@ var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
 			By("expecting denial of operation DELETE of daemon set")
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &ds)
 			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete replica set call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete daemon set call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "DaemonSet", types.NamespacedName{Name: ds.Name, Namespace: ds.Namespace})))
 		})
 
@@ -2062,7 +2062,7 @@ var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
 					return err
 				}
 				var statusErr *k8sErrors.StatusError
-				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update cronjob call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update job call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Job", types.NamespacedName{Name: j.Name, Namespace: j.Namespace})))
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
