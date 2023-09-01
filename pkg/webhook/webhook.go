@@ -247,7 +247,12 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 			admv1.Update,
 			admv1.Delete,
 		}
-		namespacedResourcesRules := getGeneralRulesForNamespacedResources(cudOperations, namespacedScope)
+		namespacedResourcesRules := []admv1.RuleWithOperations{
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),
+			},
+		}
 		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.customresourcedefinition.validating",
@@ -514,15 +519,6 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 
 	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}
 	return nil
-}
-
-func getGeneralRulesForNamespacedResources(cudOperations []admv1.OperationType, scope admv1.ScopeType) []admv1.RuleWithOperations {
-	return []admv1.RuleWithOperations{
-		{
-			Operations: cudOperations,
-			Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &scope),
-		},
-	}
 }
 
 // createRule returns a admission rule using the arguments passed.
