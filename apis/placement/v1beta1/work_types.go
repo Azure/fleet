@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// The following definitions are declared in the manager.go file.
+// The following definitions are originally declared in the controllers/workv1alpha1/manager.go file.
 const (
 	// ManifestHashAnnotation is the annotation that indicates whether the spec of the object has been changed or not.
 	ManifestHashAnnotation = fleetPrefix + "spec-hash"

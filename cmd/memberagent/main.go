@@ -38,7 +38,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
+	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/httpclient"
@@ -272,7 +272,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 
 	// TODO replacing the v1alpha1 work controller
 	// create the work controller, so we can pass it to the internal member cluster reconciler
-	workController := workapi.NewApplyWorkReconciler(
+	workController := workv1alpha1controller.NewApplyWorkReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
 		memberMgr.GetClient(),

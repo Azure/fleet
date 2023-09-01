@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/metrics"
 )
 
@@ -36,7 +36,7 @@ type Reconciler struct {
 	// the join/leave agent maintains the list of controllers in the member cluster
 	// so that it can make sure that all the agents on the member cluster have joined/left
 	// before updating the internal member cluster CR status
-	workController *workapi.ApplyWorkReconciler
+	workController *workv1alpha1.ApplyWorkReconciler
 
 	recorder record.EventRecorder
 }
@@ -54,7 +54,7 @@ const (
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
-func NewReconciler(hubClient client.Client, memberClient client.Client, workController *workapi.ApplyWorkReconciler) *Reconciler {
+func NewReconciler(hubClient client.Client, memberClient client.Client, workController *workv1alpha1.ApplyWorkReconciler) *Reconciler {
 	return &Reconciler{
 		hubClient:      hubClient,
 		memberClient:   memberClient,
