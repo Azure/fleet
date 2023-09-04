@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -213,7 +218,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // garbageCollectAppliedWork deletes the appliedWork and all the manifests associated with it from the cluster.
 func (r *ApplyWorkReconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
 	deletePolicy := metav1.DeletePropagationBackground
-	if !controllerutil.ContainsFinalizer(work, workFinalizer) {
+	if !controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
 		return ctrl.Result{}, nil
 	}
 	// delete the appliedWork which will remove all the manifests associated with it
@@ -231,7 +236,7 @@ func (r *ApplyWorkReconciler) garbageCollectAppliedWork(ctx context.Context, wor
 	default:
 		klog.InfoS("successfully deleted the appliedWork", "appliedWork", work.Name)
 	}
-	controllerutil.RemoveFinalizer(work, workFinalizer)
+	controllerutil.RemoveFinalizer(work, fleetv1beta1.WorkFinalizer)
 	return ctrl.Result{}, r.client.Update(ctx, work, &client.UpdateOptions{})
 }
 
@@ -240,7 +245,7 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleet
 	workRef := klog.KObj(work)
 	appliedWork := &fleetv1beta1.AppliedWork{}
 	hasFinalizer := false
-	if controllerutil.ContainsFinalizer(work, workFinalizer) {
+	if controllerutil.ContainsFinalizer(work, fleetv1beta1.WorkFinalizer) {
 		hasFinalizer = true
 		err := r.spokeClient.Get(ctx, types.NamespacedName{Name: work.Name}, appliedWork)
 		switch {
@@ -270,7 +275,7 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleet
 	}
 	if !hasFinalizer {
 		klog.InfoS("add the finalizer to the work", "work", workRef)
-		work.Finalizers = append(work.Finalizers, workFinalizer)
+		work.Finalizers = append(work.Finalizers, fleetv1beta1.WorkFinalizer)
 		return appliedWork, r.client.Update(ctx, work, &client.UpdateOptions{})
 	}
 	klog.InfoS("recreated the appliedWork resource", "appliedWork", workRef.Name)
@@ -389,7 +394,7 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	}
 
 	// We only try to update the object if its spec hash value has changed.
-	if manifestObj.GetAnnotations()[manifestHashAnnotation] != curObj.GetAnnotations()[manifestHashAnnotation] {
+	if manifestObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation] != curObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation] {
 		// we need to merge the owner reference between the current and the manifest since we support one manifest
 		// belong to multiple work, so it contains the union of all the appliedWork.
 		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
@@ -437,8 +442,8 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 		Namespace: manifestObj.GetNamespace(),
 	}
 	klog.V(2).InfoS("manifest is modified", "gvr", gvr, "manifest", manifestRef,
-		"new hash", manifestObj.GetAnnotations()[manifestHashAnnotation],
-		"existing hash", curObj.GetAnnotations()[manifestHashAnnotation])
+		"new hash", manifestObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation],
+		"existing hash", curObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation])
 	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {
@@ -516,8 +521,8 @@ func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 	// we leave the resources on the member cluster for now
 	for _, work := range works.Items {
 		staleWork := work.DeepCopy()
-		if controllerutil.ContainsFinalizer(staleWork, workFinalizer) {
-			controllerutil.RemoveFinalizer(staleWork, workFinalizer)
+		if controllerutil.ContainsFinalizer(staleWork, fleetv1beta1.WorkFinalizer) {
+			controllerutil.RemoveFinalizer(staleWork, fleetv1beta1.WorkFinalizer)
 			if updateErr := r.client.Update(ctx, staleWork, &client.UpdateOptions{}); updateErr != nil {
 				klog.ErrorS(updateErr, "failed to remove the work finalizer from the work",
 					"clusterNS", r.workNameSpace, "work", klog.KObj(staleWork))
@@ -547,8 +552,8 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	// remove the last applied Annotation to avoid unlimited recursion
 	annotation := manifest.GetAnnotations()
 	if annotation != nil {
-		delete(annotation, manifestHashAnnotation)
-		delete(annotation, lastAppliedConfigAnnotation)
+		delete(annotation, fleetv1beta1.ManifestHashAnnotation)
+		delete(annotation, fleetv1beta1.LastAppliedConfigAnnotation)
 		if len(annotation) == 0 {
 			manifest.SetAnnotations(nil)
 		} else {
@@ -620,7 +625,7 @@ func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
 	if annotation == nil {
 		annotation = map[string]string{}
 	}
-	annotation[manifestHashAnnotation] = manifestHash
+	annotation[fleetv1beta1.ManifestHashAnnotation] = manifestHash
 	manifestObj.SetAnnotations(annotation)
 	return nil
 }
@@ -641,7 +646,7 @@ func buildResourceIdentifier(index int, object *unstructured.Unstructured, gvr s
 func buildManifestAppliedCondition(err error, action applyAction, observedGeneration int64) metav1.Condition {
 	if err != nil {
 		return metav1.Condition{
-			Type:               ConditionTypeApplied,
+			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: metav1.Now(),
@@ -651,7 +656,7 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 	}
 
 	return metav1.Condition{
-		Type:               ConditionTypeApplied,
+		Type:               fleetv1beta1.WorkConditionTypeApplied,
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
 		ObservedGeneration: observedGeneration,
@@ -664,9 +669,9 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 // If one of the manifests is applied failed on the spoke, the applied status condition of the work is false.
 func generateWorkAppliedCondition(manifestConditions []fleetv1beta1.ManifestCondition, observedGeneration int64) metav1.Condition {
 	for _, manifestCond := range manifestConditions {
-		if meta.IsStatusConditionFalse(manifestCond.Conditions, ConditionTypeApplied) {
+		if meta.IsStatusConditionFalse(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied) {
 			return metav1.Condition{
-				Type:               ConditionTypeApplied,
+				Type:               fleetv1beta1.WorkConditionTypeApplied,
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
 				Reason:             "appliedWorkFailed",
@@ -677,7 +682,7 @@ func generateWorkAppliedCondition(manifestConditions []fleetv1beta1.ManifestCond
 	}
 
 	return metav1.Condition{
-		Type:               ConditionTypeApplied,
+		Type:               fleetv1beta1.WorkConditionTypeApplied,
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
 		Reason:             "appliedWorkComplete",

@@ -38,6 +38,7 @@ import (
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	imcv1alpha1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1alpha1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
@@ -270,30 +271,41 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	// TODO replacing the v1alpha1 work controller
-	// create the work controller, so we can pass it to the internal member cluster reconciler
-	workController := workv1alpha1controller.NewApplyWorkReconciler(
-		hubMgr.GetClient(),
-		spokeDynamicClient,
-		memberMgr.GetClient(),
-		restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
-
-	if err = workController.SetupWithManager(hubMgr); err != nil {
-		klog.ErrorS(err, "unable to create controller", "controller", "Work")
-		return err
-	}
-
 	if *enableV1Alpha1APIs {
+		// create the work controller, so we can pass it to the internal member cluster reconciler
+		workController := workv1alpha1controller.NewApplyWorkReconciler(
+			hubMgr.GetClient(),
+			spokeDynamicClient,
+			memberMgr.GetClient(),
+			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+
+		if err = workController.SetupWithManager(hubMgr); err != nil {
+			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "Work")
+			return err
+		}
+
 		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
 		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-			return fmt.Errorf("unable to create controller v1alpha1 hub_member: %w", err)
+			return fmt.Errorf("unable to create internalMemberCluster v1alpha1 controller: %w", err)
 		}
 	}
 
 	if *enableV1Beta1APIs {
+		// create the work controller, so we can pass it to the internal member cluster reconciler
+		workController := work.NewApplyWorkReconciler(
+			hubMgr.GetClient(),
+			spokeDynamicClient,
+			memberMgr.GetClient(),
+			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+
+		if err = workController.SetupWithManager(hubMgr); err != nil {
+			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "Work")
+			return err
+		}
+
 		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
 		if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-			return fmt.Errorf("unable to create controller v1beta1 hub_member: %w", err)
+			return fmt.Errorf("unable to create internalMemberCluster v1beta1 controller: %w", err)
 		}
 	}
 

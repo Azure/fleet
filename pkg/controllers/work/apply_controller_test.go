@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -155,7 +160,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 		"manifest's has hashAnnotation, same": {
 			manifestObj: func() *appsv1.Deployment {
 				alterObj := manifestObj.DeepCopy()
-				alterObj.Annotations[manifestHashAnnotation] = utilrand.String(10)
+				alterObj.Annotations[fleetv1beta1.ManifestHashAnnotation] = utilrand.String(10)
 				return alterObj
 			}(),
 			isSame: true,
@@ -222,7 +227,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 			if err != nil {
 				t.Error("failed to marshall the manifest", err.Error())
 			}
-			manifestHash := uManifestObj.GetAnnotations()[manifestHashAnnotation]
+			manifestHash := uManifestObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation]
 			if tt.isSame != (manifestHash == preHash) {
 				t.Errorf("testcase %s failed: manifestObj = (%+v)", name, tt.manifestObj)
 			}
@@ -390,7 +395,7 @@ func TestApplyUnstructured(t *testing.T) {
 	// Need to mock patch because apply return error if not.
 	dynamicClientLargeObjFound := fake.NewSimpleDynamicClient(runtime.NewScheme())
 	// Need to set annotation to ensure on comparison between curObj and manifestObj is different.
-	largeObj.SetAnnotations(map[string]string{manifestHashAnnotation: largeObjSpecHash})
+	largeObj.SetAnnotations(map[string]string{fleetv1beta1.ManifestHashAnnotation: largeObjSpecHash})
 	dynamicClientLargeObjFound.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
 		return true, largeObj.DeepCopy(), nil
 	})
@@ -563,7 +568,7 @@ func TestApplyUnstructured(t *testing.T) {
 				assert.Truef(t, err == nil, "err is not nil for Testcase %s", testName)
 				assert.Truef(t, applyResult != nil, "applyResult is not nil for Testcase %s", testName)
 				// Not checking last applied config because it has live fields.
-				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[manifestHashAnnotation],
+				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation],
 					"specHash not matching for Testcase %s", testName)
 				assert.Equalf(t, ownerRef, applyResult.GetOwnerReferences()[0], "ownerRef not matching for Testcase %s", testName)
 			}
@@ -728,7 +733,7 @@ func TestReconcile(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:  workNamespace,
 				Name:       workName,
-				Finalizers: []string{workFinalizer},
+				Finalizers: []string{fleetv1beta1.WorkFinalizer},
 			},
 			Spec: fleetv1beta1.WorkSpec{Workload: fleetv1beta1.WorkloadTemplate{Manifests: []fleetv1beta1.Manifest{testManifest}}},
 		}
@@ -1024,7 +1029,7 @@ func createObjAndDynamicClient(rawManifest []byte) (*unstructured.Unstructured, 
 	if err != nil {
 		return nil, nil, "", err
 	}
-	uObj.SetAnnotations(map[string]string{manifestHashAnnotation: validSpecHash})
+	uObj.SetAnnotations(map[string]string{fleetv1beta1.ManifestHashAnnotation: validSpecHash})
 	_, err = setModifiedConfigurationAnnotation(&uObj)
 	if err != nil {
 		return nil, nil, "", err
