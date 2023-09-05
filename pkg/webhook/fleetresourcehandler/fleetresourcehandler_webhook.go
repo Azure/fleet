@@ -111,14 +111,14 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 
 // handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
 func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
-	var currentIMC fleetv1alpha1.InternalMemberCluster
-	if err := v.decodeRequestObject(req, &currentIMC); err != nil {
+	var imc fleetv1alpha1.InternalMemberCluster
+	if err := v.decodeRequestObject(req, &imc); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	if req.Operation == admissionv1.Update {
-		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, currentIMC, v.whiteListedUsers, req.UserInfo, req.SubResource)
+		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, imc, v.whiteListedUsers, req.UserInfo, req.SubResource)
 	}
-	return validation.ValidateUserForResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(imc.Kind, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
