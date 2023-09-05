@@ -116,11 +116,7 @@ func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	if req.Operation == admissionv1.Update {
-		var oldIMC fleetv1alpha1.InternalMemberCluster
-		if err := v.decoder.DecodeRaw(req.OldObject, &oldIMC); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, currentIMC, oldIMC, v.whiteListedUsers, req.UserInfo)
+		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, currentIMC, v.whiteListedUsers, req.UserInfo, req.SubResource)
 	}
 	return validation.ValidateUserForResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
 }

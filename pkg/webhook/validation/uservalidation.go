@@ -81,12 +81,10 @@ func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, whiteListedUs
 }
 
 // ValidateInternalMemberClusterUpdate checks to see if user is allowed to update argued internal member cluster resource.
-func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Client, currentIMC, oldIMC fleetv1alpha1.InternalMemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo) admission.Response {
+func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Client, imc fleetv1alpha1.InternalMemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo, subResource string) admission.Response {
 	imcKind := "InternalMemberCluster"
-	namespacedName := types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}
-	imcSpecUpdated := isInternalMemberClusterSpecUpdated(currentIMC, oldIMC)
-	imcStatusUpdated := isInternalMemberClusterStatusUpdated(currentIMC.Status, oldIMC.Status)
-	if !imcSpecUpdated && imcStatusUpdated {
+	namespacedName := types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}
+	if subResource == "status" {
 		var mc fleetv1alpha1.MemberCluster
 		if err := client.Get(ctx, types.NamespacedName{Name: namespacedName.Name}, &mc); err != nil {
 			// fail open, if the webhook cannot get member cluster resources we don't block the request.
@@ -102,7 +100,7 @@ func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Clie
 		klog.V(2).InfoS("user is not allowed to update IMC status", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
 		return admission.Denied(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, userInfo.Username, userInfo.Groups, namespacedName))
 	}
-	return ValidateUserForResource(currentIMC.Kind, namespacedName, whiteListedUsers, userInfo)
+	return ValidateUserForResource(imc.Kind, namespacedName, whiteListedUsers, userInfo)
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
@@ -135,17 +133,6 @@ func isNodeGroupUser(userInfo authenticationv1.UserInfo) bool {
 // isMemberClusterMapFieldUpdated return true if member cluster label is updated.
 func isMapFieldUpdated(currentMCLabels, oldMCLabels map[string]string) bool {
 	return !reflect.DeepEqual(currentMCLabels, oldMCLabels)
-}
-
-// isInternalMemberClusterSpecUpdated returns true if internal member cluster spec is updated.
-func isInternalMemberClusterSpecUpdated(currentIMC, oldIMC fleetv1alpha1.InternalMemberCluster) bool {
-	return currentIMC.Generation > oldIMC.Generation
-}
-
-// isInternalMemberClusterStatusUpdated returns true if internal member cluster status is updated.
-func isInternalMemberClusterStatusUpdated(currentIMCStatus, oldIMCStatus fleetv1alpha1.InternalMemberClusterStatus) bool {
-	// cannot compare resource versions because they are the same when webhook receives the request.
-	return !reflect.DeepEqual(currentIMCStatus, oldIMCStatus)
 }
 
 // isMemberClusterUpdated returns true is member cluster spec or status is updated.
