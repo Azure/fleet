@@ -60,22 +60,22 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch {
 		case req.Kind == crdGVK:
-			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
 		case req.Kind == mcGVK:
-			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
 		case req.Kind == namespaceGVK:
-			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
 		case req.Kind == imcGVK:
-			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleInternalMemberCluster(ctx, req)
 		case req.Namespace != "":
-			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req.Kind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
@@ -111,18 +111,14 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 
 // handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
 func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
-	var currentIMC fleetv1alpha1.InternalMemberCluster
-	if err := v.decodeRequestObject(req, &currentIMC); err != nil {
+	var imc fleetv1alpha1.InternalMemberCluster
+	if err := v.decodeRequestObject(req, &imc); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	if req.Operation == admissionv1.Update {
-		var oldIMC fleetv1alpha1.InternalMemberCluster
-		if err := v.decoder.DecodeRaw(req.OldObject, &oldIMC); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, currentIMC, oldIMC, v.whiteListedUsers, req.UserInfo)
+		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, imc, v.whiteListedUsers, req.UserInfo, req.SubResource)
 	}
-	return validation.ValidateUserForResource(currentIMC.Kind, types.NamespacedName{Name: currentIMC.Name, Namespace: currentIMC.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(imc.Kind, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.

@@ -378,10 +378,10 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 	testCases := map[string]struct {
 		client           client.Client
-		currentIMC       fleetv1alpha1.InternalMemberCluster
-		oldIMC           fleetv1alpha1.InternalMemberCluster
+		imc              fleetv1alpha1.InternalMemberCluster
 		whiteListedUsers []string
 		userInfo         authenticationv1.UserInfo
+		subResource      string
 		wantResponse     admission.Response
 	}{
 		"allow user in IMC identity with status update": {
@@ -402,7 +402,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return nil
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
@@ -416,24 +416,11 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					},
 				},
 			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-				},
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
-						Capacity: corev1.ResourceList{
-							corev1.ResourceCPU: resource.Quantity{Format: "format2"},
-						},
-					},
-				},
-			},
 			userInfo: authenticationv1.UserInfo{
 				Username: "test-identity",
 				Groups:   []string{"test-group"},
 			},
+			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow hub-agent-sa in IMC identity with status update": {
@@ -454,7 +441,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return nil
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
@@ -468,24 +455,11 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					},
 				},
 			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-				},
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
-						Capacity: corev1.ResourceList{
-							corev1.ResourceCPU: resource.Quantity{Format: "format2"},
-						},
-					},
-				},
-			},
 			userInfo: authenticationv1.UserInfo{
 				Username: "system:serviceaccount:fleet-system:hub-agent-sa",
 				Groups:   []string{"system:serviceaccounts"},
 			},
+			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"deny user in system:masters group with status update": {
@@ -506,7 +480,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return nil
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
@@ -520,24 +494,11 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					},
 				},
 			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-				},
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
-						Capacity: corev1.ResourceList{
-							corev1.ResourceCPU: resource.Quantity{Format: "format2"},
-						},
-					},
-				},
-			},
 			userInfo: authenticationv1.UserInfo{
 				Username: "testUser",
 				Groups:   []string{"system:masters"},
 			},
+			subResource:  "status",
 			wantResponse: admission.Denied(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow user in system:masters group with spec update": {
@@ -558,7 +519,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return nil
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
@@ -566,16 +527,6 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				},
 				Spec: fleetv1alpha1.InternalMemberClusterSpec{
 					HeartbeatPeriodSeconds: 10,
-				},
-			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-				},
-				Spec: fleetv1alpha1.InternalMemberClusterSpec{
-					HeartbeatPeriodSeconds: 11,
 				},
 			},
 			userInfo: authenticationv1.UserInfo{
@@ -602,7 +553,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return nil
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
@@ -610,16 +561,6 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 				},
 				Spec: fleetv1alpha1.InternalMemberClusterSpec{
 					HeartbeatPeriodSeconds: 10,
-				},
-			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-				},
-				Spec: fleetv1alpha1.InternalMemberClusterSpec{
-					HeartbeatPeriodSeconds: 11,
 				},
 			},
 			userInfo: authenticationv1.UserInfo{
@@ -646,19 +587,12 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return nil
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
 					Namespace: "test-ns",
 					Labels:    map[string]string{"test-key": "test-value"},
-				},
-			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
 				},
 			},
 			userInfo: authenticationv1.UserInfo{
@@ -673,7 +607,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					return errors.New("get error")
 				},
 			},
-			currentIMC: fleetv1alpha1.InternalMemberCluster{
+			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-mc",
@@ -687,31 +621,18 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 					},
 				},
 			},
-			oldIMC: fleetv1alpha1.InternalMemberCluster{
-				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-				},
-				Status: fleetv1alpha1.InternalMemberClusterStatus{
-					ResourceUsage: fleetv1alpha1.ResourceUsage{
-						Capacity: corev1.ResourceList{
-							corev1.ResourceCPU: resource.Quantity{Format: "format2"},
-						},
-					},
-				},
-			},
 			userInfo: authenticationv1.UserInfo{
 				Username: "testUser",
 				Groups:   []string{"system:masters"},
 			},
+			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(imcAllowedGetMCFailed, "testUser", []string{"system:masters"}, types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := ValidateInternalMemberClusterUpdate(context.Background(), testCase.client, testCase.currentIMC, testCase.oldIMC, testCase.whiteListedUsers, testCase.userInfo)
+			gotResult := ValidateInternalMemberClusterUpdate(context.Background(), testCase.client, testCase.imc, testCase.whiteListedUsers, testCase.userInfo, testCase.subResource)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
