@@ -60,22 +60,22 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch {
 		case req.Kind == crdGVK:
-			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
 		case req.Kind == mcGVK:
-			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
 		case req.Kind == namespaceGVK:
-			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
 		case req.Kind == imcGVK:
-			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleInternalMemberCluster(ctx, req)
 		case req.Namespace != "":
-			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req.Kind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation)
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
