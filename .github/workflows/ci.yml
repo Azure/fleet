@@ -75,7 +75,7 @@ jobs:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
   
-  scheduler-integration-test:
+  scheduler-integration-tests:
     runs-on: ubuntu-latest
     needs: [
       detect-noop,
@@ -96,4 +96,4 @@ jobs:
 
       - name: Run scheduler integration tests
         run: |
-          cd ./test/scheduler && ginkgo . -v -p
+          make scheduler-integration-tests
