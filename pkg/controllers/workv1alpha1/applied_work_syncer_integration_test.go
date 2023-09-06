@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package work
+package workv1alpha1
 
 import (
 	"context"
@@ -30,13 +30,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 var _ = Describe("Work Status Reconciler", func() {
 	var resourceNamespace string
 	var workNamespace string
-	var work *fleetv1beta1.Work
+	var work *workv1alpha1.Work
 	var cm, cm2 *corev1.ConfigMap
 
 	var wns corev1.Namespace
@@ -91,14 +91,14 @@ var _ = Describe("Work Status Reconciler", func() {
 		}
 
 		By("Create work that contains two configMaps")
-		work = &fleetv1beta1.Work{
+		work = &workv1alpha1.Work{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "work-" + utilrand.String(5),
 				Namespace: workNamespace,
 			},
-			Spec: fleetv1beta1.WorkSpec{
-				Workload: fleetv1beta1.WorkloadTemplate{
-					Manifests: []fleetv1beta1.Manifest{
+			Spec: workv1alpha1.WorkSpec{
+				Workload: workv1alpha1.WorkloadTemplate{
+					Manifests: []workv1alpha1.Manifest{
 						{
 							RawExtension: runtime.RawExtension{Object: cm},
 						},
@@ -124,12 +124,12 @@ var _ = Describe("Work Status Reconciler", func() {
 
 		By("Make sure that the work is applied")
 		currentWork := waitForWorkToApply(work.Name, workNamespace)
-		var appliedWork fleetv1beta1.AppliedWork
+		var appliedWork workv1alpha1.AppliedWork
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
 		By("Remove configMap 2 from the work")
-		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
+		currentWork.Spec.Workload.Manifests = []workv1alpha1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: cm},
 			},
@@ -162,7 +162,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		Expect(k8sClient.Create(context.Background(), work2)).ToNot(HaveOccurred())
 
 		By("Make sure that the appliedWork is updated")
-		var appliedWork, appliedWork2 fleetv1beta1.AppliedWork
+		var appliedWork, appliedWork2 workv1alpha1.AppliedWork
 		Eventually(func() bool {
 			err := k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)
 			if err != nil {
@@ -182,7 +182,7 @@ var _ = Describe("Work Status Reconciler", func() {
 
 		By("Remove configMap 2 from the work")
 		currentWork := waitForWorkToApply(work.Name, workNamespace)
-		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
+		currentWork.Spec.Workload.Manifests = []workv1alpha1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: cm},
 			},
@@ -205,7 +205,7 @@ var _ = Describe("Work Status Reconciler", func() {
 
 		By("Remove configMap 2 from the work2")
 		currentWork = waitForWorkToApply(work2.Name, workNamespace)
-		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
+		currentWork.Spec.Workload.Manifests = []workv1alpha1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: cm},
 			},
@@ -233,7 +233,7 @@ var _ = Describe("Work Status Reconciler", func() {
 
 		By("Make sure that the work is applied")
 		currentWork := waitForWorkToApply(work.Name, workNamespace)
-		var appliedWork fleetv1beta1.AppliedWork
+		var appliedWork workv1alpha1.AppliedWork
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
@@ -251,7 +251,7 @@ var _ = Describe("Work Status Reconciler", func() {
 				Paused: true,
 			},
 		}
-		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
+		currentWork.Spec.Workload.Manifests = []workv1alpha1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: broadcastJob},
 			},
@@ -282,7 +282,7 @@ var _ = Describe("Work Status Reconciler", func() {
 
 		By("Make sure that the work is applied")
 		currentWork := waitForWorkToApply(work.Name, workNamespace)
-		var appliedWork fleetv1beta1.AppliedWork
+		var appliedWork workv1alpha1.AppliedWork
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
 
@@ -294,7 +294,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		}, timeout, interval).Should(BeTrue())
 
 		By("Change the order of the two configs in the work")
-		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
+		currentWork.Spec.Workload.Manifests = []workv1alpha1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: cm2},
 			},

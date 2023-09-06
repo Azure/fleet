@@ -14,6 +14,11 @@ const (
 	// MemberClusterFinalizer is used to make sure that we handle gc of all the member cluster resources on the hub cluster.
 	MemberClusterFinalizer = fleetPrefix + "membercluster-finalizer"
 
+	// WorkFinalizer is used by the work generator to make sure that the binding is not deleted until the work objects
+	// it generates are all deleted, or used by the work controller to make sure the work has been deleted in the member
+	// cluster.
+	WorkFinalizer = fleetPrefix + "work-cleanup"
+
 	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
 	CRPTrackingLabel = fleetPrefix + "parentCRP"
 

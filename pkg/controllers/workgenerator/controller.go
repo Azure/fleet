@@ -33,7 +33,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -160,6 +159,19 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// delete all the listed works
+	//
+	// TO-DO: this controller should be able to garbage collect all works automatically via
+	// background/foreground cascade deletion. This may render the finalizer unnecessary.
+	for workName := range works {
+		work := works[workName]
+
+		if err := r.Client.Delete(ctx, work); err != nil && !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		}
+	}
+
 	// remove the work finalizer on the binding if all the work objects are deleted
 	if len(works) == 0 {
 		controllerutil.RemoveFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
@@ -417,7 +429,7 @@ func getWorkNameFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceS
 func buildAllWorkAppliedCondition(works map[string]*workv1alpha1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
 	allApplied := true
 	for _, work := range works {
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, workapi.ConditionTypeApplied), work.GetGeneration()) {
+		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), work.GetGeneration()) {
 			allApplied = false
 			break
 		}
@@ -493,8 +505,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 						"Failed to process an update event for work object")
 					return
 				}
-				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, workapi.ConditionTypeApplied)
-				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, workapi.ConditionTypeApplied)
+				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
+				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 				// we only need to handle the case the applied condition is flipped between true and NOT true between the
 				// new and old work objects. Otherwise, it won't affect the binding applied condition
 				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) {

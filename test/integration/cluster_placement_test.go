@@ -32,7 +32,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
+	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -1506,7 +1506,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed(), "Failed to retrieve %s work", clusterWork.Name)
 
 			appliedCondition := metav1.Condition{
-				Type:               workapi.ConditionTypeApplied,
+				Type:               workv1alpha1controller.ConditionTypeApplied,
 				Status:             metav1.ConditionTrue,
 				Reason:             "appliedWorkComplete",
 				ObservedGeneration: clusterWork.GetGeneration(),
@@ -1517,9 +1517,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Identifier: workResourceIdentifier,
 				Conditions: []metav1.Condition{
 					{
-						Type:               workapi.ConditionTypeApplied,
+						Type:               workv1alpha1controller.ConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(workapi.ManifestCreatedAction),
+						Reason:             string(workv1alpha1controller.ManifestCreatedAction),
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1536,7 +1536,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 			}, &clusterWork)).Should(Succeed(), "Failed to retrieve %s work", clusterWork.Name)
 
 			appliedCondition = metav1.Condition{
-				Type:               workapi.ConditionTypeApplied,
+				Type:               workv1alpha1controller.ConditionTypeApplied,
 				Status:             metav1.ConditionFalse,
 				Reason:             "appliedWorkFailed",
 				ObservedGeneration: clusterWork.GetGeneration(),
@@ -1547,7 +1547,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Identifier: workResourceIdentifier,
 				Conditions: []metav1.Condition{
 					{
-						Type:               workapi.ConditionTypeApplied,
+						Type:               workv1alpha1controller.ConditionTypeApplied,
 						Status:             metav1.ConditionFalse,
 						Reason:             "appliedManifestFailed",
 						LastTransitionTime: metav1.Now(),
@@ -1686,7 +1686,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 
 			// update work for clusterA to have applied condition as false, and have one manifest condition as false
 			appliedCondition := metav1.Condition{
-				Type:               workapi.ConditionTypeApplied,
+				Type:               workv1alpha1controller.ConditionTypeApplied,
 				Status:             metav1.ConditionFalse,
 				Reason:             "appliedWorkFailed",
 				ObservedGeneration: clusterWork.GetGeneration(),
@@ -1697,7 +1697,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Identifier: workResourceIdentifier1,
 				Conditions: []metav1.Condition{
 					{
-						Type:               workapi.ConditionTypeApplied,
+						Type:               workv1alpha1controller.ConditionTypeApplied,
 						Status:             metav1.ConditionFalse,
 						Reason:             "appliedManifestFailed",
 						LastTransitionTime: metav1.Now(),
@@ -1708,9 +1708,9 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Identifier: workResourceIdentifier2,
 				Conditions: []metav1.Condition{
 					{
-						Type:               workapi.ConditionTypeApplied,
+						Type:               workv1alpha1controller.ConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(workapi.ManifestNoChangeAction),
+						Reason:             string(workv1alpha1controller.ManifestNoChangeAction),
 						LastTransitionTime: metav1.Now(),
 					},
 				},
@@ -1812,15 +1812,15 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				Version:  "v1",
 			}
 			manifestCondition1.Conditions[0].Status = metav1.ConditionTrue
-			manifestCondition1.Conditions[0].Reason = string(workapi.ManifestCreatedAction)
+			manifestCondition1.Conditions[0].Reason = string(workv1alpha1controller.ManifestCreatedAction)
 			manifestCondition2.Identifier = workResourceIdentifier2
 			manifestCondition3 := workv1alpha1.ManifestCondition{
 				Identifier: workResourceIdentifier3,
 				Conditions: []metav1.Condition{
 					{
-						Type:               workapi.ConditionTypeApplied,
+						Type:               workv1alpha1controller.ConditionTypeApplied,
 						Status:             metav1.ConditionTrue,
-						Reason:             string(workapi.ManifestNoChangeAction),
+						Reason:             string(workv1alpha1controller.ManifestNoChangeAction),
 						LastTransitionTime: metav1.Now(),
 					},
 				},

@@ -1,4 +1,4 @@
-package work
+package workv1alpha1
 
 import (
 	"context"
@@ -14,20 +14,20 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 // createWorkWithManifest creates a work given a manifest
-func createWorkWithManifest(workNamespace string, manifest runtime.Object) *fleetv1beta1.Work {
+func createWorkWithManifest(workNamespace string, manifest runtime.Object) *workv1alpha1.Work {
 	manifestCopy := manifest.DeepCopyObject()
-	newWork := fleetv1beta1.Work{
+	newWork := workv1alpha1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "work-" + utilrand.String(5),
 			Namespace: workNamespace,
 		},
-		Spec: fleetv1beta1.WorkSpec{
-			Workload: fleetv1beta1.WorkloadTemplate{
-				Manifests: []fleetv1beta1.Manifest{
+		Spec: workv1alpha1.WorkSpec{
+			Workload: workv1alpha1.WorkloadTemplate{
+				Manifests: []workv1alpha1.Manifest{
 					{
 						RawExtension: runtime.RawExtension{Object: manifestCopy},
 					},
@@ -60,8 +60,8 @@ func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 }
 
 // waitForWorkToApply waits for a work to be applied
-func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
-	var resultWork fleetv1beta1.Work
+func waitForWorkToApply(workName, workNS string) *workv1alpha1.Work {
+	var resultWork workv1alpha1.Work
 	Eventually(func() bool {
 		err := k8sClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
 		if err != nil {
@@ -82,8 +82,8 @@ func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
 }
 
 // waitForWorkToBeHandled waits for a work to have a finalizer
-func waitForWorkToBeHandled(workName, workNS string) *fleetv1beta1.Work {
-	var resultWork fleetv1beta1.Work
+func waitForWorkToBeHandled(workName, workNS string) *workv1alpha1.Work {
+	var resultWork workv1alpha1.Work
 	Eventually(func() bool {
 		err := k8sClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
 		if err != nil {

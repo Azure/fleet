@@ -24,7 +24,6 @@ import (
 	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,13 +47,11 @@ const (
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
 
-	crdResourceName                   = "customresourcedefinitions"
-	memberClusterResourceName         = "memberclusters"
-	internalMemberClusterResourceName = "internalmemberclusters"
-	replicaSetResourceName            = "replicasets"
-	podResourceName                   = "pods"
-	roleResourceName                  = "roles"
-	roleBindingResourceName           = "rolebindings"
+	crdResourceName           = "customresourcedefinitions"
+	memberClusterResourceName = "memberclusters"
+	namespaceResouceName      = "namespaces"
+	replicaSetResourceName    = "replicasets"
+	podResourceName           = "pods"
 )
 
 var (
@@ -217,7 +214,8 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 	}
 
 	if w.enableGuardRail {
-		namespaceSelector := &metav1.LabelSelector{
+		// MatchLabels/MatchExpressions values are ANDed to select resources.
+		fleetMemberNamespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
 					Key:      fleetv1beta1.FleetResourceLabelKey,
@@ -226,13 +224,35 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				},
 			},
 		}
-
+		fleetSystemNamespaceSelector := &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      corev1.LabelMetadataName,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"fleet-system"},
+				},
+			},
+		}
+		kubeNamespaceSelector := &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      corev1.LabelMetadataName,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   []string{"kube-system", "kube-public", "kube-node-lease"},
+				},
+			},
+		}
 		cudOperations := []admv1.OperationType{
 			admv1.Create,
 			admv1.Update,
 			admv1.Delete,
 		}
-
+		namespacedResourcesRules := []admv1.RuleWithOperations{
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),
+			},
+		}
 		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 			{
 				Name:                    "fleet.customresourcedefinition.validating",
@@ -261,22 +281,43 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				},
 			},
 			{
-				Name:                    "fleet.namespacedresources.validating",
+				Name:                    "fleet.fleetmembernamespacedresources.validating",
 				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
 				AdmissionReviewVersions: admissionReviewVersions,
-				NamespaceSelector:       namespaceSelector,
+				NamespaceSelector:       fleetMemberNamespaceSelector,
+				Rules:                   namespacedResourcesRules,
+			},
+			{
+				Name:                    "fleet.fleetsystemnamespacedresources.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				NamespaceSelector:       fleetSystemNamespaceSelector,
+				Rules:                   namespacedResourcesRules,
+			},
+			{
+				Name:                    "fleet.kubenamespacedresources.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				NamespaceSelector:       kubeNamespaceSelector,
+				Rules:                   namespacedResourcesRules,
+			},
+			{
+				Name:                    "fleet.namespace.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: cudOperations,
-						Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
+						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResouceName}, &clusterScope),
 					},
-					{
-						Operations: cudOperations,
-						Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
-					},
-					// TODO: (Arvindthiru): Add Rules for pods, services, configmaps, secrets, deployments and replicasets
 				},
 			},
 		}

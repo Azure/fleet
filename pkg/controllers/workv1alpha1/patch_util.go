@@ -1,4 +1,4 @@
-package work
+package workv1alpha1
 
 import (
 	"encoding/json"

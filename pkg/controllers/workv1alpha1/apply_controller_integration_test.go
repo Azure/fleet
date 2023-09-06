@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package work
+package workv1alpha1
 
 import (
 	"context"
@@ -36,7 +36,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 const timeout = time.Second * 10
@@ -46,7 +46,7 @@ var _ = Describe("Work Controller", func() {
 	var workNamespace string
 	var ns corev1.Namespace
 	var cm *corev1.ConfigMap
-	var work *fleetv1beta1.Work
+	var work *workv1alpha1.Work
 	const defaultNS = "default"
 
 	BeforeEach(func() {
@@ -94,7 +94,7 @@ var _ = Describe("Work Controller", func() {
 			Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
 			Expect(meta.IsStatusConditionTrue(resultWork.Status.Conditions, ConditionTypeApplied)).Should(BeTrue())
 			Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, ConditionTypeApplied)).Should(BeTrue())
-			expectedResourceID := fleetv1beta1.WorkResourceIdentifier{
+			expectedResourceID := workv1alpha1.ResourceIdentifier{
 				Ordinal:   0,
 				Group:     "",
 				Version:   "v1",
@@ -151,15 +151,15 @@ var _ = Describe("Work Controller", func() {
 			Expect(len(configMap.Data)).Should(Equal(1))
 			Expect(configMap.Data["data1"]).Should(Equal(cm.Data["data1"]))
 			Expect(len(configMap.OwnerReferences)).Should(Equal(2))
-			Expect(configMap.OwnerReferences[0].APIVersion).Should(Equal(fleetv1beta1.GroupVersion.String()))
-			Expect(configMap.OwnerReferences[0].Kind).Should(Equal(fleetv1beta1.AppliedWorkKind))
-			Expect(configMap.OwnerReferences[1].APIVersion).Should(Equal(fleetv1beta1.GroupVersion.String()))
-			Expect(configMap.OwnerReferences[1].Kind).Should(Equal(fleetv1beta1.AppliedWorkKind))
+			Expect(configMap.OwnerReferences[0].APIVersion).Should(Equal(workv1alpha1.GroupVersion.String()))
+			Expect(configMap.OwnerReferences[0].Kind).Should(Equal(workv1alpha1.AppliedWorkKind))
+			Expect(configMap.OwnerReferences[1].APIVersion).Should(Equal(workv1alpha1.GroupVersion.String()))
+			Expect(configMap.OwnerReferences[1].Kind).Should(Equal(workv1alpha1.AppliedWorkKind))
 			// GC does not work in the testEnv
 			By("delete the second work")
 			Expect(k8sClient.Delete(context.Background(), work2)).Should(Succeed())
 			By("check that the applied work2 is deleted")
-			var appliedWork fleetv1beta1.AppliedWork
+			var appliedWork workv1alpha1.AppliedWork
 			Eventually(func() bool {
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: work2.Name}, &appliedWork)
 				return apierrors.IsNotFound(err)
@@ -468,9 +468,9 @@ var _ = Describe("Work Controller", func() {
 
 			By("Check the config map label")
 			Expect(len(appliedCM.OwnerReferences)).Should(Equal(2))
-			Expect(appliedCM.OwnerReferences[0].APIVersion).Should(Equal(fleetv1beta1.GroupVersion.String()))
+			Expect(appliedCM.OwnerReferences[0].APIVersion).Should(Equal(workv1alpha1.GroupVersion.String()))
 			Expect(appliedCM.OwnerReferences[0].Name).Should(SatisfyAny(Equal(work.GetName()), Equal(work2.GetName())))
-			Expect(appliedCM.OwnerReferences[1].APIVersion).Should(Equal(fleetv1beta1.GroupVersion.String()))
+			Expect(appliedCM.OwnerReferences[1].APIVersion).Should(Equal(workv1alpha1.GroupVersion.String()))
 			Expect(appliedCM.OwnerReferences[1].Name).Should(SatisfyAny(Equal(work.GetName()), Equal(work2.GetName())))
 		})
 
@@ -561,7 +561,7 @@ var _ = Describe("Work Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("wait for the work to be applied")
-			var resultWork fleetv1beta1.Work
+			var resultWork workv1alpha1.Work
 			Eventually(func() bool {
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name, Namespace: work.GetNamespace()}, &resultWork)
 				if err != nil {
@@ -576,7 +576,7 @@ var _ = Describe("Work Controller", func() {
 				}
 				return true
 			}, timeout, interval).Should(BeTrue())
-			expectedResourceID := fleetv1beta1.WorkResourceIdentifier{
+			expectedResourceID := workv1alpha1.ResourceIdentifier{
 				Ordinal:   0,
 				Group:     "apps.kruise.io",
 				Version:   "v1alpha1",
@@ -589,7 +589,7 @@ var _ = Describe("Work Controller", func() {
 	})
 
 	Context("Test multiple work propagation", func() {
-		var works []*fleetv1beta1.Work
+		var works []*workv1alpha1.Work
 
 		AfterEach(func() {
 			for _, staleWork := range works {
@@ -652,7 +652,7 @@ var _ = Describe("Work Controller", func() {
 				"new-test-key-2": "test-value-5",
 			}
 			for i := 0; i < numWork; i++ {
-				var resultWork fleetv1beta1.Work
+				var resultWork workv1alpha1.Work
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)).Should(Succeed())
 				Expect(controllerutil.ContainsFinalizer(&resultWork, workFinalizer)).Should(BeFalse())
 				// make sure that leave can be called as many times as possible
@@ -679,7 +679,7 @@ var _ = Describe("Work Controller", func() {
 			Consistently(func() bool {
 				for i := 0; i < numWork; i++ {
 					By(fmt.Sprintf("updated the work = %s", works[i].GetName()))
-					var resultWork fleetv1beta1.Work
+					var resultWork workv1alpha1.Work
 					err := k8sClient.Get(context.Background(), types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)
 					Expect(err).Should(Succeed())
 					Expect(controllerutil.ContainsFinalizer(&resultWork, workFinalizer)).Should(BeFalse())

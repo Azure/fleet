@@ -35,8 +35,6 @@ import (
 const (
 	testClusterRole        = "wh-test-cluster-role"
 	testClusterRoleBinding = "wh-test-cluster-role-binding"
-	testRole               = "wh-test-role"
-	testRoleBinding        = "wh-test-role-binding"
 )
 
 var (
@@ -197,7 +195,7 @@ func GenerateCRDObjectFromFile(cluster framework.Cluster, fs embed.FS, filepath 
 }
 
 // CreateResourcesForWebHookE2E create resources required for Webhook E2E.
-func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster, memberNamespace string) {
+func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testClusterRole,
@@ -235,107 +233,14 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 	gomega.Eventually(func() error {
 		return hubCluster.KubeClient.Create(ctx, &crb)
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s for webhook E2E", crb.Name)
-
-	r := rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testRole,
-			Namespace: memberNamespace,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				Verbs:     []string{"*"},
-				APIGroups: []string{"*"},
-				Resources: []string{"*"},
-			},
-		},
-	}
-	gomega.Eventually(func() error {
-		return hubCluster.KubeClient.Create(ctx, &r)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create role %s for webhook E2E", r.Name)
-
-	rb := rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testRoleBinding,
-			Namespace: memberNamespace,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				APIGroup: rbacv1.GroupName,
-				Kind:     "User",
-				Name:     "test-user",
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "Role",
-			Name:     testRole,
-		},
-	}
-	gomega.Eventually(func() error {
-		return hubCluster.KubeClient.Create(ctx, &rb)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create role binding %s for webhook E2E", rb.Name)
-
-	// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
-	// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
-	identity := rbacv1.Subject{
-		Name:      "test-user",
-		Kind:      "ServiceAccount",
-		Namespace: utils.FleetSystemNamespace,
-	}
-	mc := &fleetv1alpha1.MemberCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-mc",
-		},
-		Spec: fleetv1alpha1.MemberClusterSpec{
-			Identity:               identity,
-			State:                  fleetv1alpha1.ClusterStateJoin,
-			HeartbeatPeriodSeconds: 60,
-		},
-	}
-	gomega.Eventually(func() error {
-		return hubCluster.KubeClient.Create(ctx, mc)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for member cluster %s to be created in %s cluster", mc.Name, hubCluster.ClusterName)
-
-	imc := &fleetv1alpha1.InternalMemberCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-mc",
-			Namespace: "fleet-member-test-mc",
-		},
-	}
-	gomega.Eventually(func() error {
-		return hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "Failed to wait for internal member cluster %s to be synced in %s cluster", imc.Name, hubCluster.ClusterName)
 }
 
 // DeleteResourcesForWebHookE2E deletes resources created for Webhook E2E.
-func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster, memberNamespace string) {
-	mc := fleetv1alpha1.MemberCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-mc",
-		},
-	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &mc)).Should(gomega.Succeed())
-
+func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
 	gomega.Eventually(func() bool {
 		var imc fleetv1alpha1.InternalMemberCluster
 		return apierrors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for internal member cluster %s to be deleted in %s cluster", "test-mc", hubCluster.ClusterName)
-
-	rb := rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testRoleBinding,
-			Namespace: memberNamespace,
-		},
-	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &rb)).Should(gomega.Succeed())
-
-	r := rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testRole,
-			Namespace: memberNamespace,
-		},
-	}
-	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &r)).Should(gomega.Succeed())
 
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{

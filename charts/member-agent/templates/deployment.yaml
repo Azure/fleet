@@ -32,6 +32,8 @@ spec:
             {{- end }}
             - --v={{ .Values.logVerbosity }}
             - -add_dir_header
+            - --enable-v1alpha1-apis={{ .Values.enableV1Alpha1APIs }}
+            - --enable-v1beta1-apis={{ .Values.enableV1Beta1APIs }}
           env:
           - name: HUB_SERVER_URL
             value: "{{ .Values.config.hubURL }}"

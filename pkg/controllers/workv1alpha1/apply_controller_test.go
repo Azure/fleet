@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package work
+package workv1alpha1
 
 import (
 	"context"
@@ -45,15 +45,15 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
 var (
 	fakeDynamicClient = fake.NewSimpleDynamicClient(runtime.NewScheme())
 	ownerRef          = metav1.OwnerReference{
-		APIVersion: fleetv1beta1.GroupVersion.String(),
+		APIVersion: workv1alpha1.GroupVersion.String(),
 		Kind:       "AppliedWork",
 	}
 	testGvr = schema.GroupVersionResource{
@@ -77,7 +77,7 @@ var (
 		},
 	}
 	rawTestDeployment, _ = json.Marshal(testDeployment)
-	testManifest         = fleetv1beta1.Manifest{RawExtension: runtime.RawExtension{
+	testManifest         = workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawTestDeployment,
 	}}
 )
@@ -175,8 +175,8 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 		"manifest has a new appliedWork ownership, need update": {
 			manifestObj: func() *appsv1.Deployment {
 				alterObj := manifestObj.DeepCopy()
-				alterObj.OwnerReferences[0].APIVersion = fleetv1beta1.GroupVersion.String()
-				alterObj.OwnerReferences[0].Kind = fleetv1beta1.AppliedWorkKind
+				alterObj.OwnerReferences[0].APIVersion = workv1alpha1.GroupVersion.String()
+				alterObj.OwnerReferences[0].Kind = workv1alpha1.AppliedWorkKind
 				return alterObj
 			}(),
 			isSame: false,
@@ -242,8 +242,8 @@ func TestIsManifestManagedByWork(t *testing.T) {
 		"no appliedWork": {
 			ownerRefs: []metav1.OwnerReference{
 				{
-					APIVersion: fleetv1beta1.GroupVersion.String(),
-					Kind:       fleetv1beta1.WorkKind,
+					APIVersion: workv1alpha1.GroupVersion.String(),
+					Kind:       workv1alpha1.WorkKind,
 				},
 			},
 			isManaged: false,
@@ -251,8 +251,8 @@ func TestIsManifestManagedByWork(t *testing.T) {
 		"one appliedWork": {
 			ownerRefs: []metav1.OwnerReference{
 				{
-					APIVersion: fleetv1beta1.GroupVersion.String(),
-					Kind:       fleetv1beta1.AppliedWorkKind,
+					APIVersion: workv1alpha1.GroupVersion.String(),
+					Kind:       workv1alpha1.AppliedWorkKind,
 					Name:       utilrand.String(10),
 					UID:        types.UID(utilrand.String(10)),
 				},
@@ -262,14 +262,14 @@ func TestIsManifestManagedByWork(t *testing.T) {
 		"multiple appliedWork": {
 			ownerRefs: []metav1.OwnerReference{
 				{
-					APIVersion: fleetv1beta1.GroupVersion.String(),
-					Kind:       fleetv1beta1.AppliedWorkKind,
+					APIVersion: workv1alpha1.GroupVersion.String(),
+					Kind:       workv1alpha1.AppliedWorkKind,
 					Name:       utilrand.String(10),
 					UID:        types.UID(utilrand.String(10)),
 				},
 				{
-					APIVersion: fleetv1beta1.GroupVersion.String(),
-					Kind:       fleetv1beta1.AppliedWorkKind,
+					APIVersion: workv1alpha1.GroupVersion.String(),
+					Kind:       workv1alpha1.AppliedWorkKind,
 					UID:        types.UID(utilrand.String(10)),
 				},
 			},
@@ -582,10 +582,10 @@ func TestApplyManifest(t *testing.T) {
 				APIVersion: "core/v1",
 			},
 		})
-	InvalidManifest := fleetv1beta1.Manifest{RawExtension: runtime.RawExtension{
+	InvalidManifest := workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawInvalidResource,
 	}}
-	MissingManifest := fleetv1beta1.Manifest{RawExtension: runtime.RawExtension{
+	MissingManifest := workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawMissingResource,
 	}}
 
@@ -605,7 +605,7 @@ func TestApplyManifest(t *testing.T) {
 
 	testCases := map[string]struct {
 		reconciler   ApplyWorkReconciler
-		manifestList []fleetv1beta1.Manifest
+		manifestList []workv1alpha1.Manifest
 		generation   int64
 		action       applyAction
 		wantGvr      schema.GroupVersionResource
@@ -620,7 +620,7 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: []fleetv1beta1.Manifest{testManifest},
+			manifestList: []workv1alpha1.Manifest{testManifest},
 			generation:   0,
 			action:       ManifestCreatedAction,
 			wantGvr:      expectedGvr,
@@ -635,7 +635,7 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]fleetv1beta1.Manifest{}, InvalidManifest),
+			manifestList: append([]workv1alpha1.Manifest{}, InvalidManifest),
 			generation:   0,
 			action:       ManifestNoChangeAction,
 			wantGvr:      emptyGvr,
@@ -653,7 +653,7 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]fleetv1beta1.Manifest{}, MissingManifest),
+			manifestList: append([]workv1alpha1.Manifest{}, MissingManifest),
 			generation:   0,
 			action:       ManifestNoChangeAction,
 			wantGvr:      emptyGvr,
@@ -668,7 +668,7 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]fleetv1beta1.Manifest{}, testManifest),
+			manifestList: append([]workv1alpha1.Manifest{}, testManifest),
 			generation:   0,
 			action:       ManifestNoChangeAction,
 			wantGvr:      expectedGvr,
@@ -723,14 +723,14 @@ func TestReconcile(t *testing.T) {
 					Reason: metav1.StatusReasonNotFound,
 				}}
 		}
-		o, _ := obj.(*fleetv1beta1.Work)
-		*o = fleetv1beta1.Work{
+		o, _ := obj.(*workv1alpha1.Work)
+		*o = workv1alpha1.Work{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:  workNamespace,
 				Name:       workName,
 				Finalizers: []string{workFinalizer},
 			},
-			Spec: fleetv1beta1.WorkSpec{Workload: fleetv1beta1.WorkloadTemplate{Manifests: []fleetv1beta1.Manifest{testManifest}}},
+			Spec: workv1alpha1.WorkSpec{Workload: workv1alpha1.WorkloadTemplate{Manifests: []workv1alpha1.Manifest{testManifest}}},
 		}
 		return nil
 	}
@@ -744,7 +744,7 @@ func TestReconcile(t *testing.T) {
 			Name: "Deployment",
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					APIVersion: fleetv1beta1.GroupVersion.String(),
+					APIVersion: workv1alpha1.GroupVersion.String(),
 					Kind:       "AppliedWork",
 					Name:       appliedWorkName,
 				},
@@ -755,7 +755,7 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 	rawHappyDeployment, _ := json.Marshal(happyDeployment)
-	happyManifest := fleetv1beta1.Manifest{RawExtension: runtime.RawExtension{
+	happyManifest := workv1alpha1.Manifest{RawExtension: runtime.RawExtension{
 		Raw: rawHappyDeployment,
 	}}
 	_, happyDynamicClient, _, err := createObjAndDynamicClient(happyManifest.Raw)
@@ -771,12 +771,12 @@ func TestReconcile(t *testing.T) {
 					Reason: metav1.StatusReasonNotFound,
 				}}
 		}
-		o, _ := obj.(*fleetv1beta1.AppliedWork)
-		*o = fleetv1beta1.AppliedWork{
+		o, _ := obj.(*workv1alpha1.AppliedWork)
+		*o = workv1alpha1.AppliedWork{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: appliedWorkName,
 			},
-			Spec: fleetv1beta1.AppliedWorkSpec{
+			Spec: workv1alpha1.AppliedWorkSpec{
 				WorkName:      workNamespace,
 				WorkNamespace: workName,
 			},
@@ -842,8 +842,8 @@ func TestReconcile(t *testing.T) {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						o, _ := obj.(*fleetv1beta1.Work)
-						*o = fleetv1beta1.Work{
+						o, _ := obj.(*workv1alpha1.Work)
+						*o = workv1alpha1.Work{
 							ObjectMeta: metav1.ObjectMeta{
 								Namespace: workNamespace,
 								Name:      workName,
@@ -878,8 +878,8 @@ func TestReconcile(t *testing.T) {
 			reconciler: ApplyWorkReconciler{
 				client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						o, _ := obj.(*fleetv1beta1.Work)
-						*o = fleetv1beta1.Work{
+						o, _ := obj.(*workv1alpha1.Work)
+						*o = workv1alpha1.Work{
 							ObjectMeta: metav1.ObjectMeta{
 								Namespace:         workNamespace,
 								Name:              workName,

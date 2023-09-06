@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	workcontroller "go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
 )
@@ -165,7 +165,7 @@ var _ = Describe("Work API Controller test", func() {
 			Expect(cmp.Diff(wantManifestCondition, work.Status.ManifestConditions, cmpOptions...)).Should(BeEmpty(),
 				"Manifest Condition not matching for work %s (-want, +got):", namespaceType)
 
-			Expect(work.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction)).Should(BeTrue())
+			Expect(work.Status.ManifestConditions[0].Conditions[0].Reason == string(workv1alpha1.ManifestCreatedAction)).Should(BeTrue())
 
 			By(fmt.Sprintf("AppliedWorkStatus should contain the meta for the resource %s", manifestConfigMapName))
 			appliedWork := workapi.AppliedWork{}
@@ -308,10 +308,10 @@ var _ = Describe("Work API Controller test", func() {
 
 			// One of them should be a ManifestCreatedAction and one of them should be an ManifestUpdatedAction
 			By(fmt.Sprintf("Verify that either works %s and %s condition reason should be updated", namespaceTypeOne, namespaceTypeTwo))
-			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction) ||
-				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestCreatedAction)).Should(BeTrue())
-			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestThreeWayMergePatchAction) ||
-				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workcontroller.ManifestThreeWayMergePatchAction)).Should(BeTrue())
+			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workv1alpha1.ManifestCreatedAction) ||
+				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workv1alpha1.ManifestCreatedAction)).Should(BeTrue())
+			Expect(workOne.Status.ManifestConditions[0].Conditions[0].Reason == string(workv1alpha1.ManifestThreeWayMergePatchAction) ||
+				workTwo.Status.ManifestConditions[0].Conditions[0].Reason == string(workv1alpha1.ManifestThreeWayMergePatchAction)).Should(BeTrue())
 
 			By(fmt.Sprintf("AppliedWorkStatus for both works %s and %s should contain the meta for the resource %s", namespaceTypeOne, namespaceTypeTwo, manifestSecretName))
 			wantAppliedStatus := workapi.AppliedtWorkStatus{

@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 )
@@ -38,7 +37,7 @@ var (
 	ignoreConditionOption = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
 )
 
-var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
+var _ = Describe("Test Work Generator Controller", func() {
 	const (
 		timeout  = time.Second * 6
 		duration = time.Second * 20
@@ -677,20 +676,30 @@ var _ = Describe("Test clusterSchedulingPolicySnapshot Controller", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 				Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s is deleted", binding.Name))
-				// Check the binding is not removed
-				Consistently(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)
-				}, duration, interval).Should(Succeed(), "the binding should not be removed until all the work is removed")
-				// delete the work (as the testEnv doesn't run GC controller)
-				Expect(k8sClient.Delete(ctx, &work)).Should(Succeed())
-				By(fmt.Sprintf("work  %s is deleted", work.Name))
-				// Check the binding is not still removed
-				Consistently(func() error {
-					return k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)
-				}, duration, interval).Should(Succeed(), "the binding should not be removed until all the work is removed")
-				// delete the work2 (as the testEnv doesn't run GC controller)
-				Expect(k8sClient.Delete(ctx, &work2)).Should(Succeed())
-				By(fmt.Sprintf("work2  %s is deleted", work2.Name))
+
+				// verify that all associated works have been deleted
+				Eventually(func() error {
+					workKey1 := types.NamespacedName{
+						Namespace: namespaceName,
+						Name:      fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName),
+					}
+					work1 := v1alpha1.Work{}
+					if err := k8sClient.Get(ctx, workKey1, &work1); !apierrors.IsNotFound(err) {
+						return fmt.Errorf("Work %v still exists or an unexpected error has occurred", workKey1)
+					}
+
+					workKey2 := types.NamespacedName{
+						Namespace: namespaceName,
+						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1),
+					}
+					work2 := v1alpha1.Work{}
+					if err := k8sClient.Get(ctx, workKey2, &work2); !apierrors.IsNotFound(err) {
+						return fmt.Errorf("Work %v still exists or an unexpected error has occurred", workKey2)
+					}
+
+					return nil
+				}, timeout, interval).Should(Succeed(), "Failed to clean out all the works")
+
 				// check the binding is deleted
 				Eventually(func() bool {
 					err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)
@@ -751,7 +760,7 @@ func markWorkApplied(work *v1alpha1.Work) {
 	work.Status.Conditions = []metav1.Condition{
 		{
 			Status:             metav1.ConditionTrue,
-			Type:               workapi.ConditionTypeApplied,
+			Type:               fleetv1beta1.WorkConditionTypeApplied,
 			Reason:             "appliedManifest",
 			Message:            "fake apply manifest",
 			ObservedGeneration: work.Generation,

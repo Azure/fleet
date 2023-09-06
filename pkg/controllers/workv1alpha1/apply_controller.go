@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package work
+package workv1alpha1
 
 import (
 	"context"
@@ -42,8 +42,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
 )
@@ -98,7 +98,7 @@ const (
 
 // applyResult contains the result of a manifest being applied.
 type applyResult struct {
-	identifier fleetv1beta1.WorkResourceIdentifier
+	identifier workv1alpha1.ResourceIdentifier
 	generation int64
 	action     applyAction
 	err        error
@@ -113,7 +113,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	klog.InfoS("work apply controller reconcile loop triggered.", "work", req.NamespacedName)
 
 	// Fetch the work resource
-	work := &fleetv1beta1.Work{}
+	work := &workv1alpha1.Work{}
 	err := r.client.Get(ctx, req.NamespacedName, work)
 	switch {
 	case apierrors.IsNotFound(err):
@@ -137,8 +137,8 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 	owner := metav1.OwnerReference{
-		APIVersion:         fleetv1beta1.GroupVersion.String(),
-		Kind:               fleetv1beta1.AppliedWorkKind,
+		APIVersion:         workv1alpha1.GroupVersion.String(),
+		Kind:               workv1alpha1.AppliedWorkKind,
 		Name:               appliedWork.GetName(),
 		UID:                appliedWork.GetUID(),
 		BlockOwnerDeletion: pointer.Bool(false),
@@ -211,14 +211,14 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // garbageCollectAppliedWork deletes the appliedWork and all the manifests associated with it from the cluster.
-func (r *ApplyWorkReconciler) garbageCollectAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (ctrl.Result, error) {
+func (r *ApplyWorkReconciler) garbageCollectAppliedWork(ctx context.Context, work *workv1alpha1.Work) (ctrl.Result, error) {
 	deletePolicy := metav1.DeletePropagationBackground
 	if !controllerutil.ContainsFinalizer(work, workFinalizer) {
 		return ctrl.Result{}, nil
 	}
 	// delete the appliedWork which will remove all the manifests associated with it
 	// TODO: allow orphaned manifest
-	appliedWork := fleetv1beta1.AppliedWork{
+	appliedWork := workv1alpha1.AppliedWork{
 		ObjectMeta: metav1.ObjectMeta{Name: work.Name},
 	}
 	err := r.spokeClient.Delete(ctx, &appliedWork, &client.DeleteOptions{PropagationPolicy: &deletePolicy})
@@ -236,9 +236,9 @@ func (r *ApplyWorkReconciler) garbageCollectAppliedWork(ctx context.Context, wor
 }
 
 // ensureAppliedWork makes sure that an associated appliedWork and a finalizer on the work resource exsits on the cluster.
-func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleetv1beta1.Work) (*fleetv1beta1.AppliedWork, error) {
+func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *workv1alpha1.Work) (*workv1alpha1.AppliedWork, error) {
 	workRef := klog.KObj(work)
-	appliedWork := &fleetv1beta1.AppliedWork{}
+	appliedWork := &workv1alpha1.AppliedWork{}
 	hasFinalizer := false
 	if controllerutil.ContainsFinalizer(work, workFinalizer) {
 		hasFinalizer = true
@@ -255,11 +255,11 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleet
 	}
 
 	// we create the appliedWork before setting the finalizer, so it should always exist unless it's deleted behind our back
-	appliedWork = &fleetv1beta1.AppliedWork{
+	appliedWork = &workv1alpha1.AppliedWork{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: work.Name,
 		},
-		Spec: fleetv1beta1.AppliedWorkSpec{
+		Spec: workv1alpha1.AppliedWorkSpec{
 			WorkName:      work.Name,
 			WorkNamespace: work.Namespace,
 		},
@@ -278,7 +278,7 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleet
 }
 
 // applyManifests processes a given set of Manifests by: setting ownership, validating the manifest, and passing it on for application to the cluster.
-func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fleetv1beta1.Manifest, owner metav1.OwnerReference) []applyResult {
+func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []workv1alpha1.Manifest, owner metav1.OwnerReference) []applyResult {
 	var appliedObj *unstructured.Unstructured
 
 	results := make([]applyResult, len(manifests))
@@ -288,7 +288,7 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fl
 		switch {
 		case err != nil:
 			result.err = err
-			result.identifier = fleetv1beta1.WorkResourceIdentifier{
+			result.identifier = workv1alpha1.ResourceIdentifier{
 				Ordinal: index,
 			}
 			if rawObj != nil {
@@ -321,7 +321,7 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fl
 }
 
 // Decodes the manifest into usable structs.
-func (r *ApplyWorkReconciler) decodeManifest(manifest fleetv1beta1.Manifest) (schema.GroupVersionResource, *unstructured.Unstructured, error) {
+func (r *ApplyWorkReconciler) decodeManifest(manifest workv1alpha1.Manifest) (schema.GroupVersionResource, *unstructured.Unstructured, error) {
 	unstructuredObj := &unstructured.Unstructured{}
 	err := unstructuredObj.UnmarshalJSON(manifest.Raw)
 	if err != nil {
@@ -462,16 +462,16 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 }
 
 // generateWorkCondition constructs the work condition based on the apply result
-func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work *fleetv1beta1.Work) []error {
+func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work *workv1alpha1.Work) []error {
 	var errs []error
 	// Update manifestCondition based on the results.
-	manifestConditions := make([]fleetv1beta1.ManifestCondition, len(results))
+	manifestConditions := make([]workv1alpha1.ManifestCondition, len(results))
 	for index, result := range results {
 		if result.err != nil {
 			errs = append(errs, result.err)
 		}
 		appliedCondition := buildManifestAppliedCondition(result.err, result.action, result.generation)
-		manifestCondition := fleetv1beta1.ManifestCondition{
+		manifestCondition := workv1alpha1.ManifestCondition{
 			Identifier: result.identifier,
 			Conditions: []metav1.Condition{appliedCondition},
 		}
@@ -500,7 +500,7 @@ func (r *ApplyWorkReconciler) Join(_ context.Context) error {
 
 // Leave start
 func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
-	var works fleetv1beta1.WorkList
+	var works workv1alpha1.WorkList
 	if r.joined.Load() {
 		klog.InfoS("mark the apply work reconciler left")
 	}
@@ -536,7 +536,7 @@ func (r *ApplyWorkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.concurrency,
 		}).
-		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&workv1alpha1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
 }
 
@@ -576,7 +576,7 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 func isManifestManagedByWork(ownerRefs []metav1.OwnerReference) bool {
 	// an object is managed by the work if any of its owner reference is of type appliedWork
 	for _, ownerRef := range ownerRefs {
-		if ownerRef.APIVersion == fleetv1beta1.GroupVersion.String() && ownerRef.Kind == fleetv1beta1.AppliedWorkKind {
+		if ownerRef.APIVersion == workv1alpha1.GroupVersion.String() && ownerRef.Kind == workv1alpha1.AppliedWorkKind {
 			return true
 		}
 	}
@@ -587,14 +587,14 @@ func isManifestManagedByWork(ownerRefs []metav1.OwnerReference) bool {
 // 1. Find the manifest condition with the whole identifier.
 // 2. If identifier only has ordinal, and a matched cannot be found, return nil.
 // 3. Try to find properties, other than the ordinal, within the identifier.
-func findManifestConditionByIdentifier(identifier fleetv1beta1.WorkResourceIdentifier, manifestConditions []fleetv1beta1.ManifestCondition) *fleetv1beta1.ManifestCondition {
+func findManifestConditionByIdentifier(identifier workv1alpha1.ResourceIdentifier, manifestConditions []workv1alpha1.ManifestCondition) *workv1alpha1.ManifestCondition {
 	for _, manifestCondition := range manifestConditions {
 		if identifier == manifestCondition.Identifier {
 			return &manifestCondition
 		}
 	}
 
-	if identifier == (fleetv1beta1.WorkResourceIdentifier{Ordinal: identifier.Ordinal}) {
+	if identifier == (workv1alpha1.ResourceIdentifier{Ordinal: identifier.Ordinal}) {
 		return nil
 	}
 
@@ -626,8 +626,8 @@ func setManifestHashAnnotation(manifestObj *unstructured.Unstructured) error {
 }
 
 // Builds a resource identifier for a given unstructured.Unstructured object.
-func buildResourceIdentifier(index int, object *unstructured.Unstructured, gvr schema.GroupVersionResource) fleetv1beta1.WorkResourceIdentifier {
-	return fleetv1beta1.WorkResourceIdentifier{
+func buildResourceIdentifier(index int, object *unstructured.Unstructured, gvr schema.GroupVersionResource) workv1alpha1.ResourceIdentifier {
+	return workv1alpha1.ResourceIdentifier{
 		Ordinal:   index,
 		Group:     object.GroupVersionKind().Group,
 		Version:   object.GroupVersionKind().Version,
@@ -662,7 +662,7 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 
 // generateWorkAppliedCondition generate applied status condition for work.
 // If one of the manifests is applied failed on the spoke, the applied status condition of the work is false.
-func generateWorkAppliedCondition(manifestConditions []fleetv1beta1.ManifestCondition, observedGeneration int64) metav1.Condition {
+func generateWorkAppliedCondition(manifestConditions []workv1alpha1.ManifestCondition, observedGeneration int64) metav1.Condition {
 	for _, manifestCond := range manifestConditions {
 		if meta.IsStatusConditionFalse(manifestCond.Conditions, ConditionTypeApplied) {
 			return metav1.Condition{

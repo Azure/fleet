@@ -25,7 +25,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
+	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -172,7 +172,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 			return false, fmt.Errorf("failed to get the work obj %s from namespace %s: %w", workName, memberClusterNsName, err)
 		}
 		// check the overall condition
-		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workapi.ConditionTypeApplied)
+		appliedCond := meta.FindStatusCondition(work.Status.Conditions, workv1alpha1controller.ConditionTypeApplied)
 		if appliedCond == nil {
 			hasPending = true
 			klog.V(2).InfoS("the work is never picked up by the member cluster",
@@ -199,7 +199,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 				Name:      manifestCondition.Identifier.Name,
 				Namespace: manifestCondition.Identifier.Namespace,
 			}
-			appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workapi.ConditionTypeApplied)
+			appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, workv1alpha1controller.ConditionTypeApplied)
 			// collect if there is an explicit fail
 			if appliedCond != nil && appliedCond.Status != metav1.ConditionTrue {
 				klog.V(2).InfoS("find a failed to apply manifest", "member cluster namespace", memberClusterNsName,

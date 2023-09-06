@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package work
+package workv1alpha1
 
 import (
 	"context"
@@ -27,29 +27,29 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	workapi "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 // generateDiff check the difference between what is supposed to be applied  (tracked by the work CR status)
 // and what was applied in the member cluster (tracked by the appliedWork CR).
 // What is in the `appliedWork` but not in the `work` should be deleted from the member cluster
 // What is in the `work` but not in the `appliedWork` should be added to the appliedWork status
-func (r *ApplyWorkReconciler) generateDiff(ctx context.Context, work *fleetv1beta1.Work, appliedWork *fleetv1beta1.AppliedWork) ([]fleetv1beta1.AppliedResourceMeta, []fleetv1beta1.AppliedResourceMeta, error) {
-	var staleRes, newRes []fleetv1beta1.AppliedResourceMeta
+func (r *ApplyWorkReconciler) generateDiff(ctx context.Context, work *workapi.Work, appliedWork *workapi.AppliedWork) ([]workapi.AppliedResourceMeta, []workapi.AppliedResourceMeta, error) {
+	var staleRes, newRes []workapi.AppliedResourceMeta
 	// for every resource applied in cluster, check if it's still in the work's manifest condition
 	// we keep the applied resource in the appliedWork status even if it is not applied successfully
 	// to make sure that it is safe to delete the resource from the member cluster.
 	for _, resourceMeta := range appliedWork.Status.AppliedResources {
 		resStillExist := false
 		for _, manifestCond := range work.Status.ManifestConditions {
-			if isSameResourceIdentifier(resourceMeta.WorkResourceIdentifier, manifestCond.Identifier) {
+			if isSameResourceIdentifier(resourceMeta.ResourceIdentifier, manifestCond.Identifier) {
 				resStillExist = true
 				break
 			}
 		}
 		if !resStillExist {
 			klog.V(2).InfoS("find an orphaned resource in the member cluster",
-				"parent resource", work.GetName(), "orphaned resource", resourceMeta.WorkResourceIdentifier)
+				"parent resource", work.GetName(), "orphaned resource", resourceMeta.ResourceIdentifier)
 			staleRes = append(staleRes, resourceMeta)
 		}
 	}
@@ -67,11 +67,11 @@ func (r *ApplyWorkReconciler) generateDiff(ctx context.Context, work *fleetv1bet
 			// we update the identifier
 			// TODO: this UID may not be the current one if the resource is deleted and recreated
 			for _, resourceMeta := range appliedWork.Status.AppliedResources {
-				if isSameResourceIdentifier(resourceMeta.WorkResourceIdentifier, manifestCond.Identifier) {
+				if isSameResourceIdentifier(resourceMeta.ResourceIdentifier, manifestCond.Identifier) {
 					resRecorded = true
-					newRes = append(newRes, fleetv1beta1.AppliedResourceMeta{
-						WorkResourceIdentifier: manifestCond.Identifier,
-						UID:                    resourceMeta.UID,
+					newRes = append(newRes, workapi.AppliedResourceMeta{
+						ResourceIdentifier: manifestCond.Identifier,
+						UID:                resourceMeta.UID,
 					})
 					break
 				}
@@ -92,9 +92,9 @@ func (r *ApplyWorkReconciler) generateDiff(ctx context.Context, work *fleetv1bet
 					klog.ErrorS(err, "failed to retrieve the manifest", "parent Work", work.GetName(), "manifest", manifestCond.Identifier)
 					return nil, nil, err
 				}
-				newRes = append(newRes, fleetv1beta1.AppliedResourceMeta{
-					WorkResourceIdentifier: manifestCond.Identifier,
-					UID:                    obj.GetUID(),
+				newRes = append(newRes, workapi.AppliedResourceMeta{
+					ResourceIdentifier: manifestCond.Identifier,
+					UID:                obj.GetUID(),
 				})
 			}
 		}
@@ -102,7 +102,7 @@ func (r *ApplyWorkReconciler) generateDiff(ctx context.Context, work *fleetv1bet
 	return newRes, staleRes, nil
 }
 
-func (r *ApplyWorkReconciler) deleteStaleManifest(ctx context.Context, staleManifests []fleetv1beta1.AppliedResourceMeta, owner metav1.OwnerReference) error {
+func (r *ApplyWorkReconciler) deleteStaleManifest(ctx context.Context, staleManifests []workapi.AppliedResourceMeta, owner metav1.OwnerReference) error {
 	var errs []error
 
 	for _, staleManifest := range staleManifests {
@@ -159,7 +159,7 @@ func (r *ApplyWorkReconciler) deleteStaleManifest(ctx context.Context, staleMani
 }
 
 // isSameResourceIdentifier returns true if a and b identifies the same object.
-func isSameResourceIdentifier(a, b fleetv1beta1.WorkResourceIdentifier) bool {
+func isSameResourceIdentifier(a, b workapi.ResourceIdentifier) bool {
 	// compare GVKNN but ignore the Ordinal and Resource
 	return a.Group == b.Group && a.Version == b.Version && a.Kind == b.Kind && a.Namespace == b.Namespace && a.Name == b.Name
 }
