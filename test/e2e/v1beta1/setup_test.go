@@ -121,7 +121,7 @@ var _ = BeforeSuite(func() {
 	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	// Check if the required environment variable, which specifies the path to kubeconfig file, has been set.
-	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable is not set")
+	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable KUBECONFIG is not set")
 
 	// Initialize the cluster objects and their clients.
 	hubCluster = framework.NewCluster(hubClusterName, scheme)
@@ -152,8 +152,6 @@ var _ = BeforeSuite(func() {
 
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
-
-	createWorkResources()
 })
 
 var _ = AfterSuite(func() {

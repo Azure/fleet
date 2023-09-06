@@ -6,6 +6,9 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	"fmt"
+
+	. "github.com/onsi/ginkgo/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -13,9 +16,9 @@ import (
 )
 
 const (
-	workNamespaceName = "work"
-	appConfigMapName  = "app-config"
-	crpName           = "test-crp"
+	workNamespaceNameTemplate = "work-%d"
+	appConfigMapNameTemplate  = "app-config-%d"
+	crpNameTemplate           = "crp-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 )
@@ -26,7 +29,7 @@ var (
 			Group:   "",
 			Kind:    "Namespace",
 			Version: "v1",
-			Name:    "work",
+			Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
 		},
 	}
 )
@@ -34,7 +37,7 @@ var (
 func workNamespace() corev1.Namespace {
 	return corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: workNamespaceName,
+			Name: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
 		},
 	}
 }
@@ -42,8 +45,8 @@ func workNamespace() corev1.Namespace {
 func appConfigMap() corev1.ConfigMap {
 	return corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      appConfigMapName,
-			Namespace: workNamespaceName,
+			Name:      fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
+			Namespace: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
 		},
 		Data: map[string]string{
 			"data": "test",

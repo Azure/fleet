@@ -86,13 +86,20 @@ func checkIfAllMemberClustersHaveJoined() {
 
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources() {
-	hubClient := hubCluster.KubeClient
-
 	ns := workNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace")
 
 	deploy := appConfigMap()
 	Expect(hubClient.Create(ctx, &deploy)).To(Succeed(), "Failed to create deployment")
+}
+
+// deleteWorkResources deletes the resources created by createWorkResources.
+func deleteWorkResources() {
+	ns := workNamespace()
+	Expect(hubClient.Delete(ctx, &ns)).To(Succeed(), "Failed to delete namespace")
+
+	deploy := appConfigMap()
+	Expect(hubClient.Delete(ctx, &deploy)).To(Succeed(), "Failed to delete deployment")
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.

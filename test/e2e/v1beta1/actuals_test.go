@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	. "github.com/onsi/ginkgo/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +22,9 @@ import (
 
 func workNamespaceAndDeploymentPlacedOnClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
+
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 
 	return func() error {
 		ns := &corev1.Namespace{}
@@ -69,6 +73,10 @@ func workNamespaceAndDeploymentPlacedOnClusterActual(cluster *framework.Cluster)
 }
 
 func crpStatusUpdatedActual() func() error {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -198,6 +206,9 @@ func crpStatusUpdatedActual() func() error {
 func workNamespaceAndDeploymentRemovedFromClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
 
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+
 	return func() error {
 		if err := client.Get(ctx, types.NamespacedName{Name: workNamespaceName}, &corev1.Namespace{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("work namespace still exists or an unexpected error occurred: %w", err)
@@ -212,6 +223,8 @@ func workNamespaceAndDeploymentRemovedFromClusterActual(cluster *framework.Clust
 }
 
 func allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual() func() error {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -229,6 +242,8 @@ func allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual() func() er
 }
 
 func crpRemovedActual() func() error {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
 	return func() error {
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &placementv1beta1.ClusterResourcePlacement{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("CRP still exists or an unexpected error occurred: %w", err)

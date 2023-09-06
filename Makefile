@@ -137,7 +137,7 @@ integration-test: $(ENVTEST) ## Run tests.
 
 ## e2e tests
 
-# Note that these targets are only used for E2E tests of the v1beta1 API.
+# Note that these targets are only used for E2E tests of the v1alpha1 API.
 
 install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
@@ -287,7 +287,7 @@ clean-bin: ## Remove all generated binaries
 	rm -rf $(TOOLS_BIN_DIR)
 	rm -rf ./bin
 
-# Note that these targets are only used for E2E tests of the v1beta1 API.
+# Note that these targets are only used for E2E tests of the v1alpha1 API.
 
 .PHONY: uninstall-helm
 uninstall-helm: clean-testing-resources
