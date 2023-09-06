@@ -151,3 +151,7 @@ type WorkList struct {
 	// +listType=set
 	Items []Work `json:"items"`
 }
+
+func init() {
+	SchemeBuilder.Register(&Work{}, &WorkList{})
+}
