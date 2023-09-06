@@ -8,12 +8,10 @@ package e2e
 import (
 	"errors"
 	"fmt"
-	"go.goms.io/fleet/pkg/utils"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	testutils "go.goms.io/fleet/test/e2e/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -24,6 +22,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
+
+	"go.goms.io/fleet/pkg/utils"
+	testutils "go.goms.io/fleet/test/e2e/utils"
 )
 
 const (
@@ -40,7 +41,7 @@ const (
 	testJob         = "test-job"
 )
 
-var _ = Describe("Fleet's Namespaced Resource Handler webhook tests", func() {
+var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", func() {
 	Context("fleet guard rail e2e for role", func() {
 		BeforeEach(func() {
 			rName := testRole + fmt.Sprint(GinkgoParallelProcess())
