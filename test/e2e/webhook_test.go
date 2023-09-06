@@ -578,10 +578,11 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
+	var mcName string
 	BeforeEach(func() {
 		// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
 		// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
-		mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
+		mcName = testMemberCluster + "-" + utils.RandStr()
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 		mc := &fleetv1alpha1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -612,7 +613,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 	AfterEach(func() {
-		mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 		mc := &fleetv1alpha1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -632,10 +632,9 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 	})
 	Context("fleet guard rail tests for MC, IMC", func() {
 		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
-			mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 			mc := &fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName + utils.RandStr(),
+					Name: testMemberCluster + utils.RandStr(),
 				},
 				Spec: fleetv1alpha1.MemberClusterSpec{
 					Identity: rbacv1.Subject{
@@ -658,7 +657,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should deny UPDATE operation on member cluster CR for user not in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var mc fleetv1alpha1.MemberCluster
-				mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 
 				By("update member cluster spec")
@@ -677,7 +675,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		})
 
 		It("should deny DELETE operation on member cluster CR for user not in system:masters group", func() {
-			mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 			mc := fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: mcName,
@@ -693,7 +690,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 
 		It("should allow update operation on member cluster CR labels for any user", func() {
 			var mc fleetv1alpha1.MemberCluster
-			mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 			By("update labels in member cluster, expecting successful UPDATE of member cluster")
 			Eventually(func(g Gomega) error {
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
@@ -702,20 +698,10 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 				mc.SetLabels(labels)
 				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			By("remove new label added for test, expecting successful UPDATE of member cluster")
-			Eventually(func(g Gomega) error {
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
-				labels := mc.GetLabels()
-				delete(labels, testKey)
-				mc.SetLabels(labels)
-				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
 		It("should allow update operation on member cluster CR annotations for any user", func() {
 			var mc fleetv1alpha1.MemberCluster
-			mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 			By("update annotations in member cluster, expecting successful UPDATE of member cluster")
 			Eventually(func(g Gomega) error {
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
@@ -724,52 +710,25 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 				mc.SetLabels(annotations)
 				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			By("remove new annotation added for test, expecting successful UPDATE of member cluster")
-			Eventually(func(g Gomega) error {
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
-				annotations := mc.GetLabels()
-				delete(annotations, testKey)
-				mc.SetLabels(annotations)
-				return HubCluster.ImpersonateKubeClient.Update(ctx, &mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
 		It("should allow update operation on member cluster CR spec for user in system:masters group", func() {
 			var mc fleetv1alpha1.MemberCluster
-			mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 			By("update spec of member cluster, expecting successful UPDATE of member cluster")
 			Eventually(func(g Gomega) error {
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 				mc.Spec.HeartbeatPeriodSeconds = 31
 				return HubCluster.KubeClient.Update(ctx, &mc)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			By("revert spec change made for test, expecting successful UPDATE of member cluster")
-			Eventually(func(g Gomega) error {
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
-				mc.Spec.HeartbeatPeriodSeconds = 30
-				return HubCluster.KubeClient.Update(ctx, &mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
 		It("should allow update operation on member cluster CR status for user in system:masters group", func() {
 			var mc fleetv1alpha1.MemberCluster
-			mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-			var reason string
 			By("update status of member cluster, expecting successful UPDATE of member cluster")
 			Eventually(func(g Gomega) error {
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 				g.Expect(mc.Status.Conditions).ToNot(BeEmpty())
-				reason = mc.Status.Conditions[0].Reason
 				mc.Status.Conditions[0].Reason = "update"
-				return HubCluster.KubeClient.Status().Update(ctx, &mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			By("revert spec change made for test, expecting successful UPDATE of member cluster")
-			Eventually(func(g Gomega) error {
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testMemberCluster + fmt.Sprint(GinkgoParallelProcess())}, &mc)).Should(Succeed())
-				mc.Status.Conditions[0].Reason = reason
 				return HubCluster.KubeClient.Status().Update(ctx, &mc)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
@@ -777,7 +736,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should deny member cluster CR status update for user not in system:master group or a whitelisted user", func() {
 			Eventually(func(g Gomega) error {
 				var mc fleetv1alpha1.MemberCluster
-				mcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
 				By("update status of member cluster")
 				g.Expect(mc.Status.Conditions).ToNot(BeEmpty())
@@ -795,11 +753,10 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		})
 
 		It("should deny CREATE operation on internal member cluster CR for user not in system:masters group", func() {
-			imcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, imcName)
+			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 			imc := fleetv1alpha1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      imcName,
+					Name:      mcName,
 					Namespace: imcNamespace,
 				},
 				Spec: fleetv1alpha1.InternalMemberClusterSpec{
@@ -817,10 +774,9 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 
 		It("should deny UPDATE operation on internal member cluster CR for user not in system:masters group", func() {
 			Eventually(func(g Gomega) error {
-				imcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, imcName)
+				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 				var imc fleetv1alpha1.InternalMemberCluster
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Spec.HeartbeatPeriodSeconds = 25
 
 				By("expecting denial of operation UPDATE of Internal Member Cluster")
@@ -837,9 +793,8 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 
 		It("should deny DELETE operation on internal member cluster CR for user not in system:masters group", func() {
 			var imc fleetv1alpha1.InternalMemberCluster
-			imcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, imcName)
-			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
+			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 
 			By("expecting denial of operation UPDATE of Internal Member Cluster")
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &imc)
@@ -851,9 +806,8 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should deny UPDATE operation on internal member cluster CR status for user in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
-				imcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, imcName)
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
+				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Status = fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
 						Capacity: map[corev1.ResourceName]resource.Quantity{
@@ -879,9 +833,8 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should allow UPDATE operation on internal member cluster CR spec for user in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
-				imcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, imcName)
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
+				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Spec.HeartbeatPeriodSeconds = 25
 
 				By("expecting successful UPDATE of Internal Member Cluster Spec")
@@ -892,9 +845,8 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should allow UPDATE operation on internal member cluster CR status for user in mc identity", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
-				imcName := testMemberCluster + fmt.Sprint(GinkgoParallelProcess())
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, imcName)
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
+				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Status = fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
 						Capacity: map[corev1.ResourceName]resource.Quantity{
