@@ -71,6 +71,8 @@ const (
 )
 
 var (
+	// Note that the hubTestEnv variable is only available in the first Ginkgo process, when
+	// the suite is running in parallel; in other processes, the variable remains nil.
 	hubTestEnv *envtest.Environment
 	hubClient  client.Client
 	ctx        context.Context
@@ -254,13 +256,12 @@ func setupResources() {
 	Expect(hubClient.Delete(ctx, memberCluster)).To(Succeed(), "Failed to delete member cluster")
 }
 
-var _ = BeforeSuite(func() {
+func beforeSuiteForProcess1() []byte {
 	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	By("bootstrapping the test environment")
-
 	// Start the hub cluster.
 	hubTestEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
@@ -365,12 +366,38 @@ var _ = BeforeSuite(func() {
 	go func() {
 		scheduler.Run(ctx)
 	}()
-})
 
-var _ = AfterSuite(func() {
-	defer klog.Flush()
-	cancel()
+	// Pass the hub config to other processes.
+	return buildK8sAPIConfigFrom(hubCfg)
+}
 
+func beforeSuiteForAllProcesses(hubCfgBytes []byte) {
+	if ctx == nil {
+		// Set the context only if it has not been set yet, i.e., the code runs in
+		// Ginkgo processes other than the first one; otherwise the context set
+		// before would be overwritten and cannot get cancelled at the end of the suite.
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+
+	hubCfg := loadRestConfigFrom(hubCfgBytes)
+
+	// Set up a client for the hub cluster.
+	var err error
+	hubClient, err = client.New(hubCfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).ToNot(HaveOccurred(), "Failed to create hub cluster client")
+	Expect(hubClient).ToNot(BeNil(), "Hub cluster client is nil")
+}
+
+var _ = SynchronizedBeforeSuite(beforeSuiteForProcess1, beforeSuiteForAllProcesses)
+
+func afterSuiteForProcess1() {
 	By("tearing down the test environment")
 	Expect(hubTestEnv.Stop()).Should(Succeed(), "Failed to stop test environment")
-})
+}
+
+func afterSuiteForAllProcesses() {
+	defer klog.Flush()
+	cancel()
+}
+
+var _ = SynchronizedAfterSuite(afterSuiteForAllProcesses, afterSuiteForProcess1)

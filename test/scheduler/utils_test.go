@@ -15,6 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -22,13 +25,9 @@ import (
 // This file features some utilities used in the test suites.
 
 const (
-	crpName1 = "crp-1"
+	crpNameTemplate = "crp-%d"
 
-	policySnapshotName1 = "policy-snapshot-1"
-	policySnapshotName2 = "policy-snapshot-2"
-	policySnapshotName3 = "policy-snapshot-3"
-	policySnapshotName4 = "policy-snapshot-4"
-	policySnapshotName5 = "policy-snapshot-5"
+	policySnapshotNameTemplate = "%s-policy-snapshot-%d"
 
 	policyHash = "policy-hash"
 
@@ -63,6 +62,53 @@ var (
 	ignoreConditionTimeReasonAndMessageFields = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Reason", "Message")
 )
 
+func buildK8sAPIConfigFrom(restCfg *rest.Config) []byte {
+	clusterName := "default-cluster"
+	contextName := "default-context"
+	userName := "admin"
+
+	clusters := make(map[string]*clientcmdapi.Cluster)
+	clusters[clusterName] = &clientcmdapi.Cluster{
+		Server:                   restCfg.Host,
+		CertificateAuthorityData: restCfg.CAData,
+	}
+
+	contexts := make(map[string]*clientcmdapi.Context)
+	contexts[contextName] = &clientcmdapi.Context{
+		Cluster:  clusterName,
+		AuthInfo: userName,
+	}
+
+	authInfos := make(map[string]*clientcmdapi.AuthInfo)
+	authInfos[userName] = &clientcmdapi.AuthInfo{
+		ClientCertificateData: restCfg.CertData,
+		ClientKeyData:         restCfg.KeyData,
+	}
+
+	apiCfg := &clientcmdapi.Config{
+		Kind:           "Config",
+		APIVersion:     "v1",
+		Clusters:       clusters,
+		Contexts:       contexts,
+		CurrentContext: contextName,
+		AuthInfos:      authInfos,
+	}
+
+	apiCfgBytes, err := clientcmd.Write(*apiCfg)
+	Expect(err).To(BeNil(), "Failed to write API config")
+	return apiCfgBytes
+}
+
+func loadRestConfigFrom(apiCfgBytes []byte) *rest.Config {
+	apiCfg, err := clientcmd.Load(apiCfgBytes)
+	Expect(err).To(BeNil(), "Failed to load API config")
+
+	restCfg, err := clientcmd.NewDefaultClientConfig(*apiCfg, &clientcmd.ConfigOverrides{}).ClientConfig()
+	Expect(err).To(BeNil(), "Failed to load REST config")
+
+	return restCfg
+}
+
 func updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName string, targetClusters []string, oldPolicySnapshotName, newPolicySnapshotName string) {
 	// Update the CRP.
 	crp := &fleetv1beta1.ClusterResourcePlacement{}
@@ -87,7 +133,7 @@ func updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName string
 			Name: newPolicySnapshotName,
 			Labels: map[string]string{
 				fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-				fleetv1beta1.CRPTrackingLabel:      crpName1,
+				fleetv1beta1.CRPTrackingLabel:      crpName,
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
@@ -155,7 +201,7 @@ func ensureCRPDeletion(crpName string) {
 
 	// Ensure that the CRP is deleted.
 	Eventually(func() error {
-		err := hubClient.Get(ctx, types.NamespacedName{Name: crpName1}, &fleetv1beta1.ClusterResourcePlacement{})
+		err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &fleetv1beta1.ClusterResourcePlacement{})
 		if errors.IsNotFound(err) {
 			return nil
 		}

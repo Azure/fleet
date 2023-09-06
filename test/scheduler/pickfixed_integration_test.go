@@ -9,6 +9,7 @@ package tests
 // workflow.
 
 import (
+	"fmt"
 	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -20,13 +21,18 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Ordered, func() {
+var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
 	Context("create a CRP with some valid target clusters", func() {
 		targetClusters := []string{
 			memberCluster1,
 			memberCluster4,
 			memberCluster6,
 		}
+
+		policySnapshotIdx := 1
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx)
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
@@ -40,7 +46,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			// Create the CRP.
 			crp := &fleetv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName1,
+					Name: crpName,
 				},
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: defaultResourceSelectors,
@@ -54,10 +60,10 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			// Create the associated policy snapshot.
 			policySnapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: policySnapshotName1,
+					Name: policySnapshotName,
 					Labels: map[string]string{
 						fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-						fleetv1beta1.CRPTrackingLabel:      crpName1,
+						fleetv1beta1.CRPTrackingLabel:      crpName,
 					},
 					Annotations: map[string]string{
 						fleetv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
@@ -72,18 +78,18 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
-			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName1)
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
 			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
 		})
 
 		It("should create scheduled bindings for valid target clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedForClustersActual(targetClusters, nilScoreByCluster, crpName1, policySnapshotName1)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedForClustersActual(targetClusters, nilScoreByCluster, crpName, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
 		})
 
 		It("should report status correctly", func() {
-			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(targetClusters, []string{}, policySnapshotName1)
+			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(targetClusters, []string{}, policySnapshotName)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report correct policy snapshot status")
 			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report correct policy snapshot status")
 		})
@@ -108,6 +114,10 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			memberCluster5,
 		}
 
+		policySnapshotIdx := 2
+		oldPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx-1)
+		newPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx)
+
 		BeforeAll(func() {
 			// Mark all previously created bindings as bound.
 			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
@@ -121,23 +131,23 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			}
 
 			// Update the CRP with new target clusters and refresh scheduling policy snapshots.
-			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName1, targetClusters, policySnapshotName1, policySnapshotName2)
+			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters, oldPolicySnapshotName, newPolicySnapshotName)
 		})
 
 		It("should create scheduled bindings for newly added valid target clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName1, policySnapshotName2)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
 		})
 
 		It("should update bound bindings for previously added valid target clusters", func() {
-			boundBindingsUpdatedActual := boundBindingsUpdatedForClustersActual(boundClusters, nilScoreByCluster, crpName1, policySnapshotName2)
+			boundBindingsUpdatedActual := boundBindingsUpdatedForClustersActual(boundClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(boundBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(boundBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})
 
 		It("should report status correctly", func() {
-			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(targetClusters, []string{}, policySnapshotName2)
+			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(targetClusters, []string{}, newPolicySnapshotName)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 		})
@@ -178,19 +188,23 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			memberCluster10,
 		}
 
+		policySnapshotIdx := 3
+		oldPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx-1)
+		newPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx)
+
 		BeforeAll(func() {
 			// Update the CRP with new target clusters and refresh scheduling policy snapshots.
-			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName1, targetClusters, policySnapshotName2, policySnapshotName3)
+			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters, oldPolicySnapshotName, newPolicySnapshotName)
 		})
 
 		It("should update bound bindings for previously added valid target clusters", func() {
-			boundBindingsUpdatedActual := boundBindingsUpdatedForClustersActual(boundClusters, nilScoreByCluster, crpName1, policySnapshotName3)
+			boundBindingsUpdatedActual := boundBindingsUpdatedForClustersActual(boundClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(boundBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(boundBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})
 
 		It("should update scheduled bindings for previously added valid target clusters", func() {
-			scheduledBindingsUpdatedActual := scheduledBindingsUpdatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName1, policySnapshotName3)
+			scheduledBindingsUpdatedActual := scheduledBindingsUpdatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(scheduledBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(scheduledBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})
@@ -202,7 +216,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 		})
 
 		It("should report status correctly", func() {
-			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(validClusters, invalidClusters, policySnapshotName3)
+			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(validClusters, invalidClusters, newPolicySnapshotName)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 		})
@@ -240,25 +254,29 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			memberCluster4,
 		}
 
+		policySnapshotIdx := 4
+		oldPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx-1)
+		newPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx)
+
 		BeforeAll(func() {
 			// Update the CRP with new target clusters and refresh scheduling policy snapshots.
-			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName1, targetClusters, policySnapshotName3, policySnapshotName4)
+			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters, oldPolicySnapshotName, newPolicySnapshotName)
 		})
 
 		It("should update bound bindings for previously added valid target clusters", func() {
-			boundBindingsUpdatedActual := boundBindingsUpdatedForClustersActual(boundClusters, nilScoreByCluster, crpName1, policySnapshotName4)
+			boundBindingsUpdatedActual := boundBindingsUpdatedForClustersActual(boundClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(boundBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(boundBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})
 
 		It("should update scheduled bindings for previously added valid target clusters", func() {
-			scheduledBindingsUpdatedActual := scheduledBindingsUpdatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName1, policySnapshotName4)
+			scheduledBindingsUpdatedActual := scheduledBindingsUpdatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(scheduledBindingsUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 			Consistently(scheduledBindingsUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update the expected set of bindings")
 		})
 
 		It("should mark bindings as unscheduled for removed valid target clusters", func() {
-			unscheduledBindingsCreatedActual := unscheduledBindingsCreatedForClustersActual(unscheduledClusters, nilScoreByCluster, crpName1, policySnapshotName3)
+			unscheduledBindingsCreatedActual := unscheduledBindingsCreatedForClustersActual(unscheduledClusters, nilScoreByCluster, crpName, oldPolicySnapshotName)
 			Eventually(unscheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark bindings as unscheduled")
 			Consistently(unscheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to mark bindings as unscheduled")
 		})
@@ -270,7 +288,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 		})
 
 		It("should report status correctly", func() {
-			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(validClusters, invalidClusters, policySnapshotName4)
+			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(validClusters, invalidClusters, newPolicySnapshotName)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 		})
@@ -301,31 +319,35 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 			memberCluster6,
 		}
 
+		policySnapshotIdx := 5
+		oldPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx-1)
+		newPolicySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, policySnapshotIdx)
+
 		BeforeAll(func() {
 			// Update the CRP with new target clusters and refresh scheduling policy snapshots.
-			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName1, targetClusters, policySnapshotName4, policySnapshotName5)
+			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters, oldPolicySnapshotName, newPolicySnapshotName)
 		})
 
 		It("should create scheduled bindings for newly added valid target clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName1, policySnapshotName5)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedForClustersActual(scheduledClusters, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
 		})
 
 		It("should not have any bound bindings", func() {
-			noBoundBindingsActual := boundBindingsUpdatedForClustersActual([]string{}, nilScoreByCluster, crpName1, policySnapshotName5)
+			noBoundBindingsActual := boundBindingsUpdatedForClustersActual([]string{}, nilScoreByCluster, crpName, newPolicySnapshotName)
 			Eventually(noBoundBindingsActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Unexpected bound bindings are present")
 			Consistently(noBoundBindingsActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Unexpected bound bindings are present")
 		})
 
 		It("should mark bindings as unscheduled for removed valid target clusters", func() {
-			unscheduledBindingsCreatedActual := unscheduledBindingsCreatedForClustersActual(unscheduledClusters, nilScoreByCluster, crpName1, policySnapshotName4)
+			unscheduledBindingsCreatedActual := unscheduledBindingsCreatedForClustersActual(unscheduledClusters, nilScoreByCluster, crpName, oldPolicySnapshotName)
 			Eventually(unscheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark bindings as unscheduled")
 			Consistently(unscheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to mark bindings as unscheduled")
 		})
 
 		It("should report status correctly", func() {
-			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(validClusters, []string{}, policySnapshotName5)
+			statusUpdatedActual := pickFixedPolicySnapshotStatusUpdatedActual(validClusters, []string{}, newPolicySnapshotName)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update policy snapshot status")
 		})
@@ -337,7 +359,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 		BeforeAll(func() {
 			// Retrieve the CRP.
 			crp := &fleetv1beta1.ClusterResourcePlacement{}
-			Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName1}, crp)).To(Succeed(), "Failed to get CRP")
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
 
 			// Ensure that the CRP has the scheduler cleanup finalizer.
 			Expect(controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer)).To(BeTrue(), "CRP does not have the scheduler cleanup finalizer")
@@ -357,13 +379,13 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Serial, Orde
 		})
 
 		It("should remove the scheduler cleanup finalizer from the CRP", func() {
-			finalizerRemovedActual := crpSchedulerFinalizerRemovedActual(crpName1)
+			finalizerRemovedActual := crpSchedulerFinalizerRemovedActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove scheduler cleanup finalizer from CRP")
 		})
 
 		AfterAll(func() {
 			// Delete the CRP.
-			ensureCRPDeletion(crpName1)
+			ensureCRPDeletion(crpName)
 
 			// Remove all policy snapshots.
 			clearPolicySnapshots()

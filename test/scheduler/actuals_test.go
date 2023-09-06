@@ -128,7 +128,7 @@ func scheduledBindingsCreatedForClustersActual(clusters []string, scoreByCluster
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.Items {
-			wantPrefix := fmt.Sprintf("%s-%s", crpName1, binding.Spec.TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", crpName, binding.Spec.TargetCluster)
 			if !strings.HasPrefix(binding.Name, wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.Name, wantPrefix)
 			}
@@ -190,7 +190,7 @@ func boundBindingsUpdatedForClustersActual(clusters []string, scoreByCluster map
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.Items {
-			wantPrefix := fmt.Sprintf("%s-%s", crpName1, binding.Spec.TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", crpName, binding.Spec.TargetCluster)
 			if !strings.HasPrefix(binding.Name, wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.Name, wantPrefix)
 			}
@@ -252,7 +252,7 @@ func scheduledBindingsUpdatedForClustersActual(clusters []string, scoreByCluster
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.Items {
-			wantPrefix := fmt.Sprintf("%s-%s", crpName1, binding.Spec.TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", crpName, binding.Spec.TargetCluster)
 			if !strings.HasPrefix(binding.Name, wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.Name, wantPrefix)
 			}
@@ -314,7 +314,7 @@ func unscheduledBindingsCreatedForClustersActual(clusters []string, scoreByClust
 
 		// Verify that binding names are formatted correctly.
 		for _, binding := range bindingList.Items {
-			wantPrefix := fmt.Sprintf("%s-%s", crpName1, binding.Spec.TargetCluster)
+			wantPrefix := fmt.Sprintf("%s-%s", crpName, binding.Spec.TargetCluster)
 			if !strings.HasPrefix(binding.Name, wantPrefix) {
 				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.Name, wantPrefix)
 			}
