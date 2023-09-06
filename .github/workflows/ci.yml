@@ -89,6 +89,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
+      
+      - name: Install Ginkgo CLI
+        run: |
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.9.5
 
       - name: Run e2e tests
         run: |

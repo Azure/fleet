@@ -117,7 +117,7 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "Fleet E2E Test Suite (with v1beta1 APIs)")
 }
 
-var _ = BeforeSuite(func() {
+func beforeSuiteForAllProcesses() {
 	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	// Check if the required environment variable, which specifies the path to kubeconfig file, has been set.
@@ -149,12 +149,18 @@ var _ = BeforeSuite(func() {
 	Expect(memberCluster3Client).NotTo(BeNil(), "Failed to initialize client for accessing kubernetes cluster")
 
 	allMemberClusters = []*framework.Cluster{memberCluster1, memberCluster2, memberCluster3}
+}
+
+func beforeSuiteForProcess1() {
+	beforeSuiteForAllProcesses()
 
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
-})
+}
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedBeforeSuite(beforeSuiteForProcess1, beforeSuiteForAllProcesses)
+
+var _ = SynchronizedAfterSuite(func() {}, func() {
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
 })

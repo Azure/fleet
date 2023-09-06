@@ -17,6 +17,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+// Note that this container will run in parallel with other containers.
 var _ = Describe("placing resources using a CRP with no placement policy specified", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
