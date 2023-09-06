@@ -191,6 +191,10 @@ install-helm:  load-hub-docker-image load-member-docker-image install-member-age
 .PHONY: e2e-tests
 e2e-tests: create-kind-cluster run-e2e
 
+.PHONY: e2e-tests-v1beta1
+e2e-tests-v1beta1:
+	cd ./test/e2e/v1beta1 && chmod +x ./setup.sh && ./setup.sh && ginkgo -v -p .
+
 ## reviewable
 .PHONY: reviewable
 reviewable: fmt vet lint staticcheck
@@ -310,3 +314,7 @@ clean-testing-resources:
 clean-e2e-tests: ## Remove
 	kind delete cluster --name $(HUB_KIND_CLUSTER_NAME)
 	kind delete cluster --name $(MEMBER_KIND_CLUSTER_NAME)
+
+.PHONY: clean-e2e-tests-v1beta1
+clean-e2e-tests-v1beta1:
+	cd ./test/e2e/v1beta1 && chmod +x ./stop.sh && ./stop.sh

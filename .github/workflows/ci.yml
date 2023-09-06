@@ -96,6 +96,6 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          cd ./test/e2e/v1beta1 && chmod +x ./setup.sh && ./setup.sh && ginkgo . -v -p
+          make e2e-tests-v1beta1
         env:
           KUBECONFIG: '/home/runner/.kube/config'
