@@ -96,4 +96,4 @@ jobs:
 
       - name: Run scheduler integration tests
         run: |
-          make scheduler-integration-tests
+          make scheduler-integration-test
