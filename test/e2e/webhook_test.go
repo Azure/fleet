@@ -872,7 +872,10 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 
 var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 	Context("fleet guard rail for work resource, no need to get MC", func() {
+		var workName, testMemberClusterNamespace string
 		BeforeEach(func() {
+			workName = testWork + "-" + utils.RandStr()
+			testMemberClusterNamespace = "fleet-member-test-mc"
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   testMemberClusterNamespace,
@@ -901,7 +904,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			Expect(err).Should(Succeed())
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testWork,
+					Name:      workName,
 					Namespace: testMemberClusterNamespace,
 				},
 				Spec: workv1alpha1.WorkSpec{
@@ -922,7 +925,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		AfterEach(func() {
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testWork,
+					Name:      workName,
 					Namespace: testMemberClusterNamespace,
 				},
 			}
@@ -960,7 +963,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			Expect(err).Should(Succeed())
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testWork,
+					Name:      testWork + "-" + utils.RandStr(),
 					Namespace: testMemberClusterNamespace,
 				},
 				Spec: workv1alpha1.WorkSpec{
@@ -985,7 +988,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		It("should deny UPDATE operation on work CR for user not in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testWork, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
 				w.SetLabels(map[string]string{"test-key": "test-value"})
 				By("expecting denial of operation UPDATE of work")
 				err := HubCluster.ImpersonateKubeClient.Update(ctx, &w)
@@ -1001,7 +1004,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 
 		It("should deny DELETE work operation for user not in system:masters group", func() {
 			var w workv1alpha1.Work
-			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testWork, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
 			By("expecting denial of operation DELETE of work")
 			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &w)
 			var statusErr *k8sErrors.StatusError
@@ -1011,10 +1014,14 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 	})
 
 	Context("fleet guard rail for work resource, need to retrieve MC", func() {
+		var mcName, workName, testMemberClusterNamespace string
 		BeforeEach(func() {
+			mcName = testMemberCluster + utils.RandStr()
+			workName = testWork + utils.RandStr()
+			testMemberClusterNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 			mc := &fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: testMemberCluster,
+					Name: mcName,
 				},
 				Spec: fleetv1alpha1.MemberClusterSpec{
 					Identity: rbacv1.Subject{
@@ -1032,7 +1039,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 
 			imc := &fleetv1alpha1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testMemberCluster,
+					Name:      mcName,
 					Namespace: testMemberClusterNamespace,
 				},
 			}
@@ -1061,7 +1068,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			Expect(err).Should(Succeed())
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testWork,
+					Name:      workName,
 					Namespace: testMemberClusterNamespace,
 				},
 				Spec: workv1alpha1.WorkSpec{
@@ -1082,7 +1089,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		AfterEach(func() {
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testWork,
+					Name:      workName,
 					Namespace: testMemberClusterNamespace,
 				},
 			}
@@ -1093,13 +1100,13 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 
 			mc := &fleetv1alpha1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: testMemberCluster,
+					Name: mcName,
 				},
 			}
 			Expect(HubCluster.KubeClient.Delete(ctx, mc))
 			imc := &fleetv1alpha1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testMemberCluster,
+					Name:      mcName,
 					Namespace: testMemberClusterNamespace,
 				},
 			}
@@ -1111,7 +1118,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		It("should allow UPDATE operation on work CR spec for user in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testWork, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
 				w.Spec.Workload.Manifests = []workv1alpha1.Manifest{}
 
 				By("expecting successful UPDATE of Internal Member Cluster Spec")
@@ -1122,7 +1129,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		It("should allow UPDATE operation on work CR status for user in mc identity", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testWork, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
 				w.Status = workv1alpha1.WorkStatus{
 					Conditions: []metav1.Condition{
 						{
@@ -1142,7 +1149,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		It("should deny UPDATE operation on work CR status for user in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: testWork, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
 				w.Status = workv1alpha1.WorkStatus{
 					Conditions: []metav1.Condition{
 						{

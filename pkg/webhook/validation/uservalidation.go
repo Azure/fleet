@@ -97,7 +97,7 @@ func ValidateWorkUpdate(ctx context.Context, client client.Client, work workv1al
 	if subResource == "status" {
 		workNamespace := work.Namespace
 		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
-		mcName := workNamespace[len(utils.NamespaceNameFormat)-2 : len(workNamespace)]
+		mcName := workNamespace[len(utils.NamespaceNameFormat)-2:]
 		return checkMCIdentity(ctx, client, userInfo, namespacedName, work.Kind, mcName)
 	}
 	return ValidateUserForResource(work.Kind, namespacedName, whiteListedUsers, userInfo)
