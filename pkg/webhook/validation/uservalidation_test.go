@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
@@ -376,6 +377,22 @@ func TestValidateMemberClusterUpdate(t *testing.T) {
 }
 
 func TestValidateInternalMemberClusterUpdate(t *testing.T) {
+	mockClient := &test.MockClient{
+		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			o := obj.(*fleetv1alpha1.MemberCluster)
+			*o = fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name: "test-identity",
+					},
+				},
+			}
+			return nil
+		},
+	}
 	testCases := map[string]struct {
 		client           client.Client
 		imc              fleetv1alpha1.InternalMemberCluster
@@ -384,24 +401,8 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 		subResource      string
 		wantResponse     admission.Response
 	}{
-		"allow user in IMC identity with status update": {
-			client: &test.MockClient{
-				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					o := obj.(*fleetv1alpha1.MemberCluster)
-					*o = fleetv1alpha1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-mc",
-							Namespace: "test-namespace",
-						},
-						Spec: fleetv1alpha1.MemberClusterSpec{
-							Identity: rbacv1.Subject{
-								Name: "test-identity",
-							},
-						},
-					}
-					return nil
-				},
-			},
+		"allow user in IMC identity with IMC status update": {
+			client: mockClient,
 			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -423,14 +424,13 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"allow hub-agent-sa in IMC identity with status update": {
+		"allow hub-agent-sa in IMC identity with IMC status update": {
 			client: &test.MockClient{
 				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					o := obj.(*fleetv1alpha1.MemberCluster)
 					*o = fleetv1alpha1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-mc",
-							Namespace: "test-namespace",
+							Name: "test-mc",
 						},
 						Spec: fleetv1alpha1.MemberClusterSpec{
 							Identity: rbacv1.Subject{
@@ -462,24 +462,8 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"deny user in system:masters group with status update": {
-			client: &test.MockClient{
-				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					o := obj.(*fleetv1alpha1.MemberCluster)
-					*o = fleetv1alpha1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-mc",
-							Namespace: "test-namespace",
-						},
-						Spec: fleetv1alpha1.MemberClusterSpec{
-							Identity: rbacv1.Subject{
-								Name: "test-identity",
-							},
-						},
-					}
-					return nil
-				},
-			},
+		"deny user in system:masters group with IMC status update": {
+			client: mockClient,
 			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -501,24 +485,8 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 			subResource:  "status",
 			wantResponse: admission.Denied(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"allow user in system:masters group with spec update": {
-			client: &test.MockClient{
-				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					o := obj.(*fleetv1alpha1.MemberCluster)
-					*o = fleetv1alpha1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-mc",
-							Namespace: "test-namespace",
-						},
-						Spec: fleetv1alpha1.MemberClusterSpec{
-							Identity: rbacv1.Subject{
-								Name: "test-identity",
-							},
-						},
-					}
-					return nil
-				},
-			},
+		"allow user in system:masters group with IMC spec update": {
+			client: mockClient,
 			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -535,24 +503,8 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"deny user not in system:masters group with spec update": {
-			client: &test.MockClient{
-				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					o := obj.(*fleetv1alpha1.MemberCluster)
-					*o = fleetv1alpha1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-mc",
-							Namespace: "test-namespace",
-						},
-						Spec: fleetv1alpha1.MemberClusterSpec{
-							Identity: rbacv1.Subject{
-								Name: "test-identity",
-							},
-						},
-					}
-					return nil
-				},
-			},
+		"deny user not in system:masters group with IMC spec update": {
+			client: mockClient,
 			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -569,24 +521,8 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"allow user in system:masters group with object meta update": {
-			client: &test.MockClient{
-				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-					o := obj.(*fleetv1alpha1.MemberCluster)
-					*o = fleetv1alpha1.MemberCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-mc",
-							Namespace: "test-namespace",
-						},
-						Spec: fleetv1alpha1.MemberClusterSpec{
-							Identity: rbacv1.Subject{
-								Name: "test-identity",
-							},
-						},
-					}
-					return nil
-				},
-			},
+		"allow user in system:masters group with IMC object meta update": {
+			client: mockClient,
 			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -633,6 +569,219 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
 			gotResult := ValidateInternalMemberClusterUpdate(context.Background(), testCase.client, testCase.imc, testCase.whiteListedUsers, testCase.userInfo, testCase.subResource)
+			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
+		})
+	}
+}
+
+func TestValidateWorkUpdate(t *testing.T) {
+	mockClient := &test.MockClient{
+		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			if key.Name == "test-mc" {
+				o := obj.(*fleetv1alpha1.MemberCluster)
+				*o = fleetv1alpha1.MemberCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-mc",
+					},
+					Spec: fleetv1alpha1.MemberClusterSpec{
+						Identity: rbacv1.Subject{
+							Name: "test-identity",
+						},
+					},
+				}
+				return nil
+			}
+			return errors.New("cannot find member cluster")
+		},
+	}
+	testCases := map[string]struct {
+		client           client.Client
+		work             workv1alpha1.Work
+		whiteListedUsers []string
+		userInfo         authenticationv1.UserInfo
+		subResource      string
+		wantResponse     admission.Response
+	}{
+		"allow user in work identity with status update": {
+			client: mockClient,
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+				},
+				Status: workv1alpha1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Applied",
+							Status:             metav1.ConditionTrue,
+							Reason:             "appliedWorkComplete",
+							Message:            "Apply work complete",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "test-identity",
+				Groups:   []string{"test-group"},
+			},
+			subResource:  "status",
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow hub-agent-sa in work identity with status update": {
+			client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					if key.Name == "test-mc" {
+						o := obj.(*fleetv1alpha1.MemberCluster)
+						*o = fleetv1alpha1.MemberCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "test-mc",
+							},
+							Spec: fleetv1alpha1.MemberClusterSpec{
+								Identity: rbacv1.Subject{
+									Name: "hub-agent-sa",
+								},
+							},
+						}
+						return nil
+					}
+					return errors.New("cannot find member cluster")
+				},
+			},
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+				},
+				Status: workv1alpha1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Applied",
+							Status:             metav1.ConditionTrue,
+							Reason:             "appliedWorkComplete",
+							Message:            "Apply work complete",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "system:serviceaccount:fleet-system:hub-agent-sa",
+				Groups:   []string{"system:serviceaccounts"},
+			},
+			subResource:  "status",
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+		"deny user in system:masters group with work status update": {
+			client: mockClient,
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+				},
+				Status: workv1alpha1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Applied",
+							Status:             metav1.ConditionTrue,
+							Reason:             "appliedWorkComplete",
+							Message:            "Apply work complete",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "testUser",
+				Groups:   []string{"system:masters"},
+			},
+			subResource:  "status",
+			wantResponse: admission.Denied(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow user in system:masters group with work spec update": {
+			client: mockClient,
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+				},
+				Spec: workv1alpha1.WorkSpec{
+					Workload: workv1alpha1.WorkloadTemplate{
+						Manifests: []workv1alpha1.Manifest{},
+					},
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "testUser",
+				Groups:   []string{"system:masters"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+		"deny user not in system:masters group with work spec update": {
+			client: mockClient,
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+				},
+				Spec: workv1alpha1.WorkSpec{
+					Workload: workv1alpha1.WorkloadTemplate{
+						Manifests: []workv1alpha1.Manifest{},
+					},
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "testUser",
+				Groups:   []string{"testGroup"},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow user in system:masters group with work object meta update": {
+			client: mockClient,
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+					Labels:    map[string]string{"test-key": "test-value"},
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "testUser",
+				Groups:   []string{"system:masters"},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow request if MC get fails": {
+			client: &test.MockClient{
+				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+					return errors.New("get error")
+				},
+			},
+			work: workv1alpha1.Work{
+				TypeMeta: metav1.TypeMeta{Kind: "Work"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-work",
+					Namespace: "fleet-member-test-mc",
+				},
+			},
+			userInfo: authenticationv1.UserInfo{
+				Username: "testUser",
+				Groups:   []string{"system:masters"},
+			},
+			subResource:  "status",
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+		},
+	}
+
+	for testName, testCase := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			gotResult := ValidateWorkUpdate(context.Background(), testCase.client, testCase.work, testCase.whiteListedUsers, testCase.userInfo, testCase.subResource)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
