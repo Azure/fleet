@@ -280,12 +280,13 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "Work")
+			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "work")
 			return err
 		}
 
 		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
 		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "internalMemberCluster")
 			return fmt.Errorf("unable to create internalMemberCluster v1alpha1 controller: %w", err)
 		}
 	}
@@ -299,12 +300,13 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "Work")
+			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "work")
 			return err
 		}
 
 		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
 		if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
+			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "internalMemberCluster")
 			return fmt.Errorf("unable to create internalMemberCluster v1beta1 controller: %w", err)
 		}
 	}
