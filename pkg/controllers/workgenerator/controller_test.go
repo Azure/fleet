@@ -12,7 +12,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -125,18 +124,18 @@ func Test_getWorkNameFromSnapshotName(t *testing.T) {
 
 func Test_buildAllWorkAppliedCondition(t *testing.T) {
 	tests := map[string]struct {
-		works      map[string]*workv1alpha1.Work
+		works      map[string]*fleetv1beta1.Work
 		generation int64
 		want       metav1.Condition
 	}{
 		"applied should be true if all work applied": {
-			works: map[string]*workv1alpha1.Work{
+			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "work1",
 						Generation: 123,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -151,7 +150,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 						Name:       "work2",
 						Generation: 12,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -171,13 +170,13 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 			},
 		},
 		"applied should be false if not all work applied to the latest generation": {
-			works: map[string]*workv1alpha1.Work{
+			works: map[string]*fleetv1beta1.Work{
 				"notAppliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "work1",
 						Generation: 123,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -192,7 +191,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 						Name:       "work2",
 						Generation: 12,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -212,13 +211,13 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 			},
 		},
 		"applied should be false if not all work has applied": {
-			works: map[string]*workv1alpha1.Work{
+			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "work1",
 						Generation: 123,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -244,13 +243,13 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 			},
 		},
 		"applied should be false if some work applied condition is unknown": {
-			works: map[string]*workv1alpha1.Work{
+			works: map[string]*fleetv1beta1.Work{
 				"appliedWork1": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "work1",
 						Generation: 123,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -265,7 +264,7 @@ func Test_buildAllWorkAppliedCondition(t *testing.T) {
 						Name:       "work2",
 						Generation: 12,
 					},
-					Status: workv1alpha1.WorkStatus{
+					Status: fleetv1beta1.WorkStatus{
 						Conditions: []metav1.Condition{
 							{
 								Type:               fleetv1beta1.WorkConditionTypeApplied,

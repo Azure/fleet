@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -86,7 +85,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			// check the work is not created since the binding state is not bound
-			work := v1alpha1.Work{}
+			work := fleetv1beta1.Work{}
 			Consistently(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				return apierrors.IsNotFound(err)
@@ -139,7 +138,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding `%s` created", binding.Name))
 			// check the work is not created since we have more resource snapshot to create
-			work := v1alpha1.Work{}
+			work := fleetv1beta1.Work{}
 			Consistently(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				return apierrors.IsNotFound(err)
@@ -185,7 +184,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			// check the work is not created since there is no resource snapshot
-			work := v1alpha1.Work{}
+			work := fleetv1beta1.Work{}
 			Consistently(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				return apierrors.IsNotFound(err)
@@ -247,13 +246,13 @@ var _ = Describe("Test Work Generator Controller", func() {
 						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingBound)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				// check the work is created by now
-				work := v1alpha1.Work{}
+				work := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work
-				wantWork := v1alpha1.Work{
+				wantWork := fleetv1beta1.Work{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName),
 						Namespace: namespaceName,
@@ -272,9 +271,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 							fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
 						},
 					},
-					Spec: v1alpha1.WorkSpec{
-						Workload: v1alpha1.WorkloadTemplate{
-							Manifests: []v1alpha1.Manifest{
+					Spec: fleetv1beta1.WorkSpec{
+						Workload: fleetv1beta1.WorkloadTemplate{
+							Manifests: []fleetv1beta1.Manifest{
 								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
 								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 								{RawExtension: runtime.RawExtension{Raw: testCloneset}},
@@ -333,7 +332,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			It("Should treat the unscheduled binding as bound", func() {
 				// check the work is created
-				work := v1alpha1.Work{}
+				work := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
@@ -347,7 +346,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, duration, interval).Should(Succeed(), "controller should not remove work in hub cluster for unscheduled binding")
 				//inspect the work manifest to make sure it still has the same content
-				expectedManifest := []v1alpha1.Manifest{
+				expectedManifest := []fleetv1beta1.Manifest{
 					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
@@ -416,13 +415,13 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			It("Should create all the work in the target namespace after all the resource snapshot are created", func() {
 				// check the work for the master resource snapshot is created
-				work := v1alpha1.Work{}
+				work := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work manifest
-				expectedManifest := []v1alpha1.Manifest{
+				expectedManifest := []fleetv1beta1.Manifest{
 					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
@@ -430,13 +429,13 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
-				secondWork := v1alpha1.Work{}
+				secondWork := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &secondWork)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is created in %s", secondWork.Name, secondWork.Namespace))
 				//inspect the work
-				wantWork := v1alpha1.Work{
+				wantWork := fleetv1beta1.Work{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1),
 						Namespace: namespaceName,
@@ -455,9 +454,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 							fleetv1beta1.ParentBindingLabel:               binding.Name,
 						},
 					},
-					Spec: v1alpha1.WorkSpec{
-						Workload: v1alpha1.WorkloadTemplate{
-							Manifests: []v1alpha1.Manifest{
+					Spec: fleetv1beta1.WorkSpec{
+						Workload: fleetv1beta1.WorkloadTemplate{
+							Manifests: []fleetv1beta1.Manifest{
 								{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
 								{RawExtension: runtime.RawExtension{Raw: testPdb}},
 							},
@@ -517,7 +516,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			It("Should update existing work and create more work in the target namespace when resource snapshots change", func() {
 				// check the work for the master resource snapshot is created
-				work := v1alpha1.Work{}
+				work := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
@@ -551,7 +550,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Expect(k8sClient.Create(ctx, thirdSnapshot)).Should(Succeed())
 				By(fmt.Sprintf("third resource snapshot  %s created", secondSnapshot.Name))
 				// check the work for the master resource snapshot is created
-				expectedManifest := []v1alpha1.Manifest{
+				expectedManifest := []fleetv1beta1.Manifest{
 					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 				}
@@ -568,7 +567,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is updated in %s", work.Name, work.Namespace))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
-				expectedManifest = []v1alpha1.Manifest{
+				expectedManifest = []fleetv1beta1.Manifest{
 					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
 					{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
 				}
@@ -587,7 +586,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("second work %s is updated in %s", work.Name, work.Namespace))
 				// check the work for the third resource snapshot is created, it's name is crp-subindex
-				expectedManifest = []v1alpha1.Manifest{
+				expectedManifest = []fleetv1beta1.Manifest{
 					{RawExtension: runtime.RawExtension{Raw: testPdb}},
 				}
 				Eventually(func() error {
@@ -608,7 +607,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			It("Should remove the work in the target namespace when resource snapshots change", func() {
 				// check the work for the master resource snapshot is created
-				work := v1alpha1.Work{}
+				work := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
@@ -630,7 +629,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
 				//inspect the work manifest that should have been updated to contain all
-				expectedManifest := []v1alpha1.Manifest{
+				expectedManifest := []fleetv1beta1.Manifest{
 					{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
 					{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
 					{RawExtension: runtime.RawExtension{Raw: testCloneset}},
@@ -661,13 +660,13 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 			It("Should remove binding after all work associated with deleted bind are deleted", func() {
 				// check the work for the master resource snapshot is created
-				work := v1alpha1.Work{}
+				work := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 				By(fmt.Sprintf("first work %s is created in %s", work.Name, work.Namespace))
 				// check the work for the secondary resource snapshot is created, it's name is crp-subindex
-				work2 := v1alpha1.Work{}
+				work2 := fleetv1beta1.Work{}
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1), Namespace: namespaceName}, &work2)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
@@ -683,7 +682,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 						Namespace: namespaceName,
 						Name:      fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName),
 					}
-					work1 := v1alpha1.Work{}
+					work1 := fleetv1beta1.Work{}
 					if err := k8sClient.Get(ctx, workKey1, &work1); !apierrors.IsNotFound(err) {
 						return fmt.Errorf("Work %v still exists or an unexpected error has occurred", workKey1)
 					}
@@ -692,7 +691,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 						Namespace: namespaceName,
 						Name:      fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, testCRPName, 1),
 					}
-					work2 := v1alpha1.Work{}
+					work2 := fleetv1beta1.Work{}
 					if err := k8sClient.Get(ctx, workKey2, &work2); !apierrors.IsNotFound(err) {
 						return fmt.Errorf("Work %v still exists or an unexpected error has occurred", workKey2)
 					}
@@ -756,7 +755,7 @@ func generateResourceSnapshot(resourceIndex, numberResource, subIndex int, rawCo
 	return clusterResourceSnapshot
 }
 
-func markWorkApplied(work *v1alpha1.Work) {
+func markWorkApplied(work *fleetv1beta1.Work) {
 	work.Status.Conditions = []metav1.Condition{
 		{
 			Status:             metav1.ConditionTrue,
