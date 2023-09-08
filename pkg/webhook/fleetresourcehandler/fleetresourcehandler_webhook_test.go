@@ -47,9 +47,6 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 	testCases := map[string]struct {
 		request           admission.Request
 		resourceValidator fleetResourceValidator
-		whiteListedUsers  []string
-		userInfo          authenticationv1.UserInfo
-		subResource       string
 		wantResponse      admission.Response
 	}{
 		"allow user in MC identity with IMC status update": {
@@ -129,11 +126,6 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			userInfo: authenticationv1.UserInfo{
-				Username: "testUser",
-				Groups:   []string{"system:masters"},
-			},
-			subResource:  "status",
 			wantResponse: admission.Denied(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow user in system:masters group with IMC non-status update": {
@@ -234,9 +226,6 @@ func TestHandleWork(t *testing.T) {
 	testCases := map[string]struct {
 		request           admission.Request
 		resourceValidator fleetResourceValidator
-		whiteListedUsers  []string
-		userInfo          authenticationv1.UserInfo
-		subResource       string
 		wantResponse      admission.Response
 	}{
 		"allow user in MC identity with status update": {
