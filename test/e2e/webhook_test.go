@@ -5,6 +5,7 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -19,10 +20,14 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/utils"
@@ -41,13 +46,14 @@ const (
 	testUser          = "test-user"
 	testKey           = "test-key"
 	testValue         = "test-value"
-	testMemberCluster = "test-mc"
+	testWork          = "test-work"
 	fleetSystemNS     = "fleet-system"
 	kubeSystemNS      = "kube-system"
+	testMemberCluster = "test-mc"
 
-	crdStatusErrFormat              = `user: %s in groups: %v is not allowed to modify fleet CRD: %+v`
-	resourceStatusErrFormat         = `user: %s in groups: %v is not allowed to modify resource %s: %+v`
-	imcStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update IMC status: %+v"
+	crdStatusErrFormat                   = `user: %s in groups: %v is not allowed to modify fleet CRD: %+v`
+	resourceStatusErrFormat              = `user: %s in groups: %v is not allowed to modify resource %s: %+v`
+	resourceStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update %s status: %+v"
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
@@ -824,8 +830,8 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 					return err
 				}
 				var statusErr *k8sErrors.StatusError
-				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, "kubernetes-admin", []string{"system:masters", "system:authenticated"}, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update internal member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "kubernetes-admin", []string{"system:masters", "system:authenticated"}, "InternalMemberCluster", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
@@ -859,6 +865,311 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 				}
 				By("expecting successful UPDATE of Internal Member Cluster Status")
 				return HubCluster.ImpersonateKubeClient.Status().Update(ctx, &imc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
+	Context("fleet guard rail for work resource, no need to get MC", func() {
+		var workName, testMemberClusterNamespace string
+		BeforeEach(func() {
+			workName = testWork + "-" + utils.RandStr()
+			testMemberClusterNamespace = "fleet-member-test-mc"
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   testMemberClusterNamespace,
+					Labels: map[string]string{fleetv1beta1.FleetResourceLabelKey: "true"},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &ns)).Should(Succeed())
+			testDeployment := appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Deployment",
+					APIVersion: "apps/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "Deployment",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: utilrand.String(10),
+							Kind:       utilrand.String(10),
+							Name:       utilrand.String(10),
+							UID:        types.UID(utilrand.String(10)),
+						},
+					},
+				},
+			}
+			deploymentBytes, err := json.Marshal(testDeployment)
+			Expect(err).Should(Succeed())
+			w := workv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: testMemberClusterNamespace,
+				},
+				Spec: workv1alpha1.WorkSpec{
+					Workload: workv1alpha1.WorkloadTemplate{
+						Manifests: []workv1alpha1.Manifest{
+							{
+								RawExtension: runtime.RawExtension{
+									Raw: deploymentBytes,
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &w)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			w := workv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: testMemberClusterNamespace,
+				},
+			}
+			var ns corev1.Namespace
+			ns.Name = testMemberClusterNamespace
+			Expect(HubCluster.KubeClient.Delete(ctx, &w)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: w.Name, Namespace: w.Namespace}, &w))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE operation on work CR for user not in system:masters group", func() {
+			testDeployment := appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Deployment",
+					APIVersion: "apps/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "Deployment",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: utilrand.String(10),
+							Kind:       utilrand.String(10),
+							Name:       utilrand.String(10),
+							UID:        types.UID(utilrand.String(10)),
+						},
+					},
+				},
+			}
+			deploymentBytes, err := json.Marshal(testDeployment)
+			Expect(err).Should(Succeed())
+			w := workv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testWork + "-" + utils.RandStr(),
+					Namespace: testMemberClusterNamespace,
+				},
+				Spec: workv1alpha1.WorkSpec{
+					Workload: workv1alpha1.WorkloadTemplate{
+						Manifests: []workv1alpha1.Manifest{
+							{
+								RawExtension: runtime.RawExtension{
+									Raw: deploymentBytes,
+								},
+							},
+						},
+					},
+				},
+			}
+			By("expecting denial of operation CREATE of work")
+			err = HubCluster.ImpersonateKubeClient.Create(ctx, &w)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create work call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Work", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+		})
+
+		It("should deny UPDATE operation on work CR for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var w workv1alpha1.Work
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				w.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of work")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &w)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update work call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Work", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE work operation for user not in system:masters group", func() {
+			var w workv1alpha1.Work
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+			By("expecting denial of operation DELETE of work")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &w)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete work call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Work", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+		})
+	})
+
+	Context("fleet guard rail for work resource, need to get MC", func() {
+		var mcName, workName, testMemberClusterNamespace string
+		BeforeEach(func() {
+			mcName = testMemberCluster + utils.RandStr()
+			workName = testWork + utils.RandStr()
+			testMemberClusterNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			mc := &fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: mcName,
+				},
+				Spec: fleetv1alpha1.MemberClusterSpec{
+					Identity: rbacv1.Subject{
+						Name:      "test-user",
+						Kind:      "ServiceAccount",
+						Namespace: utils.FleetSystemNamespace,
+					},
+					State:                  fleetv1alpha1.ClusterStateJoin,
+					HeartbeatPeriodSeconds: 60,
+				},
+			}
+			Eventually(func() error {
+				return HubCluster.KubeClient.Create(ctx, mc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+			imc := &fleetv1alpha1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      mcName,
+					Namespace: testMemberClusterNamespace,
+				},
+			}
+			Eventually(func() error {
+				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
+			testDeployment := appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Deployment",
+					APIVersion: "apps/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "Deployment",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: utilrand.String(10),
+							Kind:       utilrand.String(10),
+							Name:       utilrand.String(10),
+							UID:        types.UID(utilrand.String(10)),
+						},
+					},
+				},
+			}
+			deploymentBytes, err := json.Marshal(testDeployment)
+			Expect(err).Should(Succeed())
+			w := workv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: testMemberClusterNamespace,
+				},
+				Spec: workv1alpha1.WorkSpec{
+					Workload: workv1alpha1.WorkloadTemplate{
+						Manifests: []workv1alpha1.Manifest{
+							{
+								RawExtension: runtime.RawExtension{
+									Raw: deploymentBytes,
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &w)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			w := workv1alpha1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      workName,
+					Namespace: testMemberClusterNamespace,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &w)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: w.Name, Namespace: w.Namespace}, &w))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+
+			mc := &fleetv1alpha1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: mcName,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, mc))
+			imc := &fleetv1alpha1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      mcName,
+					Namespace: testMemberClusterNamespace,
+				},
+			}
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should allow UPDATE operation on work CR spec for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var w workv1alpha1.Work
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				w.Spec.Workload.Manifests = []workv1alpha1.Manifest{}
+
+				By("expecting successful UPDATE of Internal Member Cluster Spec")
+				return HubCluster.KubeClient.Update(ctx, &w)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should allow UPDATE operation on work CR status for user in mc identity", func() {
+			Eventually(func(g Gomega) error {
+				var w workv1alpha1.Work
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				w.Status = workv1alpha1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Applied",
+							Status:             metav1.ConditionTrue,
+							Reason:             "appliedWorkComplete",
+							Message:            "Apply work complete",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				}
+				By("expecting successful UPDATE of work Status")
+				return HubCluster.ImpersonateKubeClient.Status().Update(ctx, &w)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny UPDATE operation on work CR status for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var w workv1alpha1.Work
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
+				w.Status = workv1alpha1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Applied",
+							Status:             metav1.ConditionTrue,
+							Reason:             "appliedWorkComplete",
+							Message:            "Apply work complete",
+							LastTransitionTime: metav1.Now(),
+						},
+					},
+				}
+				By("expecting denial of operation UPDATE of work CR status")
+				err := HubCluster.KubeClient.Status().Update(ctx, &w)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update work status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "kubernetes-admin", []string{"system:masters", "system:authenticated"}, "Work", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+				return nil
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})

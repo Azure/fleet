@@ -26,12 +26,12 @@ const (
 	kubeControllerManagerUser = "system:kube-controller-manager"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	imcStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update IMC status: %+v"
-	imcAllowedGetMCFailed           = "user: %s in groups: %v is allowed to update IMC: %+v because we failed to get MC"
-	crdAllowedFormat                = "user: %s in groups: %v is allowed to modify fleet CRD: %+v"
-	crdDeniedFormat                 = "user: %s in groups: %v is not allowed to modify fleet CRD: %+v"
-	resourceAllowedFormat           = "user: %s in groups: %v is allowed to modify resource %s: %+v"
-	resourceDeniedFormat            = "user: %s in groups: %v is not allowed to modify resource %s: %+v"
+	resourceStatusUpdateNotAllowedFormat = "user: %s in groups: %v is not allowed to update %s status: %+v"
+	resourceAllowedGetMCFailed           = "user: %s in groups: %v is allowed to updated %s: %+v because we failed to get MC"
+	crdAllowedFormat                     = "user: %s in groups: %v is allowed to modify fleet CRD: %+v"
+	crdDeniedFormat                      = "user: %s in groups: %v is not allowed to modify fleet CRD: %+v"
+	resourceAllowedFormat                = "user: %s in groups: %v is allowed to modify resource %s: %+v"
+	resourceDeniedFormat                 = "user: %s in groups: %v is not allowed to modify resource %s: %+v"
 )
 
 var (
@@ -78,29 +78,6 @@ func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, whiteListedUs
 		response = ValidateUserForResource(kind, types.NamespacedName{Name: currentObj.GetName()}, whiteListedUsers, userInfo)
 	}
 	return response
-}
-
-// ValidateInternalMemberClusterUpdate checks to see if user is allowed to update argued internal member cluster resource.
-func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Client, imc fleetv1alpha1.InternalMemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo, subResource string) admission.Response {
-	imcKind := "InternalMemberCluster"
-	namespacedName := types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}
-	if subResource == "status" {
-		var mc fleetv1alpha1.MemberCluster
-		if err := client.Get(ctx, types.NamespacedName{Name: namespacedName.Name}, &mc); err != nil {
-			// fail open, if the webhook cannot get member cluster resources we don't block the request.
-			klog.V(2).ErrorS(err, "failed to get member cluster resource for request to modify internal member cluster, allowing request to be handled by api server",
-				"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
-			return admission.Allowed(fmt.Sprintf(imcAllowedGetMCFailed, userInfo.Username, userInfo.Groups, namespacedName))
-		}
-		// For the upstream E2E we use hub agent service account's token which allows member agent to modify IMC status, hence we use serviceAccountFmt to make the check.
-		if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
-			klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
-			return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, "InternalMemberCluster", namespacedName))
-		}
-		klog.V(2).InfoS("user is not allowed to update IMC status", "user", userInfo.Username, "groups", userInfo.Groups, "kind", imcKind, "namespacedName", namespacedName)
-		return admission.Denied(fmt.Sprintf(imcStatusUpdateNotAllowedFormat, userInfo.Username, userInfo.Groups, namespacedName))
-	}
-	return ValidateUserForResource(imc.Kind, namespacedName, whiteListedUsers, userInfo)
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
@@ -178,4 +155,22 @@ func isMemberClusterUpdated(currentObj, oldObj client.Object) (bool, error) {
 // checkCRDGroup returns true if the input CRD group is a fleet CRD group.
 func checkCRDGroup(group string) bool {
 	return slices.Contains(fleetCRDGroups, group)
+}
+
+// ValidateMCIdentity returns admission allowed/denied based on the member cluster's identity.
+func ValidateMCIdentity(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo, resourceNamespacedName types.NamespacedName, resourceKind, mcName string) admission.Response {
+	var mc fleetv1alpha1.MemberCluster
+	if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
+		// fail open, if the webhook cannot get member cluster resources we don't block the request.
+		klog.V(2).ErrorS(err, fmt.Sprintf("failed to get member cluster resource for request to modify %s, allowing request to be handled by api server", resourceKind),
+			"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", resourceNamespacedName)
+		return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, resourceKind, resourceNamespacedName))
+	}
+	// For the upstream E2E we use hub agent service account's token which allows member agent to modify Work status, hence we use serviceAccountFmt to make the check.
+	if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
+		klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resourceKind, "namespacedName", resourceNamespacedName)
+		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, resourceKind, resourceNamespacedName))
+	}
+	klog.V(2).InfoS(fmt.Sprintf("user is not allowed to update %s status", resourceKind), "user", userInfo.Username, "groups", userInfo.Groups, "kind", resourceKind, "namespacedName", resourceNamespacedName)
+	return admission.Denied(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, userInfo.Username, userInfo.Groups, resourceKind, resourceNamespacedName))
 }
