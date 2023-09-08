@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -92,8 +97,8 @@ var _ = Describe("Work Controller", func() {
 
 			resultWork := waitForWorkToApply(work.GetName(), work.GetNamespace())
 			Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
-			Expect(meta.IsStatusConditionTrue(resultWork.Status.Conditions, ConditionTypeApplied)).Should(BeTrue())
-			Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, ConditionTypeApplied)).Should(BeTrue())
+			Expect(meta.IsStatusConditionTrue(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
+			Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
 			expectedResourceID := fleetv1beta1.WorkResourceIdentifier{
 				Ordinal:   0,
 				Group:     "",
@@ -509,13 +514,13 @@ var _ = Describe("Work Controller", func() {
 			appliedCM := verifyAppliedConfigMap(cm)
 
 			By("Delete the last applied annotation from the current resource")
-			delete(appliedCM.Annotations, lastAppliedConfigAnnotation)
+			delete(appliedCM.Annotations, fleetv1beta1.LastAppliedConfigAnnotation)
 			Expect(k8sClient.Update(ctx, appliedCM)).Should(Succeed())
 
 			By("Get the last applied config map and verify it does not have the last applied annotation")
 			var modifiedCM corev1.ConfigMap
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cm.GetName(), Namespace: cm.GetNamespace()}, &modifiedCM)).Should(Succeed())
-			Expect(modifiedCM.Annotations[lastAppliedConfigAnnotation]).Should(BeEmpty())
+			Expect(modifiedCM.Annotations[fleetv1beta1.LastAppliedConfigAnnotation]).Should(BeEmpty())
 
 			By("Modify the manifest")
 			// modify one data
@@ -567,11 +572,11 @@ var _ = Describe("Work Controller", func() {
 				if err != nil {
 					return false
 				}
-				applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, ConditionTypeApplied)
+				applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 				if applyCond == nil || applyCond.Status != metav1.ConditionFalse || applyCond.ObservedGeneration != resultWork.Generation {
 					return false
 				}
-				if !meta.IsStatusConditionFalse(resultWork.Status.ManifestConditions[0].Conditions, ConditionTypeApplied) {
+				if !meta.IsStatusConditionFalse(resultWork.Status.ManifestConditions[0].Conditions, fleetv1beta1.WorkConditionTypeApplied) {
 					return false
 				}
 				return true
@@ -654,7 +659,7 @@ var _ = Describe("Work Controller", func() {
 			for i := 0; i < numWork; i++ {
 				var resultWork fleetv1beta1.Work
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)).Should(Succeed())
-				Expect(controllerutil.ContainsFinalizer(&resultWork, workFinalizer)).Should(BeFalse())
+				Expect(controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)).Should(BeFalse())
 				// make sure that leave can be called as many times as possible
 				Expect(workController.Leave(ctx)).Should(Succeed())
 				By(fmt.Sprintf("change the work = %s", work.GetName()))
@@ -682,8 +687,8 @@ var _ = Describe("Work Controller", func() {
 					var resultWork fleetv1beta1.Work
 					err := k8sClient.Get(context.Background(), types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)
 					Expect(err).Should(Succeed())
-					Expect(controllerutil.ContainsFinalizer(&resultWork, workFinalizer)).Should(BeFalse())
-					applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, ConditionTypeApplied)
+					Expect(controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)).Should(BeFalse())
+					applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 					if applyCond != nil && applyCond.Status == metav1.ConditionTrue && applyCond.ObservedGeneration == resultWork.Generation {
 						return false
 					}
@@ -701,7 +706,7 @@ var _ = Describe("Work Controller", func() {
 			for i := 0; i < numWork; i++ {
 				resultWork := waitForWorkToApply(works[i].GetName(), works[i].GetNamespace())
 				Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
-				Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, ConditionTypeApplied)).Should(BeTrue())
+				Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
 				By("the work is applied, check if the applied config map is updated")
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cmNames[i], Namespace: cmNamespace}, &configMap)).Should(Succeed())
 				Expect(cmp.Diff(configMap.Data, newData)).Should(BeEmpty())

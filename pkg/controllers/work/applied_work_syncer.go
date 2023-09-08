@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -55,7 +60,7 @@ func (r *ApplyWorkReconciler) generateDiff(ctx context.Context, work *fleetv1bet
 	}
 	// add every resource in the work's manifest condition that is applied successfully back to the appliedWork status
 	for _, manifestCond := range work.Status.ManifestConditions {
-		ac := meta.FindStatusCondition(manifestCond.Conditions, ConditionTypeApplied)
+		ac := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		if ac == nil {
 			// should not happen
 			klog.ErrorS(fmt.Errorf("resource is missing  applied condition"), "applied condition missing", "resource", manifestCond.Identifier)

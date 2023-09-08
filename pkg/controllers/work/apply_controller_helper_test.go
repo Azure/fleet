@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -51,8 +56,8 @@ func verifyAppliedConfigMap(cm *corev1.ConfigMap) *corev1.ConfigMap {
 	for key := range cm.Annotations {
 		Expect(appliedCM.Annotations[key]).Should(Equal(cm.Annotations[key]))
 	}
-	Expect(appliedCM.Annotations[manifestHashAnnotation]).ShouldNot(BeEmpty())
-	Expect(appliedCM.Annotations[lastAppliedConfigAnnotation]).ShouldNot(BeEmpty())
+	Expect(appliedCM.Annotations[fleetv1beta1.ManifestHashAnnotation]).ShouldNot(BeEmpty())
+	Expect(appliedCM.Annotations[fleetv1beta1.LastAppliedConfigAnnotation]).ShouldNot(BeEmpty())
 
 	By("Check the config map data")
 	Expect(cmp.Diff(appliedCM.Data, cm.Data)).Should(BeEmpty())
@@ -67,12 +72,12 @@ func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
 		if err != nil {
 			return false
 		}
-		applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, ConditionTypeApplied)
+		applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		if applyCond == nil || applyCond.Status != metav1.ConditionTrue || applyCond.ObservedGeneration != resultWork.Generation {
 			return false
 		}
 		for _, manifestCondition := range resultWork.Status.ManifestConditions {
-			if !meta.IsStatusConditionTrue(manifestCondition.Conditions, ConditionTypeApplied) {
+			if !meta.IsStatusConditionTrue(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeApplied) {
 				return false
 			}
 		}
@@ -89,7 +94,7 @@ func waitForWorkToBeHandled(workName, workNS string) *fleetv1beta1.Work {
 		if err != nil {
 			return false
 		}
-		return controllerutil.ContainsFinalizer(&resultWork, workFinalizer)
+		return controllerutil.ContainsFinalizer(&resultWork, fleetv1beta1.WorkFinalizer)
 	}, timeout, interval).Should(BeTrue())
 	return &resultWork
 }
