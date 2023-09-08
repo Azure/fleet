@@ -239,7 +239,7 @@ func TestHandleWork(t *testing.T) {
 		subResource       string
 		wantResponse      admission.Response
 	}{
-		"allow user in work identity with status update": {
+		"allow user in MC identity with status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-work",
@@ -260,7 +260,7 @@ func TestHandleWork(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
-		"allow hub-agent-sa in work identity with status update": {
+		"allow hub-agent-sa in MC identity with status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-work",
