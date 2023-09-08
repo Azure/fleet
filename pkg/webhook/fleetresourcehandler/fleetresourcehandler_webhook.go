@@ -3,6 +3,7 @@ package fleetresourcehandler
 import (
 	"context"
 	"fmt"
+	"go.goms.io/fleet/pkg/utils"
 	"net/http"
 	"regexp"
 	"strings"
@@ -116,26 +117,21 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 
 // handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
 func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
-	var imc fleetv1alpha1.InternalMemberCluster
-	if err := v.decodeRequestObject(req, &imc); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+	if req.Operation == admissionv1.Update && req.SubResource == "status" {
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, req.Name)
 	}
-	if req.Operation == admissionv1.Update {
-		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, imc, v.whiteListedUsers, req.UserInfo, req.SubResource)
-	}
-	return validation.ValidateUserForResource(imc.Kind, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleWork allows/delete the request to modify work object after validation.
 func (v *fleetResourceValidator) handleWork(ctx context.Context, req admission.Request) admission.Response {
-	var work workv1alpha1.Work
-	if err := v.decodeRequestObject(req, &work); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+	if req.Operation == admissionv1.Update && req.SubResource == "status" {
+		workNamespace := req.Namespace
+		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
+		mcName := workNamespace[len(utils.NamespaceNameFormat)-2:]
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, mcName)
 	}
-	if req.Operation == admissionv1.Update {
-		return validation.ValidateWorkUpdate(ctx, v.client, work, v.whiteListedUsers, req.UserInfo, req.SubResource)
-	}
-	return validation.ValidateUserForResource(work.Kind, types.NamespacedName{Name: work.Name, Namespace: work.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.

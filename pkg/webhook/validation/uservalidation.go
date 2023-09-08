@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,10 +15,6 @@ import (
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -80,27 +77,6 @@ func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, whiteListedUs
 		response = ValidateUserForResource(kind, types.NamespacedName{Name: currentObj.GetName()}, whiteListedUsers, userInfo)
 	}
 	return response
-}
-
-// ValidateInternalMemberClusterUpdate checks to see if user is allowed to update argued internal member cluster resource.
-func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Client, imc fleetv1alpha1.InternalMemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo, subResource string) admission.Response {
-	namespacedName := types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}
-	if subResource == "status" {
-		return validateMCIdentity(ctx, client, userInfo, namespacedName, imc.Kind, imc.Name)
-	}
-	return ValidateUserForResource(imc.Kind, namespacedName, whiteListedUsers, userInfo)
-}
-
-// ValidateWorkUpdate checks to see if user is allowed to update argued work resource.
-func ValidateWorkUpdate(ctx context.Context, client client.Client, work workv1alpha1.Work, whiteListedUsers []string, userInfo authenticationv1.UserInfo, subResource string) admission.Response {
-	namespacedName := types.NamespacedName{Name: work.Name, Namespace: work.Namespace}
-	if subResource == "status" {
-		workNamespace := work.Namespace
-		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
-		mcName := workNamespace[len(utils.NamespaceNameFormat)-2:]
-		return validateMCIdentity(ctx, client, userInfo, namespacedName, work.Kind, mcName)
-	}
-	return ValidateUserForResource(work.Kind, namespacedName, whiteListedUsers, userInfo)
 }
 
 // isMasterGroupUserOrWhiteListedUser returns true is user belongs to white listed users or user belongs to system:masters group.
@@ -180,8 +156,8 @@ func checkCRDGroup(group string) bool {
 	return slices.Contains(fleetCRDGroups, group)
 }
 
-// validateMCIdentity returns admission allowed/denied based on the member cluster's identity.
-func validateMCIdentity(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo, resourceNamespacedName types.NamespacedName, resourceKind, mcName string) admission.Response {
+// ValidateMCIdentity returns admission allowed/denied based on the member cluster's identity.
+func ValidateMCIdentity(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo, resourceNamespacedName types.NamespacedName, resourceKind, mcName string) admission.Response {
 	var mc fleetv1alpha1.MemberCluster
 	if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 		// fail open, if the webhook cannot get member cluster resources we don't block the request.
