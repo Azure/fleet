@@ -37,6 +37,7 @@ var (
 	imcGVK       = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	namespaceGVK = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
 	workGVK      = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	eventGVK     = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -77,6 +78,9 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == workGVK:
 			klog.V(2).InfoS("handling work resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
 			response = v.handleWork(ctx, req)
+		case req.Kind == eventGVK:
+			klog.V(2).InfoS("handling event resource", "GVK", eventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
 			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req.Kind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
@@ -151,6 +155,13 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
 	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
+}
+
+func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.Request) admission.Response {
+	if req.Operation == admissionv1.Create {
+
+	}
+	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
