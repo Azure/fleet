@@ -86,7 +86,7 @@ func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, whiteListedUs
 func ValidateInternalMemberClusterUpdate(ctx context.Context, client client.Client, imc fleetv1alpha1.InternalMemberCluster, whiteListedUsers []string, userInfo authenticationv1.UserInfo, subResource string) admission.Response {
 	namespacedName := types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}
 	if subResource == "status" {
-		return checkMCIdentity(ctx, client, userInfo, namespacedName, imc.Kind, imc.Name)
+		return validateMCIdentity(ctx, client, userInfo, namespacedName, imc.Kind, imc.Name)
 	}
 	return ValidateUserForResource(imc.Kind, namespacedName, whiteListedUsers, userInfo)
 }
@@ -98,7 +98,7 @@ func ValidateWorkUpdate(ctx context.Context, client client.Client, work workv1al
 		workNamespace := work.Namespace
 		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
 		mcName := workNamespace[len(utils.NamespaceNameFormat)-2:]
-		return checkMCIdentity(ctx, client, userInfo, namespacedName, work.Kind, mcName)
+		return validateMCIdentity(ctx, client, userInfo, namespacedName, work.Kind, mcName)
 	}
 	return ValidateUserForResource(work.Kind, namespacedName, whiteListedUsers, userInfo)
 }
@@ -180,8 +180,8 @@ func checkCRDGroup(group string) bool {
 	return slices.Contains(fleetCRDGroups, group)
 }
 
-// checkMCIdentity returns admission allowed/denied based on the member cluster's identity.
-func checkMCIdentity(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo, resourceNamespacedName types.NamespacedName, resourceKind, mcName string) admission.Response {
+// validateMCIdentity returns admission allowed/denied based on the member cluster's identity.
+func validateMCIdentity(ctx context.Context, client client.Client, userInfo authenticationv1.UserInfo, resourceNamespacedName types.NamespacedName, resourceKind, mcName string) admission.Response {
 	var mc fleetv1alpha1.MemberCluster
 	if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 		// fail open, if the webhook cannot get member cluster resources we don't block the request.
