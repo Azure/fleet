@@ -1,5 +1,5 @@
 REGISTRY ?= ghcr.io
-KIND_IMAGE ?= kindest/node:v1.24.6
+KIND_IMAGE ?= kindest/node:v1.25.11
 ifndef TAG
 	TAG ?= $(shell git rev-parse --short=7 HEAD)
 endif
@@ -150,15 +150,15 @@ install-hub-agent-helm:
     --set enableWebhook=true \
     --set webhookClientConnectionType=service
 
-.PHONY: e2e-hub-kubeconfig-secret
-e2e-hub-kubeconfig-secret:
+.PHONY: e2e-v1alpha1-hub-kubeconfig-secret
+e2e-v1alpha1-hub-kubeconfig-secret:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
 	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
 	kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$$TOKEN
 
-install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
+install-member-agent-helm: install-hub-agent-helm e2e-v1alpha1-hub-kubeconfig-secret
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
 	## Get kind cluster IP that docker uses internally so we can talk to the other cluster. the port is the default one.
 	HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ;\
@@ -176,10 +176,10 @@ install-member-agent-helm: install-hub-agent-helm e2e-hub-kubeconfig-secret
 	# to make sure member-agent reads the token file.
 	kubectl delete pod --all -n fleet-system
 
-build-e2e:
+build-e2e-v1alpha1:
 	go test -c ./test/e2e/v1alpha1
 
-run-e2e: build-e2e
+run-e2e-v1alpha1: build-e2e-v1alpha1
 	KUBECONFIG=$(KUBECONFIG) HUB_SERVER_URL="https://$$(docker inspect $(HUB_KIND_CLUSTER_NAME)-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443" ./v1alpha1.test -test.v -ginkgo.v
 
 .PHONY: create-kind-cluster
@@ -188,12 +188,12 @@ create-kind-cluster: create-hub-kind-cluster create-member-kind-cluster install-
 .PHONY: install-helm
 install-helm:  load-hub-docker-image load-member-docker-image install-member-agent-helm
 
-.PHONY: e2e-tests
-e2e-tests: create-kind-cluster run-e2e
+.PHONY: e2e-tests-v1alpha1
+e2e-tests-v1alpha1: create-kind-cluster run-e2e-v1alpha1
 
-.PHONY: e2e-tests-v1beta1
-e2e-tests-v1beta1:
-	cd ./test/e2e/v1beta1 && chmod +x ./setup.sh && ./setup.sh && ginkgo -v -p .
+.PHONY: e2e-tests
+e2e-tests:
+	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh && ginkgo -v -p .
 
 ## reviewable
 .PHONY: reviewable
@@ -310,11 +310,11 @@ clean-testing-resources:
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME)
 	kubectl delete ns fleet-member-kind-member-testing --ignore-not-found
 
-.PHONY: clean-e2e-tests
-clean-e2e-tests: ## Remove
+.PHONY: clean-e2e-tests-v1alpha1
+clean-e2e-tests-v1alpha1:
 	kind delete cluster --name $(HUB_KIND_CLUSTER_NAME)
 	kind delete cluster --name $(MEMBER_KIND_CLUSTER_NAME)
 
-.PHONY: clean-e2e-tests-v1beta1
-clean-e2e-tests-v1beta1:
-	cd ./test/e2e/v1beta1 && chmod +x ./stop.sh && ./stop.sh
+.PHONY: clean-e2e-tests
+clean-e2e-tests:
+	cd ./test/e2e && chmod +x ./stop.sh && ./stop.sh

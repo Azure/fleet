@@ -8,7 +8,7 @@ test suites, follow the steps below:
 2. Change to the current directory, and run `setup.sh` to set up the test environment.
 
     ```sh
-    cd ./test/e2e/v1beta1
+    cd ./test/e2e
     chmod +x ./setup.sh
     
     # Use a different path if the local set up is different.

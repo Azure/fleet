@@ -4,7 +4,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.24.6}"
+# Before updating the default kind image to use, verify that the version is supported
+# by the current kind release.
+KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.25.11}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 
 HUB_CLUSTER="hub"
@@ -34,9 +36,9 @@ kind create cluster --name $MEMBER_CLUSTER_3 --image=$KIND_IMAGE --kubeconfig=$K
 # Build the Fleet agent images
 echo "Building and the Fleet agent images..."
 
-make -C "../../.." docker-build-hub-agent
-make -C "../../.." docker-build-member-agent
-make -C "../../.." docker-build-refresh-token
+make -C "../.." docker-build-hub-agent
+make -C "../.." docker-build-member-agent
+make -C "../.." docker-build-refresh-token
 
 # Load the Fleet agent images into the kind clusters
 
@@ -54,7 +56,7 @@ done
 
 # Install the hub agent to the hub cluster
 kind export kubeconfig --name $HUB_CLUSTER
-helm install hub-agent ../../.././charts/hub-agent/ \
+helm install hub-agent ../../charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$TAG \
@@ -84,7 +86,7 @@ HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{
 for i in "${MEMBER_CLUSTERS[@]}"
 do
     kind export kubeconfig --name "$i"
-    helm install member-agent ../../.././charts/member-agent/ \
+    helm install member-agent ../../charts/member-agent/ \
         --set config.hubURL=$HUB_SERVER_URL \
         --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
         --set image.tag=$TAG \
