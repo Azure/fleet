@@ -46,8 +46,8 @@ var (
 
 // NewUnexpectedBehaviorError returns ErrUnexpectedBehavior type error when err is not nil.
 func NewUnexpectedBehaviorError(err error) error {
-	// TODO(zhiying) emit error metrics or well defined logs
 	if err != nil {
+		klog.ErrorS(err, "Unexpected behavior identified by the controller")
 		return fmt.Errorf("%w: %v", ErrUnexpectedBehavior, err.Error())
 	}
 	return nil
@@ -56,6 +56,7 @@ func NewUnexpectedBehaviorError(err error) error {
 // NewExpectedBehaviorError returns ErrExpectedBehavior type error when err is not nil.
 func NewExpectedBehaviorError(err error) error {
 	if err != nil {
+		klog.ErrorS(err, "Expected behavior which can be recovered by itself")
 		return fmt.Errorf("%w: %v", ErrExpectedBehavior, err.Error())
 	}
 	return nil
@@ -67,6 +68,7 @@ func NewAPIServerError(fromCache bool, err error) error {
 		if fromCache && isUnexpectedCacheError(err) {
 			return NewUnexpectedBehaviorError(err)
 		}
+		klog.ErrorS(err, "Error returned by the API server", "fromCache", fromCache, "reason", apierrors.ReasonForError(err))
 		return fmt.Errorf("%w: %v", ErrAPIServerError, err.Error())
 	}
 	return nil
@@ -81,6 +83,7 @@ func isUnexpectedCacheError(err error) bool {
 // NewUserError returns ErrUserError type error when err is not nil.
 func NewUserError(err error) error {
 	if err != nil {
+		klog.ErrorS(err, "Failed to process the request due to a client error")
 		return fmt.Errorf("%w: %v", ErrUserError, err.Error())
 	}
 	return nil

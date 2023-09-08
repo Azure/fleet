@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -23,14 +28,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -50,9 +58,65 @@ var (
 	cancel         context.CancelFunc
 )
 
+const (
+	// number of concurrent reconcile loop for work
+	maxWorkConcurrency = 5
+)
+
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Work-API Controller Suite")
+}
+
+// createControllers create the controllers with the supplied config.
+func createControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setupLog logr.Logger, opts ctrl.Options) (manager.Manager, *ApplyWorkReconciler, error) {
+	hubMgr, err := ctrl.NewManager(hubCfg, opts)
+	if err != nil {
+		setupLog.Error(err, "unable to create hub manager")
+		return nil, nil, err
+	}
+
+	spokeDynamicClient, err := dynamic.NewForConfig(spokeCfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create spoke dynamic client")
+		return nil, nil, err
+	}
+
+	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, apiutil.WithLazyDiscovery)
+	if err != nil {
+		setupLog.Error(err, "unable to create spoke rest mapper")
+		return nil, nil, err
+	}
+
+	spokeClient, err := client.New(spokeCfg, client.Options{
+		Scheme: opts.Scheme, Mapper: restMapper,
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create spoke client")
+		return nil, nil, err
+	}
+
+	workController := NewApplyWorkReconciler(
+		hubMgr.GetClient(),
+		spokeDynamicClient,
+		spokeClient,
+		restMapper,
+		hubMgr.GetEventRecorderFor("work_controller"),
+		maxWorkConcurrency,
+		opts.Namespace,
+	)
+
+	if err = workController.SetupWithManager(hubMgr); err != nil {
+		setupLog.Error(err, "unable to create the controller", "controller", "Work")
+		return nil, nil, err
+	}
+
+	if err = workController.Join(ctx); err != nil {
+		setupLog.Error(err, "unable to mark the controller joined", "controller", "Work")
+		return nil, nil, err
+	}
+
+	return hubMgr, workController, nil
 }
 
 var _ = BeforeSuite(func() {
@@ -88,7 +152,7 @@ var _ = BeforeSuite(func() {
 
 	By("start controllers")
 	var hubMgr manager.Manager
-	if hubMgr, workController, err = CreateControllers(ctx, cfg, cfg, setupLog, opts); err != nil {
+	if hubMgr, workController, err = createControllers(ctx, cfg, cfg, setupLog, opts); err != nil {
 		setupLog.Error(err, "problem creating controllers")
 		os.Exit(1)
 	}

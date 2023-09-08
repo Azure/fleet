@@ -1,3 +1,8 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -14,6 +19,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var builtinScheme = runtime.NewScheme()
@@ -93,7 +100,7 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) (bool, error) {
 	}
 
 	// remove the annotation to avoid recursion
-	delete(annotations, lastAppliedConfigAnnotation)
+	delete(annotations, fleetv1beta1.LastAppliedConfigAnnotation)
 	// do not include an empty map
 	if len(annotations) == 0 {
 		_ = metadataAccessor.SetAnnotations(obj, nil)
@@ -108,10 +115,10 @@ func setModifiedConfigurationAnnotation(obj runtime.Object) (bool, error) {
 		return false, err
 	}
 	// set the last applied annotation back
-	annotations[lastAppliedConfigAnnotation] = string(modified)
+	annotations[fleetv1beta1.LastAppliedConfigAnnotation] = string(modified)
 	if err := validation.ValidateAnnotationsSize(annotations); err != nil {
 		klog.V(2).InfoS(fmt.Sprintf("setting last applied config annotation to empty, %s", err))
-		annotations[lastAppliedConfigAnnotation] = ""
+		annotations[fleetv1beta1.LastAppliedConfigAnnotation] = ""
 		return false, metadataAccessor.SetAnnotations(obj, annotations)
 	}
 	return true, metadataAccessor.SetAnnotations(obj, annotations)
@@ -130,7 +137,7 @@ func getOriginalConfiguration(obj runtime.Object) ([]byte, error) {
 		klog.Warning("object does not have annotation", "obj", obj)
 		return nil, nil
 	}
-	original, ok := annots[lastAppliedConfigAnnotation]
+	original, ok := annots[fleetv1beta1.LastAppliedConfigAnnotation]
 	if !ok {
 		klog.Warning("object does not have lastAppliedConfigAnnotation", "obj", obj)
 		return nil, nil
