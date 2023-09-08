@@ -46,6 +46,7 @@ const (
 	testCSICapacity             = "test-csi-capacity"
 )
 
+// TODO(Arvindthiru): Refactor file to use table driven tests.
 var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", func() {
 	Context("fleet guard rail e2e for role in rbac/v1 api group", func() {
 		var roleName string
