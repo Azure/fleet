@@ -13,8 +13,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,11 +29,14 @@ import (
 )
 
 const (
-	testRole        = "test-role"
-	testRoleBinding = "test-role-binding"
-	testPod         = "test-pod"
-	testDeployment  = "test-deployment"
-	testJob         = "test-job"
+	testRole                    = "test-role"
+	testRoleBinding             = "test-role-binding"
+	testPod                     = "test-pod"
+	testDeployment              = "test-deployment"
+	testJob                     = "test-job"
+	testHorizontalPodAutoScaler = "test-horizontal-pod-auto-scaler"
+	testLease                   = "test-lease"
+	testEndPointSlice           = "test-endpoint-slice"
 )
 
 var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", func() {
@@ -590,6 +596,318 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 				By("expecting successful UPDATE of job")
 				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
 				return HubCluster.KubeClient.Update(ctx, &j)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("fleet guard rail e2e for horizontal pod auto scaler", func() {
+		var hpaName string
+		BeforeEach(func() {
+			hpaName = testHorizontalPodAutoScaler + "-" + utils.RandStr()
+			hpa := autoscalingv2.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hpaName,
+					Namespace: fleetSystemNS,
+				},
+				Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "test-deployment",
+					},
+					MaxReplicas: 1,
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &hpa)).Should(Succeed())
+		})
+		AfterEach(func() {
+			hpa := autoscalingv2.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hpaName,
+					Namespace: fleetSystemNS,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &hpa)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: hpa.Name, Namespace: hpa.Namespace}, &hpa))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE horizontal pod auto scaler operation for user not in system:masters group", func() {
+			hpa := autoscalingv2.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testHorizontalPodAutoScaler + "-" + utils.RandStr(),
+					Namespace: fleetSystemNS,
+				},
+				Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "test-deployment",
+					},
+					MaxReplicas: 1,
+				},
+			}
+			By("expecting denial of operation CREATE of horizontal pod auto scaler")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &hpa)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create horizontal pod auto scaler call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "HorizontalPodAutoscaler", types.NamespacedName{Name: hpa.Name, Namespace: hpa.Namespace})))
+		})
+
+		It("should deny UPDATE horizontal pod auto scaler operation for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var hpa autoscalingv2.HorizontalPodAutoscaler
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: hpaName, Namespace: fleetSystemNS}, &hpa)).Should(Succeed())
+				hpa.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of horizontal pod auto scaler")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &hpa)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update horizontal pod auto scaler call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "HorizontalPodAutoscaler", types.NamespacedName{Name: hpa.Name, Namespace: hpa.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE horizontal pod auto scaler operation for user not in system:masters group", func() {
+			var hpa autoscalingv2.HorizontalPodAutoscaler
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: hpaName, Namespace: fleetSystemNS}, &hpa)).Should(Succeed())
+			By("expecting denial of operation DELETE of horizontal pod auto scaler")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &hpa)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete horizontal pod auto scaler call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "HorizontalPodAutoscaler", types.NamespacedName{Name: hpa.Name, Namespace: hpa.Namespace})))
+		})
+
+		It("should allow update operation on horizontal pod auto scaler for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var hpa autoscalingv2.HorizontalPodAutoscaler
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: hpaName, Namespace: fleetSystemNS}, &hpa)).Should(Succeed())
+				By("update labels in horizontal pod auto scaler")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				hpa.SetLabels(labels)
+
+				By("expecting successful UPDATE of horizontal pod auto scaler")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &hpa)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("fleet guard rail e2e for lease", func() {
+		var leaseName string
+		BeforeEach(func() {
+			leaseName = testLease + "-" + utils.RandStr()
+			l := coordinationv1.Lease{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      leaseName,
+					Namespace: kubeSystemNS,
+				},
+				Spec: coordinationv1.LeaseSpec{
+					HolderIdentity:       pointer.String("test-holder-identity"),
+					LeaseDurationSeconds: pointer.Int32(3600),
+					RenewTime:            &metav1.MicroTime{Time: metav1.Now().Time},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &l)).Should(Succeed())
+		})
+		AfterEach(func() {
+			l := coordinationv1.Lease{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      leaseName,
+					Namespace: kubeSystemNS,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &l)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: l.Name, Namespace: l.Namespace}, &l))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE horizontal lease operation for user not in system:masters group", func() {
+			l := coordinationv1.Lease{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testLease + "-" + utils.RandStr(),
+					Namespace: kubeSystemNS,
+				},
+				Spec: coordinationv1.LeaseSpec{
+					HolderIdentity:       pointer.String("test-holder-identity"),
+					LeaseDurationSeconds: pointer.Int32(3600),
+					RenewTime:            &metav1.MicroTime{Time: metav1.Now().Time},
+				},
+			}
+			By("expecting denial of operation CREATE of lease")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &l)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create lease call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Lease", types.NamespacedName{Name: l.Name, Namespace: l.Namespace})))
+		})
+
+		It("should deny UPDATE lease operation for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var l coordinationv1.Lease
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: leaseName, Namespace: kubeSystemNS}, &l)).Should(Succeed())
+				l.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of lease")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &l)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update lease call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Lease", types.NamespacedName{Name: l.Name, Namespace: l.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE lease operation for user not in system:masters group", func() {
+			var l coordinationv1.Lease
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: leaseName, Namespace: kubeSystemNS}, &l)).Should(Succeed())
+			By("expecting denial of operation DELETE of lease")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &l)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete lease call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Lease", types.NamespacedName{Name: l.Name, Namespace: l.Namespace})))
+		})
+
+		It("should allow update operation on lease for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var l coordinationv1.Lease
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: leaseName, Namespace: kubeSystemNS}, &l)).Should(Succeed())
+				By("update labels in lease")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				l.SetLabels(labels)
+
+				By("expecting successful UPDATE of lease")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &l)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("fleet guard rail e2e for end point slices", func() {
+		var endPointName string
+		BeforeEach(func() {
+			endPointName = testEndPointSlice + "-" + utils.RandStr()
+			protocol := corev1.ProtocolTCP
+			e := discoveryv1.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      endPointName,
+					Namespace: fleetSystemNS,
+				},
+				AddressType: discoveryv1.AddressTypeIPv4,
+				Ports: []discoveryv1.EndpointPort{
+					{
+						Name:     pointer.String("http"),
+						Protocol: &protocol,
+						Port:     pointer.Int32(80),
+					},
+				},
+				Endpoints: []discoveryv1.Endpoint{
+					{
+						Addresses: []string{"10.1.2.3"},
+						Conditions: discoveryv1.EndpointConditions{
+							Ready: pointer.Bool(true),
+						},
+						Hostname: pointer.String("pod-1"),
+						NodeName: pointer.String("node-1"),
+						Zone:     pointer.String("us-west2-a"),
+					},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &e)).Should(Succeed())
+		})
+		AfterEach(func() {
+			e := discoveryv1.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      endPointName,
+					Namespace: fleetSystemNS,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &e)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: e.Name, Namespace: e.Namespace}, &e))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE endpoint slice for user not in system:masters group", func() {
+			protocol := corev1.ProtocolTCP
+			e := discoveryv1.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      endPointName + "-" + utils.RandStr(),
+					Namespace: fleetSystemNS,
+				},
+				AddressType: discoveryv1.AddressTypeIPv4,
+				Ports: []discoveryv1.EndpointPort{
+					{
+						Name:     pointer.String("http"),
+						Protocol: &protocol,
+						Port:     pointer.Int32(80),
+					},
+				},
+				Endpoints: []discoveryv1.Endpoint{
+					{
+						Addresses: []string{"10.1.2.3"},
+						Conditions: discoveryv1.EndpointConditions{
+							Ready: pointer.Bool(true),
+						},
+						Hostname: pointer.String("pod-1"),
+						NodeName: pointer.String("node-1"),
+						Zone:     pointer.String("us-west2-a"),
+					},
+				},
+			}
+			By("expecting denial of operation CREATE of endpoint slice")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &e)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create endpoint slice call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "EndpointSlice", types.NamespacedName{Name: e.Name, Namespace: e.Namespace})))
+		})
+
+		It("should deny UPDATE end point slice operation for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var e discoveryv1.EndpointSlice
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: endPointName, Namespace: fleetSystemNS}, &e)).Should(Succeed())
+				e.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of endpoint slice")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &e)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update endpoint slice call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "EndpointSlice", types.NamespacedName{Name: e.Name, Namespace: e.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE endpoint slice operation for user not in system:masters group", func() {
+			var e discoveryv1.EndpointSlice
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: endPointName, Namespace: fleetSystemNS}, &e)).Should(Succeed())
+			By("expecting denial of operation DELETE of endpoint slice")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &e)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete endpoint slice call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "EndpointSlice", types.NamespacedName{Name: e.Name, Namespace: e.Namespace})))
+		})
+
+		It("should allow update operation on endpoint slice for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var e discoveryv1.EndpointSlice
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: endPointName, Namespace: fleetSystemNS}, &e)).Should(Succeed())
+				By("update labels in endpoint slice")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				e.SetLabels(labels)
+
+				By("expecting successful UPDATE of endpoint slice")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &e)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})
