@@ -126,10 +126,10 @@ func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context
 // handleWork allows/delete the request to modify work object after validation.
 func (v *fleetResourceValidator) handleWork(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Update && req.SubResource == "status" {
-		workNamespace := req.Namespace
 		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
 		var mcName string
 		startIndex := len(utils.NamespaceNameFormat) - 2
+		workNamespace := req.Namespace
 		if len(workNamespace) > startIndex {
 			mcName = workNamespace[startIndex:]
 		}
