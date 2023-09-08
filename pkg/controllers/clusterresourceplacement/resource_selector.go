@@ -124,7 +124,7 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 	}
 	restMapping, err := r.RestMapper.RESTMapping(gk, selector.Version)
 	if err != nil {
-		return nil, controller.NewUserError(fmt.Errorf("failed to get GVR of the selector: %w", err))
+		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s, failed to get GVR of the selector: %w", placeName, err))
 	}
 	gvr := restMapping.Resource
 	gvk := schema.GroupVersionKind{
@@ -133,7 +133,7 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 		Kind:    selector.Kind,
 	}
 	if !r.InformerManager.IsClusterScopedResources(gvk) {
-		return nil, controller.NewUserError(fmt.Errorf("%+v is not a cluster scoped resource", restMapping.Resource))
+		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s: %+v is not a cluster scoped resource", placeName, restMapping.Resource))
 	}
 	if !r.InformerManager.IsInformerSynced(gvr) {
 		return nil, controller.NewExpectedBehaviorError(fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource))
