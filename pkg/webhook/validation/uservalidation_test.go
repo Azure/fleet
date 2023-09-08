@@ -401,7 +401,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 		subResource      string
 		wantResponse     admission.Response
 	}{
-		"allow user in IMC identity with IMC status update": {
+		"allow user in MC identity with IMC status update": {
 			client: mockClient,
 			imc: fleetv1alpha1.InternalMemberCluster{
 				TypeMeta: metav1.TypeMeta{Kind: "InternalMemberCluster"},
@@ -424,7 +424,7 @@ func TestValidateInternalMemberClusterUpdate(t *testing.T) {
 			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"allow hub-agent-sa in IMC identity with IMC status update": {
+		"allow hub-agent-sa in MC identity with IMC status update": {
 			client: &test.MockClient{
 				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					o := obj.(*fleetv1alpha1.MemberCluster)
@@ -602,7 +602,7 @@ func TestValidateWorkUpdate(t *testing.T) {
 		subResource      string
 		wantResponse     admission.Response
 	}{
-		"allow user in work identity with status update": {
+		"allow user in MC identity with work status update": {
 			client: mockClient,
 			work: workv1alpha1.Work{
 				TypeMeta: metav1.TypeMeta{Kind: "Work"},
@@ -629,7 +629,7 @@ func TestValidateWorkUpdate(t *testing.T) {
 			subResource:  "status",
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
-		"allow hub-agent-sa in work identity with status update": {
+		"allow hub-agent-sa in MC identity with work status update": {
 			client: &test.MockClient{
 				MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					if key.Name == "test-mc" {

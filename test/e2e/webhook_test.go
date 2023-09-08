@@ -1013,7 +1013,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		})
 	})
 
-	Context("fleet guard rail for work resource, need to retrieve MC", func() {
+	Context("fleet guard rail for work resource, need to get MC", func() {
 		var mcName, workName, testMemberClusterNamespace string
 		BeforeEach(func() {
 			mcName = testMemberCluster + utils.RandStr()
