@@ -3,7 +3,6 @@ package fleetresourcehandler
 import (
 	"context"
 	"fmt"
-	"go.goms.io/fleet/pkg/utils"
 	"net/http"
 	"regexp"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
 )
 
