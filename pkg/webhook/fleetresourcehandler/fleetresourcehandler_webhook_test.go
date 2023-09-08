@@ -136,7 +136,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			subResource:  "status",
 			wantResponse: admission.Denied(fmt.Sprintf(resourceStatusUpdateNotAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
-		"allow user in system:masters group with spec update": {
+		"allow user in system:masters group with IMC non-status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-mc",
