@@ -128,7 +128,11 @@ func (v *fleetResourceValidator) handleWork(ctx context.Context, req admission.R
 	if req.Operation == admissionv1.Update && req.SubResource == "status" {
 		workNamespace := req.Namespace
 		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
-		mcName := workNamespace[len(utils.NamespaceNameFormat)-2:]
+		var mcName string
+		startIndex := len(utils.NamespaceNameFormat) - 2
+		if len(workNamespace) > startIndex {
+			mcName = workNamespace[startIndex:]
+		}
 		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, mcName)
 	}
 	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)

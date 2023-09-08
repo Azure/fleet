@@ -364,7 +364,7 @@ func TestHandleWork(t *testing.T) {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-work",
-					Namespace: "fleet-member-test-mc",
+					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "Work",
 					},
@@ -377,13 +377,9 @@ func TestHandleWork(t *testing.T) {
 				},
 			},
 			resourceValidator: fleetResourceValidator{
-				client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return errors.New("get error")
-					},
-				},
+				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "test-ns"})),
 		},
 	}
 
