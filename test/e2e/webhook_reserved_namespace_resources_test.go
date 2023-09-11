@@ -18,10 +18,14 @@ import (
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 
 	"go.goms.io/fleet/pkg/utils"
@@ -37,8 +41,12 @@ const (
 	testHorizontalPodAutoScaler = "test-horizontal-pod-auto-scaler"
 	testLease                   = "test-lease"
 	testEndPointSlice           = "test-endpoint-slice"
+	testIngress                 = "test-ingress"
+	testPodDisruptionBudget     = "test-pod-disruption-budget"
+	testCSICapacity             = "test-csi-capacity"
 )
 
+// TODO(Arvindthiru): Refactor file to use table driven tests.
 var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", func() {
 	Context("fleet guard rail e2e for role in rbac/v1 api group", func() {
 		var roleName string
@@ -908,6 +916,320 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 				By("expecting successful UPDATE of endpoint slice")
 				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
 				return HubCluster.KubeClient.Update(ctx, &e)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("fleet guard rail e2e for ingress", func() {
+		var ingressName string
+		BeforeEach(func() {
+			ingressName = testIngress + "-" + utils.RandStr()
+			pathType := networkingv1.PathTypePrefix
+			i := networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ingressName,
+					Namespace: memberNamespace.Name,
+				},
+				Spec: networkingv1.IngressSpec{
+					IngressClassName: pointer.String("test-ingress-class"),
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "http",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path:     "/testpath",
+											PathType: &pathType,
+											Backend: networkingv1.IngressBackend{
+												Service: &networkingv1.IngressServiceBackend{
+													Name: "test-service-backend",
+													Port: networkingv1.ServiceBackendPort{
+														Number: 80,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &i)).Should(Succeed())
+		})
+		AfterEach(func() {
+			i := networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ingressName,
+					Namespace: memberNamespace.Name,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &i)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: i.Name, Namespace: i.Namespace}, &i))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE ingress for user not in system:masters group", func() {
+			pathType := networkingv1.PathTypePrefix
+			i := networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testIngress + "-" + utils.RandStr(),
+					Namespace: memberNamespace.Name,
+				},
+				Spec: networkingv1.IngressSpec{
+					IngressClassName: pointer.String("test-ingress-class"),
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: "http",
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path:     "/testpath",
+											PathType: &pathType,
+											Backend: networkingv1.IngressBackend{
+												Service: &networkingv1.IngressServiceBackend{
+													Name: "test-service-backend",
+													Port: networkingv1.ServiceBackendPort{
+														Number: 80,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			By("expecting denial of operation CREATE of ingress")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &i)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create ingress call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Ingress", types.NamespacedName{Name: i.Name, Namespace: i.Namespace})))
+		})
+
+		It("should deny UPDATE ingress operation for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var i networkingv1.Ingress
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: memberNamespace.Name}, &i)).Should(Succeed())
+				i.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of ingress")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &i)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update ingress call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Ingress", types.NamespacedName{Name: i.Name, Namespace: i.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE ingress operation for user not in system:masters group", func() {
+			var i networkingv1.Ingress
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: memberNamespace.Name}, &i)).Should(Succeed())
+			By("expecting denial of operation DELETE of ingress")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &i)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete ingress call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "Ingress", types.NamespacedName{Name: i.Name, Namespace: i.Namespace})))
+		})
+
+		It("should allow update operation on ingress for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var i networkingv1.Ingress
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: memberNamespace.Name}, &i)).Should(Succeed())
+				By("update labels in ingress")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				i.SetLabels(labels)
+
+				By("expecting successful UPDATE of ingress")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &i)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("fleet guard rail e2e for pod disruption budgets", func() {
+		var pdbName string
+		BeforeEach(func() {
+			pdbName = testPodDisruptionBudget + "-" + utils.RandStr()
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pdbName,
+					Namespace: kubeSystemNS,
+				},
+				Spec: policyv1.PodDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{IntVal: 1},
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"test-key": "test-label"},
+					},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &pdb)).Should(Succeed())
+		})
+		AfterEach(func() {
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      pdbName,
+					Namespace: kubeSystemNS,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &pdb)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}, &pdb))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE pod disruption budget for user not in system:masters group", func() {
+			pdb := policyv1.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testPodDisruptionBudget + "-" + utils.RandStr(),
+					Namespace: kubeSystemNS,
+				},
+				Spec: policyv1.PodDisruptionBudgetSpec{
+					MinAvailable: &intstr.IntOrString{IntVal: 1},
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"test-key": "test-label"},
+					},
+				},
+			}
+			By("expecting denial of operation CREATE of pod disruption budget")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &pdb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create pod disruption budget call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "PodDisruptionBudget", types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace})))
+		})
+
+		It("should deny UPDATE pod disruption budget operation for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var pdb policyv1.PodDisruptionBudget
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: pdbName, Namespace: kubeSystemNS}, &pdb)).Should(Succeed())
+				pdb.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of pod disruption budget")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &pdb)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update pod disruption budget call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "PodDisruptionBudget", types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE pod disruption budget operation for user not in system:masters group", func() {
+			var pdb policyv1.PodDisruptionBudget
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: pdbName, Namespace: kubeSystemNS}, &pdb)).Should(Succeed())
+			By("expecting denial of operation DELETE of pod disruption budget")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &pdb)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete pod disruption budget call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "PodDisruptionBudget", types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace})))
+		})
+
+		It("should allow update operation on pod disruption budget for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var pdb policyv1.PodDisruptionBudget
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: pdbName, Namespace: kubeSystemNS}, &pdb)).Should(Succeed())
+				By("update labels in pod disruption budget")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				pdb.SetLabels(labels)
+
+				By("expecting successful UPDATE of pod disruption budget")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &pdb)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("fleet guard rail e2e for CSI storage capacity", func() {
+		var cscName string
+		BeforeEach(func() {
+			cscName = testCSICapacity + "-" + utils.RandStr()
+			csc := storagev1.CSIStorageCapacity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cscName,
+					Namespace: fleetSystemNS,
+				},
+				StorageClassName: "test-storage",
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &csc)).Should(Succeed())
+		})
+		AfterEach(func() {
+			csc := storagev1.CSIStorageCapacity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cscName,
+					Namespace: fleetSystemNS,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &csc)).Should(Succeed())
+			Eventually(func() bool {
+				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: csc.Name, Namespace: csc.Namespace}, &csc))
+			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+		})
+
+		It("should deny CREATE CSI storage capacity for user not in system:masters group", func() {
+			csc := storagev1.CSIStorageCapacity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testCSICapacity + "-" + utils.RandStr(),
+					Namespace: fleetSystemNS,
+				},
+				StorageClassName: "test-storage",
+			}
+			By("expecting denial of operation CREATE of CSI storage capacity")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &csc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CSI storage capacity call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "CSIStorageCapacity", types.NamespacedName{Name: csc.Name, Namespace: csc.Namespace})))
+		})
+
+		It("should deny UPDATE CSI storage capacity operation for user not in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var csc storagev1.CSIStorageCapacity
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cscName, Namespace: fleetSystemNS}, &csc)).Should(Succeed())
+				csc.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+				By("expecting denial of operation UPDATE of CSI storage capacity")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &csc)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CSI storage capacity call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "CSIStorageCapacity", types.NamespacedName{Name: csc.Name, Namespace: csc.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		It("should deny DELETE CSI storage capacity operation for user not in system:masters group", func() {
+			var csc storagev1.CSIStorageCapacity
+			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cscName, Namespace: fleetSystemNS}, &csc)).Should(Succeed())
+			By("expecting denial of operation DELETE of CSI storage capacity")
+			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &csc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete CSI storage capacity call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceStatusErrFormat, testUser, testGroups, "CSIStorageCapacity", types.NamespacedName{Name: csc.Name, Namespace: csc.Namespace})))
+		})
+
+		It("should allow update operation on CSI storage capacity for user in system:masters group", func() {
+			Eventually(func(g Gomega) error {
+				var csc storagev1.CSIStorageCapacity
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: cscName, Namespace: fleetSystemNS}, &csc)).Should(Succeed())
+				By("update labels in CSI storage capacity")
+				labels := make(map[string]string)
+				labels[testKey] = testValue
+				csc.SetLabels(labels)
+
+				By("expecting successful UPDATE of CSI storage capacity")
+				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
+				return HubCluster.KubeClient.Update(ctx, &csc)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})
