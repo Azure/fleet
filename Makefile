@@ -130,10 +130,10 @@ local-unit-test: $(ENVTEST) ## Run tests.
 
 .PHONY: integration-test
 integration-test: $(ENVTEST) ## Run tests.
-	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" \
-	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v && \
-	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler
-
+	CGO_ENABLED=1 && \
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
+	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler && \
+	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
 
 ## e2e tests
 install-hub-agent-helm:
