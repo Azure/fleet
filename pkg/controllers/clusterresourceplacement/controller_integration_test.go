@@ -20,10 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	workapi "go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 )
 
@@ -156,7 +154,7 @@ func validateCRPDeletion(crp *placementv1beta1.ClusterResourcePlacement) {
 }
 
 func createApplySucceededWork(resourceSnapshot *placementv1beta1.ClusterResourceSnapshot, namespace string) {
-	work := &workapiv1alpha1.Work{
+	work := &placementv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      "work-1",
@@ -168,7 +166,7 @@ func createApplySucceededWork(resourceSnapshot *placementv1beta1.ClusterResource
 	}
 	Expect(k8sClient.Create(ctx, work)).Should(Succeed(), "failed to create work")
 	condition := metav1.Condition{
-		Type:               workapi.ConditionTypeApplied,
+		Type:               placementv1beta1.WorkConditionTypeApplied,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: work.Generation,
 		Reason:             "Success",

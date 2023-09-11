@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/hubagent/options"
@@ -72,9 +71,6 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	err = placementv1beta1.AddToScheme(scheme.Scheme)
-	Expect(err).Should(Succeed())
-
-	err = workapiv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).Should(Succeed())
 
 	//+kubebuilder:scaffold:scheme
