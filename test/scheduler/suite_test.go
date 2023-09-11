@@ -257,7 +257,7 @@ func beforeSuiteForProcess1() []byte {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	klog.InitFlags(nil)
-	flag.Set("v", "5")
+	Expect(flag.Set("v", "5")).To(Succeed(), "Failed to set verbosity flag")
 	flag.Parse()
 	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5))))
 
@@ -353,7 +353,7 @@ func beforeSuiteForAllProcesses(hubCfgBytes []byte) {
 		// Note that settings specified here do not apply to the controller logs, but to the
 		// tests only.
 		klog.InitFlags(nil)
-		flag.Set("v", "5")
+		Expect(flag.Set("v", "5")).To(Succeed(), "Failed to set verbosity flag")
 		flag.Parse()
 		klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5))))
 	}
