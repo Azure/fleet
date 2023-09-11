@@ -122,22 +122,16 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 // handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
 func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == admissionv1.Update && req.SubResource == "status" {
-		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, req.Name)
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, req.SubResource, req.Name)
 	}
 	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handleWork allows/delete the request to modify work object after validation.
 func (v *fleetResourceValidator) handleWork(ctx context.Context, req admission.Request) admission.Response {
-	if req.Operation == admissionv1.Update && req.SubResource == "status" {
-		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
-		var mcName string
-		startIndex := len(utils.NamespaceNameFormat) - 2
-		workNamespace := req.Namespace
-		if len(workNamespace) > startIndex {
-			mcName = workNamespace[startIndex:]
-		}
-		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, mcName)
+	if req.Operation == admissionv1.Update && isFleetMemberNamespace(req.Namespace) && req.SubResource == "status" {
+		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, req.SubResource, mcName)
 	}
 	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
@@ -157,9 +151,11 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
 }
 
+// handleEvent allows/denies request to modify event after validation.
 func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.Request) admission.Response {
-	if req.Operation == admissionv1.Create {
-
+	if isFleetMemberNamespace(req.Namespace) {
+		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, req.SubResource, mcName)
 	}
 	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
@@ -185,4 +181,22 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
+}
+
+// isFleetMemberNamespace returns true if namespace is a fleet member cluster namespace.
+func isFleetMemberNamespace(namespace string) bool {
+	return strings.HasPrefix(namespace, "fleet-member")
+}
+
+// parseMemberClusterNameFromNamespace returns member cluster name from fleet member cluster namespace.
+// returns empty string if namespace is not a fleet member cluster namespace.
+func parseMemberClusterNameFromNamespace(namespace string) string {
+	// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
+	var mcName string
+	startIndex := len(utils.NamespaceNameFormat) - 2
+	workNamespace := namespace
+	if len(workNamespace) > startIndex {
+		mcName = workNamespace[startIndex:]
+	}
+	return mcName
 }
