@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
 package work
 
 import (
@@ -106,7 +111,7 @@ func TestCalculateNewAppliedWork(t *testing.T) {
 								Identifier: workIdentifier,
 								Conditions: []metav1.Condition{
 									{
-										Type:   ConditionTypeApplied,
+										Type:   fleetv1beta1.WorkConditionTypeApplied,
 										Status: metav1.ConditionFalse,
 									},
 								},
@@ -316,7 +321,7 @@ func generateWorkObj(identifier *fleetv1beta1.WorkResourceIdentifier) fleetv1bet
 						Identifier: *identifier,
 						Conditions: []metav1.Condition{
 							{
-								Type:   ConditionTypeApplied,
+								Type:   fleetv1beta1.WorkConditionTypeApplied,
 								Status: metav1.ConditionTrue,
 							},
 						},

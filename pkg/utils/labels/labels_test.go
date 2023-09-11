@@ -9,14 +9,15 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-func TestExtractResourceIndexFromClusterResourceSnapshot(t *testing.T) {
-	snapshotName := "test-snapshot"
+const (
+	snapshotName = "test-snapshot"
+)
 
+func TestExtractResourceIndexFromClusterResourceSnapshot(t *testing.T) {
 	testCases := []struct {
 		name      string
 		snapshot  *fleetv1beta1.ClusterResourceSnapshot
@@ -88,17 +89,15 @@ func TestExtractResourceIndexFromClusterResourceSnapshot(t *testing.T) {
 }
 
 func TestExtractResourceSnapshotIndexFromWork(t *testing.T) {
-	snapshotName := "test-snapshot"
-
 	testCases := []struct {
 		name      string
-		snapshot  *workv1alpha1.Work
+		snapshot  *fleetv1beta1.Work
 		wantIndex int
 		wantError bool
 	}{
 		{
 			name: "valid annotation",
-			snapshot: &workv1alpha1.Work{
+			snapshot: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: snapshotName,
 					Labels: map[string]string{
@@ -110,7 +109,7 @@ func TestExtractResourceSnapshotIndexFromWork(t *testing.T) {
 		},
 		{
 			name: "no label",
-			snapshot: &workv1alpha1.Work{
+			snapshot: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: snapshotName,
 				},
@@ -119,7 +118,7 @@ func TestExtractResourceSnapshotIndexFromWork(t *testing.T) {
 		},
 		{
 			name: "invalid label: not an integer",
-			snapshot: &workv1alpha1.Work{
+			snapshot: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: snapshotName,
 					Labels: map[string]string{
@@ -131,7 +130,7 @@ func TestExtractResourceSnapshotIndexFromWork(t *testing.T) {
 		},
 		{
 			name: "invalid label: negative integer",
-			snapshot: &workv1alpha1.Work{
+			snapshot: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: snapshotName,
 					Labels: map[string]string{

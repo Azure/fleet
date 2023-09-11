@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -203,13 +202,13 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, resourceBinding client
 }
 
 // listAllWorksAssociated finds all the live work objects that are associated with this binding.
-func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (map[string]*workv1alpha1.Work, error) {
+func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (map[string]*fleetv1beta1.Work, error) {
 	namespaceMatcher := client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster))
 	parentBindingLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.ParentBindingLabel: resourceBinding.Name,
 	}
-	currentWork := make(map[string]*workv1alpha1.Work)
-	workList := &workv1alpha1.WorkList{}
+	currentWork := make(map[string]*fleetv1beta1.Work)
+	workList := &fleetv1beta1.WorkList{}
 	if err := r.Client.List(ctx, workList, parentBindingLabelMatcher, namespaceMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the work associated with the resourceSnapshot", "resourceBinding", klog.KObj(resourceBinding))
 		return nil, controller.NewAPIServerError(true, err)
@@ -225,7 +224,7 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 
 // syncAllWork generates all the work for the resourceSnapshot and apply them to the corresponding target cluster.
 // it returns if we actually made any changes on the hub cluster.
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, works map[string]*workv1alpha1.Work) (bool, error) {
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, works map[string]*fleetv1beta1.Work) (bool, error) {
 	updateAny := false
 	resourceBindingRef := klog.KObj(resourceBinding)
 
@@ -331,7 +330,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 
 // upsertWork creates or updates the work for the corresponding resource snapshot.
 // it returns if any change is made to the work and the possible error code.
-func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, workName string, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
+func (r *Reconciler) upsertWork(ctx context.Context, work *fleetv1beta1.Work, workName string, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
 	resourceBinding *fleetv1beta1.ClusterResourceBinding) (bool, error) {
 	needCreate := false
 	var workObj klog.ObjectRef
@@ -341,7 +340,7 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, wo
 	resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
 	if work == nil {
 		needCreate = true
-		work = &workv1alpha1.Work{
+		work = &fleetv1beta1.Work{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      workName,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
@@ -378,11 +377,9 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *workv1alpha1.Work, wo
 	// the work is pointing to a different resource snapshot, need to reset the manifest list
 	// reset the manifest list regardless and make sure the work is pointing to the right resource snapshot
 	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
-	work.Spec.Workload.Manifests = make([]workv1alpha1.Manifest, 0)
+	work.Spec.Workload.Manifests = make([]fleetv1beta1.Manifest, 0)
 	for _, selectedResource := range resourceSnapshot.Spec.SelectedResources {
-		work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, workv1alpha1.Manifest{
-			RawExtension: selectedResource.RawExtension,
-		})
+		work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, fleetv1beta1.Manifest(selectedResource))
 	}
 
 	// upsert the work
@@ -426,7 +423,7 @@ func getWorkNameFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceS
 	return fmt.Sprintf(fleetv1beta1.WorkNameWithSubindexFmt, crpName, subIndexVal), nil
 }
 
-func buildAllWorkAppliedCondition(works map[string]*workv1alpha1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
+func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
 	allApplied := true
 	for _, work := range works {
 		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), work.GetGeneration()) {
@@ -458,7 +455,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("work generator")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &workv1alpha1.Work{}}, &handler.Funcs{
+		Watches(&source.Kind{Type: &fleetv1beta1.Work{}}, &handler.Funcs{
 			// we care about work delete event as we want to know when a work is deleted so that we can
 			// delete the corresponding resource binding fast.
 			DeleteFunc: func(evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
@@ -493,13 +490,13 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 						"Could not find the parent binding label", "updatedWork", evt.ObjectNew, "existing label", evt.ObjectNew.GetLabels())
 					return
 				}
-				oldWork, ok := evt.ObjectOld.(*workv1alpha1.Work)
+				oldWork, ok := evt.ObjectOld.(*fleetv1beta1.Work)
 				if !ok {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("received old object %v not a work object", evt.ObjectOld)),
 						"Failed to process an update event for work object")
 					return
 				}
-				newWork, ok := evt.ObjectNew.(*workv1alpha1.Work)
+				newWork, ok := evt.ObjectNew.(*fleetv1beta1.Work)
 				if !ok {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("received new object %v not a work object", evt.ObjectNew)),
 						"Failed to process an update event for work object")
