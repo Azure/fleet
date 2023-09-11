@@ -9,6 +9,7 @@ package tests
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,17 +31,12 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	sched "go.goms.io/fleet/pkg/scheduler"
+	"go.goms.io/fleet/pkg/scheduler"
 	"go.goms.io/fleet/pkg/scheduler/clustereligibilitychecker"
-	fw "go.goms.io/fleet/pkg/scheduler/framework"
-	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
-	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
-	"go.goms.io/fleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
-	"go.goms.io/fleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
 	"go.goms.io/fleet/pkg/scheduler/queue"
-	crpwatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
-	pswatcher "go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
-	mcwatcher "go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
+	"go.goms.io/fleet/pkg/scheduler/watchers/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/scheduler/watchers/clusterschedulingpolicysnapshot"
+	"go.goms.io/fleet/pkg/scheduler/watchers/membercluster"
 )
 
 const (
@@ -55,16 +52,16 @@ const (
 	consistentlyDuration = time.Second * 1
 	consistentlyInterval = time.Millisecond * 200
 
-	memberCluster1  = "bravelion"
-	memberCluster2  = "singingbutterfly"
-	memberCluster3  = "smartfish"
-	memberCluster4  = "dancingelephant"
-	memberCluster5  = "jumpingfox"
-	memberCluster6  = "vigilantpenguin"
-	memberCluster7  = "sleepingbear"
-	memberCluster8  = "runningwolf"
-	memberCluster9  = "walkingeagle"
-	memberCluster10 = "blueflamingo"
+	memberCluster1  = "cluster-1-east-prod"
+	memberCluster2  = "cluster-2-east-prod"
+	memberCluster3  = "cluster-3-east-canary"
+	memberCluster4  = "cluster-4-central-prod"
+	memberCluster5  = "cluster-5-central-prod"
+	memberCluster6  = "cluster-6-west-prod"
+	memberCluster7  = "cluster-7-west-canary"
+	memberCluster8  = "unhealthy-cluster-east-prod"
+	memberCluster9  = "left-cluster-central-prod"
+	memberCluster10 = "non-existent-cluster"
 
 	regionLabel = "region"
 	envLabel    = "env"
@@ -82,23 +79,23 @@ var (
 	// * 10 member clusters in total
 	//
 	// * 7 clusters are in the healthy state (i.e., eligible for resource placement), incl.
-	//     * bravelion, singingbutterfly, smartfish, dancingelephant, jumpingfox, vigilantpenguin, sleepingbear
-	// * 3 clusters are not eligible for resource placement, incl.
-	//     * runningwolf (unhealthy)
-	//     * walkingeagle (left)
-	//     * blueflamingo (not joined yet, i.e., non-existent)
+	//     * cluster 1-7
+	// * 3 clusters are ineligible for resource placement, incl.
+	//     * cluster 8 (becomes unhealthy)
+	//     * cluster 9 (has left the fleet)
+	//     * cluster 10 (not joined yet, i.e., non-existent)
 	//
 	// * 4 clusters are in the east region (with the label "region=east"), incl.
-	//     * bravelion, singingbutterfly, smartfish, runningwolf
+	//     * cluster 1, 3, 8
 	// * 3 clusters are in the central region (with the label "region=central"), incl.
-	//     * dancingelephant, jumpingfox, walkingeagle
+	//     * member 4, 5, 9
 	// * 2 clusters are in the west region (with the label "region=west"), incl.
-	//     * vigilantpenguin, sleepingbear
+	//     * member 6, 7
 	//
 	// * 7 clusters are in the production environment (with the label "environment=prod"), incl.
-	//     * bravelion, singingbutterfly, dancingelephant, jumpingfox, vigilantpenguin, runningwolf, walkingeagle
+	//     * clusters other than cluster 3, 7, and 10
 	// * 2 clusters are in the canary environment (with the label "environment=canary"), incl.
-	//     * smartfish, sleepingbear
+	//     * cluster 3 and 7
 	allClusters = []string{
 		memberCluster1, memberCluster2, memberCluster3, memberCluster4, memberCluster5,
 		memberCluster6, memberCluster7, memberCluster8, memberCluster9,
@@ -257,9 +254,12 @@ func setupResources() {
 }
 
 func beforeSuiteForProcess1() []byte {
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-
 	ctx, cancel = context.WithCancel(context.TODO())
+
+	klog.InitFlags(nil)
+	flag.Set("v", "5")
+	flag.Parse()
+	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5))))
 
 	By("bootstrapping the test environment")
 	// Start the hub cluster.
@@ -290,7 +290,7 @@ func beforeSuiteForProcess1() []byte {
 	schedulerWorkQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
 
 	// Build a custom cluster eligibility checker.
-	eligibilityChecker := clustereligibilitychecker.New(
+	clusterEligibilityChecker := clustereligibilitychecker.New(
 		// Use a (much) larger health check and heartbeat check timeouts as in the test
 		// environment there is no actual agent to report health check status and send heartbeat
 		// signals.
@@ -299,61 +299,31 @@ func beforeSuiteForProcess1() []byte {
 	)
 
 	// Register the watchers.
-	crpReconciler := crpwatcher.Reconciler{
+	crpReconciler := clusterresourceplacement.Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
 	err = crpReconciler.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up CRP watcher with controller manager")
 
-	policySnapshotWatcher := pswatcher.Reconciler{
+	policySnapshotWatcher := clusterschedulingpolicysnapshot.Reconciler{
 		Client:             hubClient,
 		SchedulerWorkQueue: schedulerWorkQueue,
 	}
 	err = policySnapshotWatcher.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up policy snapshot watcher with controller manager")
 
-	memberClusterWatcher := mcwatcher.Reconciler{
+	memberClusterWatcher := membercluster.Reconciler{
 		Client:                    hubClient,
 		SchedulerWorkQueue:        schedulerWorkQueue,
-		ClusterEligibilityChecker: eligibilityChecker,
+		ClusterEligibilityChecker: clusterEligibilityChecker,
 	}
 	err = memberClusterWatcher.SetupWithManager(ctrlMgr)
 	Expect(err).NotTo(HaveOccurred(), "Failed to set up member cluster watcher with controller manager")
 
 	// Set up the scheduler.
-
-	// Create a new profile.
-	profile := fw.NewProfile(defaultProfileName)
-
-	// Register the plugins.
-	clusterAffinityPlugin := clusteraffinity.New()
-	clustereligibilityPlugin := clustereligibility.New()
-	samePlacementAffinityPlugin := sameplacementaffinity.New()
-	topologyspreadconstraintsPlugin := topologyspreadconstraints.New()
-	profile.
-		// Register cluster affinity plugin.
-		WithPreFilterPlugin(&clusterAffinityPlugin).
-		WithFilterPlugin(&clusterAffinityPlugin).
-		WithPreScorePlugin(&clusterAffinityPlugin).
-		WithScorePlugin(&clusterAffinityPlugin).
-		// Register cluster eligibility plugin.
-		WithFilterPlugin(&clustereligibilityPlugin).
-		// Register same placement affinity plugin.
-		WithFilterPlugin(&samePlacementAffinityPlugin).
-		WithScorePlugin(&samePlacementAffinityPlugin).
-		// Register topology spread constraints plugin.
-		WithPostBatchPlugin(&topologyspreadconstraintsPlugin).
-		WithPreFilterPlugin(&topologyspreadconstraintsPlugin).
-		WithFilterPlugin(&topologyspreadconstraintsPlugin).
-		WithPreScorePlugin(&topologyspreadconstraintsPlugin).
-		WithScorePlugin(&topologyspreadconstraintsPlugin)
-
-	// Create a scheduler framework.
-	framework := fw.NewFramework(profile, ctrlMgr, fw.WithClusterEligibilityChecker(eligibilityChecker))
-
-	// Create a scheduler.
-	scheduler := sched.NewScheduler(defaultSchedulerName, framework, schedulerWorkQueue, ctrlMgr)
+	fw := buildSchedulerFramework(ctrlMgr, clusterEligibilityChecker)
+	sched := scheduler.NewScheduler(defaultSchedulerName, fw, schedulerWorkQueue, ctrlMgr)
 
 	// Run the controller manager.
 	go func() {
@@ -364,7 +334,7 @@ func beforeSuiteForProcess1() []byte {
 
 	// Run the scheduler.
 	go func() {
-		scheduler.Run(ctx)
+		sched.Run(ctx)
 	}()
 
 	// Pass the hub config to other processes.
@@ -377,6 +347,15 @@ func beforeSuiteForAllProcesses(hubCfgBytes []byte) {
 		// Ginkgo processes other than the first one; otherwise the context set
 		// before would be overwritten and cannot get cancelled at the end of the suite.
 		ctx, cancel = context.WithCancel(context.Background())
+
+		// Set the log verbosity level.
+		//
+		// Note that settings specified here do not apply to the controller logs, but to the
+		// tests only.
+		klog.InitFlags(nil)
+		flag.Set("v", "5")
+		flag.Parse()
+		klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.Level(-5))))
 	}
 
 	hubCfg := loadRestConfigFrom(hubCfgBytes)

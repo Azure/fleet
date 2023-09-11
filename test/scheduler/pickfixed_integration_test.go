@@ -160,9 +160,9 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 			memberCluster4,
 			memberCluster5,
 			memberCluster6,
-			memberCluster8,  // cluster runningwolf is an invalid cluster (unhealthy).
-			memberCluster9,  // cluster walkingeagle is an invalid cluster (left).
-			memberCluster10, // cluster blueflamingo cannot be found in the fleet.
+			memberCluster8,  // An invalid cluster (unhealthy).
+			memberCluster9,  // An invalid cluster (left).
+			memberCluster10, // A cluster that cannot be found in the fleet.
 		}
 
 		validClusters := []string{
