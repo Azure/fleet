@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"strconv"
 
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -21,7 +19,7 @@ func ExtractResourceIndexFromClusterResourceSnapshot(snapshot *fleetv1beta1.Clus
 }
 
 // ExtractResourceSnapshotIndexFromWork extracts the resource snapshot index from the work.
-func ExtractResourceSnapshotIndexFromWork(work *workv1alpha1.Work) (int, error) {
+func ExtractResourceSnapshotIndexFromWork(work *fleetv1beta1.Work) (int, error) {
 	return validateResourceIndexStr(work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel])
 }
 

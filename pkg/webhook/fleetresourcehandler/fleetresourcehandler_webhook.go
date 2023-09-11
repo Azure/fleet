@@ -18,8 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
 )
 
@@ -34,6 +36,7 @@ var (
 	mcGVK        = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
 	imcGVK       = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	namespaceGVK = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	workGVK      = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -71,6 +74,9 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == imcGVK:
 			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleInternalMemberCluster(ctx, req)
+		case req.Kind == workGVK:
+			klog.V(2).InfoS("handling work resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
+			response = v.handleWork(ctx, req)
 		case req.Namespace != "":
 			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req.Kind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
@@ -111,14 +117,25 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 
 // handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
 func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
-	var imc fleetv1alpha1.InternalMemberCluster
-	if err := v.decodeRequestObject(req, &imc); err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+	if req.Operation == admissionv1.Update && req.SubResource == "status" {
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, req.Name)
 	}
-	if req.Operation == admissionv1.Update {
-		return validation.ValidateInternalMemberClusterUpdate(ctx, v.client, imc, v.whiteListedUsers, req.UserInfo, req.SubResource)
+	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
+}
+
+// handleWork allows/delete the request to modify work object after validation.
+func (v *fleetResourceValidator) handleWork(ctx context.Context, req admission.Request) admission.Response {
+	if req.Operation == admissionv1.Update && req.SubResource == "status" {
+		// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
+		var mcName string
+		startIndex := len(utils.NamespaceNameFormat) - 2
+		workNamespace := req.Namespace
+		if len(workNamespace) > startIndex {
+			mcName = workNamespace[startIndex:]
+		}
+		return validation.ValidateMCIdentity(ctx, v.client, req.UserInfo, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, req.RequestKind.Kind, mcName)
 	}
-	return validation.ValidateUserForResource(imc.Kind, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, v.whiteListedUsers, req.UserInfo)
+	return validation.ValidateUserForResource(req.RequestKind.Kind, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, v.whiteListedUsers, req.UserInfo)
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.

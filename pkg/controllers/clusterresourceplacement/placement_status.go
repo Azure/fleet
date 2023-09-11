@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -136,7 +135,7 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 	workLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel: crp.Name,
 	}
-	workList := &workv1alpha1.WorkList{}
+	workList := &fleetv1beta1.WorkList{}
 
 	if err := r.Client.List(ctx, workList, workLabelMatcher, namespaceMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the work associated with the clusterResourcePlacement", "clusterResourcePlacement", crpKObj, "clusterName", status.ClusterName)
@@ -269,7 +268,7 @@ func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPe
 
 // buildFailedResourcePlacements returns if work is pending or not.
 // If the work has been applied, it returns the list of failed resources.
-func buildFailedResourcePlacements(work *workv1alpha1.Work) (isPending bool, res []fleetv1beta1.FailedResourcePlacement) {
+func buildFailedResourcePlacements(work *fleetv1beta1.Work) (isPending bool, res []fleetv1beta1.FailedResourcePlacement) {
 	// check the overall condition
 	workKObj := klog.KObj(work)
 	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)

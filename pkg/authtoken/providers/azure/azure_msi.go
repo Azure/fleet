@@ -56,7 +56,7 @@ func (a *AuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToke
 				Scopes: []string{a.Scope},
 			})
 			if err != nil {
-				klog.ErrorS(err, "Failed to GetToken")
+				klog.ErrorS(err, "Failed to GetToken", "scope", a.Scope)
 			}
 			return err
 		})
