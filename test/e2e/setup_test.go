@@ -35,9 +35,9 @@ const (
 	//
 	// Note that these names must match with those in `setup.sh`, with a prefix `kind-`.
 	hubClusterName     = "kind-hub"
-	memberCluster1Name = "kind-bravelion"
-	memberCluster2Name = "kind-singingbutterfly"
-	memberCluster3Name = "kind-smartfish"
+	memberCluster1Name = "kind-cluster-1"
+	memberCluster2Name = "kind-cluster-2"
+	memberCluster3Name = "kind-cluster-3"
 
 	hubClusterSAName = "hub-agent-sa"
 	fleetSystemNS    = "fleet-system"

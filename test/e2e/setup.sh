@@ -10,9 +10,9 @@ KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.25.11}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 
 HUB_CLUSTER="hub"
-MEMBER_CLUSTER_1="bravelion"
-MEMBER_CLUSTER_2="singingbutterfly"
-MEMBER_CLUSTER_3="smartfish"
+MEMBER_CLUSTER_1="cluster-1"
+MEMBER_CLUSTER_2="cluster-2"
+MEMBER_CLUSTER_3="cluster-3"
 declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
 
 export REGISTRY="${REGISTRY:-ghcr.io}"

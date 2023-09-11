@@ -12,7 +12,6 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -29,6 +28,9 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				ResourceSelectors: workResourceSelector,
@@ -39,28 +41,23 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 
 	It("should place the resources on all member clusters", func() {
 		for idx := range allMemberClusters {
-			memberCluster := allMemberClusters[idx]
-
-			workResourcesPlacedActual := workNamespaceAndDeploymentPlacedOnClusterActual(memberCluster)
+			workResourcesPlacedActual := workNamespaceAndDeploymentPlacedOnClusterActual(allMemberClusters[idx])
 			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster")
 		}
 	})
 
 	It("should update CRP status as expected", func() {
-		statusUpdatedActual := crpStatusUpdatedActual()
-		Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 	})
 
 	It("can delete the CRP", func() {
-		// Update the CRP to add a custom finalizer; this would allow us to better observe
-		// the behavior of the controllers.
-		crp := &placementv1beta1.ClusterResourcePlacement{}
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
-
-		controllerutil.AddFinalizer(crp, customDeletionBlockerFinalizer)
-		Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
-
 		// Delete the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+		}
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
 	})
 

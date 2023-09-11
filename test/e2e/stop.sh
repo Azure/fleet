@@ -8,9 +8,9 @@ set -o nounset
 set -o pipefail
 
 HUB_CLUSTER="hub"
-MEMBER_CLUSTER_1="bravelion"
-MEMBER_CLUSTER_2="singingbutterfly"
-MEMBER_CLUSTER_3="smartfish"
+MEMBER_CLUSTER_1="cluster-1"
+MEMBER_CLUSTER_2="cluster-2"
+MEMBER_CLUSTER_3="cluster-3"
 declare -a ALL_CLUSTERS=($HUB_CLUSTER $MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
 
 for i in "${ALL_CLUSTERS[@]}"
