@@ -70,7 +70,7 @@ var (
 	}
 )
 
-func validatePolicySnapshot(crp *placementv1beta1.ClusterResourcePlacement, want *placementv1beta1.ClusterSchedulingPolicySnapshot) *placementv1beta1.ClusterSchedulingPolicySnapshot {
+func retrieveAndValidatePolicySnapshot(crp *placementv1beta1.ClusterResourcePlacement, want *placementv1beta1.ClusterSchedulingPolicySnapshot) *placementv1beta1.ClusterSchedulingPolicySnapshot {
 	policySnapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
 	Eventually(func() error {
 		if err := k8sClient.List(ctx, policySnapshotList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
@@ -87,7 +87,7 @@ func validatePolicySnapshot(crp *placementv1beta1.ClusterResourcePlacement, want
 	return &policySnapshotList.Items[0]
 }
 
-func validateResourceSnapshot(crp *placementv1beta1.ClusterResourcePlacement, want *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceSnapshot {
+func retrieveAndValidateResourceSnapshot(crp *placementv1beta1.ClusterResourcePlacement, want *placementv1beta1.ClusterResourceSnapshot) *placementv1beta1.ClusterResourceSnapshot {
 	resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
 	Eventually(func() error {
 		if err := k8sClient.List(ctx, resourceSnapshotList, client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crp.Name}); err != nil {
@@ -104,7 +104,7 @@ func validateResourceSnapshot(crp *placementv1beta1.ClusterResourcePlacement, wa
 	return &resourceSnapshotList.Items[0]
 }
 
-func validateClusterResourcePlacement(crpName string, want *placementv1beta1.ClusterResourcePlacement) *placementv1beta1.ClusterResourcePlacement {
+func retrieveAndValidateClusterResourcePlacement(crpName string, want *placementv1beta1.ClusterResourcePlacement) *placementv1beta1.ClusterResourcePlacement {
 	key := types.NamespacedName{Name: crpName}
 	createdCRP := &placementv1beta1.ClusterResourcePlacement{}
 	Eventually(func() error {
@@ -119,7 +119,7 @@ func validateClusterResourcePlacement(crpName string, want *placementv1beta1.Clu
 	return createdCRP
 }
 
-func validateCRPDeletion(crp *placementv1beta1.ClusterResourcePlacement) {
+func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlacement) {
 	By("Checking the policy snapshots")
 	policySnapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
 	Eventually(func() error {
@@ -127,7 +127,7 @@ func validateCRPDeletion(crp *placementv1beta1.ClusterResourcePlacement) {
 			return err
 		}
 		if len(policySnapshotList.Items) != 0 {
-			return fmt.Errorf("got %v, want 0", len(policySnapshotList.Items))
+			return fmt.Errorf("policySnapshotList len got %v, want 0", len(policySnapshotList.Items))
 		}
 		return nil
 	}, eventuallyTimeout, interval).Should(Succeed(), "List() clusterSchedulingPolicySnapshot mismatch")
@@ -139,7 +139,7 @@ func validateCRPDeletion(crp *placementv1beta1.ClusterResourcePlacement) {
 			return err
 		}
 		if len(resourceSnapshotList.Items) != 0 {
-			return fmt.Errorf("got %d, want 0", len(resourceSnapshotList.Items))
+			return fmt.Errorf("resourceSnapshotList len got %d, want 0", len(resourceSnapshotList.Items))
 		}
 		return nil
 	}, eventuallyTimeout, interval).Should(Succeed(), "List() resourceSnapshotList mismatch")
@@ -164,7 +164,7 @@ func createApplySucceededWork(resourceSnapshot *placementv1beta1.ClusterResource
 			},
 		},
 	}
-	Expect(k8sClient.Create(ctx, work)).Should(Succeed(), "failed to create work")
+	Expect(k8sClient.Create(ctx, work)).Should(Succeed(), "Failed to create work")
 	condition := metav1.Condition{
 		Type:               placementv1beta1.WorkConditionTypeApplied,
 		Status:             metav1.ConditionTrue,
@@ -172,7 +172,7 @@ func createApplySucceededWork(resourceSnapshot *placementv1beta1.ClusterResource
 		Reason:             "Success",
 	}
 	meta.SetStatusCondition(&work.Status.Conditions, condition)
-	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed(), "failed to update work status as applied")
+	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed(), "Failed to update work status as applied")
 }
 
 var _ = Describe("Test ClusterResourcePlacement Controller", func() {
@@ -205,7 +205,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					RevisionHistoryLimit: pointer.Int32(1),
 				},
 			}
-			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "failed to create crp")
+			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create crp")
 
 			By("By checking clusterSchedulingPolicySnapshot")
 			policyHash, err := generatePolicyHash(crp.Spec.Policy)
@@ -230,14 +230,14 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					PolicyHash: []byte(policyHash),
 				},
 			}
-			gotPolicySnapshot = validatePolicySnapshot(crp, &wantPolicySnapshot)
+			gotPolicySnapshot = retrieveAndValidatePolicySnapshot(crp, &wantPolicySnapshot)
 
 			By("By checking clusterResourceSnapshot")
 			emptyResources := &placementv1beta1.ResourceSnapshotSpec{
 				SelectedResources: []placementv1beta1.ResourceContent{},
 			}
 			jsonBytes, err := generateResourceHash(emptyResources)
-			Expect(err).Should(Succeed(), "failed to create resource hash")
+			Expect(err).Should(Succeed(), "Failed to create resource hash")
 
 			wantResourceSnapshot := &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
@@ -259,7 +259,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					SelectedResources: []placementv1beta1.ResourceContent{},
 				},
 			}
-			gotResourceSnapshot = validateResourceSnapshot(crp, wantResourceSnapshot)
+			gotResourceSnapshot = retrieveAndValidateResourceSnapshot(crp, wantResourceSnapshot)
 			By("By checking CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -287,13 +287,13 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			gotCRP = validateClusterResourcePlacement(testName, wantCRP)
+			gotCRP = retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
 		})
 
 		AfterEach(func() {
 			By("Deleting crp")
 			Expect(k8sClient.Delete(ctx, gotCRP)).Should(Succeed())
-			validateCRPDeletion(gotCRP)
+			retrieveAndValidateCRPDeletion(gotCRP)
 		})
 
 		It("None of the clusters are selected", func() {
@@ -301,12 +301,12 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			scheduledCondition := metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
-				Reason:             "Completed",
+				Reason:             resourceScheduleSucceededReason,
 				ObservedGeneration: gotCRP.Generation,
 			}
 			meta.SetStatusCondition(&gotPolicySnapshot.Status.Conditions, scheduledCondition)
 			gotPolicySnapshot.Status.ObservedCRPGeneration = gotCRP.Generation
-			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "failed to update the policy snapshot status")
+			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
 			By("By validating the CRP status")
 			wantCRP := &placementv1beta1.ClusterResourcePlacement{
@@ -325,7 +325,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: "Completed",
+							Reason: resourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
@@ -335,7 +335,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			validateClusterResourcePlacement(testName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
 		})
 
 		It("Clusters are selected and resources are applied successfully", func() {
@@ -343,7 +343,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			scheduledCondition := metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
-				Reason:             "Completed",
+				Reason:             resourceScheduleSucceededReason,
 				ObservedGeneration: gotCRP.Generation,
 			}
 			meta.SetStatusCondition(&gotPolicySnapshot.Status.Conditions, scheduledCondition)
@@ -360,7 +360,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Reason:      "valid",
 				},
 			}
-			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "failed to update the policy snapshot status")
+			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
 			By("By creating appliedSuccess works on member-1")
 			createApplySucceededWork(gotResourceSnapshot, member1Namespace)
@@ -382,7 +382,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: "Completed",
+							Reason: resourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionFalse,
@@ -434,7 +434,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			validateClusterResourcePlacement(testName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
 
 			By("By creating appliedSuccess works on member-2")
 			createApplySucceededWork(gotResourceSnapshot, member2Namespace)
@@ -454,7 +454,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: "Completed",
+							Reason: resourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
@@ -506,7 +506,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					},
 				},
 			}
-			validateClusterResourcePlacement(testName, wantCRP)
+			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
 		})
 	})
 })

@@ -159,22 +159,6 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	defer klog.Flush()
-
-	By("By deleting member clusters namespaces")
-	ns := corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: member1Namespace,
-		},
-	}
-	Expect(k8sClient.Delete(ctx, &ns)).Should(Succeed())
-
-	ns = corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: member2Namespace,
-		},
-	}
-	Expect(k8sClient.Delete(ctx, &ns)).Should(Succeed())
-
 	cancel()
 
 	By("tearing down the test environment")
