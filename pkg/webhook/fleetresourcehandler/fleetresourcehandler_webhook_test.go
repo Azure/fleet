@@ -24,16 +24,18 @@ const (
 	resourceAllowedFormat      = "user: %s in groups: %v is allowed to modify resource %s: %+v"
 	resourceDeniedFormat       = "user: %s in groups: %v is not allowed to modify resource %s: %+v"
 	resourceAllowedGetMCFailed = "user: %s in groups: %v is allowed to updated %s: %+v because we failed to get MC"
+
+	mcName = "test-mc"
 )
 
 func TestHandleInternalMemberCluster(t *testing.T) {
 	mockClient := &test.MockClient{
 		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-			if key.Name == "test-mc" {
+			if key.Name == mcName {
 				o := obj.(*fleetv1alpha1.MemberCluster)
 				*o = fleetv1alpha1.MemberCluster{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-mc",
+						Name: mcName,
 					},
 					Spec: fleetv1alpha1.MemberClusterSpec{
 						Identity: rbacv1.Subject{
@@ -54,7 +56,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 		"allow user in MC identity with IMC status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
+					Name:      mcName,
 					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
@@ -70,12 +72,12 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow hub-agent-sa in MC identity with IMC status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
+					Name:      mcName,
 					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
@@ -94,7 +96,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 						o := obj.(*fleetv1alpha1.MemberCluster)
 						*o = fleetv1alpha1.MemberCluster{
 							ObjectMeta: metav1.ObjectMeta{
-								Name:      "test-mc",
+								Name:      mcName,
 								Namespace: "test-namespace",
 							},
 							Spec: fleetv1alpha1.MemberClusterSpec{
@@ -107,12 +109,12 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					},
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"deny user in system:masters group with IMC status update in fleet member cluster namespace": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
+					Name:      mcName,
 					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
@@ -128,12 +130,12 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow user in system:masters group with IMC non-status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
+					Name:      mcName,
 					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
@@ -145,12 +147,12 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"deny user not in system:masters group with IMC non-status update": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
+					Name:      mcName,
 					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
@@ -162,12 +164,12 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow request if MC get fails": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
+					Name:      mcName,
 					Namespace: "fleet-member",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
@@ -187,7 +189,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					},
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "fleet-member"})),
 		},
 	}
 
@@ -202,11 +204,11 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 func TestHandleWork(t *testing.T) {
 	mockClient := &test.MockClient{
 		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-			if key.Name == "test-mc" {
+			if key.Name == mcName {
 				o := obj.(*fleetv1alpha1.MemberCluster)
 				*o = fleetv1alpha1.MemberCluster{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-mc",
+						Name: mcName,
 					},
 					Spec: fleetv1alpha1.MemberClusterSpec{
 						Identity: rbacv1.Subject{
@@ -264,11 +266,11 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						if key.Name == "test-mc" {
+						if key.Name == mcName {
 							o := obj.(*fleetv1alpha1.MemberCluster)
 							*o = fleetv1alpha1.MemberCluster{
 								ObjectMeta: metav1.ObjectMeta{
-									Name: "test-mc",
+									Name: mcName,
 								},
 								Spec: fleetv1alpha1.MemberClusterSpec{
 									Identity: rbacv1.Subject{
@@ -373,11 +375,11 @@ func TestHandleWork(t *testing.T) {
 func TestHandleEvent(t *testing.T) {
 	mockClient := &test.MockClient{
 		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-			if key.Name == "test-mc" {
+			if key.Name == mcName {
 				o := obj.(*fleetv1alpha1.MemberCluster)
 				*o = fleetv1alpha1.MemberCluster{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-mc",
+						Name: mcName,
 					},
 					Spec: fleetv1alpha1.MemberClusterSpec{
 						Identity: rbacv1.Subject{
@@ -433,11 +435,11 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						if key.Name == "test-mc" {
+						if key.Name == mcName {
 							o := obj.(*fleetv1alpha1.MemberCluster)
 							*o = fleetv1alpha1.MemberCluster{
 								ObjectMeta: metav1.ObjectMeta{
-									Name: "test-mc",
+									Name: mcName,
 								},
 								Spec: fleetv1alpha1.MemberClusterSpec{
 									Identity: rbacv1.Subject{
