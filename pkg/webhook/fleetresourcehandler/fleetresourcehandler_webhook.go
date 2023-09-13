@@ -27,8 +27,9 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
-	ValidationPath = "/validate-v1-fleetresourcehandler"
-	groupMatch     = `^[^.]*\.(.*)`
+	ValidationPath             = "/validate-v1-fleetresourcehandler"
+	groupMatch                 = `^[^.]*\.(.*)`
+	fleetMemberNamespacePrefix = "fleet-member"
 )
 
 var (
@@ -185,7 +186,7 @@ func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 
 // isFleetMemberNamespace returns true if namespace is a fleet member cluster namespace.
 func isFleetMemberNamespace(namespace string) bool {
-	return strings.HasPrefix(namespace, "fleet-member")
+	return strings.HasPrefix(namespace, fleetMemberNamespacePrefix)
 }
 
 // parseMemberClusterNameFromNamespace returns member cluster name from fleet member cluster namespace.
@@ -194,9 +195,8 @@ func parseMemberClusterNameFromNamespace(namespace string) string {
 	// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
 	var mcName string
 	startIndex := len(utils.NamespaceNameFormat) - 2
-	workNamespace := namespace
-	if len(workNamespace) > startIndex {
-		mcName = workNamespace[startIndex:]
+	if len(namespace) > startIndex {
+		mcName = namespace[startIndex:]
 	}
 	return mcName
 }

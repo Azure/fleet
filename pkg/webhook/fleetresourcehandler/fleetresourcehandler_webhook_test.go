@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -11,7 +12,9 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -45,7 +48,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 				}
 				return nil
 			}
-			return errors.New("cannot find member cluster")
+			return apierrors.NewNotFound(schema.GroupResource{}, mcName)
 		},
 	}
 	testCases := map[string]struct {
@@ -166,11 +169,11 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
-		"allow request if MC get fails": {
+		"allow request if MC get fails with not found error": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      mcName,
-					Namespace: "fleet-member",
+					Name:      "bad-mc",
+					Namespace: "test-ns",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "InternalMemberCluster",
 					},
@@ -183,13 +186,9 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 				},
 			},
 			resourceValidator: fleetResourceValidator{
-				client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return errors.New("get error")
-					},
-				},
+				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: mcName, Namespace: "fleet-member"})),
+			wantResponse: admission.Errored(http.StatusNotFound, errors.New(fmt.Sprintf("%s %q not found", schema.GroupResource{}, mcName))),
 		},
 	}
 
@@ -218,7 +217,7 @@ func TestHandleWork(t *testing.T) {
 				}
 				return nil
 			}
-			return errors.New("cannot find member cluster")
+			return apierrors.NewInternalError(errors.New("error"))
 		},
 	}
 	testCases := map[string]struct {
@@ -266,21 +265,18 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						if key.Name == mcName {
-							o := obj.(*fleetv1alpha1.MemberCluster)
-							*o = fleetv1alpha1.MemberCluster{
-								ObjectMeta: metav1.ObjectMeta{
-									Name: mcName,
+						o := obj.(*fleetv1alpha1.MemberCluster)
+						*o = fleetv1alpha1.MemberCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: mcName,
+							},
+							Spec: fleetv1alpha1.MemberClusterSpec{
+								Identity: rbacv1.Subject{
+									Name: "hub-agent-sa",
 								},
-								Spec: fleetv1alpha1.MemberClusterSpec{
-									Identity: rbacv1.Subject{
-										Name: "hub-agent-sa",
-									},
-								},
-							}
-							return nil
+							},
 						}
-						return errors.New("cannot find member cluster")
+						return nil
 					},
 				},
 			},
@@ -341,7 +337,7 @@ func TestHandleWork(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
-		"allow request if namespace is invalid fleet member namespace and get MC failed": {
+		"allow request if namespace is invalid fleet member namespace and get MC failed with internal server error": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-work",
@@ -360,7 +356,7 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member"})),
+			wantResponse: admission.Errored(http.StatusInternalServerError, errors.New("Internal error occurred: error")),
 		},
 	}
 
@@ -389,7 +385,7 @@ func TestHandleEvent(t *testing.T) {
 				}
 				return nil
 			}
-			return errors.New("cannot find member cluster")
+			return apierrors.NewInternalError(errors.New("error"))
 		},
 	}
 	testCases := map[string]struct {
@@ -435,21 +431,18 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: &test.MockClient{
 					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						if key.Name == mcName {
-							o := obj.(*fleetv1alpha1.MemberCluster)
-							*o = fleetv1alpha1.MemberCluster{
-								ObjectMeta: metav1.ObjectMeta{
-									Name: mcName,
+						o := obj.(*fleetv1alpha1.MemberCluster)
+						*o = fleetv1alpha1.MemberCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: mcName,
+							},
+							Spec: fleetv1alpha1.MemberClusterSpec{
+								Identity: rbacv1.Subject{
+									Name: "hub-agent-sa",
 								},
-								Spec: fleetv1alpha1.MemberClusterSpec{
-									Identity: rbacv1.Subject{
-										Name: "hub-agent-sa",
-									},
-								},
-							}
-							return nil
+							},
 						}
-						return errors.New("cannot find member cluster")
+						return nil
 					},
 				},
 			},
@@ -509,7 +502,7 @@ func TestHandleEvent(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Event", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
 		},
-		"allow request if get MC failed": {
+		"allow request if get MC failed with internal server error": {
 			request: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-event",
@@ -525,13 +518,9 @@ func TestHandleEvent(t *testing.T) {
 				},
 			},
 			resourceValidator: fleetResourceValidator{
-				client: &test.MockClient{
-					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-						return errors.New("get error")
-					},
-				},
+				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Event", types.NamespacedName{Name: "test-event", Namespace: "fleet-member"})),
+			wantResponse: admission.Errored(http.StatusInternalServerError, errors.New("Internal error occurred: error")),
 		},
 	}
 	for testName, testCase := range testCases {

@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -163,13 +165,16 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, userInfo auth
 		// fail open, if the webhook cannot get member cluster resources we don't block the request.
 		klog.V(2).ErrorS(err, fmt.Sprintf("failed to get member cluster resource for request to modify %s, allowing request to be handled by api server", resourceKind),
 			"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", resourceNamespacedName)
-		return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, resourceKind, resourceNamespacedName))
+		if apierrors.IsNotFound(err) {
+			return admission.Errored(http.StatusNotFound, err)
+		}
+		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	// For the upstream E2E we use hub agent service account's token which allows member agent to modify Work status, hence we use serviceAccountFmt to make the check.
 	if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
 		klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", resourceNamespacedName, "kind", resourceKind, "subResource", subResource)
 		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, resourceKind, resourceNamespacedName))
 	}
-	klog.V(2).InfoS(fmt.Sprintf("user is not allowed to update %s status", resourceKind), "user", userInfo.Username, "groups", userInfo.Groups, "kind", resourceKind, "namespacedName", resourceNamespacedName, "kind", resourceKind, "subResource", subResource)
+	klog.V(2).InfoS("user is not allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", resourceKind, "namespacedName", resourceNamespacedName, "kind", resourceKind, "subResource", subResource)
 	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, resourceKind, resourceNamespacedName))
 }
