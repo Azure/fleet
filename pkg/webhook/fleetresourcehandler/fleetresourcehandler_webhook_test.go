@@ -188,7 +188,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Errored(http.StatusNotFound, errors.New(fmt.Sprintf("%s %q not found", schema.GroupResource{}, mcName))),
+			wantResponse: admission.Errored(http.StatusNotFound, fmt.Errorf("%s %q not found", schema.GroupResource{}, mcName)),
 		},
 	}
 
@@ -356,7 +356,7 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Errored(http.StatusInternalServerError, errors.New("Internal error occurred: error")),
+			wantResponse: admission.Errored(http.StatusInternalServerError, fmt.Errorf("Internal error occurred: error")),
 		},
 	}
 
@@ -520,7 +520,7 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Errored(http.StatusInternalServerError, errors.New("Internal error occurred: error")),
+			wantResponse: admission.Errored(http.StatusInternalServerError, fmt.Errorf("Internal error occurred: error")),
 		},
 	}
 	for testName, testCase := range testCases {
