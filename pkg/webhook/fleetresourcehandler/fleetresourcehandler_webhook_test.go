@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
@@ -12,9 +11,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -48,7 +45,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 				}
 				return nil
 			}
-			return apierrors.NewNotFound(schema.GroupResource{}, mcName)
+			return errors.New("cannot find member cluster")
 		},
 	}
 	testCases := map[string]struct {
@@ -188,7 +185,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Errored(http.StatusNotFound, fmt.Errorf("%s %q not found", schema.GroupResource{}, mcName)),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "InternalMemberCluster", types.NamespacedName{Name: "bad-mc", Namespace: "test-ns"})),
 		},
 	}
 
@@ -217,7 +214,7 @@ func TestHandleWork(t *testing.T) {
 				}
 				return nil
 			}
-			return apierrors.NewInternalError(errors.New("error"))
+			return errors.New("cannot find member cluster")
 		},
 	}
 	testCases := map[string]struct {
@@ -356,7 +353,7 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Errored(http.StatusInternalServerError, fmt.Errorf("Internal error occurred: error")),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Work", types.NamespacedName{Name: "test-work", Namespace: "fleet-member"})),
 		},
 	}
 
@@ -385,7 +382,7 @@ func TestHandleEvent(t *testing.T) {
 				}
 				return nil
 			}
-			return apierrors.NewInternalError(errors.New("error"))
+			return errors.New("cannot find member cluster")
 		},
 	}
 	testCases := map[string]struct {
@@ -520,7 +517,7 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Errored(http.StatusInternalServerError, fmt.Errorf("Internal error occurred: error")),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Event", types.NamespacedName{Name: "test-event", Namespace: "fleet-member"})),
 		},
 	}
 	for testName, testCase := range testCases {
