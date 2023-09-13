@@ -533,7 +533,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", "", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"deny user not in system:masters group with IMC non-status update": {
 			req: admission.Request{
@@ -550,7 +550,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", "", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow request if MC get fails with not found error": {
 			req: admission.Request{
