@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	resourceAllowedFormat      = "user: %s in groups: %v is allowed to modify resource %s/%s: %+v"
-	resourceDeniedFormat       = "user: %s in groups: %v is not allowed to modify resource %s/%s: %+v"
-	resourceAllowedGetMCFailed = "user: %s in groups: %v is allowed to update %s/%s: %+v because we failed to get MC"
+	resourceAllowedFormat      = "user: %s in groups: %v is allowed to %s resource %s/%s: %+v"
+	resourceDeniedFormat       = "user: %s in groups: %v is not allowed to %s resource %s/%s: %+v"
+	resourceAllowedGetMCFailed = "user: %s in groups: %v is allowed to %s resource %s/%s: %+v because we failed to get MC"
 
 	mcName = "test-mc"
 )
@@ -47,10 +47,11 @@ func TestHandleCRD(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "CustomResourceDefinition",
 					},
+					Operation: admissionv1.Create,
 				},
 			},
 			resourceValidator: fleetResourceValidator{},
-			wantResponse:      admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "CustomResourceDefinition", "", types.NamespacedName{Name: "test-crd"})),
+			wantResponse:      admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, admissionv1.Create, "CustomResourceDefinition", "", types.NamespacedName{Name: "test-crd"})),
 		},
 		"allow user in system:masters group to modify fleet CRD": {
 			req: admission.Request{
@@ -63,10 +64,11 @@ func TestHandleCRD(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "CustomResourceDefinition",
 					},
+					Operation: admissionv1.Update,
 				},
 			},
 			resourceValidator: fleetResourceValidator{},
-			wantResponse:      admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "CustomResourceDefinition", "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse:      admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, admissionv1.Update, "CustomResourceDefinition", "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
 		"allow white listed user to modify fleet CRD": {
 			req: admission.Request{
@@ -79,12 +81,13 @@ func TestHandleCRD(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "CustomResourceDefinition",
 					},
+					Operation: admissionv1.Delete,
 				},
 			},
 			resourceValidator: fleetResourceValidator{
 				whiteListedUsers: []string{"test-user"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "CustomResourceDefinition", "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Delete, "CustomResourceDefinition", "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
 		"deny user not in system:masters group to modify fleet CRD": {
 			req: admission.Request{
@@ -97,9 +100,10 @@ func TestHandleCRD(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "CustomResourceDefinition",
 					},
+					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "CustomResourceDefinition", "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Create, "CustomResourceDefinition", "", types.NamespacedName{Name: "memberclusters.fleet.azure.com"})),
 		},
 	}
 
@@ -209,7 +213,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, admissionv1.Create, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
 		},
 		"allow any user to modify MC labels": {
 			req: admission.Request{
@@ -236,7 +240,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
 		},
 		"allow any user to modify MC annotations": {
 			req: admission.Request{
@@ -263,7 +267,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
 		},
 		"allow system:masters group user to modify MC spec": {
 			req: admission.Request{
@@ -290,7 +294,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, admissionv1.Update, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
 		},
 		"allow system:masters group user to modify MC status": {
 			req: admission.Request{
@@ -318,7 +322,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, "MemberCluster", "status", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, admissionv1.Update, "MemberCluster", "status", types.NamespacedName{Name: "test-mc"})),
 		},
 		"allow whitelisted user to modify MC status": {
 			req: admission.Request{
@@ -347,7 +351,7 @@ func TestHandleMemberCluster(t *testing.T) {
 				decoder:          decoder,
 				whiteListedUsers: []string{"test-user"},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "MemberCluster", "status", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, "MemberCluster", "status", types.NamespacedName{Name: "test-mc"})),
 		},
 		"deny update of member cluster spec by non system:masters group": {
 			req: admission.Request{
@@ -374,7 +378,7 @@ func TestHandleMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Update, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
 		},
 		"deny update of member cluster spec by non whitelisted user ": {
 			req: admission.Request{
@@ -402,7 +406,7 @@ func TestHandleMemberCluster(t *testing.T) {
 				decoder:          decoder,
 				whiteListedUsers: []string{"test-user1"},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Update, "MemberCluster", "", types.NamespacedName{Name: "test-mc"})),
 		},
 	}
 
@@ -458,7 +462,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, admissionv1.Update, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow hub-agent-sa in MC identity with IMC status update": {
 			req: admission.Request{
@@ -495,7 +499,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					},
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, admissionv1.Update, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"deny user in system:masters group with IMC status update in fleet member cluster namespace": {
 			req: admission.Request{
@@ -516,7 +520,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, admissionv1.Update, "InternalMemberCluster", "status", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow user in system:masters group with IMC non-status update": {
 			req: admission.Request{
@@ -533,7 +537,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "InternalMemberCluster", "", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Update, "InternalMemberCluster", "", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"deny user not in system:masters group with IMC non-status update": {
 			req: admission.Request{
@@ -550,7 +554,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "InternalMemberCluster", "", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "InternalMemberCluster", "", types.NamespacedName{Name: mcName, Namespace: "test-ns"})),
 		},
 		"allow request if MC get fails with not found error": {
 			req: admission.Request{
@@ -571,7 +575,7 @@ func TestHandleInternalMemberCluster(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "InternalMemberCluster", "status", types.NamespacedName{Name: "bad-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, admissionv1.Update, "InternalMemberCluster", "status", types.NamespacedName{Name: "bad-mc", Namespace: "test-ns"})),
 		},
 	}
 
@@ -627,7 +631,7 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, admissionv1.Update, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
 		"allow hub-agent-sa in MC identity with status update": {
 			req: admission.Request{
@@ -663,7 +667,7 @@ func TestHandleWork(t *testing.T) {
 					},
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, admissionv1.Update, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
 		"deny user in system:masters group with work status update in a fleet member cluster namespace": {
 			req: admission.Request{
@@ -684,7 +688,7 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, admissionv1.Update, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
 		"allow user in system:masters group with work non-status update": {
 			req: admission.Request{
@@ -701,7 +705,7 @@ func TestHandleWork(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "Work", "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Update, "Work", "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
 		"deny user not in system:masters group with work non-status update": {
 			req: admission.Request{
@@ -718,7 +722,7 @@ func TestHandleWork(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Work", "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "Work", "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
 		"allow request if namespace is invalid fleet member namespace and get MC failed with internal server error": {
 			req: admission.Request{
@@ -739,7 +743,7 @@ func TestHandleWork(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, admissionv1.Update, "Work", "status", types.NamespacedName{Name: "test-work", Namespace: "fleet-member"})),
 		},
 	}
 
@@ -760,7 +764,8 @@ func TestHandleNamespace(t *testing.T) {
 		"allow user to modify non-reserved namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "test-namespace",
+					Name:      "test-namespace",
+					Operation: admissionv1.Create,
 				},
 			},
 			wantResponse: admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces"),
@@ -776,9 +781,10 @@ func TestHandleNamespace(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "Namespace",
 					},
+					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Namespace", "", types.NamespacedName{Name: "fleet-system"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "Namespace", "", types.NamespacedName{Name: "fleet-system"})),
 		},
 		"deny user not in system:masters group to modify kube-system namespace": {
 			req: admission.Request{
@@ -791,9 +797,10 @@ func TestHandleNamespace(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "Namespace",
 					},
+					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Namespace", "", types.NamespacedName{Name: "kube-system"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "Namespace", "", types.NamespacedName{Name: "kube-system"})),
 		},
 	}
 
@@ -848,7 +855,7 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
 		},
 		"allow hub-agent-sa in MC identity with create": {
 			req: admission.Request{
@@ -883,7 +890,7 @@ func TestHandleEvent(t *testing.T) {
 					},
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
 		},
 		"deny user in system:masters group with create in a fleet member cluster namespace": {
 			req: admission.Request{
@@ -903,7 +910,7 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
 		},
 		"allow user in system:masters group with create in non-fleet member cluster namespace": {
 			req: admission.Request{
@@ -920,7 +927,7 @@ func TestHandleEvent(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
 		},
 		"deny user not in system:masters group with create in non-fleet member cluster namespace create": {
 			req: admission.Request{
@@ -937,7 +944,7 @@ func TestHandleEvent(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
 		},
 		"allow request if get MC failed with internal server error": {
 			req: admission.Request{
@@ -957,7 +964,7 @@ func TestHandleEvent(t *testing.T) {
 			resourceValidator: fleetResourceValidator{
 				client: mockClient,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member"})),
 		},
 	}
 	for testName, testCase := range testCases {

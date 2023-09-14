@@ -26,9 +26,9 @@ const (
 	kubeControllerManagerUser = "system:kube-controller-manager"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	resourceAllowedFormat      = "user: %s in groups: %v is allowed to modify resource %s/%s: %+v"
-	resourceDeniedFormat       = "user: %s in groups: %v is not allowed to modify resource %s/%s: %+v"
-	resourceAllowedGetMCFailed = "user: %s in groups: %v is allowed to update %s/%s: %+v because we failed to get MC"
+	resourceAllowedFormat      = "user: %s in groups: %v is allowed to %s resource %s/%s: %+v"
+	resourceDeniedFormat       = "user: %s in groups: %v is not allowed to %s resource %s/%s: %+v"
+	resourceAllowedGetMCFailed = "user: %s in groups: %v is allowed to %s resource %s/%s: %+v because we failed to get MC"
 )
 
 var (
@@ -40,13 +40,12 @@ func ValidateUserForFleetCRD(req admission.Request, whiteListedUsers []string, g
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	kind := req.RequestKind.Kind
 	userInfo := req.UserInfo
-	subResource := req.SubResource
 	if checkCRDGroup(group) && !isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) {
-		klog.V(2).InfoS("user in groups is not allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "subResource", subResource, "namespacedName", namespacedName)
-		return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+		klog.V(2).InfoS("user in groups is not allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 	}
-	klog.V(2).InfoS("user in groups is allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "subResource", subResource, "namespacedName", namespacedName)
-	return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+	klog.V(2).InfoS("user in groups is allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 }
 
 // ValidateUserForResource checks to see if user is allowed to modify argued resource modified by request.
@@ -54,22 +53,20 @@ func ValidateUserForResource(req admission.Request, whiteListedUsers []string) a
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	kind := req.RequestKind.Kind
 	userInfo := req.UserInfo
-	subResource := req.SubResource
 	if isMasterGroupUserOrWhiteListedUser(whiteListedUsers, userInfo) || isUserAuthenticatedServiceAccount(userInfo) || isUserKubeScheduler(userInfo) || isUserKubeControllerManager(userInfo) || isNodeGroupUser(userInfo) {
-		klog.V(2).InfoS("user in groups is allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "subResource", subResource, "namespacedName", namespacedName)
-		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+		klog.V(2).InfoS("user in groups is allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 	}
-	klog.V(2).InfoS("user in groups is not allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "subResource", subResource, "namespacedName", namespacedName)
-	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+	klog.V(2).InfoS("user in groups is not allowed to modify resource", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 }
 
 // ValidateMemberClusterUpdate checks to see if user had updated the member cluster resource and allows/denies the request.
 func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, req admission.Request, whiteListedUsers []string) admission.Response {
+	namespacedName := types.NamespacedName{Name: currentObj.GetName()}
 	kind := req.RequestKind.Kind
 	userInfo := req.UserInfo
-	subResource := req.SubResource
-	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely updated read-only field/fields of member cluster resource, so no field/fields will be updated", userInfo.Username, userInfo.Groups))
-	namespacedName := types.NamespacedName{Name: currentObj.GetName()}
+	response := admission.Allowed(fmt.Sprintf("user %s in groups %v most likely %s read-only field/fields of member cluster resource %s/%s, so no field/fields will be updated", userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource))
 	isLabelUpdated := isMapFieldUpdated(currentObj.GetLabels(), oldObj.GetLabels())
 	isAnnotationUpdated := isMapFieldUpdated(currentObj.GetAnnotations(), oldObj.GetAnnotations())
 	isObjUpdated, err := isMemberClusterUpdated(currentObj, oldObj)
@@ -78,8 +75,8 @@ func ValidateMemberClusterUpdate(currentObj, oldObj client.Object, req admission
 	}
 	if (isLabelUpdated || isAnnotationUpdated) && !isObjUpdated {
 		// we allow any user to modify MemberCluster/Namespace labels/annotations.
-		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "namespacedName", namespacedName)
-		response = admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+		klog.V(2).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		response = admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 	}
 	if isObjUpdated {
 		response = ValidateUserForResource(req, whiteListedUsers)
@@ -169,19 +166,18 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	kind := req.RequestKind.Kind
 	userInfo := req.UserInfo
-	subResource := req.SubResource
 	var mc fleetv1alpha1.MemberCluster
 	if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 		// fail open, if the webhook cannot get member cluster resources we don't block the request.
-		klog.V(2).ErrorS(err, fmt.Sprintf("failed to get member cluster resource for request to modify %s, allowing request to be handled by api server", kind),
+		klog.V(2).ErrorS(err, fmt.Sprintf("failed to get member cluster resource for request to modify %s/%s, allowing request to be handled by api server", kind, req.SubResource),
 			"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
-		return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+		return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 	}
 	// For the upstream E2E we use hub agent service account's token which allows member agent to modify Work status, hence we use serviceAccountFmt to make the check.
 	if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
-		klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "subResource", subResource, "namespacedName", namespacedName)
-		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+		klog.V(2).InfoS("user in groups is allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 	}
-	klog.V(2).InfoS("user in groups is not allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "kind", kind, "subResource", subResource, "namespacedName", namespacedName)
-	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, kind, subResource, namespacedName))
+	klog.V(2).InfoS("user in groups is not allowed to modify fleet resource", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "kind", kind, "subResource", req.SubResource, "namespacedName", namespacedName)
+	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, req.Operation, kind, req.SubResource, namespacedName))
 }

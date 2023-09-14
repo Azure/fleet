@@ -32,9 +32,10 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "test-user",
 						Groups:   []string{mastersGroup},
 					},
+					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{mastersGroup}, "Role", "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{mastersGroup}, admissionv1.Create, "Role", "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 		"allow white listed user not in system:masters group": {
 			req: admission.Request{
@@ -48,10 +49,11 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "test-user",
 						Groups:   []string{"test-group"},
 					},
+					Operation: admissionv1.Update,
 				},
 			},
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, "RoleBinding", "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, "RoleBinding", "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow valid service account": {
 			req: admission.Request{
@@ -65,9 +67,10 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "test-user",
 						Groups:   []string{serviceAccountsGroup},
 					},
+					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, "RoleBinding", "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, admissionv1.Delete, "RoleBinding", "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow user in system:node group": {
 			req: admission.Request{
@@ -81,9 +84,10 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "test-user",
 						Groups:   []string{nodeGroup},
 					},
+					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{nodeGroup}, "Pod", "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{nodeGroup}, admissionv1.Create, "Pod", "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"allow system:kube-scheduler user": {
 			req: admission.Request{
@@ -97,9 +101,10 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "system:kube-scheduler",
 						Groups:   []string{"system:authenticated"},
 					},
+					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", []string{"system:authenticated"}, "Pod", "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", []string{"system:authenticated"}, admissionv1.Update, "Pod", "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"allow system:kube-controller-manager user": {
 			req: admission.Request{
@@ -113,9 +118,10 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "system:kube-controller-manager",
 						Groups:   []string{"system:authenticated"},
 					},
+					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-controller-manager", []string{"system:authenticated"}, "Pod", "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-controller-manager", []string{"system:authenticated"}, admissionv1.Delete, "Pod", "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"fail to validate user with invalid username, groups": {
 			req: admission.Request{
@@ -129,9 +135,10 @@ func TestValidateUserForResource(t *testing.T) {
 						Username: "test-user",
 						Groups:   []string{"test-group"},
 					},
+					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, "Role", "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Delete, "Role", "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 	}
 
