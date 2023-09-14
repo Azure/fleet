@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package e2e
+package v1alpha1
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"go.goms.io/fleet/pkg/utils"
-	testutils "go.goms.io/fleet/test/e2e/utils"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 const (
