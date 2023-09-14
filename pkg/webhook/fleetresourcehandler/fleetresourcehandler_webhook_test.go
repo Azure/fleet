@@ -36,13 +36,13 @@ func TestHandleCRD(t *testing.T) {
 		resourceValidator fleetResourceValidator
 		wantResponse      admission.Response
 	}{
-		"allow user in system:masters group to modify other CRD": {
+		"allow any user group to modify fleet unrelated CRD": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "test-crd",
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
-						Groups:   []string{"system:masters"},
+						Groups:   []string{"test-group"},
 					},
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "CustomResourceDefinition",
@@ -51,7 +51,7 @@ func TestHandleCRD(t *testing.T) {
 				},
 			},
 			resourceValidator: fleetResourceValidator{},
-			wantResponse:      admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"system:masters"}, admissionv1.Create, "CustomResourceDefinition", "", types.NamespacedName{Name: "test-crd"})),
+			wantResponse:      admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Create, "CustomResourceDefinition", "", types.NamespacedName{Name: "test-crd"})),
 		},
 		"allow user in system:masters group to modify fleet CRD": {
 			req: admission.Request{
