@@ -3,8 +3,8 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-// Package clustershedulingpolicysnapshot features a controller to reconcile the clusterSchedulingPolicySnapshot object.
-package clustershedulingpolicysnapshot
+// Package clusterschedulingpolicysnapshot features a controller to reconcile the clusterSchedulingPolicySnapshot object.
+package clusterschedulingpolicysnapshot
 
 import (
 	"context"

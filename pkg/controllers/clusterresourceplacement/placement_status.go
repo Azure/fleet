@@ -55,6 +55,8 @@ const (
 	// workSynchronizeSucceededReason is the reason string of placement condition when the work(s) are synchronized successfully.
 	workSynchronizeSucceededReason = "WorkSynchronizeSucceeded"
 
+	resourceScheduleSucceededReason = "ScheduleSucceeded"
+
 	// ResourcePlacementStatus schedule condition message formats
 	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
 	resourcePlacementConditionScheduleFailedWithScoreMessageFormat    = "%s is not selected with clusterScore %+v: %s"
