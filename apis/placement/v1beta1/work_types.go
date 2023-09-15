@@ -43,9 +43,6 @@ const (
 // This api is copied from https://github.com/kubernetes-sigs/work-api/blob/master/pkg/apis/v1alpha1/work_types.go.
 // Renamed original "ResourceIdentifier" so that it won't conflict with ResourceIdentifier defined in the clusterresourceplacement_types.go.
 
-const WorkKind = "Work"
-const WorkResource = "works"
-
 // WorkSpec defines the desired state of Work.
 type WorkSpec struct {
 	// Workload represents the manifest workload to be deployed on spoke cluster

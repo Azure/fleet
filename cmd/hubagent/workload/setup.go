@@ -10,12 +10,15 @@ import (
 	"strings"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
@@ -38,6 +41,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/validator"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
 const (
@@ -47,6 +51,25 @@ const (
 
 	resourceChangeControllerName = "resource-change-controller"
 	mcPlacementControllerName    = "memberCluster-placement-controller"
+)
+
+var (
+	v1Alpha1RequiredGVKs = []schema.GroupVersionKind{
+		fleetv1alpha1.GroupVersion.WithKind(fleetv1alpha1.MemberClusterKind),
+		fleetv1alpha1.GroupVersion.WithKind(fleetv1alpha1.InternalMemberClusterKind),
+		fleetv1alpha1.GroupVersion.WithKind(fleetv1alpha1.ClusterResourcePlacementKind),
+		workv1alpha1.SchemeGroupVersion.WithKind(workv1alpha1.WorkKind),
+	}
+
+	v1Beta1RequiredGVKs = []schema.GroupVersionKind{
+		clusterv1beta1.GroupVersion.WithKind(clusterv1beta1.MemberClusterKind),
+		clusterv1beta1.GroupVersion.WithKind(clusterv1beta1.InternalMemberClusterKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourcePlacementKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceBindingKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterResourceSnapshotKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.ClusterSchedulingPolicySnapshotKind),
+		placementv1beta1.GroupVersion.WithKind(placementv1beta1.WorkKind),
+	}
 )
 
 // SetupControllers set up the customized controllers we developed
@@ -63,16 +86,23 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		return err
 	}
 
-	if err = utils.CheckCRDInstalled(discoverClient,
-		fleetv1alpha1.GroupVersion.WithKind(fleetv1alpha1.MemberClusterKind)); err != nil {
-		klog.ErrorS(err, "unable to find the memberCluster definition")
-		return err
+	// Verify CRD installation status.
+	if opts.EnableV1Alpha1APIs {
+		for _, gvk := range v1Alpha1RequiredGVKs {
+			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+				return err
+			}
+		}
 	}
 
-	if err = utils.CheckCRDInstalled(discoverClient,
-		fleetv1alpha1.GroupVersion.WithKind(fleetv1alpha1.InternalMemberClusterKind)); err != nil {
-		klog.ErrorS(err, "unable to find the InternalMemberCluster definition")
-		return err
+	if opts.EnableV1Beta1APIs {
+		for _, gvk := range v1Beta1RequiredGVKs {
+			if err = utils.CheckCRDInstalled(discoverClient, gvk); err != nil {
+				klog.ErrorS(err, "unable to find the required CRD", "GVK", gvk)
+				return err
+			}
+		}
 	}
 
 	disabledResourceConfig := utils.NewDisabledResourceConfig()

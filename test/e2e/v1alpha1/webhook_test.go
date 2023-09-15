@@ -504,7 +504,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 	Context("CRD validation webhook", func() {
 		It("should deny CREATE operation on Fleet CRD for user not in system:masters group", func() {
 			var crd v1.CustomResourceDefinition
-			Expect(utils.GetObjectFromManifest("./charts/hub-agent/templates/crds/fleet.azure.com_clusterresourceplacements.yaml", &crd)).Should(Succeed())
+			Expect(utils.GetObjectFromManifest("./config/crd/bases/fleet.azure.com_clusterresourceplacements.yaml", &crd)).Should(Succeed())
 
 			By("expecting denial of operation CREATE of CRD")
 			err := HubCluster.ImpersonateKubeClient.Create(ctx, &crd)

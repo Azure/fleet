@@ -29,8 +29,6 @@ import (
 // This api is copied from https://github.com/kubernetes-sigs/work-api/blob/master/pkg/apis/v1alpha1/appliedwork_type.go.
 // Fixed the typo in the "AppliedtWorkStatus".
 
-const AppliedWorkKind = "AppliedWork"
-
 // AppliedWorkSpec represents the desired configuration of AppliedWork.
 type AppliedWorkSpec struct {
 	// WorkName represents the name of the related work on the hub.
