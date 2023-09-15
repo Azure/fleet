@@ -64,11 +64,11 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconcile", "memberCluster", req.NamespacedName)
 	var mc clusterv1beta1.MemberCluster
-	mcObjRef := klog.KObj(&mc)
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	mcObjRef := klog.KObj(&mc)
 
 	// Handle deleting/leaving member cluster, garbage collect all the resources in the cluster namespace
 	if !mc.DeletionTimestamp.IsZero() {
