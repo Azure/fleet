@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -155,7 +154,7 @@ func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) 
 
 // garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
 func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
-	var works workv1alpha1.WorkList
+	var works placementv1beta1.WorkList
 	var clusterNS corev1.Namespace
 	// check if the namespace still exist
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
