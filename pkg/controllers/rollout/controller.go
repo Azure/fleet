@@ -233,11 +233,16 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 
 	// calculate the target number of bindings
 	targetNumber := 0
-	if crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType {
+
+	// note that if the policy will be overwritten if it is nil in this controller.
+	switch {
+	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickAllPlacementType:
 		// we use the scheduler picked bindings as the target number since there is no target in the CRP
 		targetNumber = len(schedulerTargetedBinds)
-	} else {
-		// the CRP validation webhook should make sure this is not nil
+	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
+		// we use the length of the given cluster names are targets
+		targetNumber = len(crp.Spec.Policy.ClusterNames)
+	default:
 		targetNumber = int(*crp.Spec.Policy.NumberOfClusters)
 	}
 	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", klog.KObj(crp),
