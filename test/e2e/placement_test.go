@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -37,6 +38,12 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 			},
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				ResourceSelectors: workResourceSelector,
+				Strategy: placementv1beta1.RolloutStrategy{
+					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: pointer.Int(2),
+					},
+				},
 			},
 		}
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
