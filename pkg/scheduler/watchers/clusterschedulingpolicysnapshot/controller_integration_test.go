@@ -40,7 +40,8 @@ const (
 )
 
 var (
-	numOfClusters = int32(10)
+	numOfClusters         = int32(10)
+	observedCRPGeneration = 1
 )
 
 var (
@@ -86,6 +87,7 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 				},
 				Annotations: map[string]string{
 					fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(numOfClusters)),
+					fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(observedCRPGeneration),
 				},
 			},
 			Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
@@ -118,6 +120,27 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 			Expect(hubClient.Get(ctx, client.ObjectKey{Name: policySnapshotName1}, &policySnapshot)).Should(Succeed(), "Failed to get cluster scheduling policy snapshot")
 
 			policySnapshot.Annotations[fleetv1beta1.NumberOfClustersAnnotation] = strconv.Itoa(int(numOfClusters) + 1)
+			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update cluster scheduling policy snapshot")
+		})
+
+		It("should enqueue the CRP when number of clusters annotation updated", func() {
+			Eventually(expectedKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to enqueue expected key set")
+			Consistently(expectedKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to enqueue expected key set")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("CRP generation annotation updated", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			policySnapshot := fleetv1beta1.ClusterSchedulingPolicySnapshot{}
+			Expect(hubClient.Get(ctx, client.ObjectKey{Name: policySnapshotName1}, &policySnapshot)).Should(Succeed(), "Failed to get cluster scheduling policy snapshot")
+
+			policySnapshot.Annotations[fleetv1beta1.CRPGenerationAnnotation] = strconv.Itoa(observedCRPGeneration + 1)
 			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update cluster scheduling policy snapshot")
 		})
 

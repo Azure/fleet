@@ -124,13 +124,19 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 
 			// Policy snapshot spec is immutable; however, the scheduler will have to respond
-			// to changes in the number of clusters annoation.
+			// to changes in the annoations.
 			oldAnnotations := e.ObjectOld.GetAnnotations()
 			newAnnotations := e.ObjectNew.GetAnnotations()
 
 			oldNumOfClusters := oldAnnotations[fleetv1beta1.NumberOfClustersAnnotation]
 			newNumOfClusters := newAnnotations[fleetv1beta1.NumberOfClustersAnnotation]
 			if oldNumOfClusters != newNumOfClusters {
+				return true
+			}
+
+			oldObservedCRPGeneration := oldAnnotations[fleetv1beta1.CRPGenerationAnnotation]
+			newObservedCRPGeneration := newAnnotations[fleetv1beta1.CRPGenerationAnnotation]
+			if oldObservedCRPGeneration != newObservedCRPGeneration {
 				return true
 			}
 
