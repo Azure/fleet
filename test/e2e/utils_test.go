@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
@@ -96,10 +97,10 @@ func createWorkResources() {
 // deleteWorkResources deletes the resources created by createWorkResources.
 func deleteWorkResources() {
 	ns := workNamespace()
-	Expect(hubClient.Delete(ctx, &ns)).To(Succeed(), "Failed to delete namespace")
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace")
 
 	deploy := appConfigMap()
-	Expect(hubClient.Delete(ctx, &deploy)).To(Succeed(), "Failed to delete deployment")
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &deploy))).To(Succeed(), "Failed to delete deployment")
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -112,7 +113,7 @@ func setAllMemberClustersToLeave() {
 				Name: memberCluster.ClusterName,
 			},
 		}
-		Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to set member cluster to leave state")
+		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to set member cluster to leave state")
 	}
 }
 

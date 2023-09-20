@@ -99,13 +99,19 @@ var (
 
 // Those are the GVR/GVK of the fleet related resources.
 var (
-	ClusterResourcePlacementGVR = schema.GroupVersionResource{
+	ClusterResourcePlacementV1Alpha1GVR = schema.GroupVersionResource{
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
 	}
 
-	ClusterResourcePlacementGVK = schema.GroupVersionKind{
+	ClusterResourcePlacementGVR = schema.GroupVersionResource{
+		Group:    placementv1beta1.GroupVersion.Group,
+		Version:  placementv1beta1.GroupVersion.Version,
+		Resource: placementv1beta1.ClusterResourcePlacementResource,
+	}
+
+	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
 		Kind:    "ClusterResourcePlacement",
