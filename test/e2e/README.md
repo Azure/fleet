@@ -1,70 +1,69 @@
-Here is how to run e2e locally. Make sure that you have installed Docker and Kind.
+# Fleet E2E Tests (API version v1beta1)
 
-1. Build the docker images
-```shell
-export KUBECONFIG=~/.kube/config
-OUTPUT_TYPE=type=docker make docker-build-member-agent docker-build-hub-agent docker-build-refresh-token
-```
+This directory includes the E2E test suites for Fleet agents (v1beta1 API). To run the 
+test suites, follow the steps below:
 
-2. Create the kind clusters and install the helm.
-```shell
-make creat-kind-cluster
-```
-or 
-```shell
-make create-hub-kind-cluster
-make create-member-kind-cluster
-make install-helm
-```
+1. Install [Docker](https://www.docker.com) and [Kind](https://kind.sigs.k8s.io/).
 
-3. Run the test
+2. Change to the current directory, and run `setup.sh` to set up the test environment.
 
-run the e2e test suite
- ```shell
-make run-e2e
-```
-or test manually
-```shell
-kubectl --context=kind-hub-testing delete ns local-path-storage
-kubectl --context=kind-hub-testing apply -f examples/fleet_v1alpha1_membercluster.yaml
-kubectl --context=kind-hub-testing apply -f test/integration/manifests/resources
-kubectl --context=kind-hub-testing apply -f test/integration/manifests/resources
-kubectl --context=kind-hub-testing apply -f test/integration/manifests/placement/select-namespace.yaml
-```
+    ```sh
+    cd ./test/e2e
+    chmod +x ./setup.sh
+    
+    # Use a different path if the local set up is different.
+    export KUBECONFIG=~/.kube/config
+    export OUTPUT_TYPE=type=docker
+    ./setup.sh
+    ```
 
-4. Check the controller logs 
+    The setup script will perform the following tasks:
 
-check the logs of the hub cluster controller
-```shell
-kubectl --context=kind-hub-testing -n fleet-system get pod 
+    * Provision a number of `Kind` clusters: `hub` as the hub cluster, with `bravelion`, `smartfish`
+      and `singingbutterfly` as the member clusters
+    * Build the agent images
+    * Upload the images to the `Kind` clusters
+    * Install the agent images
 
-NAME                       READY   STATUS    RESTARTS   AGE
-hub-agent-8bb6d658-6jj7n   1/1     Running   0          11m
+3. Run the command below to start running the tests:
 
-```
+    ```sh
+    go test .
+    ```
 
-check the logs of the member cluster controller
-```shell
-kubectl --context=kind-member-testing -n fleet-system get pod 
-```
+## Access the `Kind` clusters
 
-5.  check the hub metrics
-```shell
-kubectl --context=kind-hub-testing -n fleet-system  port-forward hub-agent-8bb6d658-6jj7n 13622:8080
+To access the `Kind` clusters, after the test environment is set up using `setup.sh`, switch
+between the following contexts using the command `kubectl config use-context`:
 
-Forwarding from 127.0.0.1:13622 -> 8080
-Forwarding from [::1]:13622 -> 8080
+* `kind-hub` for accessing the hub cluster
+* `kind-bravelion` for accessing the bravelion cluster
+* `kind-smartfish` for accessing the smartfish cluster
+* `kind-singingbutterfly` for accessing the singingbutterfly cluster
 
-curl http://127.0.0.1:13622/metrics
-```
+Fleet agents run in the namespace `fleet-system`; to retrieve their logs, switch to a `Kind`
+cluster, and run the following steps:
 
-Use a local prometheus to draw graphs. Download prometheus binary for your local machine. Start the prometheus.
-```shell
-prometheus --config.file=test/e2e/prometheus.yml 
-```
+1. Find out the name of the pod with the command:
 
-6.uninstall the resources
-```shell
-make uninstall-helm
-make clean-e2e-tests
-```
+    ```sh
+    kubectl get pods -n fleet-system
+    ```
+
+    You should see the agent pod in the output list; write down the name of the pod.
+
+2. Retrieve the logs:
+
+    ```sh
+    # Replace YOUR-POD-NAME with a value of your own.
+    kubectl logs YOUR-POD-NAME -n fleet-system
+    ```
+
+## Tear down the test environment.
+
+To stop the `Kind` clusters, run the script `stop.sh`:
+
+    ```sh
+    chmod +x ./stop.sh
+    ./stop.sh
+    ```

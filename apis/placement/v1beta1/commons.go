@@ -6,6 +6,15 @@ Licensed under the MIT license.
 package v1beta1
 
 const (
+	ClusterResourcePlacementKind        = "ClusterResourcePlacement"
+	ClusterResourceBindingKind          = "ClusterResourceBinding"
+	ClusterResourceSnapshotKind         = "ClusterResourceSnapshot"
+	ClusterSchedulingPolicySnapshotKind = "ClusterSchedulingPolicySnapshot"
+	WorkKind                            = "Work"
+	AppliedWorkKind                     = "AppliedWork"
+)
+
+const (
 	// Unprefixed labels/annotations are reserved for end-users
 	// we will add a kubernetes-fleet.io to designate these labels/annotations as official fleet labels/annotations.
 	// See https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#label-selector-and-annotation-conventions

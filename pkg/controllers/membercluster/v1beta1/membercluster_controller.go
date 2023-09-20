@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -65,11 +64,11 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconcile", "memberCluster", req.NamespacedName)
 	var mc clusterv1beta1.MemberCluster
-	mcObjRef := klog.KObj(&mc)
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	mcObjRef := klog.KObj(&mc)
 
 	// Handle deleting/leaving member cluster, garbage collect all the resources in the cluster namespace
 	if !mc.DeletionTimestamp.IsZero() {
@@ -155,7 +154,7 @@ func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) 
 
 // garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
 func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
-	var works workv1alpha1.WorkList
+	var works placementv1beta1.WorkList
 	var clusterNS corev1.Namespace
 	// check if the namespace still exist
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
@@ -300,7 +299,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *clusterv1beta1.MemberClus
 			Namespace:       namespaceName,
 			OwnerReferences: []metav1.OwnerReference{*toOwnerReference(mc)},
 		},
-		Rules: []rbacv1.PolicyRule{utils.FleetRule, utils.EventRule, utils.FleetNetworkRule, utils.WorkRule},
+		Rules: []rbacv1.PolicyRule{utils.FleetClusterRule, utils.FleetPlacementRule, utils.FleetNetworkRule, utils.EventRule},
 	}
 
 	// Creates role if not found.

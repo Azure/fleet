@@ -24,6 +24,8 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -66,6 +68,16 @@ var (
 	FleetRule = rbacv1.PolicyRule{
 		Verbs:     []string{"*"},
 		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
+		Resources: []string{"*"},
+	}
+	FleetClusterRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{clusterv1beta1.GroupVersion.Group},
+		Resources: []string{"*"},
+	}
+	FleetPlacementRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{placementv1beta1.GroupVersion.Group},
 		Resources: []string{"*"},
 	}
 	EventRule = rbacv1.PolicyRule{

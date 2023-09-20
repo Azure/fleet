@@ -2,7 +2,8 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
-package e2e
+
+package v1alpha1
 
 import (
 	"context"
@@ -17,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/test/e2e/utils"
+	"go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 // Serial - Ginkgo will guarantee that these specs will never run in parallel with other specs.

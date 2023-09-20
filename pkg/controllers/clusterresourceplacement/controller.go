@@ -196,6 +196,15 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	klog.V(2).InfoS("Updated the clusterResourcePlacement status", "clusterResourcePlacement", crpKObj)
 
+	if !isCRPScheduled(oldCRP) && isCRPScheduled(crp) {
+		klog.V(2).InfoS("Placement has been scheduled", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
+		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementScheduleSuccess", "Successfully scheduled the placement")
+	}
+	if !isCRPSynchronized(oldCRP) && isCRPSynchronized(crp) {
+		klog.V(2).InfoS("Placement has been synchronized", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
+		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementSyncSuccess", "Successfully synchronized the placement")
+	}
+
 	if isRolloutCompleted(crp) {
 		if !isRolloutCompleted(oldCRP) {
 			klog.V(2).InfoS("Placement rollout has finished", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
@@ -204,15 +213,6 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		// We keep a slow reconcile loop here to periodically update the work status in case the applied works change the status.
 		klog.V(2).InfoS("Placement rollout has finished and requeue the request in case of works change", "clusterResourcePlacement", crpKObj)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
-	}
-
-	if !isCRPScheduled(oldCRP) && isCRPScheduled(crp) {
-		klog.V(2).InfoS("Placement has been scheduled", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementScheduleSuccess", "Successfully scheduled the placement")
-	}
-	if !isCRPSynchronized(oldCRP) && isCRPSynchronized(crp) {
-		klog.V(2).InfoS("Placement has been synchronized", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementSyncSuccess", "Successfully synchronized the placement")
 	}
 
 	// There is no need to check if the CRP is applied or not.
@@ -883,7 +883,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             "ScheduleSucceeded",
+			Reason:             resourceScheduleSucceededReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
 			ObservedGeneration: crp.Generation,
 		}

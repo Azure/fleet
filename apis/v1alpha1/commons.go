@@ -22,6 +22,7 @@ const (
 	MemberClusterKind                = "MemberCluster"
 	MemberClusterResource            = "memberclusters"
 	InternalMemberClusterKind        = "InternalMemberCluster"
+	ClusterResourcePlacementKind     = "ClusterResourcePlacement"
 	ClusterResourcePlacementResource = "clusterresourceplacements"
 )
 
