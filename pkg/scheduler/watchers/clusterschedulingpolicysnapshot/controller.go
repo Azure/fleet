@@ -124,7 +124,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 
 			// Policy snapshot spec is immutable; however, the scheduler will have to respond
-			// to changes in the annoations.
+			// to changes in the annotations.
 			oldAnnotations := e.ObjectOld.GetAnnotations()
 			newAnnotations := e.ObjectNew.GetAnnotations()
 
@@ -134,6 +134,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return true
 			}
 
+			// The scheduler needs to update the policy snapshot based on the latest CRP generation, when resource selector
+			// has changed and there are no policy changes.
 			oldObservedCRPGeneration := oldAnnotations[fleetv1beta1.CRPGenerationAnnotation]
 			newObservedCRPGeneration := newAnnotations[fleetv1beta1.CRPGenerationAnnotation]
 			if oldObservedCRPGeneration != newObservedCRPGeneration {

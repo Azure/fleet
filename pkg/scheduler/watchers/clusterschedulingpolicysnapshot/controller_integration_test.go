@@ -144,7 +144,7 @@ var _ = Describe("cluster scheduling policy snapshot scheduler source controller
 			Expect(hubClient.Update(ctx, &policySnapshot)).Should(Succeed(), "Failed to update cluster scheduling policy snapshot")
 		})
 
-		It("should enqueue the CRP when number of clusters annotation updated", func() {
+		It("should enqueue the CRP when crp generation annotation updated", func() {
 			Eventually(expectedKeySetEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to enqueue expected key set")
 			Consistently(expectedKeySetEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to enqueue expected key set")
 		})
