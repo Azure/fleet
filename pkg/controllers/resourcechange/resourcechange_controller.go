@@ -136,6 +136,7 @@ func (r *Reconciler) findPlacementsSelectedDeletedResV1Alpha1(res keys.ClusterWi
 
 	if len(matchedCrps) == 0 {
 		klog.V(2).InfoS("change in deleted object does not affect any v1alpha1 placement", "obj", res)
+		return
 	}
 
 	for _, crp := range matchedCrps {
@@ -171,6 +172,7 @@ func (r *Reconciler) findPlacementsSelectedDeletedResV1Beta1(res keys.ClusterWid
 
 	if len(matchedCrps) == 0 {
 		klog.V(2).InfoS("change in deleted object does not affect any v1beta1 placement", "obj", res)
+		return
 	}
 
 	for _, crp := range matchedCrps {
