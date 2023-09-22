@@ -92,8 +92,8 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 			d.onClusterResourcePlacementUpdated, d.onClusterResourcePlacementDeleted)
 		d.InformerManager.AddStaticResource(
 			informer.APIResourceMeta{
-				GroupVersionKind:     utils.ClusterResourcePlacementGVK,
-				GroupVersionResource: utils.ClusterResourcePlacementGVR,
+				GroupVersionKind:     utils.ClusterResourcePlacementV1Alpha1GVK,
+				GroupVersionResource: utils.ClusterResourcePlacementV1Alpha1GVR,
 				IsClusterScoped:      true,
 			}, clusterPlacementEventHandler)
 

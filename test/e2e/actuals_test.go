@@ -20,7 +20,7 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
-func workNamespaceAndDeploymentPlacedOnClusterActual(cluster *framework.Cluster) func() error {
+func workNamespaceAndConfigMapPlacedOnClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
 
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -53,8 +53,7 @@ func workNamespaceAndDeploymentPlacedOnClusterActual(cluster *framework.Cluster)
 			return err
 		}
 
-		// Use the object created in the hub cluster as reference; this helps to avoid the trouble
-		// of having to ignore default fields in the spec.
+		// Use the object created in the hub cluster as reference.
 		wantConfigMap := &corev1.ConfigMap{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, wantConfigMap); err != nil {
 			return err

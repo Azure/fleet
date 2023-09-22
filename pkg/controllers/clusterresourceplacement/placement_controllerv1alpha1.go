@@ -246,7 +246,7 @@ func (r *Reconciler) persistSelectedResourceUnion(ctx context.Context, placement
 
 // getPlacement retrieves a ClusterResourcePlacement object by its name, this will hit the informer cache.
 func (r *Reconciler) getPlacement(name string) (*fleetv1alpha1.ClusterResourcePlacement, error) {
-	obj, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).Get(name)
+	obj, err := r.InformerManager.Lister(utils.ClusterResourcePlacementV1Alpha1GVR).Get(name)
 	if err != nil {
 		return nil, err
 	}
