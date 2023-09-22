@@ -37,7 +37,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: workResourceSelector,
+				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
@@ -98,7 +98,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 		for idx := range allMemberClusters {
 			memberCluster := allMemberClusters[idx]
 
-			workResourcesRemovedActual := workNamespaceAndDeploymentRemovedFromClusterActual(memberCluster)
+			workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
 			Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster")
 		}
 	})
@@ -126,6 +126,6 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 		Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP")
 
 		// Delete the created resources.
-		deleteWorkResources()
+		cleanupWorkResources()
 	})
 })

@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"fmt"
+	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -21,10 +22,11 @@ const (
 	crpNameTemplate           = "crp-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
+	workNamespaceLabelName         = "process"
 )
 
-var (
-	workResourceSelector = []placementv1beta1.ClusterResourceSelector{
+func workResourceSelector() []placementv1beta1.ClusterResourceSelector {
+	return []placementv1beta1.ClusterResourceSelector{
 		{
 			Group:   "",
 			Kind:    "Namespace",
@@ -32,12 +34,15 @@ var (
 			Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
 		},
 	}
-)
+}
 
 func workNamespace() corev1.Namespace {
 	return corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+			Labels: map[string]string{
+				workNamespaceLabelName: strconv.Itoa(GinkgoParallelProcess()),
+			},
 		},
 	}
 }
