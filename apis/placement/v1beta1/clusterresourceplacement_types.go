@@ -381,14 +381,14 @@ type ResourceIdentifier struct {
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
-	// Envelope identifies the envelope objects that contains this resource.
+	// Envelope identifies the envelope object that contains this resource.
 	// +optional
-	Envelope EnvelopeIdentifier `json:"bundleIdentifier,omitempty"`
+	Envelope EnvelopeIdentifier `json:"envelope,omitempty"`
 }
 
-// EnvelopeIdentifier identifies the bundle objects that contains the selected resource.
+// EnvelopeIdentifier identifies the envelope object that contains the selected resource.
 type EnvelopeIdentifier struct {
-	// Name of the target resource.
+	// Name of the envelope object.
 	// +required
 	Name string `json:"name"`
 
@@ -402,7 +402,7 @@ type EnvelopeIdentifier struct {
 	Type EnvelopeType `json:"type"`
 }
 
-// EnvelopeType defines the type of the bundle object.
+// EnvelopeType defines the type of the envelope object.
 // +enum
 type EnvelopeType string
 

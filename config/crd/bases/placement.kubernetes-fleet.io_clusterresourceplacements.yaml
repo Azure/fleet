@@ -656,25 +656,6 @@ spec:
                         description: FailedResourcePlacement contains the failure
                           details of a failed resource placement.
                         properties:
-                          bundleIdentifier:
-                            description: Envelope identifies the envelope objects
-                              that contains this resource.
-                            properties:
-                              name:
-                                description: Name of the target resource.
-                                type: string
-                              namespace:
-                                description: Namespace is the namespace of the envelope
-                                  object. Empty if the envelope object is cluster
-                                  scoped.
-                                type: string
-                              type:
-                                default: ConfigmapEnvelopeType
-                                description: Type of the envelope object.
-                                type: string
-                            required:
-                            - name
-                            type: object
                           condition:
                             description: The failed condition status.
                             properties:
@@ -739,6 +720,25 @@ spec:
                             - status
                             - type
                             type: object
+                          envelope:
+                            description: Envelope identifies the envelope object that
+                              contains this resource.
+                            properties:
+                              name:
+                                description: Name of the envelope object.
+                                type: string
+                              namespace:
+                                description: Namespace is the namespace of the envelope
+                                  object. Empty if the envelope object is cluster
+                                  scoped.
+                                type: string
+                              type:
+                                default: ConfigmapEnvelopeType
+                                description: Type of the envelope object.
+                                type: string
+                            required:
+                            - name
+                            type: object
                           group:
                             description: Group is the group name of the selected resource.
                             type: string
@@ -772,12 +772,12 @@ spec:
                 items:
                   description: ResourceIdentifier identifies one Kubernetes resource.
                   properties:
-                    bundleIdentifier:
-                      description: Envelope identifies the envelope objects that contains
+                    envelope:
+                      description: Envelope identifies the envelope object that contains
                         this resource.
                       properties:
                         name:
-                          description: Name of the target resource.
+                          description: Name of the envelope object.
                           type: string
                         namespace:
                           description: Namespace is the namespace of the envelope
