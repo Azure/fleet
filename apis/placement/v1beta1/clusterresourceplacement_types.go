@@ -383,7 +383,7 @@ type ResourceIdentifier struct {
 
 	// Envelope identifies the envelope object that contains this resource.
 	// +optional
-	Envelope EnvelopeIdentifier `json:"envelope,omitempty"`
+	Envelope *EnvelopeIdentifier `json:"envelope,omitempty"`
 }
 
 // EnvelopeIdentifier identifies the envelope object that contains the selected resource.
