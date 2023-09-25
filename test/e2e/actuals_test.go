@@ -20,7 +20,7 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
-func workNamespaceAndDeploymentPlacedOnClusterActual(cluster *framework.Cluster) func() error {
+func workNamespaceAndConfigMapPlacedOnClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
 
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -53,8 +53,7 @@ func workNamespaceAndDeploymentPlacedOnClusterActual(cluster *framework.Cluster)
 			return err
 		}
 
-		// Use the object created in the hub cluster as reference; this helps to avoid the trouble
-		// of having to ignore default fields in the spec.
+		// Use the object created in the hub cluster as reference.
 		wantConfigMap := &corev1.ConfigMap{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, wantConfigMap); err != nil {
 			return err
@@ -203,21 +202,14 @@ func crpStatusUpdatedActual() func() error {
 	}
 }
 
-func workNamespaceAndDeploymentRemovedFromClusterActual(cluster *framework.Cluster) func() error {
+func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
 
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
-
 	return func() error {
 		if err := client.Get(ctx, types.NamespacedName{Name: workNamespaceName}, &corev1.Namespace{}); !errors.IsNotFound(err) {
-			return fmt.Errorf("work namespace still exists or an unexpected error occurred: %w", err)
+			return fmt.Errorf("work namespace %s still exists or an unexpected error occurred: %w", workNamespaceName, err)
 		}
-
-		if err := client.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, &corev1.ConfigMap{}); !errors.IsNotFound(err) {
-			return fmt.Errorf("app configMap still exists or an unexpected error occurred: %w", err)
-		}
-
 		return nil
 	}
 }

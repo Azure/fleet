@@ -24,6 +24,8 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -68,6 +70,16 @@ var (
 		APIGroups: []string{fleetv1alpha1.GroupVersion.Group},
 		Resources: []string{"*"},
 	}
+	FleetClusterRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{clusterv1beta1.GroupVersion.Group},
+		Resources: []string{"*"},
+	}
+	FleetPlacementRule = rbacv1.PolicyRule{
+		Verbs:     []string{"*"},
+		APIGroups: []string{placementv1beta1.GroupVersion.Group},
+		Resources: []string{"*"},
+	}
 	EventRule = rbacv1.PolicyRule{
 		Verbs:     []string{"get", "list", "update", "patch", "watch", "create"},
 		APIGroups: []string{""},
@@ -87,13 +99,19 @@ var (
 
 // Those are the GVR/GVK of the fleet related resources.
 var (
-	ClusterResourcePlacementGVR = schema.GroupVersionResource{
+	ClusterResourcePlacementV1Alpha1GVR = schema.GroupVersionResource{
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.ClusterResourcePlacementResource,
 	}
 
-	ClusterResourcePlacementGVK = schema.GroupVersionKind{
+	ClusterResourcePlacementGVR = schema.GroupVersionResource{
+		Group:    placementv1beta1.GroupVersion.Group,
+		Version:  placementv1beta1.GroupVersion.Version,
+		Resource: placementv1beta1.ClusterResourcePlacementResource,
+	}
+
+	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
 		Kind:    "ClusterResourcePlacement",

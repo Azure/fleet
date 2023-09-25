@@ -46,8 +46,8 @@ const (
 )
 
 const (
-	eventuallyDuration = time.Second * 10
-	eventuallyInterval = time.Millisecond * 500
+	eventuallyDuration = time.Minute * 10
+	eventuallyInterval = time.Second * 5
 )
 
 var (

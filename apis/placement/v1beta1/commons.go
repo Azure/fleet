@@ -7,6 +7,7 @@ package v1beta1
 
 const (
 	ClusterResourcePlacementKind        = "ClusterResourcePlacement"
+	ClusterResourcePlacementResource    = "clusterresourceplacements"
 	ClusterResourceBindingKind          = "ClusterResourceBinding"
 	ClusterResourceSnapshotKind         = "ClusterResourceSnapshot"
 	ClusterSchedulingPolicySnapshotKind = "ClusterSchedulingPolicySnapshot"
