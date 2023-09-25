@@ -41,6 +41,10 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+              
+      - name: Set up Ginkgo CLI
+        run: |
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.9.5
 
       - name: Run unit tests & Generate coverage
         run: make test
@@ -111,3 +115,4 @@ jobs:
           make e2e-tests
         env:
           KUBECONFIG: '/home/runner/.kube/config'
+          HUB_SERVER_URL: 'https://172.19.0.2:6443'

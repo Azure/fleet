@@ -73,7 +73,7 @@ var _ = BeforeSuite(func() {
 
 	reconciler := &Reconciler{
 		Client:             hubClient,
-		SchedulerWorkqueue: schedulerWorkQueue,
+		SchedulerWorkQueue: schedulerWorkQueue,
 	}
 	err = reconciler.SetupWithManager(ctrlMgr)
 	Expect(err).ToNot(HaveOccurred(), "Failed to set up controller with controller manager")
