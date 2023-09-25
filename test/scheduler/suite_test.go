@@ -208,7 +208,7 @@ func setupResources() {
 		Expect(hubClient.Status().Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster status")
 	}
 
-	// Mark cluster runningwolf as unhealthy (no recent heartbeats).
+	// Mark cluster 8 as unhealthy (no recent heartbeats).
 	memberCluster := &clusterv1beta1.MemberCluster{}
 	Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster8}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 	memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
@@ -244,7 +244,7 @@ func setupResources() {
 		Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster")
 	}
 
-	// Set cluster walkingeagle to leave by deleting the member cluster object.
+	// Set cluster 9 to leave by deleting the member cluster object.
 	memberCluster = &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: memberCluster9,
