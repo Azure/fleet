@@ -15,8 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
@@ -87,19 +89,19 @@ func checkIfAllMemberClustersHaveJoined() {
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources() {
 	ns := workNamespace()
-	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace")
+	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 
-	deploy := appConfigMap()
-	Expect(hubClient.Create(ctx, &deploy)).To(Succeed(), "Failed to create deployment")
+	configMap := appConfigMap()
+	Expect(hubClient.Create(ctx, &configMap)).To(Succeed(), "Failed to create config map %s", configMap.Name)
 }
 
-// deleteWorkResources deletes the resources created by createWorkResources.
-func deleteWorkResources() {
+// cleanupWorkResources deletes the resources created by createWorkResources and waits until the resources are not found.
+func cleanupWorkResources() {
 	ns := workNamespace()
-	Expect(hubClient.Delete(ctx, &ns)).To(Succeed(), "Failed to delete namespace")
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
 
-	deploy := appConfigMap()
-	Expect(hubClient.Delete(ctx, &deploy)).To(Succeed(), "Failed to delete deployment")
+	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(hubCluster)
+	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from hub cluster")
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -112,7 +114,7 @@ func setAllMemberClustersToLeave() {
 				Name: memberCluster.ClusterName,
 			},
 		}
-		Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to set member cluster to leave state")
+		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to set member cluster to leave state")
 	}
 }
 
@@ -129,4 +131,40 @@ func checkIfAllMemberClustersHaveLeft() {
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 	}
+}
+
+func checkIfPlacedWorkResourcesOnAllMemberClusters() {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+
+		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
+		Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfRemovedWorkResourcesFromAllMemberClusters() {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+
+		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
+		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+// cleanupCRP deletes the CRP and waits until the resources are not found.
+func cleanupCRP(name string) {
+	crp := &placementv1beta1.ClusterResourcePlacement{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)).To(Succeed(), "Failed to get CRP %s", name)
+
+	// Delete the CRP (again, if applicable).
+	//
+	// This helps the AfterAll node to run successfully even if the steps above fail early.
+	Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", name)
+
+	crp.Finalizers = []string{}
+	Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP %s", name)
+
+	// Wait until the CRP is removed.
+	removedActual := crpRemovedActual()
+	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
 }

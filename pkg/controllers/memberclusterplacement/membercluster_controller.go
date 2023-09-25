@@ -57,7 +57,7 @@ func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl
 		}
 		mObj = nil //guard against unexpected informer lib behavior
 	}
-	crpList, err := r.InformerManager.Lister(utils.ClusterResourcePlacementGVR).List(labels.Everything())
+	crpList, err := r.InformerManager.Lister(utils.ClusterResourcePlacementV1Alpha1GVR).List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "failed to list all the cluster resource placement", "memberCluster", memberClusterName)
 		return ctrl.Result{}, err
