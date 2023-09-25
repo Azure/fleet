@@ -380,7 +380,37 @@ type ResourceIdentifier struct {
 	// Namespace is the namespace of the resource. Empty if the resource is cluster scoped.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+
+	// Envelope identifies the envelope object that contains this resource.
+	// +optional
+	Envelope *EnvelopeIdentifier `json:"envelope,omitempty"`
 }
+
+// EnvelopeIdentifier identifies the envelope object that contains the selected resource.
+type EnvelopeIdentifier struct {
+	// Name of the envelope object.
+	// +required
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the envelope object. Empty if the envelope object is cluster scoped.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Type of the envelope object.
+	// +kubebuilder:validation:Enum=ConfigMap
+	// +kubebuilder:default=ConfigMap
+	// +optional
+	Type EnvelopeType `json:"type"`
+}
+
+// EnvelopeType defines the type of the envelope object.
+// +enum
+type EnvelopeType string
+
+const (
+	// ConfigMapEnvelopeType means the envelope object is of type `ConfigMap`.
+	ConfigMapEnvelopeType EnvelopeType = "ConfigMap"
+)
 
 // ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
 type ResourcePlacementStatus struct {

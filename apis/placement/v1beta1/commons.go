@@ -53,4 +53,8 @@ const (
 	// CRPGenerationAnnotation is the annotation that indicates the generation of the CRP from
 	// which an object is derived or last updated.
 	CRPGenerationAnnotation = fleetPrefix + "CRPGeneration"
+
+	// EnvelopeConfigMapAnnotation is the annotation that indicates the configmap is an envelope configmap that contains resources
+	// we need to apply to the member cluster instead of the configMap itself.
+	EnvelopeConfigMapAnnotation = fleetPrefix + "EnvelopeConfigMap"
 )

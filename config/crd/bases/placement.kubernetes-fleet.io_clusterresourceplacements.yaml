@@ -720,6 +720,27 @@ spec:
                             - status
                             - type
                             type: object
+                          envelope:
+                            description: Envelope identifies the envelope object that
+                              contains this resource.
+                            properties:
+                              name:
+                                description: Name of the envelope object.
+                                type: string
+                              namespace:
+                                description: Namespace is the namespace of the envelope
+                                  object. Empty if the envelope object is cluster
+                                  scoped.
+                                type: string
+                              type:
+                                default: ConfigMap
+                                description: Type of the envelope object.
+                                enum:
+                                - ConfigMap
+                                type: string
+                            required:
+                            - name
+                            type: object
                           group:
                             description: Group is the group name of the selected resource.
                             type: string
@@ -753,6 +774,26 @@ spec:
                 items:
                   description: ResourceIdentifier identifies one Kubernetes resource.
                   properties:
+                    envelope:
+                      description: Envelope identifies the envelope object that contains
+                        this resource.
+                      properties:
+                        name:
+                          description: Name of the envelope object.
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the envelope
+                            object. Empty if the envelope object is cluster scoped.
+                          type: string
+                        type:
+                          default: ConfigMap
+                          description: Type of the envelope object.
+                          enum:
+                          - ConfigMap
+                          type: string
+                      required:
+                      - name
+                      type: object
                     group:
                       description: Group is the group name of the selected resource.
                       type: string
