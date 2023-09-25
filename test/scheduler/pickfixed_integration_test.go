@@ -5,8 +5,8 @@ Licensed under the MIT license.
 
 package tests
 
-// This test suite features a number of test cases which cover the happy paths of the scheduler
-// workflow.
+// This test suite features a number of test cases which cover the workflow of scheduling CRPs
+// of the PickFixed placement type.
 
 import (
 	"fmt"
@@ -15,10 +15,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, func() {
@@ -36,19 +36,21 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
-			Consistently(noBindingCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
-			policy := &fleetv1beta1.PlacementPolicy{
-				PlacementType: fleetv1beta1.PickFixedPlacementType,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
 				ClusterNames:  targetClusters,
 			}
 
 			// Create the CRP.
-			crp := &fleetv1beta1.ClusterResourcePlacement{
+			crp := &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: crpName,
+					Name:       crpName,
+					Finalizers: []string{customDeletionBlockerFinalizer},
 				},
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: defaultResourceSelectors,
 					Policy:            policy,
 				},
@@ -58,18 +60,18 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 			crpGeneration := crp.Generation
 
 			// Create the associated policy snapshot.
-			policySnapshot := &fleetv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: policySnapshotName,
 					Labels: map[string]string{
-						fleetv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-						fleetv1beta1.CRPTrackingLabel:      crpName,
+						placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+						placementv1beta1.CRPTrackingLabel:      crpName,
 					},
 					Annotations: map[string]string{
-						fleetv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
+						placementv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
 					},
 				},
-				Spec: fleetv1beta1.SchedulingPolicySnapshotSpec{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
 					Policy:     policy,
 					PolicyHash: []byte(policyHash),
 				},
@@ -120,12 +122,14 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 		BeforeAll(func() {
 			// Mark all previously created bindings as bound.
-			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
-			Expect(hubClient.List(ctx, bindingList)).To(Succeed(), "Failed to list bindings")
+			bindingList := &placementv1beta1.ClusterResourceBindingList{}
+			labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+			listOptions := &client.ListOptions{LabelSelector: labelSelector}
+			Expect(hubClient.List(ctx, bindingList, listOptions)).To(Succeed(), "Failed to list bindings")
 			for idx := range bindingList.Items {
 				binding := bindingList.Items[idx]
-				if binding.Spec.State == fleetv1beta1.BindingStateScheduled {
-					binding.Spec.State = fleetv1beta1.BindingStateBound
+				if binding.Spec.State == placementv1beta1.BindingStateScheduled {
+					binding.Spec.State = placementv1beta1.BindingStateBound
 					Expect(hubClient.Update(ctx, &binding)).To(Succeed(), "Failed to update binding")
 				}
 			}
@@ -210,7 +214,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 		})
 
 		It("should not create bindings for invalid target clusters", func() {
-			noBindingsCreatedActual := noBindingsCreatedForClustersActual(invalidClusters)
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(invalidClusters, crpName)
 			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Created a binding for invalid or not found cluster")
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Created a binding for invalid or not found cluster")
 		})
@@ -282,7 +286,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 		})
 
 		It("should not create bindings for invalid target clusters", func() {
-			noBindingsCreatedActual := noBindingsCreatedForClustersActual(invalidClusters)
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(invalidClusters, crpName)
 			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Created a binding for invalid or not found cluster")
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Created a binding for invalid or not found cluster")
 		})
@@ -354,28 +358,20 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 	})
 
 	Context("delete the CRP", func() {
-		additionalFinalizer := "test-purpose-finalizer"
-
 		BeforeAll(func() {
-			// Retrieve the CRP.
-			crp := &fleetv1beta1.ClusterResourcePlacement{}
-			Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
-
-			// Ensure that the CRP has the scheduler cleanup finalizer.
-			Expect(controllerutil.ContainsFinalizer(crp, fleetv1beta1.SchedulerCRPCleanupFinalizer)).To(BeTrue(), "CRP does not have the scheduler cleanup finalizer")
-
-			// Add an additional finalizer to the CRP to block its deletion; this helps to better
-			// observe the scheduler's behavior.
-			controllerutil.AddFinalizer(crp, additionalFinalizer)
-			Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
-
 			// Delete the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+			}
 			Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
 		})
 
 		It("should clear all bindings", func() {
-			Eventually(noBindingCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to clear all bindings")
-			Consistently(noBindingCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to clear all bindings")
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to clear all bindings")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to clear all bindings")
 		})
 
 		It("should remove the scheduler cleanup finalizer from the CRP", func() {
@@ -388,7 +384,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 			ensureCRPDeletion(crpName)
 
 			// Remove all policy snapshots.
-			clearPolicySnapshots()
+			clearPolicySnapshots(crpName)
 		})
 	})
 })
