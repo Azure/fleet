@@ -733,8 +733,10 @@ spec:
                                   scoped.
                                 type: string
                               type:
-                                default: ConfigmapEnvelopeType
+                                default: ConfigMap
                                 description: Type of the envelope object.
+                                enum:
+                                - ConfigMap
                                 type: string
                             required:
                             - name
@@ -784,8 +786,10 @@ spec:
                             object. Empty if the envelope object is cluster scoped.
                           type: string
                         type:
-                          default: ConfigmapEnvelopeType
+                          default: ConfigMap
                           description: Type of the envelope object.
+                          enum:
+                          - ConfigMap
                           type: string
                       required:
                       - name

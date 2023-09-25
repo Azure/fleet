@@ -397,7 +397,8 @@ type EnvelopeIdentifier struct {
 	Namespace string `json:"namespace,omitempty"`
 
 	// Type of the envelope object.
-	// +kubebuilder:default=ConfigmapEnvelopeType
+	// +kubebuilder:validation:Enum=ConfigMap
+	// +kubebuilder:default=ConfigMap
 	// +optional
 	Type EnvelopeType `json:"type"`
 }
@@ -407,8 +408,8 @@ type EnvelopeIdentifier struct {
 type EnvelopeType string
 
 const (
-	// ConfigmapEnvelopeType means the envelope object is of type `Configmap`.
-	ConfigmapEnvelopeType EnvelopeType = "Configmap"
+	// ConfigMapEnvelopeType means the envelope object is of type `ConfigMap`.
+	ConfigMapEnvelopeType EnvelopeType = "ConfigMap"
 )
 
 // ResourcePlacementStatus represents the placement status of selected resources for one target cluster.
