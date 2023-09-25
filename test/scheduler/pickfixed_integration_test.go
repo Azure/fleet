@@ -26,9 +26,9 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 	Context("create a CRP with some valid target clusters", func() {
 		targetClusters := []string{
-			memberCluster1,
-			memberCluster4,
-			memberCluster6,
+			memberCluster1EastProd,
+			memberCluster4CentralProd,
+			memberCluster6WestProd,
 		}
 
 		policySnapshotIdx := 1
@@ -97,21 +97,21 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 	Context("add additional valid target clusters", func() {
 		targetClusters := []string{
-			memberCluster1,
-			memberCluster2,
-			memberCluster4,
-			memberCluster5,
-			memberCluster6,
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
 		}
 
 		boundClusters := []string{
-			memberCluster1,
-			memberCluster4,
-			memberCluster6,
+			memberCluster1EastProd,
+			memberCluster4CentralProd,
+			memberCluster6WestProd,
 		}
 		scheduledClusters := []string{
-			memberCluster2,
-			memberCluster5,
+			memberCluster2EastProd,
+			memberCluster5CentralProd,
 		}
 
 		policySnapshotIdx := 2
@@ -155,37 +155,37 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 	Context("add invalid (unhealthy, or left) and not found target clusters", func() {
 		targetClusters := []string{
-			memberCluster1,
-			memberCluster2,
-			memberCluster4,
-			memberCluster5,
-			memberCluster6,
-			memberCluster8,  // An invalid cluster (unhealthy).
-			memberCluster9,  // An invalid cluster (left).
-			memberCluster10, // A cluster that cannot be found in the fleet.
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster8UnhealthyEastProd, // An invalid cluster (unhealthy).
+			memberCluster9LeftCentralProd,   // An invalid cluster (left).
+			memberCluster10NonExistent,      // A cluster that cannot be found in the fleet.
 		}
 
 		validClusters := []string{
-			memberCluster1,
-			memberCluster2,
-			memberCluster4,
-			memberCluster5,
-			memberCluster6,
+			memberCluster1EastProd,
+			memberCluster2EastProd,
+			memberCluster4CentralProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
 		}
 		boundClusters := []string{
-			memberCluster1,
-			memberCluster4,
-			memberCluster6,
+			memberCluster1EastProd,
+			memberCluster4CentralProd,
+			memberCluster6WestProd,
 		}
 		scheduledClusters := []string{
-			memberCluster2,
-			memberCluster5,
+			memberCluster2EastProd,
+			memberCluster5CentralProd,
 		}
 
 		invalidClusters := []string{
-			memberCluster8,
-			memberCluster9,
-			memberCluster10,
+			memberCluster8UnhealthyEastProd,
+			memberCluster9LeftCentralProd,
+			memberCluster10NonExistent,
 		}
 
 		policySnapshotIdx := 3
@@ -224,34 +224,34 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 	Context("remove some target clusters (valid + invalid)", func() {
 		targetClusters := []string{
-			memberCluster2,
-			memberCluster5,
-			memberCluster6,
-			memberCluster8,
-			memberCluster10,
+			memberCluster2EastProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
+			memberCluster8UnhealthyEastProd,
+			memberCluster10NonExistent,
 		}
 
 		validClusters := []string{
-			memberCluster2,
-			memberCluster5,
-			memberCluster6,
+			memberCluster2EastProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
 		}
 		boundClusters := []string{
-			memberCluster6,
+			memberCluster6WestProd,
 		}
 		scheduledClusters := []string{
-			memberCluster2,
-			memberCluster5,
+			memberCluster2EastProd,
+			memberCluster5CentralProd,
 		}
 
 		invalidClusters := []string{
-			memberCluster8,
-			memberCluster10,
+			memberCluster8UnhealthyEastProd,
+			memberCluster10NonExistent,
 		}
 
 		unscheduledClusters := []string{
-			memberCluster1,
-			memberCluster4,
+			memberCluster1EastProd,
+			memberCluster4CentralProd,
 		}
 
 		policySnapshotIdx := 4
@@ -300,23 +300,23 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", Ordered, fun
 
 	Context("pick a different set of clusters", func() {
 		targetClusters := []string{
-			memberCluster3,
-			memberCluster7,
+			memberCluster3EastCanary,
+			memberCluster7WestCanary,
 		}
 
 		validClusters := []string{
-			memberCluster3,
-			memberCluster7,
+			memberCluster3EastCanary,
+			memberCluster7WestCanary,
 		}
 		scheduledClusters := []string{
-			memberCluster3,
-			memberCluster7,
+			memberCluster3EastCanary,
+			memberCluster7WestCanary,
 		}
 
 		unscheduledClusters := []string{
-			memberCluster2,
-			memberCluster5,
-			memberCluster6,
+			memberCluster2EastProd,
+			memberCluster5CentralProd,
+			memberCluster6WestProd,
 		}
 
 		policySnapshotIdx := 5

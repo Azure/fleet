@@ -52,16 +52,16 @@ const (
 	consistentlyDuration = time.Second * 1
 	consistentlyInterval = time.Millisecond * 200
 
-	memberCluster1  = "cluster-1-east-prod"
-	memberCluster2  = "cluster-2-east-prod"
-	memberCluster3  = "cluster-3-east-canary"
-	memberCluster4  = "cluster-4-central-prod"
-	memberCluster5  = "cluster-5-central-prod"
-	memberCluster6  = "cluster-6-west-prod"
-	memberCluster7  = "cluster-7-west-canary"
-	memberCluster8  = "unhealthy-cluster-east-prod"
-	memberCluster9  = "left-cluster-central-prod"
-	memberCluster10 = "non-existent-cluster"
+	memberCluster1EastProd          = "cluster-1-east-prod"
+	memberCluster2EastProd          = "cluster-2-east-prod"
+	memberCluster3EastCanary        = "cluster-3-east-canary"
+	memberCluster4CentralProd       = "cluster-4-central-prod"
+	memberCluster5CentralProd       = "cluster-5-central-prod"
+	memberCluster6WestProd          = "cluster-6-west-prod"
+	memberCluster7WestCanary        = "cluster-7-west-canary"
+	memberCluster8UnhealthyEastProd = "unhealthy-cluster-east-prod"
+	memberCluster9LeftCentralProd   = "left-cluster-central-prod"
+	memberCluster10NonExistent      = "non-existent-cluster"
 
 	regionLabel = "region"
 	envLabel    = "env"
@@ -97,44 +97,44 @@ var (
 	// * 2 clusters are in the canary environment (with the label "environment=canary"), incl.
 	//     * cluster 3 and 7
 	allClusters = []string{
-		memberCluster1, memberCluster2, memberCluster3, memberCluster4, memberCluster5,
-		memberCluster6, memberCluster7, memberCluster8, memberCluster9,
+		memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd,
+		memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd,
 	}
 
 	labelsByCluster = map[string]map[string]string{
-		memberCluster1: {
+		memberCluster1EastProd: {
 			regionLabel: "east",
 			envLabel:    "prod",
 		},
-		memberCluster2: {
+		memberCluster2EastProd: {
 			regionLabel: "east",
 			envLabel:    "prod",
 		},
-		memberCluster3: {
+		memberCluster3EastCanary: {
 			regionLabel: "east",
 			envLabel:    "canary",
 		},
-		memberCluster4: {
+		memberCluster4CentralProd: {
 			regionLabel: "central",
 			envLabel:    "prod",
 		},
-		memberCluster5: {
+		memberCluster5CentralProd: {
 			regionLabel: "central",
 			envLabel:    "prod",
 		},
-		memberCluster6: {
+		memberCluster6WestProd: {
 			regionLabel: "west",
 			envLabel:    "prod",
 		},
-		memberCluster7: {
+		memberCluster7WestCanary: {
 			regionLabel: "west",
 			envLabel:    "canary",
 		},
-		memberCluster8: {
+		memberCluster8UnhealthyEastProd: {
 			regionLabel: "east",
 			envLabel:    "prod",
 		},
-		memberCluster9: {
+		memberCluster9LeftCentralProd: {
 			regionLabel: "central",
 			envLabel:    "prod",
 		},
@@ -210,7 +210,7 @@ func setupResources() {
 
 	// Mark cluster 8 as unhealthy (no recent heartbeats).
 	memberCluster := &clusterv1beta1.MemberCluster{}
-	Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster8}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: memberCluster8UnhealthyEastProd}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 	memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
 		{
 			Type: clusterv1beta1.MemberAgent,
@@ -247,7 +247,7 @@ func setupResources() {
 	// Set cluster 9 to leave by deleting the member cluster object.
 	memberCluster = &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: memberCluster9,
+			Name: memberCluster9LeftCentralProd,
 		},
 	}
 	Expect(hubClient.Delete(ctx, memberCluster)).To(Succeed(), "Failed to delete member cluster")
