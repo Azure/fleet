@@ -49,12 +49,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 	})
 
-	It("should place the resources on all member clusters", func() {
-		for idx := range allMemberClusters {
-			workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(allMemberClusters[idx])
-			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster")
-		}
-	})
+	It("should place the resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual()
@@ -72,12 +67,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 		Expect(hubClient.Update(ctx, configMap)).To(Succeed(), "Failed to update config map")
 	})
 
-	It("should place the resources on all member clusters", func() {
-		for idx := range allMemberClusters {
-			workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(allMemberClusters[idx])
-			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster")
-		}
-	})
+	It("should place the resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual()
@@ -94,14 +84,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
 	})
 
-	It("should remove placed resources from all member clusters", func() {
-		for idx := range allMemberClusters {
-			memberCluster := allMemberClusters[idx]
-
-			workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-			Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster")
-		}
-	})
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
@@ -110,20 +93,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 
 	AfterAll(func() {
 		// Remove the custom deletion blocker finalizer from the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{}
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
-
-		// Delete the CRP (again, if applicable).
-		//
-		// This helps the AfterAll node to run successfully even if the steps above fail early.
-		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
-
-		crp.Finalizers = []string{}
-		Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
-
-		// Wait until the CRP is removed.
-		removedActual := crpRemovedActual()
-		Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP")
+		cleanupCRP(crpName)
 
 		// Delete the created resources.
 		cleanupWorkResources()

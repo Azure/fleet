@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -88,6 +89,13 @@ var (
 	ignoreConditionLTTReasonAndMessageFields = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Reason", "Message")
 	ignoreAgentStatusHeartbeatField          = cmpopts.IgnoreFields(clusterv1beta1.AgentStatus{}, "LastReceivedHeartbeat")
 	ignoreNamespaceStatusField               = cmpopts.IgnoreFields(corev1.Namespace{}, "Status")
+
+	crpStatusCmpOptions = cmp.Options{
+		cmpopts.SortSlices(lessFuncCondition),
+		cmpopts.SortSlices(lessFuncPlacementStatus),
+		cmpopts.SortSlices(lessFuncResourceIdentifier),
+		ignoreConditionLTTReasonAndMessageFields,
+	}
 )
 
 // TestMain sets up the E2E test environment.
