@@ -9,10 +9,12 @@ package tests
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/gomega"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -179,6 +181,151 @@ func loadRestConfigFrom(apiCfgBytes []byte) *rest.Config {
 	return restCfg
 }
 
+func createMemberCluster(name string) {
+	memberCluster := clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Kind:     "ServiceAccount",
+				APIGroup: "",
+				Name:     "admin",
+			},
+		},
+	}
+	Expect(hubClient.Create(ctx, &memberCluster)).To(Succeed(), "Failed to create member cluster")
+}
+
+func markClusterAsHealthy(name string) {
+	memberCluster := clusterv1beta1.MemberCluster{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, &memberCluster)).To(Succeed(), "Failed to get member cluster")
+	memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
+		{
+			Type: clusterv1beta1.MemberAgent,
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(clusterv1beta1.AgentJoined),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.NewTime(time.Now()),
+					Reason:             dummyReason,
+				},
+				{
+					Type:               string(clusterv1beta1.AgentHealthy),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.NewTime(time.Now()),
+					Reason:             dummyReason,
+				},
+			},
+			LastReceivedHeartbeat: metav1.NewTime(time.Now()),
+		},
+	}
+	Expect(hubClient.Status().Update(ctx, &memberCluster)).To(Succeed(), "Failed to update member cluster status")
+}
+
+func markClusterAsUnhealthy(name string) {
+	memberCluster := clusterv1beta1.MemberCluster{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, &memberCluster)).To(Succeed(), "Failed to get member cluster")
+	memberCluster.Status.AgentStatus = []clusterv1beta1.AgentStatus{
+		{
+			Type: clusterv1beta1.MemberAgent,
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(clusterv1beta1.AgentJoined),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour * 25)),
+					Reason:             dummyReason,
+				},
+				{
+					Type:               string(clusterv1beta1.AgentHealthy),
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour * 25)),
+					Reason:             dummyReason,
+				},
+			},
+			LastReceivedHeartbeat: metav1.NewTime(time.Now().Add(-time.Hour * 25)),
+		},
+	}
+	Expect(hubClient.Status().Update(ctx, &memberCluster)).To(Succeed(), "Failed to update member cluster status")
+}
+
+func createPickFixedCRPWithPolicySnapshot(crpName string, targetClusters []string, policySnapshotName string) {
+	policy := &placementv1beta1.PlacementPolicy{
+		PlacementType: placementv1beta1.PickFixedPlacementType,
+		ClusterNames:  targetClusters,
+	}
+
+	// Create the CRP.
+	crp := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       crpName,
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: defaultResourceSelectors,
+			Policy:            policy,
+		},
+	}
+	Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+
+	crpGeneration := crp.Generation
+
+	// Create the associated policy snapshot.
+	policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policySnapshotName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.CRPTrackingLabel:      crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy:     policy,
+			PolicyHash: []byte(policyHash),
+		},
+	}
+	Expect(hubClient.Create(ctx, policySnapshot)).To(Succeed(), "Failed to create policy snapshot")
+}
+
+func createNilSchedulingPolicyCRPWithPolicySnapshot(crpName string, policySnapshotName string) {
+	// Create a CRP with no scheduling policy specified.
+	crp := placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       crpName,
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: defaultResourceSelectors,
+			Policy:            nil,
+		},
+	}
+	Expect(hubClient.Create(ctx, &crp)).Should(Succeed(), "Failed to create CRP")
+
+	crpGeneration := crp.Generation
+
+	// Create the associated policy snapshot.
+	policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policySnapshotName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.CRPTrackingLabel:      crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy:     nil,
+			PolicyHash: []byte(policyHash),
+		},
+	}
+	Expect(hubClient.Create(ctx, policySnapshot)).Should(Succeed(), "Failed to create policy snapshot")
+}
+
 func updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName string, targetClusters []string, oldPolicySnapshotName, newPolicySnapshotName string) {
 	// Update the CRP.
 	crp := &placementv1beta1.ClusterResourcePlacement{}
@@ -217,40 +364,74 @@ func updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName string
 	Expect(hubClient.Create(ctx, policySnapshot)).To(Succeed(), "Failed to create policy snapshot")
 }
 
-func clearUnscheduledBindings() {
-	// List all bindings.
+func markBindingsAsBoundForClusters(crpName string, boundClusters []string) {
 	bindingList := &placementv1beta1.ClusterResourceBindingList{}
-	Expect(hubClient.List(ctx, bindingList)).To(Succeed(), "Failed to list bindings")
-
-	// Delete all unscheduled bindings.
+	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+	listOptions := &client.ListOptions{LabelSelector: labelSelector}
+	Expect(hubClient.List(ctx, bindingList, listOptions)).To(Succeed(), "Failed to list bindings")
+	boundClusterMap := make(map[string]bool)
+	for _, cluster := range boundClusters {
+		boundClusterMap[cluster] = true
+	}
 	for idx := range bindingList.Items {
 		binding := bindingList.Items[idx]
-		if binding.Spec.State == placementv1beta1.BindingStateUnscheduled {
-			Expect(hubClient.Delete(ctx, &binding)).To(Succeed(), "Failed to delete binding")
-
-			Eventually(func() error {
-				err := hubClient.Get(ctx, types.NamespacedName{Name: binding.Name}, &placementv1beta1.ClusterResourceBinding{})
-				if errors.IsNotFound(err) {
-					return nil
-				}
-
-				return err
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete binding")
+		if _, ok := boundClusterMap[binding.Spec.TargetCluster]; ok && binding.Spec.State == placementv1beta1.BindingStateScheduled {
+			binding.Spec.State = placementv1beta1.BindingStateBound
+			Expect(hubClient.Update(ctx, &binding)).To(Succeed(), "Failed to update binding")
 		}
 	}
 }
 
-func clearPolicySnapshots(crpName string) {
+func ensureCRPAndAllRelatedResourcesDeletion(crpName string) {
+	// Delete the CRP.
+	crp := &placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpName,
+		},
+	}
+	Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
+
+	// Ensure that all the bindings are deleted.
+	noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+	Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to clear all bindings")
+	Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to clear all bindings")
+
+	// Ensure that the scheduler finalizer is removed.
+	finalizerRemovedActual := crpSchedulerFinalizerRemovedActual(crpName)
+	Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove scheduler cleanup finalizer from CRP")
+
+	// Remove all the other finalizers from the CRP.
+	Eventually(func() error {
+		crp := &placementv1beta1.ClusterResourcePlacement{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+			return err
+		}
+
+		crp.Finalizers = []string{}
+		return hubClient.Update(ctx, crp)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove all finalizers from CRP")
+
+	// Ensure that the CRP is deleted.
+	Eventually(func() error {
+		err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &placementv1beta1.ClusterResourcePlacement{})
+		if errors.IsNotFound(err) {
+			return nil
+		}
+
+		return err
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP")
+
 	// List all policy snapshots.
 	policySnapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
 	labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
 	listOptions := &client.ListOptions{LabelSelector: labelSelector}
 	Expect(hubClient.List(ctx, policySnapshotList, listOptions)).To(Succeed(), "Failed to list policy snapshots")
 
-	// Delete all policy snapshots.
+	// Delete all policy snapshots and ensure their deletion.
 	for idx := range policySnapshotList.Items {
 		policySnapshot := policySnapshotList.Items[idx]
 		Expect(hubClient.Delete(ctx, &policySnapshot)).To(Succeed(), "Failed to delete policy snapshot")
+
 		Eventually(func() error {
 			err := hubClient.Get(ctx, types.NamespacedName{Name: policySnapshot.Name}, &placementv1beta1.ClusterSchedulingPolicySnapshot{})
 			if errors.IsNotFound(err) {
@@ -262,34 +443,14 @@ func clearPolicySnapshots(crpName string) {
 	}
 }
 
-func ensureCRPDeletion(crpName string) {
-	// Retrieve the CRP.
-	crp := &placementv1beta1.ClusterResourcePlacement{}
-	Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
-
-	// Remove all finalizers from the CRP.
-	crp.Finalizers = []string{}
-	Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
-
-	// Ensure that the CRP is deleted.
-	Eventually(func() error {
-		err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &placementv1beta1.ClusterResourcePlacement{})
-		if errors.IsNotFound(err) {
-			return nil
-		}
-
-		return err
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP")
-}
-
 func ensureProvisionalClusterDeletion(clusterName string) {
 	// Retrieve the provisional cluster.
-	memberCluster := &clusterv1beta1.MemberCluster{}
-	Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
-
-	// Remove all finalizers from the provisional cluster.
-	memberCluster.Finalizers = []string{}
-	Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster")
+	memberCluster := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+	}
+	Expect(hubClient.Delete(ctx, memberCluster)).To(Succeed(), "Failed to delete member cluster")
 
 	// Ensure that the provisional cluster is deleted.
 	Eventually(func() error {

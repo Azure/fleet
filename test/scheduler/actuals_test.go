@@ -77,7 +77,7 @@ func crpSchedulerFinalizerRemovedActual(crpName string) func() error {
 	}
 }
 
-func scheduledBindingsCreatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName, policySnapshotName string) func() error {
+func scheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName, policySnapshotName string) func() error {
 	return func() error {
 		// List all bindings.
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
@@ -89,8 +89,12 @@ func scheduledBindingsCreatedForClustersActual(clusters []string, scoreByCluster
 
 		// Find all the scheduled bindings.
 		scheduled := []placementv1beta1.ClusterResourceBinding{}
+		clusterMap := make(map[string]bool)
+		for _, name := range clusters {
+			clusterMap[name] = true
+		}
 		for _, binding := range bindingList.Items {
-			if binding.Spec.State == placementv1beta1.BindingStateScheduled {
+			if _, ok := clusterMap[binding.Spec.TargetCluster]; ok && binding.Spec.State == placementv1beta1.BindingStateScheduled {
 				scheduled = append(scheduled, binding)
 			}
 		}
@@ -136,7 +140,7 @@ func scheduledBindingsCreatedForClustersActual(clusters []string, scoreByCluster
 	}
 }
 
-func boundBindingsUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName, policySnapshotName string) func() error {
+func boundBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName, policySnapshotName string) func() error {
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
 		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
@@ -146,8 +150,12 @@ func boundBindingsUpdatedForClustersActual(clusters []string, scoreByCluster map
 		}
 
 		bound := []placementv1beta1.ClusterResourceBinding{}
+		clusterMap := make(map[string]bool)
+		for _, name := range clusters {
+			clusterMap[name] = true
+		}
 		for _, binding := range bindingList.Items {
-			if binding.Spec.State == placementv1beta1.BindingStateBound {
+			if _, ok := clusterMap[binding.Spec.TargetCluster]; ok && binding.Spec.State == placementv1beta1.BindingStateBound {
 				bound = append(bound, binding)
 			}
 		}
@@ -192,63 +200,7 @@ func boundBindingsUpdatedForClustersActual(clusters []string, scoreByCluster map
 	}
 }
 
-func scheduledBindingsUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName, policySnapshotName string) func() error {
-	return func() error {
-		bindingList := &placementv1beta1.ClusterResourceBindingList{}
-		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
-		listOptions := &client.ListOptions{LabelSelector: labelSelector}
-		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
-			return err
-		}
-
-		scheduled := []placementv1beta1.ClusterResourceBinding{}
-		for _, binding := range bindingList.Items {
-			if binding.Spec.State == placementv1beta1.BindingStateScheduled {
-				scheduled = append(scheduled, binding)
-			}
-		}
-
-		wantScheduled := []placementv1beta1.ClusterResourceBinding{}
-		for _, name := range clusters {
-			score := scoreByCluster[name]
-			binding := placementv1beta1.ClusterResourceBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: bindingNamePlaceholder,
-					Labels: map[string]string{
-						placementv1beta1.CRPTrackingLabel: crpName,
-					},
-				},
-				Spec: placementv1beta1.ResourceBindingSpec{
-					State:                        placementv1beta1.BindingStateScheduled,
-					SchedulingPolicySnapshotName: policySnapshotName,
-					TargetCluster:                name,
-					ClusterDecision: placementv1beta1.ClusterDecision{
-						ClusterName:  name,
-						Selected:     true,
-						ClusterScore: score,
-					},
-				},
-			}
-			wantScheduled = append(wantScheduled, binding)
-		}
-
-		if diff := cmp.Diff(scheduled, wantScheduled, ignoreResourceBindingFields...); diff != "" {
-			return fmt.Errorf("scheduled bindings are not updated as expected; diff (-got, +want): %s", diff)
-		}
-
-		// Verify that binding names are formatted correctly.
-		for _, binding := range bindingList.Items {
-			wantPrefix := fmt.Sprintf("%s-%s", crpName, binding.Spec.TargetCluster)
-			if !strings.HasPrefix(binding.Name, wantPrefix) {
-				return fmt.Errorf("binding name %s is not formatted correctly; want prefix %s", binding.Name, wantPrefix)
-			}
-		}
-
-		return nil
-	}
-}
-
-func unscheduledBindingsCreatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName string, policySnapshotName string) func() error {
+func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, scoreByCluster map[string]*placementv1beta1.ClusterScore, crpName string, policySnapshotName string) func() error {
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
 		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
@@ -258,8 +210,12 @@ func unscheduledBindingsCreatedForClustersActual(clusters []string, scoreByClust
 		}
 
 		unscheduled := []placementv1beta1.ClusterResourceBinding{}
+		clusterMap := make(map[string]bool)
+		for _, name := range clusters {
+			clusterMap[name] = true
+		}
 		for _, binding := range bindingList.Items {
-			if binding.Spec.State == placementv1beta1.BindingStateUnscheduled {
+			if _, ok := clusterMap[binding.Spec.TargetCluster]; ok && binding.Spec.State == placementv1beta1.BindingStateUnscheduled {
 				unscheduled = append(unscheduled, binding)
 			}
 		}

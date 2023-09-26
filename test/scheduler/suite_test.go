@@ -47,7 +47,7 @@ const (
 
 	dummyReason = "dummyReason"
 
-	eventuallyDuration   = time.Minute * 2
+	eventuallyDuration   = time.Second * 30
 	eventuallyInterval   = time.Second * 2
 	consistentlyDuration = time.Second * 1
 	consistentlyInterval = time.Millisecond * 200
