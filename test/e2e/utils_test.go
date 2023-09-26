@@ -19,7 +19,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
+	"go.goms.io/fleet/test/e2e/framework"
 )
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
@@ -98,11 +98,15 @@ func createWorkResources() {
 
 // cleanupWorkResources deletes the resources created by createWorkResources and waits until the resources are not found.
 func cleanupWorkResources() {
-	ns := workNamespace()
-	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
+	cleanWorkResourcesOnCluster(hubCluster)
+}
 
-	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(hubCluster)
-	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from hub cluster")
+func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
+	ns := workNamespace()
+	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
+
+	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
+	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -155,22 +159,26 @@ func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 // cleanupCRP deletes the CRP and waits until the resources are not found.
 func cleanupCRP(name string) {
 	// TODO(Arvindthiru): There is a conflict which requires the Eventually block, not sure of series of operations that leads to it yet.
-	Eventually(func(g Gomega) error {
+	Eventually(func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)
 		if errors.IsNotFound(err) {
 			return nil
 		}
-		g.Expect(err).Should(Succeed(), "Failed to get CRP %s", name)
+		if err != nil {
+			return err
+		}
 
 		// Delete the CRP (again, if applicable).
 		//
 		// This helps the After All node to run successfully even if the steps above fail early.
-		g.Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", name)
+		if err := hubClient.Delete(ctx, crp); err != nil {
+			return err
+		}
 
 		crp.Finalizers = []string{}
 		return hubClient.Update(ctx, crp)
-	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP %s", name)
 
 	// Wait until the CRP is removed.
 	removedActual := crpRemovedActual()
