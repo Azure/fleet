@@ -46,13 +46,14 @@ const (
 )
 
 var (
-	ignoreObjectMetaResourceVersionField      = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
-	ignoreObjectMetaNameField                 = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
-	ignoreTypeMetaAPIVersionKindFields        = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
-	ignoredStatusFields                       = cmpopts.IgnoreFields(Status{}, "reasons", "err")
-	ignoredBindingWithPatchFields             = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
-	ignoredCondFields                         = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
-	ignoreCycleStateFields                    = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
+	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
+	ignoreObjectAnnotationField          = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Annotations")
+	ignoreObjectMetaNameField            = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
+	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
+	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
+	ignoredCondFields                    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoreCycleStateFields               = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
 	ignoreClusterDecisionScoreAndReasonFields = cmpopts.IgnoreFields(placementv1beta1.ClusterDecision{}, "ClusterScore", "Reason")
 
 	lessFuncCluster = func(cluster1, cluster2 *clusterv1beta1.MemberCluster) bool {
@@ -2043,6 +2044,9 @@ func TestManipulateBindings(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: anotherBindingName,
 		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
 	}
 
 	topologySpreadScore := int32(0)
@@ -2069,9 +2073,12 @@ func TestManipulateBindings(t *testing.T) {
 		},
 	}
 
-	unscheduledBinding := &placementv1beta1.ClusterResourceBinding{
+	wantDeleteddBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: anotherBindingName,
+			Annotations: map[string]string{
+				placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateBound),
+			},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State: placementv1beta1.BindingStateUnscheduled,
@@ -2130,7 +2137,7 @@ func TestManipulateBindings(t *testing.T) {
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: anotherBindingName}, deletedBinding); err != nil {
 		t.Errorf("Get() binding %s = %v, want no error", anotherBindingName, err)
 	}
-	if diff := cmp.Diff(deletedBinding, unscheduledBinding, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
+	if diff := cmp.Diff(deletedBinding, wantDeleteddBinding, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
 		t.Errorf("unscheduled binding %s diff (-got, +want): %s", anotherBindingName, diff)
 	}
 }
@@ -4649,7 +4656,7 @@ func TestDownscale(t *testing.T) {
 					t.Errorf("Get() binding %s = %v, want no error", wantUnscheduledBinding.Name, err)
 				}
 
-				if diff := cmp.Diff(unscheduledBinding, wantUnscheduledBinding, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+				if diff := cmp.Diff(unscheduledBinding, wantUnscheduledBinding, ignoreObjectMetaResourceVersionField, ignoreObjectAnnotationField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
 					t.Errorf("unscheduled binding %s diff (-got, +want): %s", wantUnscheduledBinding.Name, diff)
 				}
 			}
