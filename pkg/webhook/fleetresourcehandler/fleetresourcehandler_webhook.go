@@ -30,6 +30,8 @@ const (
 	ValidationPath             = "/validate-v1-fleetresourcehandler"
 	groupMatch                 = `^[^.]*\.(.*)`
 	fleetMemberNamespacePrefix = "fleet-member"
+	fleetNamespacePrefix       = "fleet"
+	kubeNamespacePrefix        = "kube"
 )
 
 var (
@@ -124,36 +126,51 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 // handleFleetMemberNamespacedResource allows/denies the request to modify object after validation.
 func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
-	if isFleetMemberNamespace(req.Namespace) {
+	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
 		// check to see if valid users other than member agent is making the request.
 		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		// check to see if member agent is making the request only on Update.
 		if !response.Allowed && req.Operation == admissionv1.Update {
 			mcName := parseMemberClusterNameFromNamespace(req.Namespace)
-			if mcName != "" {
-				response = validation.ValidateMCIdentity(ctx, v.client, req, mcName)
-			}
+			return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
 		}
 		return response
 	}
-	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces")
+	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object")
 }
 
 // handleEvent allows/denies request to modify event after validation.
 func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.Request) admission.Response {
 	// hub agent creates events for MC which is cluster scoped, only member agent creates events in fleet-member prefixed namespaces.
-	if isFleetMemberNamespace(req.Namespace) {
+	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
 		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
 		return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
 	}
-	return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
+		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	}
+
+	return admission.Allowed("namespace name for this event is not a reserved namespace so we allow all operations for events on these namespaces")
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
-	fleetMatchResult := strings.HasPrefix(req.Name, "fleet")
-	kubeMatchResult := strings.HasPrefix(req.Name, "kube")
-	if fleetMatchResult || kubeMatchResult {
+	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
+		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
+		if mcName == "" {
+			return admission.Denied("request is trying to modify a namespace called fleet-member which is not allowed")
+		}
+	}
+	if strings.HasPrefix(req.Name, fleetNamespacePrefix) {
+		if len(req.Name) == len(fleetNamespacePrefix) {
+			return admission.Denied("request is trying to modify a namespace called fleet which is not allowed")
+		}
+		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	}
+	if strings.HasPrefix(req.Name, kubeNamespacePrefix) {
+		if len(req.Name) == len(kubeNamespacePrefix) {
+			return admission.Denied("request is trying to modify a namespace called kube which is not allowed")
+		}
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
@@ -181,11 +198,6 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
-}
-
-// isFleetMemberNamespace returns true if namespace is a fleet member cluster namespace.
-func isFleetMemberNamespace(namespace string) bool {
-	return strings.HasPrefix(namespace, fleetMemberNamespacePrefix)
 }
 
 // parseMemberClusterNameFromNamespace returns member cluster name from fleet member cluster namespace.
