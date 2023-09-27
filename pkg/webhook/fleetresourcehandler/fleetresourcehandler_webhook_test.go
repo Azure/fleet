@@ -643,7 +643,7 @@ func TestHandleEvent(t *testing.T) {
 		resourceValidator fleetResourceValidator
 		wantResponse      admission.Response
 	}{
-		"allow user in MC identity to create": {
+		"allow user in MC identity to create in fleet member namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-event",
@@ -663,7 +663,7 @@ func TestHandleEvent(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-identity", []string{"test-group"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
 		},
-		"allow hub-agent-sa in MC identity with create": {
+		"allow hub-agent-sa in MC identity with create in fleet member namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-event",
@@ -718,11 +718,11 @@ func TestHandleEvent(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-member-test-mc"})),
 		},
-		"allow user in system:masters group with create in non-fleet member cluster namespace": {
+		"allow user in system:masters group with create in fleet-system namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-event",
-					Namespace: "test-ns",
+					Namespace: "fleet-system",
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "Event",
 					},
@@ -733,9 +733,43 @@ func TestHandleEvent(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "fleet-system"})),
 		},
-		"deny user not in system:masters group with create in non-fleet member cluster namespace create": {
+		"deny user not is system:masters group with create in fleet-system namespace": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:      "test-event",
+					Namespace: "te",
+					RequestKind: &metav1.GroupVersionKind{
+						Kind: "Event",
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Allowed("namespace name for this event is not a reserved namespace so we allow all operations for events on these namespaces"),
+		},
+		"allow user in system:masters group with create in kube-system namespace": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:      "test-event",
+					Namespace: "kube-system",
+					RequestKind: &metav1.GroupVersionKind{
+						Kind: "Event",
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"system:masters"},
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "kube-system"})),
+		},
+		"allow user not in system:masters group with create in non reserved namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-event",
@@ -750,7 +784,7 @@ func TestHandleEvent(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Create, "Event", "", types.NamespacedName{Name: "test-event", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed("namespace name for this event is not a reserved namespace so we allow all operations for events on these namespaces"),
 		},
 		"allow request if get MC failed with internal server error": {
 			req: admission.Request{
