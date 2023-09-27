@@ -39,6 +39,7 @@ const (
 	pickedByPolicyReason                  = "picked by scheduling policy"
 	pickFixedInvalidClusterReasonTemplate = "cluster is not eligible for resource placement yet: %s"
 	pickFixedNotFoundClusterReason        = "specified cluster is not found"
+	notPickedByScoreReason                = "cluster does not score high enough"
 
 	// The reasons and messages for scheduled conditions.
 	fullyScheduledReason     = "SchedulingPolicyFulfilled"
@@ -417,7 +418,7 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	// With the PickAll placement type, the desired number of clusters to select always matches
 	// with the count of scheduled + bound bindings.
 	numOfClusters := len(toCreate) + len(patched) + len(scheduled) + len(bound)
-	if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, filtered, toCreate, patched, scheduled, bound); err != nil {
+	if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, filtered, toCreate, patched, scheduled, bound); err != nil {
 		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}
@@ -654,13 +655,14 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	ctx context.Context,
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	numOfClusters int,
+	notPicked ScoredClusters,
 	filtered []*filteredClusterWithStatus,
 	existing ...[]*placementv1beta1.ClusterResourceBinding,
 ) error {
 	policyRef := klog.KObj(policy)
 
 	// Prepare new scheduling decisions.
-	newDecisions := newSchedulingDecisionsFromBindings(f.maxUnselectedClusterDecisionCount, filtered, existing...)
+	newDecisions := newSchedulingDecisionsFromBindings(f.maxUnselectedClusterDecisionCount, notPicked, filtered, existing...)
 	// Prepare new scheduling condition.
 	newCondition := newScheduledConditionFromBindings(policy, numOfClusters, existing...)
 
@@ -752,7 +754,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		// Note that since there is no reliable way to determine the validity of old decisions added
 		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
 		// the clusters that are currently selected.
-		if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, scheduled, bound); err != nil {
+		if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, nil, scheduled, bound); err != nil {
 			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when downscaling", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
@@ -772,7 +774,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 		// Note that since there is no reliable way to determine the validity of old decisions added
 		// to the policy snapshot status, we will only update the status with the known facts, i.e.,
 		// the clusters that are currently selected.
-		if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, bound, scheduled); err != nil {
+		if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, nil, nil, bound, scheduled); err != nil {
 			klog.ErrorS(err, "Failed to update latest scheduling decisions and condition when no scheduling run is needed", "clusterSchedulingPolicySnapshot", policyRef)
 			return ctrl.Result{}, err
 		}
@@ -810,7 +812,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	//
 	// Note that at this point of the scheduling cycle, any cluster associated with a currently
 	// bound or scheduled binding should be filtered out already.
-	picked := pickTopNScoredClusters(scored, numOfClustersToPick)
+	picked, notPicked := pickTopNScoredClusters(scored, numOfClustersToPick)
 
 	// Cross-reference the newly picked clusters with obsolete bindings; find out
 	//
@@ -860,7 +862,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 
 	// Update policy snapshot status with the latest scheduling decisions and condition.
 	klog.V(2).InfoS("Updating policy snapshot status", "clusterSchedulingPolicySnapshot", policyRef)
-	if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, filtered, toCreate, patched, scheduled, bound); err != nil {
+	if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, notPicked, filtered, toCreate, patched, scheduled, bound); err != nil {
 		klog.ErrorS(err, "Failed to update latest scheduling decisions and condition", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err
 	}

@@ -106,6 +106,22 @@ var (
 		return decisions
 	}
 
+	generateNotPickedScoredClusters = func(count int, startIdx int) ScoredClusters {
+		notPicked := make(ScoredClusters, 0, count)
+
+		for i := 0; i < count; i++ {
+			notPicked = append(notPicked, &ScoredCluster{
+				Cluster: &clusterv1beta1.MemberCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(clusterNameTemplate, i+startIdx),
+					},
+				},
+				Score: &ClusterScore{},
+			})
+		}
+		return notPicked
+	}
+
 	generatedFilterdClusterWithStatus = func(count int, startIdx int) []*filteredClusterWithStatus {
 		filtered := make([]*filteredClusterWithStatus, 0, count)
 
@@ -1731,6 +1747,8 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	topologySpreadScore1 := int32(10)
 	affinityScore2 := int32(0)
 	topologySpreadScore2 := int32(20)
+	affinityScore3 := int32(-1)
+	topologySpreadScore3 := int32(0)
 
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPluginName, "filtered")
 
@@ -1747,13 +1765,14 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	testCases := []struct {
 		name                              string
 		maxUnselectedClusterDecisionCount int
+		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		existing                          [][]*placementv1beta1.ClusterResourceBinding
 		wantDecisions                     []placementv1beta1.ClusterDecision
 		wantCondition                     metav1.Condition
 	}{
 		{
-			name:                              "no filtered",
+			name:                              "no filtered/not picked clusters",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -1814,7 +1833,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
-			name:                              "filtered and existing",
+			name:                              "with filtered clusters and existing bindings",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -1890,6 +1909,162 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
+			name:                              "with not picked clusters and existing bindings",
+			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore: int(topologySpreadScore3),
+						AffinityScore:       int(affinityScore3),
+					},
+				},
+			},
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore2,
+						TopologySpreadScore: &topologySpreadScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					Reason:      notPickedByScoreReason,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore3,
+						TopologySpreadScore: &topologySpreadScore3,
+					},
+				},
+			},
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+		},
+		{
+			name:                              "with both filtered/not picked clusters and existing bindings",
+			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore: int(topologySpreadScore3),
+						AffinityScore:       int(affinityScore3),
+					},
+				},
+			},
+			filtered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					status: filteredStatus,
+				},
+			},
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore3,
+						TopologySpreadScore: &topologySpreadScore3,
+					},
+					Reason: notPickedByScoreReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					Reason:      filteredStatus.String(),
+				},
+			},
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+		},
+		{
 			name:                              "none",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			wantCondition:                     newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
@@ -1953,6 +2128,75 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			},
 			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
+		{
+			name:                              "too many not picked",
+			maxUnselectedClusterDecisionCount: 1,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore2),
+						TopologySpreadScore: int(topologySpreadScore2),
+					},
+				},
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      notPickedByScoreReason,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore2,
+						TopologySpreadScore: &topologySpreadScore2,
+					},
+				},
+			},
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1972,7 +2216,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			for _, bindingSet := range tc.existing {
 				numOfClusters += len(bindingSet)
 			}
-			if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, tc.filtered, tc.existing...); err != nil {
+			if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, tc.notPicked, tc.filtered, tc.existing...); err != nil {
 				t.Fatalf("updatePolicySnapshotStatusFrom() = %v, want no error", err)
 			}
 
@@ -2387,18 +2631,21 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 	affinityScore1 := int32(10)
 	topologySpreadScore2 := int32(0)
 	affinityScore2 := int32(20)
+	topologySpreadScore3 := int32(2)
+	affinityScore3 := int32(5)
 
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPlugin, dummyReasons...)
 
 	testCases := []struct {
 		name                              string
 		maxUnselectedClusterDecisionCount int
+		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		existing                          [][]*placementv1beta1.ClusterResourceBinding
 		want                              []placementv1beta1.ClusterDecision
 	}{
 		{
-			name:                              "no filtered clusters, small number of existing bindings",
+			name:                              "no not picked/filtered clusters, small number of existing bindings",
 			maxUnselectedClusterDecisionCount: 20,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2454,6 +2701,160 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 						AffinityScore:       &affinityScore2,
 					},
 					Reason: pickedByPolicyReason,
+				},
+			},
+		},
+		{
+			name:                              "with not picked clusters, small number of existing bindings",
+			maxUnselectedClusterDecisionCount: 20,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore2,
+									AffinityScore:       &affinityScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore2,
+						AffinityScore:       &affinityScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore3,
+						AffinityScore:       &affinityScore3,
+					},
+					Reason: notPickedByScoreReason,
+				},
+			},
+		},
+		{
+			name:                              "with both not picked and filtered clusters, small number of existing bindings",
+			maxUnselectedClusterDecisionCount: 20,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			filtered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					status: filteredStatus,
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore3,
+						AffinityScore:       &affinityScore3,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      filteredStatus.String(),
 				},
 			},
 		},
@@ -2602,11 +3003,84 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                              "with not picked clusters (count exceeding limit), small number of existing bindings",
+			maxUnselectedClusterDecisionCount: 0,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore2,
+									AffinityScore:       &affinityScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore2,
+						AffinityScore:       &affinityScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.existing...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.existing...)
 			if diff := cmp.Diff(tc.want, decisions); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -2617,15 +3091,18 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 // TestNewSchedulingDecisionsFrom tests a special case in the newSchedulingDecisionsFrom function,
 // specifically the case where the number of new decisions exceeds the API limit.
 func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
-	wantSelectedAndUnselectedDecisons := make([]placementv1beta1.ClusterDecision, 0, 1000)
-	wantSelectedDecisions := generateClusterDecisions(980, 0, true)
-	wantUnselectedDecisions := generateClusterDecisions(20, 980, false)
-	wantSelectedAndUnselectedDecisons = append(wantSelectedAndUnselectedDecisons, wantSelectedDecisions...)
-	wantSelectedAndUnselectedDecisons = append(wantSelectedAndUnselectedDecisons, wantUnselectedDecisions...)
+	wantDecisions1 := generateClusterDecisions(1000, 0, true)
+
+	wantDecisions2 := generateClusterDecisions(980, 0, true)
+	wantDecisions2 = append(wantDecisions2, generateClusterDecisions(20, 980, false)...)
+
+	wantDecisions3 := generateClusterDecisions(10, 0, true)
+	wantDecisions3 = append(wantDecisions3, generateClusterDecisions(20, 10, false)...)
 
 	testCases := []struct {
 		name                              string
 		maxUnselectedClusterDecisionCount int
+		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		bindingSets                       [][]*placementv1beta1.ClusterResourceBinding
 		wantDecisions                     []placementv1beta1.ClusterDecision
@@ -2637,23 +3114,53 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 				generateResourceBindings(550, 0),
 				generateResourceBindings(550, 550),
 			},
-			wantDecisions: generateClusterDecisions(1000, 0, true),
+			wantDecisions: wantDecisions1,
 		},
 		{
-			name:                              "too many selected + unselected clusters",
+			name:                              "count of not picked clusters exceeding API limit",
 			maxUnselectedClusterDecisionCount: 50,
-			filtered:                          generatedFilterdClusterWithStatus(60, 980),
 			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
 				generateResourceBindings(490, 0),
 				generateResourceBindings(490, 490),
 			},
-			wantDecisions: wantSelectedAndUnselectedDecisons,
+			notPicked:     generateNotPickedScoredClusters(50, 980),
+			wantDecisions: wantDecisions2,
+		},
+		{
+			name:                              "count of not picked clusters exceeding custom limit",
+			maxUnselectedClusterDecisionCount: 20,
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				generateResourceBindings(10, 0),
+			},
+			notPicked:     generateNotPickedScoredClusters(50, 10),
+			wantDecisions: wantDecisions3,
+		},
+		{
+			name:                              "count of filtered clusters exceeding API limit",
+			maxUnselectedClusterDecisionCount: 50,
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				generateResourceBindings(490, 0),
+				generateResourceBindings(490, 490),
+			},
+			notPicked:     nil,
+			filtered:      generatedFilterdClusterWithStatus(50, 980),
+			wantDecisions: wantDecisions2,
+		},
+		{
+			name:                              "count of filtered clusters exceeding custom limit",
+			maxUnselectedClusterDecisionCount: 20,
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				generateResourceBindings(10, 0),
+			},
+			notPicked:     nil,
+			filtered:      generatedFilterdClusterWithStatus(50, 10),
+			wantDecisions: wantDecisions3,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.bindingSets...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.bindingSets...)
 			if diff := cmp.Diff(decisions, tc.wantDecisions); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -4210,28 +4717,31 @@ func TestPickTopNScoredClusters(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		scoredClusters     ScoredClusters
-		picks              int
-		wantScoredClusters ScoredClusters
+		name           string
+		scoredClusters ScoredClusters
+		picks          int
+		wantPicked     ScoredClusters
+		wantNotPicked  ScoredClusters
 	}{
 		{
-			name:               "no scored clusters",
-			scoredClusters:     ScoredClusters{},
-			picks:              1,
-			wantScoredClusters: ScoredClusters{},
+			name:           "no scored clusters",
+			scoredClusters: ScoredClusters{},
+			picks:          1,
+			wantPicked:     ScoredClusters{},
+			wantNotPicked:  ScoredClusters{},
 		},
 		{
-			name:               "zero to pick",
-			scoredClusters:     scs,
-			picks:              0,
-			wantScoredClusters: ScoredClusters{},
+			name:           "zero to pick",
+			scoredClusters: scs,
+			picks:          0,
+			wantPicked:     ScoredClusters{},
+			wantNotPicked:  scs,
 		},
 		{
 			name:           "not enough to pick",
 			scoredClusters: scs,
 			picks:          10,
-			wantScoredClusters: ScoredClusters{
+			wantPicked: ScoredClusters{
 				{
 					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
@@ -4257,12 +4767,27 @@ func TestPickTopNScoredClusters(t *testing.T) {
 					},
 				},
 			},
+			wantNotPicked: ScoredClusters{},
 		},
 		{
 			name:           "enough to pick",
 			scoredClusters: scs,
 			picks:          1,
-			wantScoredClusters: ScoredClusters{
+			wantPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore:            2,
+						AffinityScore:                  10,
+						ObsoletePlacementAffinityScore: 1,
+					},
+				},
+			},
+			wantNotPicked: ScoredClusters{
 				{
 					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
@@ -4281,9 +4806,13 @@ func TestPickTopNScoredClusters(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			picked := pickTopNScoredClusters(tc.scoredClusters, tc.picks)
-			if diff := cmp.Diff(picked, tc.wantScoredClusters); diff != "" {
+			picked, notPicked := pickTopNScoredClusters(tc.scoredClusters, tc.picks)
+			if diff := cmp.Diff(picked, tc.wantPicked); diff != "" {
 				t.Errorf("pickTopNScoredClusters() picked diff (-got, +want): %s", diff)
+			}
+
+			if diff := cmp.Diff(notPicked, tc.wantNotPicked); diff != "" {
+				t.Errorf("pickTopNScoredClusters() not picked diff (-got, +want): %s", diff)
 			}
 		})
 	}
