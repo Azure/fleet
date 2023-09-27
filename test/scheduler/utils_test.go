@@ -462,3 +462,53 @@ func ensureProvisionalClusterDeletion(clusterName string) {
 		return err
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 }
+
+func createPickNCRPWithPolicySnapshot(
+	crpName string,
+	numOfClusters int32,
+	affinity *placementv1beta1.Affinity,
+	topologySpreadConstraints []placementv1beta1.TopologySpreadConstraint,
+	policySnapshotName string,
+) {
+	policy := &placementv1beta1.PlacementPolicy{
+		PlacementType:             placementv1beta1.PickNPlacementType,
+		NumberOfClusters:          &numOfClusters,
+		Affinity:                  affinity,
+		TopologySpreadConstraints: topologySpreadConstraints,
+	}
+
+	// Create a CRP of the PickAll placement type.
+	crp := placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       crpName,
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: defaultResourceSelectors,
+			Policy:            policy,
+		},
+	}
+	Expect(hubClient.Create(ctx, &crp)).Should(Succeed(), "Failed to create CRP")
+
+	crpGeneration := crp.Generation
+
+	// Create the associated policy snapshot.
+	policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policySnapshotName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.CRPTrackingLabel:      crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation:    strconv.FormatInt(crpGeneration, 10),
+				placementv1beta1.NumberOfClustersAnnotation: strconv.FormatInt(int64(numOfClusters), 10),
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy:     policy,
+			PolicyHash: []byte(policyHash),
+		},
+	}
+	Expect(hubClient.Create(ctx, policySnapshot)).Should(Succeed(), "Failed to create policy snapshot")
+}
