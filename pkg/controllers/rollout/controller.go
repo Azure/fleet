@@ -196,7 +196,7 @@ func waitForResourcesToCleanUp(allBindings []*fleetv1beta1.ClusterResourceBindin
 		if deletingBinding[cluster] {
 			klog.V(2).InfoS("Find a binding assigned to a cluster with another deleting binding", "clusterResourcePlacement", crpObj, "binding", binding)
 			if binding.Spec.State == fleetv1beta1.BindingStateBound {
-				// the rollout controller won't move a binding from unscheduled to bound if there is a deleting binding on the same cluster.
+				// the rollout controller won't move a binding from scheduled state to bound if there is a deleting binding on the same cluster.
 				return false, controller.NewUnexpectedBehaviorError(fmt.Errorf(
 					"find a cluster `%s` that has a bound binding `%s` and a deleting binding point to it", binding.Spec.TargetCluster, binding.Name))
 			}
@@ -204,7 +204,7 @@ func waitForResourcesToCleanUp(allBindings []*fleetv1beta1.ClusterResourceBindin
 				// this is a very rare case that the resource was in the middle of being removed from a member cluster after it is unselected.
 				// then the cluster get selected and unselected in two scheduling before the member agent is able to clean up all the resources.
 				if binding.GetAnnotations()[fleetv1beta1.PreviousBindingStateAnnotation] == string(fleetv1beta1.BindingStateBound) {
-					// its previous state can not bound as rollout won't roll a binding with a deleting binding pointing to the same cluster.
+					// its previous state can not be bound as rollout won't roll a binding with a deleting binding pointing to the same cluster.
 					return false, controller.NewUnexpectedBehaviorError(fmt.Errorf(
 						"find a cluster `%s` that has a unscheduled binding `%+s` with previous state is `bound` and a deleting binding point to it", binding.Spec.TargetCluster, binding.Name))
 				}

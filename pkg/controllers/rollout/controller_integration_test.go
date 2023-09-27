@@ -49,10 +49,12 @@ var _ = Describe("Test the rollout Controller", func() {
 		for _, binding := range bindings {
 			Expect(k8sClient.Delete(ctx, binding)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		}
+		bindings = nil
 		By("Deleting ClusterResourceSnapshots")
 		for _, resourceSnapshot := range resourceSnapshots {
 			Expect(k8sClient.Delete(ctx, resourceSnapshot)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		}
+		resourceSnapshots = nil
 		By("Deleting ClusterResourcePlacement")
 		Expect(k8sClient.Delete(ctx, rolloutCRP)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 	})
