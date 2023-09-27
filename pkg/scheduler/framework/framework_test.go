@@ -562,6 +562,24 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			},
 			wantStatus: FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA),
 		},
+		{
+			name: "multiple plugins, one success, one already selected",
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						return NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameA)
+					},
+				},
+			},
+			wantStatus: NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameA),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -711,6 +729,37 @@ func TestRunFilterPlugins(t *testing.T) {
 					status: NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
 				},
 			},
+		},
+		{
+			name: "three clusters, two filter plugins, two already selected",
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == clusterName {
+							return NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameA)
+						}
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == anotherClusterName {
+							return NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			wantClusters: []*clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: altClusterName,
+					},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{},
 		},
 		{
 			name: "three clusters, two filter plugins, one success, one internal error on specific cluster",
