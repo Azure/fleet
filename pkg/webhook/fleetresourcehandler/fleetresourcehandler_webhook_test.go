@@ -500,7 +500,7 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 		resourceValidator fleetResourceValidator
 		wantResponse      admission.Response
 	}{
-		"allow user in system:masters group with create in non-fleet member cluster namespace": {
+		"allow user not in system:masters group with create in non-fleet member cluster namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:      "test-mc",
@@ -510,12 +510,12 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 					},
 					UserInfo: authenticationv1.UserInfo{
 						Username: "testUser",
-						Groups:   []string{"system:masters"},
+						Groups:   []string{"testGroup"},
 					},
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "testUser", []string{"system:masters"}, admissionv1.Create, "InternalMemberCluster", "", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
+			wantResponse: admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces"),
 		},
 		"allow user in system:masters group with update in fleet member cluster namespace": {
 			req: admission.Request{
@@ -588,23 +588,6 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 				},
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:serviceaccount:fleet-system:hub-agent-sa", []string{"system:serviceaccounts"}, admissionv1.Create, "InternalMemberCluster", "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
-		},
-		"deny user not in system:masters group with create in non-fleet member cluster namespace create": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:      "test-mc",
-					Namespace: "test-ns",
-					RequestKind: &metav1.GroupVersionKind{
-						Kind: "InternalMemberCluster",
-					},
-					UserInfo: authenticationv1.UserInfo{
-						Username: "testUser",
-						Groups:   []string{"testGroup"},
-					},
-					Operation: admissionv1.Create,
-				},
-			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Create, "InternalMemberCluster", "", types.NamespacedName{Name: "test-mc", Namespace: "test-ns"})),
 		},
 		"allow request if get MC failed with internal server error": {
 			req: admission.Request{

@@ -124,16 +124,19 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 // handleFleetMemberNamespacedResource allows/denies the request to modify object after validation.
 func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
-	// check to see if valid users other than member agent is making the request.
-	response = validation.ValidateUserForResource(req, v.whiteListedUsers)
-	// check to see if member agent is making the request only on Update.
-	if !response.Allowed && req.Operation == admissionv1.Update && isFleetMemberNamespace(req.Namespace) {
-		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
-		if mcName != "" {
-			response = validation.ValidateMCIdentity(ctx, v.client, req, mcName)
+	if isFleetMemberNamespace(req.Namespace) {
+		// check to see if valid users other than member agent is making the request.
+		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
+		// check to see if member agent is making the request only on Update.
+		if !response.Allowed && req.Operation == admissionv1.Update {
+			mcName := parseMemberClusterNameFromNamespace(req.Namespace)
+			if mcName != "" {
+				response = validation.ValidateMCIdentity(ctx, v.client, req, mcName)
+			}
 		}
+		return response
 	}
-	return response
+	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces")
 }
 
 // handleEvent allows/denies request to modify event after validation.
