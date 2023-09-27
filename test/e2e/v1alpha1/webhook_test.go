@@ -762,7 +762,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 	})
 
 	// TODO(Arvindthiru): add tests where IMC exists in a different namespace without fleet-member prefix
-	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with non member agent user", func() {
+	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with user not in MC identity", func() {
 		var mcName string
 		BeforeEach(func() {
 			// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
@@ -816,7 +816,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
-		It("should deny CREATE operation on internal member cluster CR for non member agent user in fleet member namespace", func() {
+		It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
 			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 			imc := fleetv1alpha1.InternalMemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -836,7 +836,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Create, "InternalMemberCluster", "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 		})
 
-		It("should deny UPDATE operation on internal member cluster CR for non member agent user in fleet member namespace", func() {
+		It("should deny UPDATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
 			Eventually(func(g Gomega) error {
 				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 				var imc fleetv1alpha1.InternalMemberCluster
@@ -855,7 +855,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
-		It("should deny DELETE operation on internal member cluster CR for user non member agent user in fleet member namespace", func() {
+		It("should deny DELETE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
 			var imc fleetv1alpha1.InternalMemberCluster
 			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
@@ -867,7 +867,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Delete, "InternalMemberCluster", "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 		})
 
-		It("should deny UPDATE operation on internal member cluster CR status for non member agent user in fleet member namespace", func() {
+		It("should deny UPDATE operation on internal member cluster CR status for user not in MC identity in fleet member namespace", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
 				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
@@ -895,7 +895,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		})
 	})
 
-	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with member agent user, system:master group user", func() {
+	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with user in MC identity, system:master group users", func() {
 		var mcName string
 		BeforeEach(func() {
 			// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
@@ -949,7 +949,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
-		It("should allow UPDATE operation on internal member cluster CR status for user in mc identity", func() {
+		It("should allow UPDATE operation on internal member cluster CR status for user in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
 				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
@@ -969,7 +969,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
-		It("should allow UPDATE operation on internal member cluster CR for user in mc identity", func() {
+		It("should allow UPDATE operation on internal member cluster CR for user in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
 				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
@@ -995,7 +995,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
-	Context("fleet guard rail for work resource in fleet prefixed namespace with non member agent user", func() {
+	Context("fleet guard rail for work resource in fleet prefixed namespace with user not in MC identity", func() {
 		var mcName, workName, testMemberClusterNamespace string
 		BeforeEach(func() {
 			mcName = testMemberCluster + "-" + utils.RandStr()
@@ -1097,7 +1097,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
-		It("should deny CREATE operation on work CR for non member agent user", func() {
+		It("should deny CREATE operation on work CR for user not in MC identity", func() {
 			testDeployment := appsv1.Deployment{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "Deployment",
@@ -1141,7 +1141,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Create, "Work", "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
 		})
 
-		It("should deny UPDATE operation on work CR status for non member agent user", func() {
+		It("should deny UPDATE operation on work CR status for user not in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
@@ -1168,7 +1168,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
-		It("should deny DELETE work operation for user non member agent user", func() {
+		It("should deny DELETE work operation for user not in MC identity", func() {
 			var w workv1alpha1.Work
 			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
 			By("expecting denial of operation DELETE of work")
@@ -1179,7 +1179,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 		})
 	})
 
-	Context("fleet guard rail for work resource in fleet prefixed namespace with member agent user, system:masters group user", func() {
+	Context("fleet guard rail for work resource in fleet prefixed namespace with user in MC identity, system:masters group users", func() {
 		var mcName, workName, testMemberClusterNamespace string
 		BeforeEach(func() {
 			mcName = testMemberCluster + "-" + utils.RandStr()
@@ -1281,7 +1281,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 		})
 
-		It("should allow UPDATE operation on work CR for user in mc identity", func() {
+		It("should allow UPDATE operation on work CR for user in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
@@ -1291,7 +1291,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
-		It("should allow UPDATE operation on work CR status for user in mc identity", func() {
+		It("should allow UPDATE operation on work CR status for user in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var w workv1alpha1.Work
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: testMemberClusterNamespace}, &w)).Should(Succeed())
