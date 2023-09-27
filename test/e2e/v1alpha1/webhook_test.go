@@ -598,7 +598,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 				},
 				Spec: fleetv1alpha1.MemberClusterSpec{
 					Identity: rbacv1.Subject{
-						Name:      "member-agent-user",
+						Name:      "random-user",
 						Kind:      "ServiceAccount",
 						Namespace: utils.FleetSystemNamespace,
 					},
@@ -662,7 +662,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Create, "MemberCluster", "", types.NamespacedName{Name: mc.Name})))
 		})
 
-		It("should deny UPDATE operation on member cluster CR for non member agent user", func() {
+		It("should deny UPDATE operation on member cluster CR for user not in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var mc fleetv1alpha1.MemberCluster
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
