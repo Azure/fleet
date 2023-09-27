@@ -585,7 +585,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
-	Context("fleet guard rail tests for MC, IMC", func() {
+	Context("fleet guard rail tests for MC", func() {
 		var mcName string
 		BeforeEach(func() {
 			// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
