@@ -23,8 +23,11 @@ import (
 )
 
 const (
-	timeout  = time.Second * 5
-	interval = time.Millisecond * 250
+	timeout                = time.Second * 5
+	interval               = time.Millisecond * 250
+	consistentTimeout      = time.Second * 60
+	consistentInterval     = time.Second * 5
+	customBindingFinalizer = "custom-binding-finalizer"
 )
 
 var testCRPName string
@@ -46,10 +49,12 @@ var _ = Describe("Test the rollout Controller", func() {
 		for _, binding := range bindings {
 			Expect(k8sClient.Delete(ctx, binding)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		}
+		bindings = nil
 		By("Deleting ClusterResourceSnapshots")
 		for _, resourceSnapshot := range resourceSnapshots {
 			Expect(k8sClient.Delete(ctx, resourceSnapshot)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 		}
+		resourceSnapshots = nil
 		By("Deleting ClusterResourcePlacement")
 		Expect(k8sClient.Delete(ctx, rolloutCRP)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 	})
@@ -346,6 +351,99 @@ var _ = Describe("Test the rollout Controller", func() {
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
 	})
 
+	It("Should wait for deleting binding delete before we rollout", func() {
+		// create CRP
+		var targetCluster int32 = 5
+		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster))
+		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed())
+		// create master resource snapshot that is latest
+		latestSnapshot := generateResourceSnapshot(rolloutCRP.Name, 1, true)
+		Expect(k8sClient.Create(ctx, latestSnapshot)).Should(Succeed())
+		By(fmt.Sprintf("resource snapshot %s created", latestSnapshot.Name))
+		// generate scheduled bindings for master snapshot on target clusters
+		clusters := make([]string, targetCluster)
+		for i := 0; i < int(targetCluster); i++ {
+			clusters[i] = "cluster-" + utils.RandStr()
+			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, latestSnapshot.Name, clusters[i])
+			bindings = append(bindings, binding)
+		}
+		// create two unscheduled bindings and delete them
+		firstDeleteBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, latestSnapshot.Name, clusters[0])
+		firstDeleteBinding.Name = "delete-" + firstDeleteBinding.Name
+		firstDeleteBinding.SetFinalizers([]string{customBindingFinalizer})
+		Expect(k8sClient.Create(ctx, firstDeleteBinding)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, firstDeleteBinding)).Should(Succeed())
+		secondDeleteBinding := generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, latestSnapshot.Name, clusters[2])
+		secondDeleteBinding.Name = "delete-" + secondDeleteBinding.Name
+		secondDeleteBinding.SetFinalizers([]string{customBindingFinalizer})
+		Expect(k8sClient.Create(ctx, secondDeleteBinding)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, secondDeleteBinding)).Should(Succeed())
+		By("Created 2 deleting bindings")
+		// create the normal binding after the deleting one
+		for _, binding := range bindings {
+			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
+			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+		}
+		// check that no bindings are rolled out
+		Consistently(func() bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					return false
+				}
+				if binding.Spec.State == fleetv1beta1.BindingStateBound {
+					return false
+				}
+			}
+			return true
+		}, consistentTimeout, consistentInterval).Should(BeTrue(), "rollout controller should not roll the bindings")
+		By("Verified that the rollout is blocked")
+		// now we remove the finalizer of the first deleting binding
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: firstDeleteBinding.GetName()}, firstDeleteBinding)).Should(Succeed())
+		firstDeleteBinding.SetFinalizers([]string{})
+		Expect(k8sClient.Update(ctx, firstDeleteBinding)).Should(Succeed())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: firstDeleteBinding.GetName()}, firstDeleteBinding))
+		}, timeout, interval).Should(BeTrue(), "the first deleting binding should now be deleted")
+		By("Verified that the first deleting binding is deleted")
+		// check that no bindings are rolled out
+		Consistently(func() bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					return false
+				}
+				if binding.Spec.State == fleetv1beta1.BindingStateBound {
+					return false
+				}
+			}
+			return true
+		}, consistentTimeout, consistentInterval).Should(BeTrue(), "rollout controller should not roll the bindings")
+		By("Verified that the rollout is still blocked")
+		// now we remove the finalizer of the second deleting binding
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: secondDeleteBinding.GetName()}, secondDeleteBinding)).Should(Succeed())
+		secondDeleteBinding.SetFinalizers([]string{})
+		Expect(k8sClient.Update(ctx, secondDeleteBinding)).Should(Succeed())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: secondDeleteBinding.GetName()}, secondDeleteBinding))
+		}, timeout, interval).Should(BeTrue(), "the second deleting binding should now be deleted")
+		By("Verified that the second deleting binding is deleted")
+		// check that the bindings are rolledout
+		Eventually(func() bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					return false
+				}
+				if binding.Spec.State != fleetv1beta1.BindingStateBound {
+					return false
+				}
+			}
+			return true
+		}, consistentTimeout, consistentInterval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
+		By("Verified that the rollout is finally unblocked")
+	})
+
 	// TODO: should update scheduled bindings to the latest snapshot when it is updated to bound state.
 
 	// TODO: should count the deleting bindings as can be Unavailable.
@@ -353,6 +451,8 @@ var _ = Describe("Test the rollout Controller", func() {
 })
 
 func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding) {
+	// get the binding again to avoid conflict
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)).Should(Succeed())
 	binding.SetConditions(metav1.Condition{
 		Status:             metav1.ConditionTrue,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
@@ -406,4 +506,12 @@ func generateResourceSnapshot(testCRPName string, resourceIndex int, isLatest bo
 		)
 	}
 	return clusterResourceSnapshot
+}
+
+func generateDeletingClusterResourceBinding(targetCluster string) *fleetv1beta1.ClusterResourceBinding {
+	binding := generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "anything", targetCluster)
+	binding.DeletionTimestamp = &metav1.Time{
+		Time: now,
+	}
+	return binding
 }

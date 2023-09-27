@@ -92,6 +92,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		allBindings = append(allBindings, binding.DeepCopy())
 	}
 
+	// handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not completely deleted yet
+	wait, err := waitForResourcesToCleanUp(allBindings, &crp)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if wait {
+		// wait for the deletion to finish
+		klog.V(2).InfoS("Found multiple bindings pointing to the same cluster, wait for the deletion to finish", "clusterResourcePlacement", crpName)
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
 	// find the latest resource resourceBinding
 	latestResourceSnapshotName, err := r.fetchLatestResourceSnapshot(ctx, crpName)
 	if err != nil {
@@ -101,18 +112,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
 
-	//TODO: handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not deleted yet
-
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
-	crpCopy := crp.DeepCopy()
-	fleetv1beta1.SetDefaultsClusterResourcePlacement(crpCopy)
+	fleetv1beta1.SetDefaultsClusterResourcePlacement(&crp)
 	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
-	if err = validator.ValidateClusterResourcePlacement(crpCopy); err != nil {
+	if err = validator.ValidateClusterResourcePlacement(&crp); err != nil {
 		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)
 		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
 	}
+
 	// pick the bindings to be updated according to the rollout plan
-	toBeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, crpCopy)
+	toBeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, &crp)
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
 		return ctrl.Result{}, nil
@@ -124,7 +133,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
 	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch the next ready one early.
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
-	return ctrl.Result{RequeueAfter: time.Duration(*crpCopy.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
+	return ctrl.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
 }
 
@@ -158,6 +167,54 @@ func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName st
 	klog.V(2).InfoS("Find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName,
 		"latestResourceSnapshotName", latestResourceSnapshotName)
 	return latestResourceSnapshotName, nil
+}
+
+// waitForResourcesToCleanUp checks if there are any cluster that has a binding that is both being deleted and another one that needs rollout.
+// We currently just wait for those cluster to be cleanup so that we can have a clean slate to start compute the rollout plan.
+// TODO (rzhang): group all bindings pointing to the same cluster together when we calculate the rollout plan so that we can avoid this.
+func waitForResourcesToCleanUp(allBindings []*fleetv1beta1.ClusterResourceBinding, crp *fleetv1beta1.ClusterResourcePlacement) (bool, error) {
+	crpObj := klog.KObj(crp)
+	deletingBinding := make(map[string]bool)
+	bindingMap := make(map[string]*fleetv1beta1.ClusterResourceBinding)
+	// separate deleting bindings from the rest of the bindings
+	for _, binding := range allBindings {
+		if !binding.DeletionTimestamp.IsZero() {
+			deletingBinding[binding.Spec.TargetCluster] = true
+			klog.V(2).InfoS("Found a binding that is being deleted", "clusterResourcePlacement", crpObj, "binding", klog.KObj(binding))
+		} else {
+			if _, exist := bindingMap[binding.Spec.TargetCluster]; !exist {
+				bindingMap[binding.Spec.TargetCluster] = binding
+			} else {
+				return false, controller.NewUnexpectedBehaviorError(fmt.Errorf("the same cluster `%s` has bindings `%s` and `%s` pointing to it",
+					binding.Spec.TargetCluster, bindingMap[binding.Spec.TargetCluster].Name, binding.Name))
+			}
+		}
+	}
+	// check if there are any cluster that has a binding that is both being deleted and scheduled
+	for cluster, binding := range bindingMap {
+		// check if there is a  deleting binding on the same cluster
+		if deletingBinding[cluster] {
+			klog.V(2).InfoS("Find a binding assigned to a cluster with another deleting binding", "clusterResourcePlacement", crpObj, "binding", binding)
+			if binding.Spec.State == fleetv1beta1.BindingStateBound {
+				// the rollout controller won't move a binding from scheduled state to bound if there is a deleting binding on the same cluster.
+				return false, controller.NewUnexpectedBehaviorError(fmt.Errorf(
+					"find a cluster `%s` that has a bound binding `%s` and a deleting binding point to it", binding.Spec.TargetCluster, binding.Name))
+			}
+			if binding.Spec.State == fleetv1beta1.BindingStateUnscheduled {
+				// this is a very rare case that the resource was in the middle of being removed from a member cluster after it is unselected.
+				// then the cluster get selected and unselected in two scheduling before the member agent is able to clean up all the resources.
+				if binding.GetAnnotations()[fleetv1beta1.PreviousBindingStateAnnotation] == string(fleetv1beta1.BindingStateBound) {
+					// its previous state can not be bound as rollout won't roll a binding with a deleting binding pointing to the same cluster.
+					return false, controller.NewUnexpectedBehaviorError(fmt.Errorf(
+						"find a cluster `%s` that has a unscheduled binding `%+s` with previous state is `bound` and a deleting binding point to it", binding.Spec.TargetCluster, binding.Name))
+				}
+				return true, nil
+			}
+			// there is a scheduled binding on the same cluster, we need to wait for the deletion to finish
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // pickBindingsToRoll go through all bindings associated with a CRP and returns the bindings that are ready to be updated.
@@ -203,11 +260,11 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 				klog.V(8).InfoS("Found a ready unscheduled binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
 				readyBindings = append(readyBindings, binding)
 			}
-			if binding.DeletionTimestamp == nil {
-				// it's not deleted yet, so it is a removal candidate
+			if binding.DeletionTimestamp.IsZero() {
+				// it's not been deleted yet, so it is a removal candidate
 				removeCandidates = append(removeCandidates, binding)
 			} else if bindingReady {
-				// it can be deleted at any time, so it can be unavailable at any time
+				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
 				canBeUnavailableBindings = append(canBeUnavailableBindings, binding)
 			}
 
@@ -242,8 +299,14 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType:
 		// we use the length of the given cluster names are targets
 		targetNumber = len(crp.Spec.Policy.ClusterNames)
-	default:
+	case crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType:
+		// we use the given number as the target
 		targetNumber = int(*crp.Spec.Policy.NumberOfClusters)
+	default:
+		// should never happen
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("unknown placement type")),
+			"Encountered an invalid placementType", "clusterResourcePlacement", klog.KObj(crp))
+		targetNumber = 0
 	}
 	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", klog.KObj(crp),
 		"targetNumber", targetNumber, "readyBindingNumber", len(readyBindings), "canBeUnavailableBindingNumber", len(canBeUnavailableBindings),
