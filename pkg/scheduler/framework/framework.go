@@ -309,7 +309,7 @@ func (f *framework) RunSchedulingCycleFor(ctx context.Context, crpName string, p
 	case policy.Spec.Policy.PlacementType == placementv1beta1.PickFixedPlacementType:
 		// The placement policy features a fixed set of clusters to select; in such cases, the
 		// scheduler will bind to these clusters directly.
-		return f.runSchedulingCycleForPickFixedPlacementType(ctx, crpName, policy, clusters, bound, scheduled, obsolete)
+		return f.runSchedulingCycleForPickFixedPlacementType(ctx, crpName, policy, clusters, bound, scheduled, unscheduled, obsolete)
 	case policy.Spec.Policy.PlacementType == placementv1beta1.PickAllPlacementType:
 		// Run the scheduling cycle for policy of the PickAll placement type.
 		return f.runSchedulingCycleForPickAllPlacementType(ctx, state, crpName, policy, clusters, bound, scheduled, unscheduled, obsolete)
@@ -1320,7 +1320,7 @@ func (f *framework) runSchedulingCycleForPickFixedPlacementType(
 	crpName string,
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	clusters []clusterv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
+	bound, scheduled, unscheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (ctrl.Result, error) {
 	policyRef := klog.KObj(policy)
 
@@ -1353,7 +1353,7 @@ func (f *framework) runSchedulingCycleForPickFixedPlacementType(
 	//
 	// Fields in the returned bindings are fulfilled and/or refreshed as applicable.
 	klog.V(2).InfoS("Cross-referencing bindings with valid target clusters", "clusterSchedulingPolicySnapshot", policyRef)
-	toCreate, toDelete, toPatch, err := crossReferenceValidTargetsWithBindings(crpName, policy, valid, bound, scheduled, obsolete)
+	toCreate, toDelete, toPatch, err := crossReferenceValidTargetsWithBindings(crpName, policy, valid, bound, scheduled, unscheduled, obsolete)
 	if err != nil {
 		klog.ErrorS(err, "Failed to cross-reference bindings with valid targets", "clusterSchedulingPolicySnapshot", policyRef)
 		return ctrl.Result{}, err

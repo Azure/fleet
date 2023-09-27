@@ -1180,8 +1180,8 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 	}
 }
 
-// TestCrossReferencePickedClustersAndObsoleteBindings tests the crossReferencePickedClustersAndDeDupBindings function.
-func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
+// TestCrossReferencePickedClustersAndDeDupBindings tests the crossReferencePickedClustersAndDeDupBindings function.
+func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
@@ -1749,7 +1749,8 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				{
 					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: bindingName2,
+							Name:        bindingName2,
+							Annotations: map[string]string{},
 						},
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName2,
@@ -1833,7 +1834,8 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				{
 					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: bindingName1,
+							Name:        bindingName1,
+							Annotations: map[string]string{},
 						},
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName1,
@@ -1862,7 +1864,8 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 				{
 					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: bindingName2,
+							Name:        bindingName2,
+							Annotations: map[string]string{},
 						},
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName2,
@@ -1879,14 +1882,14 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 							},
 						},
 					},
-					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
+					patch: client.MergeFromWithOptions(&placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
 							Name: bindingName2,
 						},
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster: clusterName2,
 						},
-					}),
+					}, client.MergeFromWithOptimisticLock{}),
 				},
 			},
 			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
@@ -1897,12 +1900,12 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			toCreate, toDelete, toPatch, err := crossReferencePickedClustersAndDeDupBindings(crpName, policy, tc.picked, tc.unscheduled, tc.obsolete)
 			if err != nil {
-				t.Errorf("crossReferencePickedClustersAndDeDupBindings() = %v, want no error", err)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s`, err = %v, want no error", tc.name, err)
 				return
 			}
 
 			if diff := cmp.Diff(toCreate, tc.wantToCreate, ignoreObjectMetaNameField); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndDeDupBindings() toCreate diff (-got, +want) = %s", diff)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toCreate diff (-got, +want) = %s", tc.name, diff)
 			}
 
 			// Verify names separately.
@@ -1915,11 +1918,11 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 
 			// Ignore the patch field (not exported in local package).
 			if diff := cmp.Diff(toPatch, tc.wantToPatch, cmp.AllowUnexported(bindingWithPatch{}), ignoredBindingWithPatchFields); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndDeDupBindings() toPatch diff (-got, +want): %s", diff)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toPatch diff (-got, +want): %s", tc.name, diff)
 			}
 
 			if diff := cmp.Diff(toDelete, tc.wantToDelete); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndDeDupBindings() toDelete diff (-got, +want): %s", diff)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toDelete diff (-got, +want): %s", tc.name, diff)
 			}
 		})
 	}
