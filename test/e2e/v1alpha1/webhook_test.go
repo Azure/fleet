@@ -761,7 +761,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		})
 	})
 
-	// TODO(Arvindthiru): add tests where IMC exists in a different namespace without fleet-member prefix
 	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with user not in MC identity", func() {
 		var mcName string
 		BeforeEach(func() {
