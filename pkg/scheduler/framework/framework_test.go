@@ -1834,8 +1834,7 @@ func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 				{
 					updated: &placementv1beta1.ClusterResourceBinding{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:        bindingName1,
-							Annotations: map[string]string{},
+							Name: bindingName1,
 						},
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName1,
