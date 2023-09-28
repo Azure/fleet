@@ -61,8 +61,4 @@ const (
 	// EnvelopeConfigMapAnnotation is the annotation that indicates the configmap is an envelope configmap that contains resources
 	// we need to apply to the member cluster instead of the configMap itself.
 	EnvelopeConfigMapAnnotation = fleetPrefix + "EnvelopeConfigMap"
-
-	// PreviousBindingStateAnnotation is the annotation that records the previous state of a binding.
-	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
-	PreviousBindingStateAnnotation = fleetPrefix + "PreviousBindingState"
 )
