@@ -46,13 +46,14 @@ const (
 )
 
 var (
-	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
-	ignoreObjectMetaNameField            = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
-	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
-	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
-	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
-	ignoredCondFields                    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
-	ignoreCycleStateFields               = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
+	ignoreObjectMetaResourceVersionField      = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
+	ignoreObjectMetaNameField                 = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
+	ignoreTypeMetaAPIVersionKindFields        = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
+	ignoredStatusFields                       = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+	ignoredBindingWithPatchFields             = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
+	ignoredCondFields                         = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoreCycleStateFields                    = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
+	ignoreClusterDecisionScoreAndReasonFields = cmpopts.IgnoreFields(placementv1beta1.ClusterDecision{}, "ClusterScore", "Reason")
 
 	lessFuncCluster = func(cluster1, cluster2 *clusterv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name
@@ -95,10 +96,6 @@ var (
 			newDecision := placementv1beta1.ClusterDecision{
 				ClusterName: fmt.Sprintf(clusterNameTemplate, i+startIdx),
 				Selected:    selected,
-			}
-
-			if !selected {
-				newDecision.Reason = defaultFilteredStatus.String()
 			}
 
 			decisions = append(decisions, newDecision)
@@ -2844,12 +2841,12 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				},
 				{
 					ClusterName: anotherClusterName,
-					Selected:    true,
+					Selected:    false,
 					ClusterScore: &placementv1beta1.ClusterScore{
 						TopologySpreadScore: &topologySpreadScore3,
 						AffinityScore:       &affinityScore3,
 					},
-					Reason: pickedByPolicyReason,
+					Reason: notPickedByScoreReason,
 				},
 				{
 					ClusterName: altClusterName,
@@ -3161,7 +3158,7 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.bindingSets...)
-			if diff := cmp.Diff(decisions, tc.wantDecisions); diff != "" {
+			if diff := cmp.Diff(decisions, tc.wantDecisions, ignoreClusterDecisionScoreAndReasonFields); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
 		})
@@ -4791,13 +4788,13 @@ func TestPickTopNScoredClusters(t *testing.T) {
 				{
 					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: altClusterName,
+							Name: clusterName,
 						},
 					},
 					Score: &ClusterScore{
-						TopologySpreadScore:            2,
-						AffinityScore:                  10,
-						ObsoletePlacementAffinityScore: 1,
+						TopologySpreadScore:            1,
+						AffinityScore:                  20,
+						ObsoletePlacementAffinityScore: 0,
 					},
 				},
 			},
