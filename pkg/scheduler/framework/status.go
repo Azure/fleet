@@ -24,7 +24,12 @@ const (
 	internalError
 	// ClusterUnschedulable signals that a plugin has found that a placement should not be bound
 	// to a specific cluster.
+	//
+	// Return ClusterAlreadySelected if the placement has already been placed on the cluster.
 	ClusterUnschedulable
+	// ClusterAlreadySelected signals that a plugin has found that a placement has already been
+	// placed on the cluster **per latest scheduling policy**.
+	ClusterAlreadySelected
 	// Skip signals that no action is needed for the plugin to take at the stage.
 	// If this is returned by a plugin at the Pre- stages (PreFilter or PreScore), the associated
 	// plugin will be skipped at the following stages (Filter or Score) as well. This helps
@@ -33,7 +38,7 @@ const (
 	Skip
 )
 
-var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "Skip"}
+var statusCodeNames = []string{"Success", "InternalError", "ClusterUnschedulable", "ClusterAlreadySelected", "Skip"}
 
 // Name returns the name of a status code.
 func (sc StatusCode) Name() string {
@@ -72,7 +77,7 @@ func (s *Status) IsInteralError() bool {
 	return s.code() == internalError
 }
 
-// IsPreSkip returns if a Status is of the status code Skip.
+// IsSkip returns if a Status is of the status code Skip.
 func (s *Status) IsSkip() bool {
 	return s.code() == Skip
 }
@@ -80,6 +85,11 @@ func (s *Status) IsSkip() bool {
 // IsClusterUnschedulable returns if a Status is of the status code ClusterUnschedulable.
 func (s *Status) IsClusterUnschedulable() bool {
 	return s.code() == ClusterUnschedulable
+}
+
+// IsClusterAlreadySelected returns if a Status is of the status code ClusterAlreadySelected.
+func (s *Status) IsClusterAlreadySelected() bool {
+	return s.code() == ClusterAlreadySelected
 }
 
 // Reasons returns the reasons of a Status.

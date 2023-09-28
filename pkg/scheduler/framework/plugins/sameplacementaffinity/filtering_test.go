@@ -58,7 +58,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName),
+			want: framework.NewNonErrorStatus(framework.ClusterAlreadySelected, defaultPluginName),
 		},
 		{
 			name: "placement has already been bounded",
@@ -73,7 +73,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			want: framework.NewNonErrorStatus(framework.ClusterUnschedulable, defaultPluginName),
+			want: framework.NewNonErrorStatus(framework.ClusterAlreadySelected, defaultPluginName),
 		},
 		{
 			name:                     "no bindings",

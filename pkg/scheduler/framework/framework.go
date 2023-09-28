@@ -369,6 +369,11 @@ func (f *framework) runSchedulingCycleForPickAllPlacementType(
 	klog.V(2).InfoS("Scheduling is always needed for CRPs of the PickAll placement type; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
 
 	// Run all plugins needed.
+	//
+	// Note that it is up to some plugin (by default the same placement anti-affinity plugin)
+	// to identify clusters that already have placements, in accordance with the latest
+	// scheduling policy, on them. Such clusters will not be scored; it will not be included
+	// as a filtered out cluster, either.
 	scored, filtered, err := f.runAllPluginsForPickAllPlacementType(ctx, state, policy, clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run all plugins (pickAll placement type)", "clusterSchedulingPolicySnapshot", policyRef)
@@ -513,6 +518,8 @@ func (f *framework) runFilterPluginsFor(ctx context.Context, state *CycleState, 
 			return status
 		case status.IsClusterUnschedulable():
 			return status
+		case status.IsClusterAlreadySelected():
+			return status
 		default:
 			// Any status that is not Success, InternalError, or ClusterUnschedulable is considered an error.
 			return FromError(fmt.Errorf("filter plugin returned an unknown status %s", status), pl.Name())
@@ -560,6 +567,10 @@ func (f *framework) runFilterPlugins(ctx context.Context, state *CycleState, pol
 				cluster: &cluster,
 				status:  status,
 			}
+		case status.IsClusterAlreadySelected():
+			// Simply ignore the cluster if it is already selected; no further stages need
+			// to run for this cluster, and it should not be considered as a filtered out one
+			// either.
 		default: // An error has occurred.
 			errFlag.Raise(status.AsError())
 			// Cancel the child context, which will lead the parallelizer to stop running tasks.
@@ -787,6 +798,11 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	klog.V(2).InfoS("Scheduling is needed; entering scheduling stages", "clusterSchedulingPolicySnapshot", policyRef)
 
 	// Run all the plugins.
+	//
+	// Note that it is up to some plugin (by default the same placement anti-affinity plugin)
+	// to identify clusters that already have placements, in accordance with the latest
+	// scheduling policy, on them. Such clusters will not be scored; it will not be included
+	// as a filtered out cluster, either.
 	scored, filtered, err := f.runAllPluginsForPickNPlacementType(ctx, state, policy, numOfClusters, len(bound)+len(scheduled), clusters)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run all plugins", "clusterSchedulingPolicySnapshot", policyRef)
