@@ -154,12 +154,14 @@ func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
+// TODO: Add logs
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
-	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
-		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
+	if strings.HasPrefix(req.Name, fleetMemberNamespacePrefix) {
+		mcName := parseMemberClusterNameFromNamespace(req.Name)
 		if mcName == "" {
 			return admission.Denied("request is trying to modify a namespace called fleet-member which is not allowed")
 		}
+		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
 	if strings.HasPrefix(req.Name, fleetNamespacePrefix) {
 		if len(req.Name) == len(fleetNamespacePrefix) {
@@ -174,7 +176,7 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
-	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
+	return admission.Allowed("namespace name doesn't begin with fleet, fleet-member, kube prefixes so we allow all operations on these namespaces")
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.

@@ -431,9 +431,57 @@ func TestHandleNamespace(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces"),
+			wantResponse: admission.Allowed("namespace name doesn't begin with fleet, fleet-member, kube prefixes so we allow all operations on these namespaces"),
 		},
-		"deny user not in system:masters group to modify fleet namespace": {
+		"deny user not in system:masters group to modify namespace named fleet-member": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "fleet-member",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &metav1.GroupVersionKind{
+						Kind: "Namespace",
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Denied("request is trying to modify a namespace called fleet-member which is not allowed"),
+		},
+		"deny user not in system:masters group to modify namespace named fleet-member prefixed namespace": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "fleet-member-test-mc",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &metav1.GroupVersionKind{
+						Kind: "Namespace",
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Create, "Namespace", "", types.NamespacedName{Name: "fleet-member-test-mc"})),
+		},
+		"deny user not in system:masters group to modify namespace named fleet": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "fleet",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &metav1.GroupVersionKind{
+						Kind: "Namespace",
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Denied("request is trying to modify a namespace called fleet which is not allowed"),
+		},
+		"deny user not in system:masters group to modify fleet-system namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name: "fleet-system",
@@ -449,6 +497,22 @@ func TestHandleNamespace(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "Namespace", "", types.NamespacedName{Name: "fleet-system"})),
 		},
+		"deny user not in system:masters group to modify namespace named kube": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "kube",
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					RequestKind: &metav1.GroupVersionKind{
+						Kind: "Namespace",
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Denied("request is trying to modify a namespace called kube which is not allowed"),
+		},
 		"deny user not in system:masters group to modify kube-system namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
@@ -460,10 +524,10 @@ func TestHandleNamespace(t *testing.T) {
 					RequestKind: &metav1.GroupVersionKind{
 						Kind: "Namespace",
 					},
-					Operation: admissionv1.Update,
+					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "Namespace", "", types.NamespacedName{Name: "kube-system"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Delete, "Namespace", "", types.NamespacedName{Name: "kube-system"})),
 		},
 	}
 
@@ -515,7 +579,7 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces"),
+			wantResponse: admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object"),
 		},
 		"allow user in system:masters group with update in fleet member cluster namespace": {
 			req: admission.Request{
