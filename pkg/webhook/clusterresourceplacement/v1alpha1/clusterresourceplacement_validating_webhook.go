@@ -1,4 +1,4 @@
-package clusterresourceplacement
+package v1alpha1
 
 import (
 	"context"
@@ -38,16 +38,16 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 	var crp fleetv1alpha1.ClusterResourcePlacement
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
 		if err := v.decoder.Decode(req, &crp); err != nil {
-			klog.ErrorS(err, "failed to decode request object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
+			klog.ErrorS(err, "failed to decode v1alpha1 CRP object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 		if err := validator.ValidateClusterResourcePlacementAlpha(&crp); err != nil {
-			klog.V(2).InfoS("cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
+			klog.V(2).InfoS("v1alpha1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
 			return admission.Denied(err.Error())
 		}
 	}
-	klog.V(2).InfoS("user is allowed to modify cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})
-	return admission.Allowed("any user is allowed to modify CRP")
+	klog.V(2).InfoS("user is allowed to modify v1alpha1 cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})
+	return admission.Allowed("any user is allowed to modify v1alpha1 CRP")
 }
 
 // InjectDecoder injects the decoder.
