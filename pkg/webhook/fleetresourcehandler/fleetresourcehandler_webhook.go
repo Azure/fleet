@@ -154,28 +154,32 @@ func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
-// TODO: Add logs
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
 	if strings.HasPrefix(req.Name, fleetMemberNamespacePrefix) {
 		mcName := parseMemberClusterNameFromNamespace(req.Name)
 		if mcName == "" {
+			klog.V(2).InfoS("request is trying to modify a namespace called fleet-member which is not allowed",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
 			return admission.Denied("request is trying to modify a namespace called fleet-member which is not allowed")
 		}
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
 	if strings.HasPrefix(req.Name, fleetNamespacePrefix) {
 		if len(req.Name) == len(fleetNamespacePrefix) {
+			klog.V(2).InfoS("request is trying to modify a namespace called fleet which is not allowed",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
 			return admission.Denied("request is trying to modify a namespace called fleet which is not allowed")
 		}
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
 	if strings.HasPrefix(req.Name, kubeNamespacePrefix) {
 		if len(req.Name) == len(kubeNamespacePrefix) {
+			klog.V(2).InfoS("request is trying to modify a namespace called kube which is not allowed",
+				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
 			return admission.Denied("request is trying to modify a namespace called kube which is not allowed")
 		}
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	// only handling reserved namespaces with prefix fleet/kube.
 	return admission.Allowed("namespace name doesn't begin with fleet, fleet-member, kube prefixes so we allow all operations on these namespaces")
 }
 
