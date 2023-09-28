@@ -12,6 +12,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -205,7 +206,12 @@ func crossReferencePickedCustersAndObsoleteBindings(
 
 // newSchedulingDecisionsFromBindings returns a list of scheduling decisions, based on the newly manipulated list of
 // bindings and (if applicable) a list of filtered clusters.
-func newSchedulingDecisionsFromBindings(maxUnselectedClusterDecisionCount int, filtered []*filteredClusterWithStatus, existing ...[]*placementv1beta1.ClusterResourceBinding) []placementv1beta1.ClusterDecision {
+func newSchedulingDecisionsFromBindings(
+	maxUnselectedClusterDecisionCount int,
+	notPicked ScoredClusters,
+	filtered []*filteredClusterWithStatus,
+	existing ...[]*placementv1beta1.ClusterResourceBinding,
+) []placementv1beta1.ClusterDecision {
 	// Pre-allocate with a reasonable capacity.
 	newDecisions := make([]placementv1beta1.ClusterDecision, 0, maxUnselectedClusterDecisionCount)
 
@@ -222,6 +228,27 @@ func newSchedulingDecisionsFromBindings(maxUnselectedClusterDecisionCount int, f
 			klog.V(2).InfoS("Reached API limit of cluster decision count; decisions off the limit will be discarded")
 			break
 		}
+	}
+
+	// Add decisions for clusters that have been scored, but are not picked, if there are still
+	// enough room.
+	for _, sc := range notPicked {
+		if slotsLeft == 0 || maxUnselectedClusterDecisionCount == 0 {
+			break
+		}
+
+		newDecisions = append(newDecisions, placementv1beta1.ClusterDecision{
+			ClusterName: sc.Cluster.Name,
+			Selected:    false,
+			ClusterScore: &placementv1beta1.ClusterScore{
+				AffinityScore:       pointer.Int32(int32(sc.Score.AffinityScore)),
+				TopologySpreadScore: pointer.Int32(int32(sc.Score.TopologySpreadScore)),
+			},
+			Reason: notPickedByScoreReason,
+		})
+
+		slotsLeft--
+		maxUnselectedClusterDecisionCount--
 	}
 
 	// Move some decisions from unbound clusters, if there are still enough room.
@@ -421,7 +448,7 @@ func calcNumOfClustersToSelect(desired, limit, scored int) int {
 //
 // Note that this function assumes that the list of clusters have been sorted by their scores,
 // and the N count is no greater than the length of the list.
-func pickTopNScoredClusters(scoredClusters ScoredClusters, N int) ScoredClusters {
+func pickTopNScoredClusters(scoredClusters ScoredClusters, N int) (picked, notPicked ScoredClusters) {
 	// Sort the clusters by their scores in reverse order.
 	//
 	// Note that when two clusters have the same score, they are sorted by their names in
@@ -431,15 +458,15 @@ func pickTopNScoredClusters(scoredClusters ScoredClusters, N int) ScoredClusters
 
 	// No need to pick if there is no scored cluster or the number to pick is zero.
 	if len(scoredClusters) == 0 || N == 0 {
-		return make(ScoredClusters, 0)
+		return make(ScoredClusters, 0), scoredClusters
 	}
 
 	// No need to pick if the number of scored clusters is less than or equal to N.
 	if len(scoredClusters) <= N {
-		return scoredClusters
+		return scoredClusters, make(ScoredClusters, 0)
 	}
 
-	return scoredClusters[:N]
+	return scoredClusters[:N], scoredClusters[N:]
 }
 
 // shouldRequeue determines if the scheduler should start another scheduling cycle on the same
