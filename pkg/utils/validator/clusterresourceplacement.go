@@ -14,7 +14,7 @@ import (
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -65,7 +65,7 @@ func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alph
 }
 
 // ValidateClusterResourcePlacement validates a ClusterResourcePlacement object.
-func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.ClusterResourcePlacement) error {
+func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
@@ -78,6 +78,16 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.Clu
 				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
 			}
 		}
+	}
+
+	// In Placement Policy,
+	// - cluster names is only valid in PickFixed
+	// - PlacementType can't be updated if its PickFixed user can only specify ClusterNames field is allowed
+	// - if pickAll only Affinity can be specified and cluster affinity only required is allowed
+	// - PickN all combination
+
+	if err := validatePlacementPolicy(clusterResourcePlacement.Spec.Policy); err != nil {
+		allErr = append(allErr, fmt.Errorf("the placement policy field is invalid: %w", err))
 	}
 
 	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
@@ -94,14 +104,80 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.Clu
 	return apiErrors.NewAggregate(allErr)
 }
 
-func validateClusterAffinity(_ *fleetv1beta1.ClusterAffinity) error {
+func validateClusterAffinity(_ *placementv1beta1.ClusterAffinity) error {
 	// TODO: implement this
 	return nil
 }
 
-func validateRolloutStrategy(rolloutStrategy fleetv1beta1.RolloutStrategy) error {
+func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 	allErr := make([]error, 0)
-	if rolloutStrategy.Type != fleetv1beta1.RollingUpdateRolloutStrategyType {
+	switch policy.PlacementType {
+	case placementv1beta1.PickFixedPlacementType:
+		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	case placementv1beta1.PickAllPlacementType:
+		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	case placementv1beta1.PickNPlacementType:
+		if err := validatePolicyForPickNPolicyType(policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
+	if len(policy.ClusterNames) == 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names cannot be empty for policy type %s", policy.PlacementType))
+	}
+	if policy.NumberOfClusters != nil {
+		allErr = append(allErr, fmt.Errorf("NumberOfClusters must be nil for policy type %s", policy.PlacementType))
+	}
+	if policy.Affinity != nil {
+		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s", policy.PlacementType))
+	}
+	if len(policy.TopologySpreadConstraints) > 0 {
+		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s", policy.PlacementType))
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
+	if len(policy.ClusterNames) > 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s", policy.PlacementType))
+	}
+	if policy.NumberOfClusters != nil {
+		allErr = append(allErr, fmt.Errorf("NumberOfClusters must be nil for policy type %s", policy.PlacementType))
+	}
+	// Can Affinity and ClusterAffinity be empty
+	if policy.Affinity != nil && policy.Affinity.ClusterAffinity != nil {
+		if err := validateClusterAffinity(policy.Affinity.ClusterAffinity); err != nil {
+			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
+		}
+	}
+	if len(policy.TopologySpreadConstraints) > 0 {
+		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s", policy.PlacementType))
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
+	if len(policy.ClusterNames) > 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s", policy.PlacementType))
+	}
+	// Can Affinity, ClusterAffinity, NumberOfClusters, TopologyConstraints be empty
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
+	allErr := make([]error, 0)
+	if rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
 		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
 	}
 
