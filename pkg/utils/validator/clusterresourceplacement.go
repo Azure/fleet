@@ -79,13 +79,6 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 			}
 		}
 	}
-
-	// In Placement Policy,
-	// - cluster names is only valid in PickFixed
-	// - PlacementType can't be updated if its PickFixed user can only specify ClusterNames field is allowed
-	// - if pickAll only Affinity can be specified and cluster affinity only required is allowed
-	// - PickN all combination
-
 	if err := validatePlacementPolicy(clusterResourcePlacement.Spec.Policy); err != nil {
 		allErr = append(allErr, fmt.Errorf("the placement policy field is invalid: %w", err))
 	}
@@ -154,7 +147,6 @@ func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPol
 	if policy.NumberOfClusters != nil {
 		allErr = append(allErr, fmt.Errorf("NumberOfClusters must be nil for policy type %s", policy.PlacementType))
 	}
-	// Can Affinity and ClusterAffinity be empty
 	if policy.Affinity != nil && policy.Affinity.ClusterAffinity != nil {
 		if err := validateClusterAffinity(policy.Affinity.ClusterAffinity); err != nil {
 			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
@@ -171,7 +163,6 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 	if len(policy.ClusterNames) > 0 {
 		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s", policy.PlacementType))
 	}
-	// Can Affinity, ClusterAffinity, NumberOfClusters, TopologyConstraints be empty
 	return apiErrors.NewAggregate(allErr)
 }
 
