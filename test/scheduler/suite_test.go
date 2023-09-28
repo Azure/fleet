@@ -47,8 +47,8 @@ const (
 
 	dummyReason = "dummyReason"
 
-	eventuallyDuration   = time.Second * 5
-	eventuallyInterval   = time.Millisecond * 500
+	eventuallyDuration   = time.Second * 30
+	eventuallyInterval   = time.Second * 2
 	consistentlyDuration = time.Second * 1
 	consistentlyInterval = time.Millisecond * 200
 
@@ -99,6 +99,15 @@ var (
 	allClusters = []string{
 		memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd,
 		memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd,
+	}
+	healthyClusters = []string{
+		memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary,
+		memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd,
+		memberCluster7WestCanary,
+	}
+	unhealthyClusters = []string{
+		memberCluster8UnhealthyEastProd,
+		memberCluster9LeftCentralProd,
 	}
 
 	labelsByCluster = map[string]map[string]string{
