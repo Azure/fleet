@@ -36,8 +36,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
-	crpv1alpha1 "go.goms.io/fleet/pkg/webhook/clusterresourceplacement/v1alpha1"
-	crpv1beta1 "go.goms.io/fleet/pkg/webhook/clusterresourceplacement/v1beta1"
+	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
@@ -183,7 +182,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
-			ClientConfig:            w.createClientConfig(crpv1alpha1.ValidationPath),
+			ClientConfig:            w.createClientConfig(clusterresourceplacement.V1Alpha1CRPValidationPath),
 			FailurePolicy:           &failPolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
@@ -200,7 +199,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1beta1.validating",
-			ClientConfig:            w.createClientConfig(crpv1beta1.ValidationPath),
+			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
 			FailurePolicy:           &failPolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,

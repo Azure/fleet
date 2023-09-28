@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	// ValidationPath is the webhook service path which admission requests are routed to for validating ReplicaSet resources.
-	v1alpha1CRPValidationPath = "/validate-fleet.azure.com-v1alpha1-clusterresourceplacement"
+	// V1Alpha1CRPValidationPath is the webhook service path which admission requests are routed to for validating ReplicaSet resources.
+	V1Alpha1CRPValidationPath = "/validate-fleet.azure.com-v1alpha1-clusterresourceplacement"
 )
 
 type v1alpha1ClusterResourcePlacementValidator struct {
