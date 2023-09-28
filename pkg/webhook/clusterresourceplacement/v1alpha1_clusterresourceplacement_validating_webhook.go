@@ -1,4 +1,4 @@
-package v1alpha1
+package clusterresourceplacement
 
 import (
 	"context"
@@ -18,23 +18,23 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating ReplicaSet resources.
-	ValidationPath = "/validate-fleet.azure.com-v1alpha1-clusterresourceplacement"
+	v1alpha1CRPValidationPath = "/validate-fleet.azure.com-v1alpha1-clusterresourceplacement"
 )
 
-type clusterResourcePlacementValidator struct {
+type v1alpha1ClusterResourcePlacementValidator struct {
 	Client  client.Client
 	decoder *admission.Decoder
 }
 
-// Add registers the webhook for K8s bulit-in object types.
-func Add(mgr manager.Manager, _ []string) error {
+// AddV1Alpha1 registers the webhook for K8s bulit-in object types.
+func AddV1Alpha1(mgr manager.Manager, _ []string) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourcePlacementValidator{Client: mgr.GetClient()}})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &v1alpha1ClusterResourcePlacementValidator{Client: mgr.GetClient()}})
 	return nil
 }
 
 // Handle clusterResourcePlacementValidator handles create, update CRP requests.
-func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admission.Request) admission.Response {
+func (v *v1alpha1ClusterResourcePlacementValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	var crp fleetv1alpha1.ClusterResourcePlacement
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
 		if err := v.decoder.Decode(req, &crp); err != nil {
@@ -51,7 +51,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 }
 
 // InjectDecoder injects the decoder.
-func (v *clusterResourcePlacementValidator) InjectDecoder(d *admission.Decoder) error {
+func (v *v1alpha1ClusterResourcePlacementValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
 }
