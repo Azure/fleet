@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
@@ -236,7 +235,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 		fleetMemberNamespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
-					Key:      fleetv1beta1.FleetResourceLabelKey,
+					Key:      placementv1beta1.FleetResourceLabelKey,
 					Operator: metav1.LabelSelectorOpIn,
 					Values:   []string{"true"},
 				},
