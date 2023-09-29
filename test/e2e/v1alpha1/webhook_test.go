@@ -1473,6 +1473,19 @@ var _ = Describe("Fleet's Event Resource Handler webhook tests", func() {
 
 var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 	Context("deny requests to modify namespace with fleet/kube prefix", func() {
+		It("should deny CREATE operation on namespace with fleet-member prefix for user not in system:masters group", func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "fleet-member-test-mc",
+				},
+			}
+			By("expecting denial of operation CREATE of namespace")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &ns)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create namespace call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Create, "Namespace", "", types.NamespacedName{Name: ns.Name})))
+		})
+
 		It("should deny CREATE operation on namespace with fleet prefix for user not in system:masters group", func() {
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{

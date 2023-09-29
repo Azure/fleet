@@ -164,19 +164,11 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 		}
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	if strings.HasPrefix(req.Name, fleetNamespacePrefix) {
+	if strings.HasPrefix(req.Name, fleetNamespacePrefix) || strings.HasPrefix(req.Name, kubeNamespacePrefix) {
 		if len(req.Name) == len(fleetNamespacePrefix) {
 			klog.V(2).InfoS("request is trying to modify a namespace called fleet which is not allowed",
 				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
 			return admission.Denied("request is trying to modify a namespace called fleet which is not allowed")
-		}
-		return validation.ValidateUserForResource(req, v.whiteListedUsers)
-	}
-	if strings.HasPrefix(req.Name, kubeNamespacePrefix) {
-		if len(req.Name) == len(kubeNamespacePrefix) {
-			klog.V(2).InfoS("request is trying to modify a namespace called kube which is not allowed",
-				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
-			return admission.Denied("request is trying to modify a namespace called kube which is not allowed")
 		}
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}

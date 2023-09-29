@@ -497,22 +497,6 @@ func TestHandleNamespace(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "testUser", []string{"testGroup"}, admissionv1.Update, "Namespace", "", types.NamespacedName{Name: "fleet-system"})),
 		},
-		"deny user not in system:masters group to modify namespace named kube": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name: "kube",
-					UserInfo: authenticationv1.UserInfo{
-						Username: "testUser",
-						Groups:   []string{"testGroup"},
-					},
-					RequestKind: &metav1.GroupVersionKind{
-						Kind: "Namespace",
-					},
-					Operation: admissionv1.Create,
-				},
-			},
-			wantResponse: admission.Denied("request is trying to modify a namespace called kube which is not allowed"),
-		},
 		"deny user not in system:masters group to modify kube-system namespace": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
