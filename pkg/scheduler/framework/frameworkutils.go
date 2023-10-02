@@ -29,13 +29,15 @@ import (
 //   - dangling bindings, i.e., bindings that are associated with a cluster that is no longer in
 //     a normally operating state (the cluster has left the fleet, or is in the state of leaving),
 //     yet has not been marked as unscheduled by the scheduler; and
+//   - unscheduled bindings, i.e., bindings that are marked to be removed by the scheduler.
 //   - obsolete bindings, i.e., bindings that are no longer associated with the latest scheduling
 //     policy.
-func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, dangling []*placementv1beta1.ClusterResourceBinding) {
+func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, bindings []placementv1beta1.ClusterResourceBinding, clusters []clusterv1beta1.MemberCluster) (bound, scheduled, obsolete, unscheduled, dangling []*placementv1beta1.ClusterResourceBinding) {
 	// Pre-allocate arrays.
 	bound = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	scheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	obsolete = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
+	unscheduled = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 	dangling = make([]*placementv1beta1.ClusterResourceBinding, 0, len(bindings))
 
 	// Build a map for clusters for quick loopup.
@@ -49,14 +51,15 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 		targetCluster, isTargetClusterPresent := clusterMap[binding.Spec.TargetCluster]
 
 		switch {
-		case binding.DeletionTimestamp != nil:
+		case !binding.DeletionTimestamp.IsZero():
 			// Ignore any binding that has been deleted.
 			//
 			// Note that the scheduler will not add any cleanup scheduler to a binding, as
 			// in normal operations bound and scheduled bindings will not be deleted, and
 			// unscheduled bindings are disregarded by the scheduler.
 		case binding.Spec.State == placementv1beta1.BindingStateUnscheduled:
-			// Ignore any binding that is of the unscheduled state.
+			// we need to remember those bindings so that we will not create another one.
+			unscheduled = append(unscheduled, &binding)
 		case !isTargetClusterPresent || !targetCluster.GetDeletionTimestamp().IsZero():
 			// Check if the binding is now dangling, i.e., it is associated with a cluster that
 			// is no longer in normal operations, but is still of a scheduled or bound state.
@@ -80,7 +83,7 @@ func classifyBindings(policy *placementv1beta1.ClusterSchedulingPolicySnapshot, 
 		}
 	}
 
-	return bound, scheduled, obsolete, dangling
+	return bound, scheduled, obsolete, unscheduled, dangling
 }
 
 // bindingWithPatch is a helper struct that includes a binding that needs to be patched and the
@@ -92,22 +95,23 @@ type bindingWithPatch struct {
 	patch client.Patch
 }
 
-// crossReferencePickedCustersAndBindings cross references picked clusters in the current scheduling
+// crossReferencePickedClustersAndDeDupBindings cross references picked clusters in the current scheduling
 // run and existing bindings to find out:
 //
 //   - bindings that should be created, i.e., create a binding in the state of Scheduled for every
 //     cluster that is newly picked and does not have a binding associated with;
 //   - bindings that should be patched, i.e., associate a binding, whose target cluster is picked again
 //     in the current run, with the latest score and the latest scheduling policy snapshot (if applicable);
+//     This will deduplicate bindings that are originally created in accordance with a previous scheduling round.
 //   - bindings that should be deleted, i.e., mark a binding as unschedulable if its target cluster is no
 //     longer picked in the current run.
 //
 // Note that this function will return bindings with all fields fulfilled/refreshed, as applicable.
-func crossReferencePickedCustersAndObsoleteBindings(
+func crossReferencePickedClustersAndDeDupBindings(
 	crpName string,
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	picked ScoredClusters,
-	obsolete []*placementv1beta1.ClusterResourceBinding,
+	unscheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (toCreate, toDelete []*placementv1beta1.ClusterResourceBinding, toPatch []*bindingWithPatch, err error) {
 	// Pre-allocate with a reasonable capacity.
 	toCreate = make([]*placementv1beta1.ClusterResourceBinding, 0, len(picked))
@@ -136,30 +140,34 @@ func crossReferencePickedCustersAndObsoleteBindings(
 
 		// The binding's target cluster is picked again in the current run; yet the binding
 		// is originally created/updated in accordance with an out-of-date scheduling policy.
+		// Add the binding to the toPatch list. We will simply keep the binding's state as
+		// it could be "scheduled" or "bound".
+		toPatch = append(toPatch, patchBindingFromScoredCluster(binding, binding.Spec.State, scored, policy))
+	}
 
-		// Update the binding so that it is associated with the latest score.
-		updated := binding.DeepCopy()
-		affinityScore := int32(scored.Score.AffinityScore)
-		topologySpreadScore := int32(scored.Score.TopologySpreadScore)
-		updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
-			ClusterName: scored.Cluster.Name,
-			Selected:    true,
-			ClusterScore: &placementv1beta1.ClusterScore{
-				AffinityScore:       &affinityScore,
-				TopologySpreadScore: &topologySpreadScore,
-			},
-			Reason: pickedByPolicyReason,
+	for _, binding := range unscheduled {
+		scored, ok := pickedMap[binding.Spec.TargetCluster]
+		checked[binding.Spec.TargetCluster] = true
+		if !ok {
+			// this cluster is not picked up again, so we can skip it
+			continue
 		}
-
-		// Update the binding so that it is associated with the lastest scheduling policy.
-		updated.Spec.SchedulingPolicySnapshotName = policy.Name
-
-		// Add the binding to the toUpdate list.
-		toPatch = append(toPatch, &bindingWithPatch{
-			updated: updated,
-			// Prepare the patch.
-			patch: client.MergeFrom(binding),
-		})
+		// The binding's target cluster is picked again in the current run; yet the binding
+		// is originally de-selected by the previous scheduling round.
+		// Add the binding to the toPatch list so that we won't create more and more bindings.
+		// We need to recover the previous state before the binding is marked as unscheduled.
+		var desiredState placementv1beta1.BindingState
+		// we recorded the previous state in the binding's annotation
+		currentAnnotation := binding.GetAnnotations()
+		if previousState, exist := currentAnnotation[placementv1beta1.PreviousBindingStateAnnotation]; exist {
+			desiredState = placementv1beta1.BindingState(previousState)
+			// remove the annotation just to avoid confusion.
+			delete(currentAnnotation, placementv1beta1.PreviousBindingStateAnnotation)
+			binding.SetAnnotations(currentAnnotation)
+		} else {
+			return nil, nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to find the previous state of an unscheduled binding: %+v", binding))
+		}
+		toPatch = append(toPatch, patchBindingFromScoredCluster(binding, desiredState, scored, policy))
 	}
 
 	for _, scored := range picked {
@@ -202,6 +210,57 @@ func crossReferencePickedCustersAndObsoleteBindings(
 	}
 
 	return toCreate, toDelete, toPatch, nil
+}
+
+func patchBindingFromScoredCluster(binding *placementv1beta1.ClusterResourceBinding, desiredState placementv1beta1.BindingState,
+	scored *ScoredCluster, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *bindingWithPatch {
+	// Update the binding so that it is associated with the latest score.
+	updated := binding.DeepCopy()
+	affinityScore := int32(scored.Score.AffinityScore)
+	topologySpreadScore := int32(scored.Score.TopologySpreadScore)
+	// Update the binding so that it is associated with the lastest scheduling policy.
+	updated.Spec.State = desiredState
+	updated.Spec.SchedulingPolicySnapshotName = policy.Name
+	// copy the scheduling decision
+	updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
+		ClusterName: scored.Cluster.Name,
+		Selected:    true,
+		ClusterScore: &placementv1beta1.ClusterScore{
+			AffinityScore:       &affinityScore,
+			TopologySpreadScore: &topologySpreadScore,
+		},
+		Reason: pickedByPolicyReason,
+	}
+
+	return &bindingWithPatch{
+		updated: updated,
+		// Prepare the patch using safeguard to ensure no update in between.
+		patch: client.MergeFromWithOptions(binding, client.MergeFromWithOptimisticLock{}),
+	}
+}
+
+func patchBindingFromFixedCluster(binding *placementv1beta1.ClusterResourceBinding, desiredState placementv1beta1.BindingState,
+	clusterName string, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) *bindingWithPatch {
+	// Update the binding so that it is associated with the latest score.
+	updated := binding.DeepCopy()
+	// Update the binding so that it is associated with the lastest scheduling policy.
+	updated.Spec.State = desiredState
+	updated.Spec.SchedulingPolicySnapshotName = policy.Name
+	// Technically speaking, overwriting the cluster decision is not needed, as the same value
+	// should have been set in the previous run. Here the scheduler writes the information
+	// again just in case.
+	updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
+		ClusterName: clusterName,
+		Selected:    true,
+		// Scoring does not apply in this placement type.
+		Reason: pickedByPolicyReason,
+	}
+
+	return &bindingWithPatch{
+		updated: updated,
+		// Prepare the patch using safeguard to ensure no update in between.
+		patch: client.MergeFromWithOptions(binding, client.MergeFromWithOptimisticLock{}),
+	}
 }
 
 // newSchedulingDecisionsFromBindings returns a list of scheduling decisions, based on the newly manipulated list of
@@ -517,7 +576,7 @@ func crossReferenceValidTargetsWithBindings(
 	crpName string,
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	valid []*clusterv1beta1.MemberCluster,
-	bound, scheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
+	bound, scheduled, unscheduled, obsolete []*placementv1beta1.ClusterResourceBinding,
 ) (
 	toCreate []*placementv1beta1.ClusterResourceBinding,
 	toDelete []*placementv1beta1.ClusterResourceBinding,
@@ -538,6 +597,11 @@ func crossReferenceValidTargetsWithBindings(
 		scheduledOrBoundClusterMap[binding.Spec.TargetCluster] = true
 	}
 
+	unscheduledClusterMap := make(map[string]*placementv1beta1.ClusterResourceBinding)
+	for _, binding := range unscheduled {
+		unscheduledClusterMap[binding.Spec.TargetCluster] = binding
+	}
+
 	obsoleteClusterMap := make(map[string]*placementv1beta1.ClusterResourceBinding)
 	for _, binding := range obsolete {
 		obsoleteClusterMap[binding.Spec.TargetCluster] = binding
@@ -552,6 +616,7 @@ func crossReferenceValidTargetsWithBindings(
 	for _, cluster := range valid {
 		_, foundInScheduledOrBound := scheduledOrBoundClusterMap[cluster.Name]
 		obsoleteBinding, foundInObsolete := obsoleteClusterMap[cluster.Name]
+		unscheduledBinding, foundInUnscheduled := unscheduledClusterMap[cluster.Name]
 
 		switch {
 		case foundInScheduledOrBound:
@@ -561,23 +626,26 @@ func crossReferenceValidTargetsWithBindings(
 			// The cluster already has a binding associated, but it is selected in a previous
 			// scheduling run; update the binding to refer to the latest scheduling policy
 			// snapshot.
-			updated := obsoleteBinding.DeepCopy()
-			// Technically speaking, overwriting the cluster decision is not needed, as the same value
-			// should have been set in the previous run. Here the scheduler writes the information
-			// again just in case.
-			updated.Spec.ClusterDecision = placementv1beta1.ClusterDecision{
-				ClusterName: cluster.Name,
-				Selected:    true,
-				// Scoring does not apply in this placement type.
-				Reason: pickedByPolicyReason,
-			}
-			updated.Spec.SchedulingPolicySnapshotName = policy.Name
+			toPatch = append(toPatch, patchBindingFromFixedCluster(obsoleteBinding, obsoleteBinding.Spec.State, cluster.Name, policy))
 
-			toPatch = append(toPatch, &bindingWithPatch{
-				updated: updated,
-				// Prepare the patch.
-				patch: client.MergeFrom(obsoleteBinding),
-			})
+		case foundInUnscheduled:
+			// The binding's target cluster is picked again in the current run; yet the binding
+			// is originally de-selected by the previous scheduling round.
+			// Add the binding to the toPatch list so that we won't create more and more bindings.
+			// We need to recover the previous state before the binding is marked as unscheduled.
+			var desiredState placementv1beta1.BindingState
+			// we recorded the previous state in the binding's annotation
+			currentAnnotation := unscheduledBinding.GetAnnotations()
+			if previousState, exist := currentAnnotation[placementv1beta1.PreviousBindingStateAnnotation]; exist {
+				desiredState = placementv1beta1.BindingState(previousState)
+				// remove the annotation just to avoid confusion.
+				delete(currentAnnotation, placementv1beta1.PreviousBindingStateAnnotation)
+				unscheduledBinding.SetAnnotations(currentAnnotation)
+			} else {
+				return nil, nil, nil, controller.NewUnexpectedBehaviorError(fmt.Errorf("failed to find the previous state of an unscheduled binding: %+v", unscheduledBinding))
+			}
+			toPatch = append(toPatch, patchBindingFromFixedCluster(unscheduledBinding, desiredState, cluster.Name, policy))
+
 		default:
 			// The cluster does not have an associated binding yet; create one.
 
