@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"go.goms.io/fleet/apis/placement/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
@@ -19,12 +18,12 @@ import (
 
 func Test_validateRolloutStrategy(t *testing.T) {
 	tests := map[string]struct {
-		rolloutStrategy v1beta1.RolloutStrategy
+		rolloutStrategy placementv1beta1.RolloutStrategy
 		wantErr         bool
 	}{
 		// TODO: Add test cases.
 		"invalid RolloutStrategyType should fail": {
-			rolloutStrategy: v1beta1.RolloutStrategy{
+			rolloutStrategy: placementv1beta1.RolloutStrategy{
 				Type: "random type",
 			},
 			wantErr: true,
@@ -196,8 +195,7 @@ func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 }
 
 func Test_validateClusterResourcePlacement(t *testing.T) {
-	var unavailablePeriodSeconds int
-	unavailablePeriodSeconds = -10
+	unavailablePeriodSeconds := -10
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
