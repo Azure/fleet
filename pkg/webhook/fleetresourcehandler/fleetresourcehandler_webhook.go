@@ -131,11 +131,14 @@ func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context
 		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		// check to see if member agent is making the request only on Update.
 		if !response.Allowed && req.Operation == admissionv1.Update {
+			// if namespace name is just "fleet-member", mcName variable becomes empty and the request is allowed since that namespaces is not watched by member agents.
 			mcName := parseMemberClusterNameFromNamespace(req.Namespace)
 			return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
 		}
 		return response
 	}
+	klog.InfoS("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces",
+		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
 	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object")
 }
 
@@ -149,30 +152,18 @@ func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.
 	if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-
 	return admission.Allowed("namespace name for this event is not a reserved namespace so we allow all operations for events on these namespaces")
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
-	if strings.HasPrefix(req.Name, fleetMemberNamespacePrefix) {
-		mcName := parseMemberClusterNameFromNamespace(req.Name)
-		if mcName == "" {
-			klog.V(2).InfoS("request is trying to modify a namespace called fleet-member which is not allowed",
-				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
-			return admission.Denied("request is trying to modify a namespace called fleet-member which is not allowed")
-		}
+	fleetMatchResult := strings.HasPrefix(req.Name, "fleet")
+	kubeMatchResult := strings.HasPrefix(req.Name, "kube")
+	if fleetMatchResult || kubeMatchResult {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	if strings.HasPrefix(req.Name, fleetNamespacePrefix) || strings.HasPrefix(req.Name, kubeNamespacePrefix) {
-		if len(req.Name) == len(fleetNamespacePrefix) {
-			klog.V(2).InfoS("request is trying to modify a namespace called fleet which is not allowed",
-				"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
-			return admission.Denied("request is trying to modify a namespace called fleet which is not allowed")
-		}
-		return validation.ValidateUserForResource(req, v.whiteListedUsers)
-	}
-	return admission.Allowed("namespace name doesn't begin with fleet, fleet-member, kube prefixes so we allow all operations on these namespaces")
+	// only handling reserved namespaces with prefix fleet/kube.
+	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
