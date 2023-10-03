@@ -8,16 +8,16 @@ package e2e
 import (
 	"errors"
 	"fmt"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
-	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 var _ = Describe("webhook tests for CRP CREATE operations", func() {
