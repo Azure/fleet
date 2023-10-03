@@ -29,9 +29,6 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				ResourceSelectors: selector,
@@ -56,9 +53,6 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				ResourceSelectors: workResourceSelector(),
@@ -76,7 +70,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 		cleanupWorkResources()
 	})
 
-	It("should update CRP status as expected", func() {
+	It("should deny update on CRP with invalid label selector", func() {
 		Eventually(func(g Gomega) error {
 			selector := invalidWorkResourceSelector()
 			var crp placementv1beta1.ClusterResourcePlacement
