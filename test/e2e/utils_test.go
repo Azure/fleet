@@ -164,8 +164,7 @@ func cleanupCRP(name string) {
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", name)
 
 		crp.Finalizers = []string{}
-		err := hubClient.Update(ctx, crp)
-		return err
+		return hubClient.Update(ctx, crp)
 	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 
 	// Wait until the CRP is removed.
