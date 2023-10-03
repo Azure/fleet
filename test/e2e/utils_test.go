@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"fmt"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -19,7 +20,6 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
@@ -154,9 +154,14 @@ func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 
 // cleanupCRP deletes the CRP and waits until the resources are not found.
 func cleanupCRP(name string) {
+	// TODO(Arvindthiru): There is a conflict which requires the Eventually block, not sure of series of operations that leads to it yet.
 	Eventually(func(g Gomega) error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)).To(Succeed(), "Failed to get CRP %s", name)
+		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		Expect(err).Should(Succeed(), "Failed to get CRP %s", name)
 
 		// Delete the CRP (again, if applicable).
 		//
