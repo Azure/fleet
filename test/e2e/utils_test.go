@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"fmt"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -20,6 +19,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
