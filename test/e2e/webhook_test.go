@@ -38,9 +38,6 @@ var _ = Describe("creating CRP and selecting resources by name", func() {
 		}
 		By(fmt.Sprintf("expecting denial of CREATE placement %s", crpName))
 		err := hubClient.Create(ctx, crp)
-		fmt.Println("actual: ")
-		fmt.Println(err.Error())
-		fmt.Println("expected: ")
 		fmt.Println(fmt.Sprintf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
