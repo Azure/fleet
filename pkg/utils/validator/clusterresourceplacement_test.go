@@ -196,8 +196,7 @@ func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 
 func Test_validateClusterResourcePlacement(t *testing.T) {
 	unavailablePeriodSeconds := -10
-	var numberOfClusters int32
-	numberOfClusters = 1
+	var numberOfClusters int32 = 1
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
