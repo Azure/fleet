@@ -72,6 +72,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 	if len(clusterResourcePlacement.Name) > validation.DNS1035LabelMaxLength {
 		allErr = append(allErr, fmt.Errorf("the name field cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
 	}
+
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
 		//TODO: make sure the selector's gvk is valid
 		if selector.LabelSelector != nil {
@@ -84,8 +85,10 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 		}
 	}
 
-	if err := validatePlacementPolicy(clusterResourcePlacement.Spec.Policy); err != nil {
-		allErr = append(allErr, fmt.Errorf("the placement policy field is invalid: %w", err))
+	if clusterResourcePlacement.Spec.Policy != nil {
+		if err := validatePlacementPolicy(clusterResourcePlacement.Spec.Policy); err != nil {
+			allErr = append(allErr, fmt.Errorf("the placement policy field is invalid: %w", err))
+		}
 	}
 
 	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&

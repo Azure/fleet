@@ -161,12 +161,12 @@ func cleanupCRP(name string) {
 		if errors.IsNotFound(err) {
 			return nil
 		}
-		Expect(err).Should(Succeed(), "Failed to get CRP %s", name)
+		g.Expect(err).Should(Succeed(), "Failed to get CRP %s", name)
 
 		// Delete the CRP (again, if applicable).
 		//
-		// This helps the AfterAll node to run successfully even if the steps above fail early.
-		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", name)
+		// This helps the After All node to run successfully even if the steps above fail early.
+		g.Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", name)
 
 		crp.Finalizers = []string{}
 		return hubClient.Update(ctx, crp)
