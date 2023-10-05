@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -68,6 +69,9 @@ func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alph
 func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
+	if len(clusterResourcePlacement.Name) > validation.DNS1035LabelMaxLength {
+		allErr = append(allErr, fmt.Errorf("the name fields cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
+	}
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
 		//TODO: make sure the selector's gvk is valid
 		if selector.LabelSelector != nil {
