@@ -284,7 +284,7 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		"invalid rollout strategy - UnavailablePeriodSeconds": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
@@ -418,36 +418,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		"invalid placement policy - PickFixed with empty cluster names": {
-			crp: &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io",
-							Version: "v1",
-							Kind:    "ClusterRole",
-							Name:    "test-cluster-role",
-						},
-					},
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType: placementv1beta1.PickFixedPlacementType,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   0,
-								IntVal: 10,
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
 		"invalid placement policy - PickFixed with non nil number of clusters": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -466,15 +436,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 						PlacementType:    placementv1beta1.PickFixedPlacementType,
 						ClusterNames:     []string{"test-cluster"},
 						NumberOfClusters: &numberOfClusters,
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   0,
-								IntVal: 10,
-							},
-						},
 					},
 				},
 			},
@@ -512,15 +473,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 							},
 						},
 					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   0,
-								IntVal: 10,
-							},
-						},
-					},
 				},
 			},
 			wantErr: true,
@@ -546,15 +498,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
 								TopologyKey: "test-key",
-							},
-						},
-					},
-					Strategy: placementv1beta1.RolloutStrategy{
-						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							MaxUnavailable: &intstr.IntOrString{
-								Type:   0,
-								IntVal: 10,
 							},
 						},
 					},

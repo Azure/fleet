@@ -37,6 +37,7 @@ func AddV1Alpha1(mgr manager.Manager, _ []string) error {
 func (v *v1alpha1ClusterResourcePlacementValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	var crp fleetv1alpha1.ClusterResourcePlacement
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
+		klog.V(2).InfoS("handling CRP", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: req.Name})
 		if err := v.decoder.Decode(req, &crp); err != nil {
 			klog.ErrorS(err, "failed to decode v1alpha1 CRP object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 			return admission.Errored(http.StatusBadRequest, err)

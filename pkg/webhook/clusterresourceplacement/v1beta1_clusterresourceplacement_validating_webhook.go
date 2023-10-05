@@ -37,7 +37,7 @@ func Add(mgr manager.Manager, _ []string) error {
 func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admission.Request) admission.Response {
 	var crp placementv1beta1.ClusterResourcePlacement
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
-		klog.V(2).InfoS("handling CRP", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: req.Name})
+		klog.V(2).InfoS("handling CRP", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: req.Name})
 		if err := v.decoder.Decode(req, &crp); err != nil {
 			klog.ErrorS(err, "failed to decode v1beta1 CRP object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 			return admission.Errored(http.StatusBadRequest, err)

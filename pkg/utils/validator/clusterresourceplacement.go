@@ -8,6 +8,7 @@ package validator
 
 import (
 	"fmt"
+	"reflect"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -97,9 +98,10 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
 		}
 	}
-
-	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
-		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
+	if !reflect.DeepEqual(clusterResourcePlacement.Spec.Strategy, placementv1beta1.RolloutStrategy{}) {
+		if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
+			allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
+		}
 	}
 
 	return apiErrors.NewAggregate(allErr)
@@ -127,17 +129,14 @@ func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
 	allErr := make([]error, 0)
-	if len(policy.ClusterNames) == 0 {
-		allErr = append(allErr, fmt.Errorf("cluster names cannot be empty for policy type %s", policy.PlacementType))
-	}
 	if policy.NumberOfClusters != nil {
-		allErr = append(allErr, fmt.Errorf("NumberOfClusters must be nil for policy type %s, only valid for PickN placement policy type", policy.PlacementType))
+		allErr = append(allErr, fmt.Errorf("NumberOfClusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
 	}
 	if policy.Affinity != nil {
-		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement poliy types", policy.PlacementType))
+		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement poliy types", placementv1beta1.PickFixedPlacementType))
 	}
 	if len(policy.TopologySpreadConstraints) > 0 {
-		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", policy.PlacementType))
+		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickFixedPlacementType))
 	}
 
 	return apiErrors.NewAggregate(allErr)

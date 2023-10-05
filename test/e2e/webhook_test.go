@@ -89,10 +89,12 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 
 	It("should deny update on CRP with invalid placement policy", func() {
 		Eventually(func(g Gomega) error {
+			var numOfClusters int32 = 1
 			var crp placementv1beta1.ClusterResourcePlacement
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
 			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickFixedPlacementType,
+				PlacementType:    placementv1beta1.PickFixedPlacementType,
+				NumberOfClusters: &numOfClusters,
 			}
 			err := hubClient.Update(ctx, &crp)
 			if k8sErrors.IsConflict(err) {
@@ -100,7 +102,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cluster names cannot be empty for policy type"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("NumberOfClusters must be nil for policy type PickFixed"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
