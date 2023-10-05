@@ -70,7 +70,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 	allErr := make([]error, 0)
 
 	if len(clusterResourcePlacement.Name) > validation.DNS1035LabelMaxLength {
-		allErr = append(allErr, fmt.Errorf("the name fields cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
+		allErr = append(allErr, fmt.Errorf("the name field cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
 	}
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
 		//TODO: make sure the selector's gvk is valid
