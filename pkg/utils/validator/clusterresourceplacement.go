@@ -162,6 +162,10 @@ func validateClusterAffinity(_ *placementv1beta1.ClusterAffinity) error {
 func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
 	allErr := make([]error, 0)
 
+	if rolloutStrategy.Type != "" && rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
+		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
+	}
+
 	if rolloutStrategy.RollingUpdate != nil {
 		if rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds != nil && *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds < 0 {
 			allErr = append(allErr, fmt.Errorf("unavailablePeriodSeconds must be greater than or equal to 0, got %d", *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds))

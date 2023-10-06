@@ -286,6 +286,27 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		"invalid rollout strategy": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: "random type",
+					},
+				},
+			},
+			wantErr: true,
+		},
 		"invalid rollout strategy - UnavailablePeriodSeconds": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
