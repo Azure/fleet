@@ -8,8 +8,6 @@ package validator
 
 import (
 	"fmt"
-	"reflect"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -98,10 +96,8 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
 		}
 	}
-	if !reflect.DeepEqual(clusterResourcePlacement.Spec.Strategy, placementv1beta1.RolloutStrategy{}) {
-		if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
-			allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
-		}
+	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
+		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
 	}
 
 	return apiErrors.NewAggregate(allErr)
@@ -164,9 +160,6 @@ func validateClusterAffinity(_ *placementv1beta1.ClusterAffinity) error {
 
 func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
 	allErr := make([]error, 0)
-	if rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
-		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
-	}
 
 	if rolloutStrategy.RollingUpdate != nil {
 		if rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds != nil && *rolloutStrategy.RollingUpdate.UnavailablePeriodSeconds < 0 {

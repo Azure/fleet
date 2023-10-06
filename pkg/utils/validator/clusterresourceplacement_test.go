@@ -471,7 +471,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
-
 		"invalid placement policy - PickFixed with non nil affinity": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -507,7 +506,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
-
 		"invalid placement policy - PickFixed with non empty topology constraints": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -536,7 +534,6 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			wantErr: true,
 		},
 	}
-
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
 			ResourceInformer = testCase.resourceInformer
