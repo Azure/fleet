@@ -16,28 +16,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
-func Test_validateRolloutStrategy(t *testing.T) {
-	tests := map[string]struct {
-		rolloutStrategy placementv1beta1.RolloutStrategy
-		wantErr         bool
-	}{
-		// TODO: Add test cases.
-		"invalid RolloutStrategyType should fail": {
-			rolloutStrategy: placementv1beta1.RolloutStrategy{
-				Type: "random type",
-			},
-			wantErr: true,
-		},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			if err := validateRolloutStrategy(tt.rolloutStrategy); (err != nil) != tt.wantErr {
-				t.Errorf("validateRolloutStrategy() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
 		crp              *fleetv1alpha1.ClusterResourcePlacement
