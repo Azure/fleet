@@ -13,8 +13,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/validation"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
@@ -65,9 +66,12 @@ func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alph
 }
 
 // ValidateClusterResourcePlacement validates a ClusterResourcePlacement object.
-func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.ClusterResourcePlacement) error {
+func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
 
+	if len(clusterResourcePlacement.Name) > validation.DNS1035LabelMaxLength {
+		allErr = append(allErr, fmt.Errorf("the name field cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
+	}
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
 		//TODO: make sure the selector's gvk is valid
 		if selector.LabelSelector != nil {
@@ -94,14 +98,14 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *fleetv1beta1.Clu
 	return apiErrors.NewAggregate(allErr)
 }
 
-func validateClusterAffinity(_ *fleetv1beta1.ClusterAffinity) error {
+func validateClusterAffinity(_ *placementv1beta1.ClusterAffinity) error {
 	// TODO: implement this
 	return nil
 }
 
-func validateRolloutStrategy(rolloutStrategy fleetv1beta1.RolloutStrategy) error {
+func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
 	allErr := make([]error, 0)
-	if rolloutStrategy.Type != fleetv1beta1.RollingUpdateRolloutStrategyType {
+	if rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
 		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
 	}
 

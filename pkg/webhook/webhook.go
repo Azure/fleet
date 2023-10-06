@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
@@ -180,8 +180,8 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 			},
 		},
 		{
-			Name:                    "fleet.clusterresourceplacement.validating",
-			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
+			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceplacement.V1Alpha1CRPValidationPath),
 			FailurePolicy:           &failPolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
@@ -193,6 +193,23 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 						admv1.Update,
 					},
 					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
+				},
+			},
+		},
+		{
+			Name:                    "fleet.clusterresourceplacementv1beta1.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
+			FailurePolicy:           &failPolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
 		},
@@ -218,7 +235,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 		fleetMemberNamespaceSelector := &metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
 				{
-					Key:      fleetv1beta1.FleetResourceLabelKey,
+					Key:      placementv1beta1.FleetResourceLabelKey,
 					Operator: metav1.LabelSelectorOpIn,
 					Values:   []string{"true"},
 				},
