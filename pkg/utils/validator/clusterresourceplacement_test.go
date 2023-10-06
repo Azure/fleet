@@ -16,28 +16,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
-func Test_validateRolloutStrategy(t *testing.T) {
-	tests := map[string]struct {
-		rolloutStrategy placementv1beta1.RolloutStrategy
-		wantErr         bool
-	}{
-		// TODO: Add test cases.
-		"invalid RolloutStrategyType should fail": {
-			rolloutStrategy: placementv1beta1.RolloutStrategy{
-				Type: "random type",
-			},
-			wantErr: true,
-		},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			if err := validateRolloutStrategy(tt.rolloutStrategy); (err != nil) != tt.wantErr {
-				t.Errorf("validateRolloutStrategy() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
 		crp              *fleetv1alpha1.ClusterResourcePlacement
@@ -196,6 +174,7 @@ func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 
 func Test_validateClusterResourcePlacement(t *testing.T) {
 	unavailablePeriodSeconds := -10
+	var numberOfClusters int32 = 1
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -280,6 +259,27 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 							Kind:    "ClusterRole",
 							Name:    "test-cluster-role",
 						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"invalid rollout strategy": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: "random type",
 					},
 				},
 			},
@@ -417,8 +417,122 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		"invalid placement policy - PickFixed with empty cluster names": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							MaxUnavailable: &intstr.IntOrString{
+								Type:   0,
+								IntVal: 10,
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		"invalid placement policy - PickFixed with non nil number of clusters": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickFixedPlacementType,
+						ClusterNames:     []string{"test-cluster"},
+						NumberOfClusters: &numberOfClusters,
+					},
+				},
+			},
+			wantErr: true,
+		},
+		"invalid placement policy - PickFixed with non nil affinity": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{"test-cluster"},
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: metav1.LabelSelector{
+												MatchLabels: map[string]string{"test-key": "test-value"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		"invalid placement policy - PickFixed with non empty topology constraints": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "ClusterRole",
+							Name:    "test-cluster-role",
+						},
+					},
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickFixedPlacementType,
+						ClusterNames:  []string{"test-cluster"},
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+							{
+								TopologyKey: "test-key",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
 	}
-
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
 			ResourceInformer = testCase.resourceInformer

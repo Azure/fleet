@@ -72,6 +72,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 	if len(clusterResourcePlacement.Name) > validation.DNS1035LabelMaxLength {
 		allErr = append(allErr, fmt.Errorf("the name field cannot have length exceeding %d", validation.DNS1035LabelMaxLength))
 	}
+
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
 		//TODO: make sure the selector's gvk is valid
 		if selector.LabelSelector != nil {
@@ -84,17 +85,72 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 		}
 	}
 
+	if clusterResourcePlacement.Spec.Policy != nil {
+		if err := validatePlacementPolicy(clusterResourcePlacement.Spec.Policy); err != nil {
+			allErr = append(allErr, fmt.Errorf("the placement policy field is invalid: %w", err))
+		}
+	}
+
 	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
 		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
 		if err := validateClusterAffinity(clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity); err != nil {
 			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
 		}
 	}
-
 	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
 		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
 	}
 
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
+	switch policy.PlacementType {
+	case placementv1beta1.PickFixedPlacementType:
+		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	case placementv1beta1.PickAllPlacementType:
+		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	case placementv1beta1.PickNPlacementType:
+		if err := validatePolicyForPickNPolicyType(policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
+	if len(policy.ClusterNames) == 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names cannot be empty for policy type %s", placementv1beta1.PickFixedPlacementType))
+	}
+	if policy.NumberOfClusters != nil {
+		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
+	}
+	if policy.Affinity != nil {
+		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement poliy types", placementv1beta1.PickFixedPlacementType))
+	}
+	if len(policy.TopologySpreadConstraints) > 0 {
+		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickFixedPlacementType))
+	}
+
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePolicyForPickAllPlacementType(_ *placementv1beta1.PlacementPolicy) error {
+	// TODO(Arvindthiru): implement this.
+	allErr := make([]error, 0)
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePolicyForPickNPolicyType(_ *placementv1beta1.PlacementPolicy) error {
+	// TODO(Arvindthiru): implement this.
+	allErr := make([]error, 0)
 	return apiErrors.NewAggregate(allErr)
 }
 
@@ -105,7 +161,8 @@ func validateClusterAffinity(_ *placementv1beta1.ClusterAffinity) error {
 
 func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
 	allErr := make([]error, 0)
-	if rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
+
+	if rolloutStrategy.Type != "" && rolloutStrategy.Type != placementv1beta1.RollingUpdateRolloutStrategyType {
 		allErr = append(allErr, fmt.Errorf("unsupported rollout strategy type `%s`", rolloutStrategy.Type))
 	}
 
