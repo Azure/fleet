@@ -129,8 +129,11 @@ func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
 	allErr := make([]error, 0)
+	if len(policy.ClusterNames) == 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names cannot be empty for policy type %s", policy.PlacementType))
+	}
 	if policy.NumberOfClusters != nil {
-		allErr = append(allErr, fmt.Errorf("NumberOfClusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
+		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
 	}
 	if policy.Affinity != nil {
 		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement poliy types", placementv1beta1.PickFixedPlacementType))
