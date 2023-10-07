@@ -617,7 +617,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			memberCluster3EastCanary:  &zeroScore,
 			memberCluster4CentralProd: &zeroScore,
 			// Cluster 5 is picked in the second iteration, as placing resources on it does
-			// not violate any topology spread constraits + does not increase the skew. It
+			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged.
 			memberCluster5CentralProd: {
 				AffinityScore:       pointer.Int32(0),
@@ -734,7 +734,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 				TopologySpreadScore: pointer.Int32(1),
 			},
 			// Cluster 5 is picked in the second iteration, as placing resources on it does
-			// not violate any topology spread constraits + does not increase the skew. It
+			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged for both
 			// topology spread constraints.
 			memberCluster5CentralProd: {
@@ -834,7 +834,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			memberCluster3EastCanary:  &zeroScore,
 			memberCluster4CentralProd: &zeroScore,
 			// Cluster 5 is picked in the second iteration, as placing resources on it does
-			// not violate any topology spread constraits + does not increase the skew. It
+			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged.
 			memberCluster5CentralProd: {
 				AffinityScore:       pointer.Int32(0),
@@ -958,7 +958,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 				TopologySpreadScore: pointer.Int32(1),
 			},
 			// Cluster 5 is picked in the second iteration, as placing resources on it does
-			// not violate any topology spread constraits + does not increase the skew. It
+			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged for both
 			// topology spread constraints.
 			memberCluster5CentralProd: {
