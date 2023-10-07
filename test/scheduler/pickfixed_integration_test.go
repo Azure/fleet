@@ -170,7 +170,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", func() {
 			markBindingsAsBoundForClusters(crpName, previouslyBoundClusters)
 
 			// Update the CRP with new target clusters and refresh scheduling policy snapshots.
-			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters2, policySnapshotName1, policySnapshotName2)
+			updatePickFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters2, policySnapshotName1, policySnapshotName2)
 		})
 
 		It("should create scheduled bindings for newly added valid target clusters", func() {
@@ -248,7 +248,7 @@ var _ = Describe("scheduling CRPs of the PickFixed placement type", func() {
 			markBindingsAsBoundForClusters(crpName, previouslyBoundClusters)
 
 			// Update the CRP with new target clusters and refresh scheduling policy snapshots.
-			updatePickedFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters2, policySnapshotName1, policySnapshotName2)
+			updatePickFixedCRPWithNewTargetClustersAndRefreshSnapshots(crpName, targetClusters2, policySnapshotName1, policySnapshotName2)
 		})
 
 		It("should create scheduled bindings for newly added valid target clusters", func() {
