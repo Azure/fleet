@@ -36,6 +36,20 @@ func workResourceSelector() []placementv1beta1.ClusterResourceSelector {
 	}
 }
 
+func invalidWorkResourceSelector() []placementv1beta1.ClusterResourceSelector {
+	return []placementv1beta1.ClusterResourceSelector{
+		{
+			Group:   "",
+			Kind:    "Namespace",
+			Version: "v1",
+			Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"test-key": "test-value"},
+			},
+		},
+	}
+}
+
 func workNamespace() corev1.Namespace {
 	return corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{

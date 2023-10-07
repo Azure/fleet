@@ -219,7 +219,7 @@ func unscheduledBindingsCreatedOrUpdatedForClustersActual(clusters []string, sco
 				unscheduled = append(unscheduled, binding)
 			}
 		}
-
+		// TODO (rzhang): fix me, compare the annotations when we know its previous state
 		wantUnscheduled := []placementv1beta1.ClusterResourceBinding{}
 		for _, name := range clusters {
 			score := scoreByCluster[name]

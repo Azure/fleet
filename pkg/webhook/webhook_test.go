@@ -23,7 +23,7 @@ func TestBuildValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enableGuardRail:      false,
 			},
-			wantLength: 3,
+			wantLength: 4,
 		},
 		"enable guard rail": {
 			config: Config{
@@ -33,7 +33,7 @@ func TestBuildValidatingWebhooks(t *testing.T) {
 				clientConnectionType: &url,
 				enableGuardRail:      true,
 			},
-			wantLength: 9,
+			wantLength: 10,
 		},
 	}
 

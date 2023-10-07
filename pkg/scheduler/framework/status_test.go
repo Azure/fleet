@@ -51,8 +51,14 @@ func TestNonNilStatusMethods(t *testing.T) {
 			sourcePlugin: dummyPlugin,
 		},
 		{
-			name:         "status preskip",
+			name:         "status skip",
 			statusCode:   Skip,
+			reasons:      dummyReasons,
+			sourcePlugin: dummyPlugin,
+		},
+		{
+			name:         "status cluster already selected",
+			statusCode:   ClusterAlreadySelected,
 			reasons:      dummyReasons,
 			sourcePlugin: dummyPlugin,
 		},
@@ -73,6 +79,7 @@ func TestNonNilStatusMethods(t *testing.T) {
 				status.IsSuccess,
 				status.IsInteralError,
 				status.IsClusterUnschedulable,
+				status.IsClusterAlreadySelected,
 				status.IsSkip,
 			}
 			for idx, checkFunc := range checkFuncs {
