@@ -52,7 +52,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -119,7 +119,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -191,9 +191,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
-		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -210,7 +208,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -282,7 +280,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -299,9 +297,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
-		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -360,7 +356,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -386,7 +382,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	It("should update the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -444,16 +440,14 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			wantSelectedResources := []placementv1beta1.ResourceIdentifier{
-				{
-					Kind:    "Namespace",
-					Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
-					Version: "v1",
-				},
-			}
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, wantSelectedResources)
+		wantSelectedResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Kind:    "Namespace",
+				Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+				Version: "v1",
+			},
 		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -475,7 +469,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -534,7 +528,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual()
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -546,16 +540,14 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			wantSelectedResources := []placementv1beta1.ResourceIdentifier{
-				{
-					Kind:    "Namespace",
-					Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
-					Version: "v1",
-				},
-			}
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, wantSelectedResources)
+		wantSelectedResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Kind:    "Namespace",
+				Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+				Version: "v1",
+			},
 		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 

@@ -780,6 +780,7 @@ func TestSetPlacementStatus(t *testing.T) {
 						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 					},
 					{
+						ClusterName: "member-2",
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
@@ -790,6 +791,7 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
+						ClusterName: "member-3",
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
