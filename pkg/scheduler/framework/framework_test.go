@@ -46,13 +46,15 @@ const (
 )
 
 var (
-	ignoreObjectMetaResourceVersionField = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
-	ignoreObjectMetaNameField            = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
-	ignoreTypeMetaAPIVersionKindFields   = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
-	ignoredStatusFields                  = cmpopts.IgnoreFields(Status{}, "reasons", "err")
-	ignoredBindingWithPatchFields        = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
-	ignoredCondFields                    = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
-	ignoreCycleStateFields               = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
+	ignoreObjectMetaResourceVersionField      = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")
+	ignoreObjectAnnotationField               = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Annotations")
+	ignoreObjectMetaNameField                 = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")
+	ignoreTypeMetaAPIVersionKindFields        = cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion", "Kind")
+	ignoredStatusFields                       = cmpopts.IgnoreFields(Status{}, "reasons", "err")
+	ignoredBindingWithPatchFields             = cmpopts.IgnoreFields(bindingWithPatch{}, "patch")
+	ignoredCondFields                         = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime")
+	ignoreCycleStateFields                    = cmpopts.IgnoreFields(CycleState{}, "store", "clusters", "scheduledOrBoundBindings", "obsoleteBindings")
+	ignoreClusterDecisionScoreAndReasonFields = cmpopts.IgnoreFields(placementv1beta1.ClusterDecision{}, "ClusterScore", "Reason")
 
 	lessFuncCluster = func(cluster1, cluster2 *clusterv1beta1.MemberCluster) bool {
 		return cluster1.Name < cluster2.Name
@@ -97,13 +99,25 @@ var (
 				Selected:    selected,
 			}
 
-			if !selected {
-				newDecision.Reason = defaultFilteredStatus.String()
-			}
-
 			decisions = append(decisions, newDecision)
 		}
 		return decisions
+	}
+
+	generateNotPickedScoredClusters = func(count int, startIdx int) ScoredClusters {
+		notPicked := make(ScoredClusters, 0, count)
+
+		for i := 0; i < count; i++ {
+			notPicked = append(notPicked, &ScoredCluster{
+				Cluster: &clusterv1beta1.MemberCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(clusterNameTemplate, i+startIdx),
+					},
+				},
+				Score: &ClusterScore{},
+			})
+		}
+		return notPicked
 	}
 
 	generatedFilterdClusterWithStatus = func(count int, startIdx int) []*filteredClusterWithStatus {
@@ -255,6 +269,16 @@ func TestClassifyBindings(t *testing.T) {
 		},
 	}
 
+	deletingBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "binding-2",
+			DeletionTimestamp: &deleteTime,
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
+		},
+	}
+
 	unscheduledBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "binding-3",
@@ -315,6 +339,7 @@ func TestClassifyBindings(t *testing.T) {
 	}
 
 	bindings := []placementv1beta1.ClusterResourceBinding{
+		deletingBinding,
 		unscheduledBinding,
 		associatedWithLeavingClusterBinding,
 		assocaitedWithDisappearedClusterBinding,
@@ -325,9 +350,10 @@ func TestClassifyBindings(t *testing.T) {
 	wantBound := []*placementv1beta1.ClusterResourceBinding{&boundBinding}
 	wantScheduled := []*placementv1beta1.ClusterResourceBinding{&scheduledBinding}
 	wantObsolete := []*placementv1beta1.ClusterResourceBinding{&obsoleteBinding}
+	wantUnscheduled := []*placementv1beta1.ClusterResourceBinding{&unscheduledBinding}
 	wantDangling := []*placementv1beta1.ClusterResourceBinding{&associatedWithLeavingClusterBinding, &assocaitedWithDisappearedClusterBinding}
 
-	bound, scheduled, obsolete, dangling := classifyBindings(policy, bindings, clusters)
+	bound, scheduled, obsolete, unscheduled, dangling := classifyBindings(policy, bindings, clusters)
 	if diff := cmp.Diff(bound, wantBound); diff != "" {
 		t.Errorf("classifyBindings() bound diff (-got, +want): %s", diff)
 	}
@@ -340,6 +366,10 @@ func TestClassifyBindings(t *testing.T) {
 		t.Errorf("classifyBindings() obsolete diff (-got, +want) = %s", diff)
 	}
 
+	if diff := cmp.Diff(unscheduled, wantUnscheduled); diff != "" {
+		t.Errorf("classifyBindings() unscheduled diff (-got, +want) = %s", diff)
+	}
+
 	if diff := cmp.Diff(dangling, wantDangling); diff != "" {
 		t.Errorf("classifyBindings() dangling diff (-got, +want) = %s", diff)
 	}
@@ -347,7 +377,7 @@ func TestClassifyBindings(t *testing.T) {
 
 // TestMarkAsUnscheduledFor tests the markAsUnscheduledFor method.
 func TestMarkAsUnscheduledFor(t *testing.T) {
-	binding := placementv1beta1.ClusterResourceBinding{
+	boundBinding := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
 		},
@@ -356,34 +386,63 @@ func TestMarkAsUnscheduledFor(t *testing.T) {
 		},
 	}
 
+	scheduledBinding := placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: altBindingName,
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateScheduled,
+		},
+	}
+	// setup fake client with bindings
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
-		WithObjects(&binding).
+		WithObjects(&boundBinding, &scheduledBinding).
 		Build()
 	// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
 	f := &framework{
 		client: fakeClient,
 	}
-
+	// call markAsUnscheduledFor
 	ctx := context.Background()
-	if err := f.markAsUnscheduledFor(ctx, []*placementv1beta1.ClusterResourceBinding{&binding}); err != nil {
+	if err := f.markAsUnscheduledFor(ctx, []*placementv1beta1.ClusterResourceBinding{&boundBinding, &scheduledBinding}); err != nil {
 		t.Fatalf("markAsUnscheduledFor() = %v, want no error", err)
 	}
-
-	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, &binding); err != nil {
-		t.Fatalf("Get cluster resource binding %s = %v, want no error", bindingName, err)
+	// check if the boundBinding has been updated
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: bindingName}, &boundBinding); err != nil {
+		t.Fatalf("Get cluster resource boundBinding %s = %v, want no error", bindingName, err)
 	}
-
 	want := placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: bindingName,
+			Annotations: map[string]string{
+				placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateBound),
+			},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State: placementv1beta1.BindingStateUnscheduled,
 		},
 	}
-	if diff := cmp.Diff(binding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
-		t.Errorf("binding diff (-got, +want): %s", diff)
+	if diff := cmp.Diff(boundBinding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
+		t.Errorf("boundBinding diff (-got, +want): %s", diff)
+	}
+	// check if the scheduledBinding has been updated with the correct annotation
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: altBindingName}, &scheduledBinding); err != nil {
+		t.Fatalf("Get cluster resource boundBinding %s = %v, want no error", altBindingName, err)
+	}
+	want = placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: altBindingName,
+			Annotations: map[string]string{
+				placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateScheduled),
+			},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateUnscheduled,
+		},
+	}
+	if diff := cmp.Diff(scheduledBinding, want, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
+		t.Errorf("scheduledBinding diff (-got, +want): %s", diff)
 	}
 }
 
@@ -562,6 +621,24 @@ func TestRunFilterPluginsFor(t *testing.T) {
 			},
 			wantStatus: FromError(fmt.Errorf("internal error"), dummyFilterPluginNameA),
 		},
+		{
+			name: "multiple plugins, one success, one already selected",
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						return NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameA)
+					},
+				},
+			},
+			wantStatus: NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameA),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -711,6 +788,37 @@ func TestRunFilterPlugins(t *testing.T) {
 					status: NewNonErrorStatus(ClusterUnschedulable, dummyFilterPluginNameB),
 				},
 			},
+		},
+		{
+			name: "three clusters, two filter plugins, two already selected",
+			filterPlugins: []FilterPlugin{
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameA,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == clusterName {
+							return NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameA)
+						}
+						return nil
+					},
+				},
+				&DummyAllPurposePlugin{
+					name: dummyFilterPluginNameB,
+					filterRunner: func(ctx context.Context, state CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot, cluster *clusterv1beta1.MemberCluster) (status *Status) {
+						if cluster.Name == anotherClusterName {
+							return NewNonErrorStatus(ClusterAlreadySelected, dummyFilterPluginNameB)
+						}
+						return nil
+					},
+				},
+			},
+			wantClusters: []*clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: altClusterName,
+					},
+				},
+			},
+			wantFiltered: []*filteredClusterWithStatus{},
 		},
 		{
 			name: "three clusters, two filter plugins, one success, one internal error on specific cluster",
@@ -1072,8 +1180,8 @@ func TestRunAllPluginsForPickAllPlacementType(t *testing.T) {
 	}
 }
 
-// TestCrossReferencePickedClustersAndObsoleteBindings tests the crossReferencePickedClustersAndObsoleteBindings function.
-func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
+// TestCrossReferencePickedClustersAndDeDupBindings tests the crossReferencePickedClustersAndDeDupBindings function.
+func TestCrossReferencePickedClustersAndDeDupBindings(t *testing.T) {
 	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
@@ -1140,6 +1248,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 	testCases := []struct {
 		name         string
 		picked       ScoredClusters
+		unscheduled  []*placementv1beta1.ClusterResourceBinding
 		obsolete     []*placementv1beta1.ClusterResourceBinding
 		wantToCreate []*placementv1beta1.ClusterResourceBinding
 		wantToPatch  []*bindingWithPatch
@@ -1247,6 +1356,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName1,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1255,6 +1365,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName2,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1263,6 +1374,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName3,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName3,
 					},
 				},
@@ -1277,6 +1389,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName1,
 							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateBound,
 							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName1,
 								Selected:    true,
@@ -1305,6 +1418,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName2,
 							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateScheduled,
 							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName2,
 								Selected:    true,
@@ -1333,6 +1447,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName3,
 							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateBound,
 							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName3,
 								Selected:    true,
@@ -1357,7 +1472,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
 		},
 		{
-			name:   "mixed",
+			name:   "mixed obsolete bindings",
 			picked: sorted,
 			obsolete: []*placementv1beta1.ClusterResourceBinding{
 				{
@@ -1365,6 +1480,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName1,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName1,
 					},
 				},
@@ -1373,6 +1489,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName2,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateScheduled,
 						TargetCluster: clusterName2,
 					},
 				},
@@ -1381,6 +1498,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName4,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName4,
 					},
 				},
@@ -1417,6 +1535,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						},
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName1,
+							State:                        placementv1beta1.BindingStateBound,
 							SchedulingPolicySnapshotName: policyName,
 							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName1,
@@ -1446,6 +1565,7 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Spec: placementv1beta1.ResourceBindingSpec{
 							TargetCluster:                clusterName2,
 							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateScheduled,
 							ClusterDecision: placementv1beta1.ClusterDecision{
 								ClusterName: clusterName2,
 								Selected:    true,
@@ -1473,23 +1593,318 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 						Name: bindingName4,
 					},
 					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
 						TargetCluster: clusterName4,
 					},
 				},
 			},
 		},
+		{
+			name:   "no matching unscheduled bindings",
+			picked: sorted,
+			unscheduled: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName4,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName4,
+					},
+				},
+			},
+			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName1,
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &placementv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore1,
+								TopologySpreadScore: &topologySpreadScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName2,
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterName: clusterName2,
+							Selected:    true,
+							ClusterScore: &placementv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore2,
+								TopologySpreadScore: &topologySpreadScore2,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName3,
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &placementv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore3,
+								TopologySpreadScore: &topologySpreadScore3,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToPatch:  []*bindingWithPatch{},
+			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+		},
+		{
+			name:   "matching 1 unscheduled bindings",
+			picked: sorted,
+			unscheduled: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+						Annotations: map[string]string{
+							placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateBound),
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName2,
+					},
+				},
+			},
+			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName1,
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterName: clusterName1,
+							Selected:    true,
+							ClusterScore: &placementv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore1,
+								TopologySpreadScore: &topologySpreadScore1,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName3,
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &placementv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore3,
+								TopologySpreadScore: &topologySpreadScore3,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToPatch: []*bindingWithPatch{
+				{
+					updated: &placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        bindingName2,
+							Annotations: map[string]string{},
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName2,
+							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateBound,
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName2,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName2,
+						},
+					}),
+				},
+			},
+			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+		},
+		{
+			name:   "matching 1 unscheduled with previous state scheduled and 1 obsolete bindings",
+			picked: sorted,
+			unscheduled: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName2,
+						Annotations: map[string]string{
+							placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateScheduled),
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						TargetCluster: clusterName2,
+					},
+				},
+			},
+			obsolete: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName1,
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:         placementv1beta1.BindingStateBound,
+						TargetCluster: clusterName1,
+					},
+				},
+			},
+			wantToCreate: []*placementv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingName3,
+						Labels: map[string]string{
+							placementv1beta1.CRPTrackingLabel: crpName,
+						},
+					},
+					Spec: placementv1beta1.ResourceBindingSpec{
+						State:                        placementv1beta1.BindingStateScheduled,
+						SchedulingPolicySnapshotName: policyName,
+						TargetCluster:                clusterName3,
+						ClusterDecision: placementv1beta1.ClusterDecision{
+							ClusterName: clusterName3,
+							Selected:    true,
+							ClusterScore: &placementv1beta1.ClusterScore{
+								AffinityScore:       &affinityScore3,
+								TopologySpreadScore: &topologySpreadScore3,
+							},
+							Reason: pickedByPolicyReason,
+						},
+					},
+				},
+			},
+			wantToPatch: []*bindingWithPatch{
+				{
+					updated: &placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName1,
+							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateBound,
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName1,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					patch: client.MergeFrom(&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName1,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName1,
+						},
+					}),
+				},
+				{
+					updated: &placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        bindingName2,
+							Annotations: map[string]string{},
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster:                clusterName2,
+							SchedulingPolicySnapshotName: policyName,
+							State:                        placementv1beta1.BindingStateScheduled,
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName2,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					patch: client.MergeFromWithOptions(&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName2,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							TargetCluster: clusterName2,
+						},
+					}, client.MergeFromWithOptimisticLock{}),
+				},
+			},
+			wantToDelete: []*placementv1beta1.ClusterResourceBinding{},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			toCreate, toDelete, toPatch, err := crossReferencePickedCustersAndObsoleteBindings(crpName, policy, tc.picked, tc.obsolete)
+			toCreate, toDelete, toPatch, err := crossReferencePickedClustersAndDeDupBindings(crpName, policy, tc.picked, tc.unscheduled, tc.obsolete)
 			if err != nil {
-				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() = %v, want no error", err)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s`, err = %v, want no error", tc.name, err)
 				return
 			}
 
 			if diff := cmp.Diff(toCreate, tc.wantToCreate, ignoreObjectMetaNameField); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toCreate diff (-got, +want) = %s", diff)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toCreate diff (-got, +want) = %s", tc.name, diff)
 			}
 
 			// Verify names separately.
@@ -1502,11 +1917,11 @@ func TestCrossReferencePickedCustersAndObsoleteBindings(t *testing.T) {
 
 			// Ignore the patch field (not exported in local package).
 			if diff := cmp.Diff(toPatch, tc.wantToPatch, cmp.AllowUnexported(bindingWithPatch{}), ignoredBindingWithPatchFields); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toPatch diff (-got, +want): %s", diff)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toPatch diff (-got, +want): %s", tc.name, diff)
 			}
 
 			if diff := cmp.Diff(toDelete, tc.wantToDelete); diff != "" {
-				t.Errorf("crossReferencePickedClustersAndObsoleteBindings() toDelete diff (-got, +want): %s", diff)
+				t.Errorf("crossReferencePickedClustersAndDeDupBindings test `%s` toDelete diff (-got, +want): %s", tc.name, diff)
 			}
 		})
 	}
@@ -1631,6 +2046,9 @@ func TestManipulateBindings(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: anotherBindingName,
 		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State: placementv1beta1.BindingStateBound,
+		},
 	}
 
 	topologySpreadScore := int32(0)
@@ -1657,9 +2075,12 @@ func TestManipulateBindings(t *testing.T) {
 		},
 	}
 
-	unscheduledBinding := &placementv1beta1.ClusterResourceBinding{
+	wantDeleteddBinding := &placementv1beta1.ClusterResourceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: anotherBindingName,
+			Annotations: map[string]string{
+				placementv1beta1.PreviousBindingStateAnnotation: string(placementv1beta1.BindingStateBound),
+			},
 		},
 		Spec: placementv1beta1.ResourceBindingSpec{
 			State: placementv1beta1.BindingStateUnscheduled,
@@ -1718,7 +2139,7 @@ func TestManipulateBindings(t *testing.T) {
 	if err := fakeClient.Get(ctx, types.NamespacedName{Name: anotherBindingName}, deletedBinding); err != nil {
 		t.Errorf("Get() binding %s = %v, want no error", anotherBindingName, err)
 	}
-	if diff := cmp.Diff(deletedBinding, unscheduledBinding, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
+	if diff := cmp.Diff(deletedBinding, wantDeleteddBinding, ignoreTypeMetaAPIVersionKindFields, ignoreObjectMetaResourceVersionField); diff != "" {
 		t.Errorf("unscheduled binding %s diff (-got, +want): %s", anotherBindingName, diff)
 	}
 }
@@ -1731,6 +2152,8 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	topologySpreadScore1 := int32(10)
 	affinityScore2 := int32(0)
 	topologySpreadScore2 := int32(20)
+	affinityScore3 := int32(-1)
+	topologySpreadScore3 := int32(0)
 
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPluginName, "filtered")
 
@@ -1747,13 +2170,14 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 	testCases := []struct {
 		name                              string
 		maxUnselectedClusterDecisionCount int
+		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		existing                          [][]*placementv1beta1.ClusterResourceBinding
 		wantDecisions                     []placementv1beta1.ClusterDecision
 		wantCondition                     metav1.Condition
 	}{
 		{
-			name:                              "no filtered",
+			name:                              "no filtered/not picked clusters",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -1814,7 +2238,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
-			name:                              "filtered and existing",
+			name:                              "with filtered clusters and existing bindings",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -1890,6 +2314,162 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
 		{
+			name:                              "with not picked clusters and existing bindings",
+			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore: int(topologySpreadScore3),
+						AffinityScore:       int(affinityScore3),
+					},
+				},
+			},
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore2,
+						TopologySpreadScore: &topologySpreadScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					Reason:      notPickedByScoreReason,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore3,
+						TopologySpreadScore: &topologySpreadScore3,
+					},
+				},
+			},
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+		},
+		{
+			name:                              "with both filtered/not picked clusters and existing bindings",
+			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore: int(topologySpreadScore3),
+						AffinityScore:       int(affinityScore3),
+					},
+				},
+			},
+			filtered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					status: filteredStatus,
+				},
+			},
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore3,
+						TopologySpreadScore: &topologySpreadScore3,
+					},
+					Reason: notPickedByScoreReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					Reason:      filteredStatus.String(),
+				},
+			},
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+		},
+		{
 			name:                              "none",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			wantCondition:                     newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
@@ -1953,6 +2533,75 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			},
 			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
 		},
+		{
+			name:                              "too many not picked",
+			maxUnselectedClusterDecisionCount: 1,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore2),
+						TopologySpreadScore: int(topologySpreadScore2),
+					},
+				},
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      notPickedByScoreReason,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore2,
+						TopologySpreadScore: &topologySpreadScore2,
+					},
+				},
+			},
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1972,7 +2621,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			for _, bindingSet := range tc.existing {
 				numOfClusters += len(bindingSet)
 			}
-			if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, tc.filtered, tc.existing...); err != nil {
+			if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, tc.notPicked, tc.filtered, tc.existing...); err != nil {
 				t.Fatalf("updatePolicySnapshotStatusFrom() = %v, want no error", err)
 			}
 
@@ -2387,18 +3036,21 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 	affinityScore1 := int32(10)
 	topologySpreadScore2 := int32(0)
 	affinityScore2 := int32(20)
+	topologySpreadScore3 := int32(2)
+	affinityScore3 := int32(5)
 
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPlugin, dummyReasons...)
 
 	testCases := []struct {
 		name                              string
 		maxUnselectedClusterDecisionCount int
+		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		existing                          [][]*placementv1beta1.ClusterResourceBinding
 		want                              []placementv1beta1.ClusterDecision
 	}{
 		{
-			name:                              "no filtered clusters, small number of existing bindings",
+			name:                              "no not picked/filtered clusters, small number of existing bindings",
 			maxUnselectedClusterDecisionCount: 20,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2454,6 +3106,160 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 						AffinityScore:       &affinityScore2,
 					},
 					Reason: pickedByPolicyReason,
+				},
+			},
+		},
+		{
+			name:                              "with not picked clusters, small number of existing bindings",
+			maxUnselectedClusterDecisionCount: 20,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore2,
+									AffinityScore:       &affinityScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore2,
+						AffinityScore:       &affinityScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore3,
+						AffinityScore:       &affinityScore3,
+					},
+					Reason: notPickedByScoreReason,
+				},
+			},
+		},
+		{
+			name:                              "with both not picked and filtered clusters, small number of existing bindings",
+			maxUnselectedClusterDecisionCount: 20,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			filtered: []*filteredClusterWithStatus{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					status: filteredStatus,
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore3,
+						AffinityScore:       &affinityScore3,
+					},
+					Reason: notPickedByScoreReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      filteredStatus.String(),
 				},
 			},
 		},
@@ -2602,11 +3408,84 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:                              "with not picked clusters (count exceeding limit), small number of existing bindings",
+			maxUnselectedClusterDecisionCount: 0,
+			notPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: anotherClusterName,
+						},
+					},
+					Score: &ClusterScore{
+						AffinityScore:       int(affinityScore3),
+						TopologySpreadScore: int(topologySpreadScore3),
+					},
+				},
+			},
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore1,
+									AffinityScore:       &affinityScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									TopologySpreadScore: &topologySpreadScore2,
+									AffinityScore:       &affinityScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			want: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore1,
+						AffinityScore:       &affinityScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						TopologySpreadScore: &topologySpreadScore2,
+						AffinityScore:       &affinityScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.existing...)
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.existing...)
 			if diff := cmp.Diff(tc.want, decisions); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
@@ -2617,15 +3496,18 @@ func TestNewSchedulingDecisionsFromBindings(t *testing.T) {
 // TestNewSchedulingDecisionsFrom tests a special case in the newSchedulingDecisionsFrom function,
 // specifically the case where the number of new decisions exceeds the API limit.
 func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
-	wantSelectedAndUnselectedDecisons := make([]placementv1beta1.ClusterDecision, 0, 1000)
-	wantSelectedDecisions := generateClusterDecisions(980, 0, true)
-	wantUnselectedDecisions := generateClusterDecisions(20, 980, false)
-	wantSelectedAndUnselectedDecisons = append(wantSelectedAndUnselectedDecisons, wantSelectedDecisions...)
-	wantSelectedAndUnselectedDecisons = append(wantSelectedAndUnselectedDecisons, wantUnselectedDecisions...)
+	wantDecisions1 := generateClusterDecisions(1000, 0, true)
+
+	wantDecisions2 := generateClusterDecisions(980, 0, true)
+	wantDecisions2 = append(wantDecisions2, generateClusterDecisions(20, 980, false)...)
+
+	wantDecisions3 := generateClusterDecisions(10, 0, true)
+	wantDecisions3 = append(wantDecisions3, generateClusterDecisions(20, 10, false)...)
 
 	testCases := []struct {
 		name                              string
 		maxUnselectedClusterDecisionCount int
+		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		bindingSets                       [][]*placementv1beta1.ClusterResourceBinding
 		wantDecisions                     []placementv1beta1.ClusterDecision
@@ -2637,24 +3519,54 @@ func TestNewSchedulingDecisionsFromOversized(t *testing.T) {
 				generateResourceBindings(550, 0),
 				generateResourceBindings(550, 550),
 			},
-			wantDecisions: generateClusterDecisions(1000, 0, true),
+			wantDecisions: wantDecisions1,
 		},
 		{
-			name:                              "too many selected + unselected clusters",
+			name:                              "count of not picked clusters exceeding API limit",
 			maxUnselectedClusterDecisionCount: 50,
-			filtered:                          generatedFilterdClusterWithStatus(60, 980),
 			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
 				generateResourceBindings(490, 0),
 				generateResourceBindings(490, 490),
 			},
-			wantDecisions: wantSelectedAndUnselectedDecisons,
+			notPicked:     generateNotPickedScoredClusters(50, 980),
+			wantDecisions: wantDecisions2,
+		},
+		{
+			name:                              "count of not picked clusters exceeding custom limit",
+			maxUnselectedClusterDecisionCount: 20,
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				generateResourceBindings(10, 0),
+			},
+			notPicked:     generateNotPickedScoredClusters(50, 10),
+			wantDecisions: wantDecisions3,
+		},
+		{
+			name:                              "count of filtered clusters exceeding API limit",
+			maxUnselectedClusterDecisionCount: 50,
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				generateResourceBindings(490, 0),
+				generateResourceBindings(490, 490),
+			},
+			notPicked:     nil,
+			filtered:      generatedFilterdClusterWithStatus(50, 980),
+			wantDecisions: wantDecisions2,
+		},
+		{
+			name:                              "count of filtered clusters exceeding custom limit",
+			maxUnselectedClusterDecisionCount: 20,
+			bindingSets: [][]*placementv1beta1.ClusterResourceBinding{
+				generateResourceBindings(10, 0),
+			},
+			notPicked:     nil,
+			filtered:      generatedFilterdClusterWithStatus(50, 10),
+			wantDecisions: wantDecisions3,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.filtered, tc.bindingSets...)
-			if diff := cmp.Diff(decisions, tc.wantDecisions); diff != "" {
+			decisions := newSchedulingDecisionsFromBindings(tc.maxUnselectedClusterDecisionCount, tc.notPicked, tc.filtered, tc.bindingSets...)
+			if diff := cmp.Diff(decisions, tc.wantDecisions, ignoreClusterDecisionScoreAndReasonFields); diff != "" {
 				t.Errorf("newSchedulingDecisionsFrom() decisions diff (-got, +want): %s", diff)
 			}
 		})
@@ -3746,7 +4658,7 @@ func TestDownscale(t *testing.T) {
 					t.Errorf("Get() binding %s = %v, want no error", wantUnscheduledBinding.Name, err)
 				}
 
-				if diff := cmp.Diff(unscheduledBinding, wantUnscheduledBinding, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
+				if diff := cmp.Diff(unscheduledBinding, wantUnscheduledBinding, ignoreObjectMetaResourceVersionField, ignoreObjectAnnotationField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
 					t.Errorf("unscheduled binding %s diff (-got, +want): %s", wantUnscheduledBinding.Name, diff)
 				}
 			}
@@ -4210,28 +5122,31 @@ func TestPickTopNScoredClusters(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name               string
-		scoredClusters     ScoredClusters
-		picks              int
-		wantScoredClusters ScoredClusters
+		name           string
+		scoredClusters ScoredClusters
+		picks          int
+		wantPicked     ScoredClusters
+		wantNotPicked  ScoredClusters
 	}{
 		{
-			name:               "no scored clusters",
-			scoredClusters:     ScoredClusters{},
-			picks:              1,
-			wantScoredClusters: ScoredClusters{},
+			name:           "no scored clusters",
+			scoredClusters: ScoredClusters{},
+			picks:          1,
+			wantPicked:     ScoredClusters{},
+			wantNotPicked:  ScoredClusters{},
 		},
 		{
-			name:               "zero to pick",
-			scoredClusters:     scs,
-			picks:              0,
-			wantScoredClusters: ScoredClusters{},
+			name:           "zero to pick",
+			scoredClusters: scs,
+			picks:          0,
+			wantPicked:     ScoredClusters{},
+			wantNotPicked:  scs,
 		},
 		{
 			name:           "not enough to pick",
 			scoredClusters: scs,
 			picks:          10,
-			wantScoredClusters: ScoredClusters{
+			wantPicked: ScoredClusters{
 				{
 					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
@@ -4257,12 +5172,13 @@ func TestPickTopNScoredClusters(t *testing.T) {
 					},
 				},
 			},
+			wantNotPicked: ScoredClusters{},
 		},
 		{
 			name:           "enough to pick",
 			scoredClusters: scs,
 			picks:          1,
-			wantScoredClusters: ScoredClusters{
+			wantPicked: ScoredClusters{
 				{
 					Cluster: &clusterv1beta1.MemberCluster{
 						ObjectMeta: metav1.ObjectMeta{
@@ -4276,14 +5192,32 @@ func TestPickTopNScoredClusters(t *testing.T) {
 					},
 				},
 			},
+			wantNotPicked: ScoredClusters{
+				{
+					Cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: clusterName,
+						},
+					},
+					Score: &ClusterScore{
+						TopologySpreadScore:            1,
+						AffinityScore:                  20,
+						ObsoletePlacementAffinityScore: 0,
+					},
+				},
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			picked := pickTopNScoredClusters(tc.scoredClusters, tc.picks)
-			if diff := cmp.Diff(picked, tc.wantScoredClusters); diff != "" {
+			picked, notPicked := pickTopNScoredClusters(tc.scoredClusters, tc.picks)
+			if diff := cmp.Diff(picked, tc.wantPicked); diff != "" {
 				t.Errorf("pickTopNScoredClusters() picked diff (-got, +want): %s", diff)
+			}
+
+			if diff := cmp.Diff(notPicked, tc.wantNotPicked); diff != "" {
+				t.Errorf("pickTopNScoredClusters() not picked diff (-got, +want): %s", diff)
 			}
 		})
 	}

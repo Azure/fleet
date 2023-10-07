@@ -27,5 +27,5 @@ func (p *Plugin) Filter(
 	}
 
 	reason := "resource placement has already been scheduled or bounded on the cluster"
-	return framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), reason)
+	return framework.NewNonErrorStatus(framework.ClusterAlreadySelected, p.Name(), reason)
 }

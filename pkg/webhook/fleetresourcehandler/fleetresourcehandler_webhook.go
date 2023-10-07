@@ -30,6 +30,8 @@ const (
 	ValidationPath             = "/validate-v1-fleetresourcehandler"
 	groupMatch                 = `^[^.]*\.(.*)`
 	fleetMemberNamespacePrefix = "fleet-member"
+	fleetNamespacePrefix       = "fleet"
+	kubeNamespacePrefix        = "kube"
 )
 
 var (
@@ -76,10 +78,10 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			response = v.handleNamespace(req)
 		case req.Kind == imcGVK:
 			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
-			response = v.handleInternalMemberCluster(ctx, req)
+			response = v.handleFleetMemberNamespacedResource(ctx, req)
 		case req.Kind == workGVK:
 			klog.V(2).InfoS("handling work resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
-			response = v.handleWork(ctx, req)
+			response = v.handleFleetMemberNamespacedResource(ctx, req)
 		case req.Kind == eventGVK:
 			klog.V(2).InfoS("handling event resource", "GVK", eventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
@@ -121,21 +123,36 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
 
-// handleInternalMemberCluster allows/denies the request to modify internal member cluster object after validation.
-func (v *fleetResourceValidator) handleInternalMemberCluster(ctx context.Context, req admission.Request) admission.Response {
-	if req.Operation == admissionv1.Update && req.SubResource == "status" {
-		return validation.ValidateMCIdentity(ctx, v.client, req, req.Name)
+// handleFleetMemberNamespacedResource allows/denies the request to modify object after validation.
+func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context.Context, req admission.Request) admission.Response {
+	var response admission.Response
+	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
+		// check to see if valid users other than member agent is making the request.
+		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
+		// check to see if member agent is making the request only on Update.
+		if !response.Allowed && req.Operation == admissionv1.Update {
+			// if namespace name is just "fleet-member", mcName variable becomes empty and the request is allowed since that namespaces is not watched by member agents.
+			mcName := parseMemberClusterNameFromNamespace(req.Namespace)
+			return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
+		}
+		return response
 	}
-	return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	klog.InfoS("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces",
+		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
+	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object")
 }
 
-// handleWork allows/delete the request to modify work object after validation.
-func (v *fleetResourceValidator) handleWork(ctx context.Context, req admission.Request) admission.Response {
-	if req.Operation == admissionv1.Update && isFleetMemberNamespace(req.Namespace) && req.SubResource == "status" {
+// handleEvent allows/denies request to modify event after validation.
+func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.Request) admission.Response {
+	// hub agent creates events for MC which is cluster scoped, only member agent creates events in fleet-member prefixed namespaces.
+	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
 		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
 		return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
 	}
-	return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
+		return validation.ValidateUserForResource(req, v.whiteListedUsers)
+	}
+	return admission.Allowed("namespace name for this event is not a reserved namespace so we allow all operations for events on these namespaces")
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
@@ -147,15 +164,6 @@ func (v *fleetResourceValidator) handleNamespace(req admission.Request) admissio
 	}
 	// only handling reserved namespaces with prefix fleet/kube.
 	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces")
-}
-
-// handleEvent allows/denies request to modify event after validation.
-func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.Request) admission.Response {
-	if isFleetMemberNamespace(req.Namespace) {
-		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
-		return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
-	}
-	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
 
 // decodeRequestObject decodes the request object into the passed runtime object.
@@ -179,11 +187,6 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 	v.decoder = d
 	return nil
-}
-
-// isFleetMemberNamespace returns true if namespace is a fleet member cluster namespace.
-func isFleetMemberNamespace(namespace string) bool {
-	return strings.HasPrefix(namespace, fleetMemberNamespacePrefix)
 }
 
 // parseMemberClusterNameFromNamespace returns member cluster name from fleet member cluster namespace.

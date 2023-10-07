@@ -7,6 +7,7 @@ package rollout
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -20,9 +21,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-var now = time.Now()
+var (
+	now = time.Now()
+
+	cluster1 = "cluster-1"
+	cluster2 = "cluster-2"
+	cluster3 = "cluster-3"
+)
 
 func TestReconciler_handleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {
@@ -141,6 +149,72 @@ func TestReconciler_handleResourceBinding(t *testing.T) {
 	}
 }
 
+func Test_waitForResourcesToCleanUp(t *testing.T) {
+	tests := map[string]struct {
+		allBindings []*fleetv1beta1.ClusterResourceBinding
+		wantWait    bool
+		wantErr     bool
+	}{
+		"test deleting binding block schedule binding on the same cluster": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				generateDeletingClusterResourceBinding(cluster1),
+			},
+			wantWait: true,
+			wantErr:  false,
+		},
+		"test deleting binding not block binding on different cluster": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				generateDeletingClusterResourceBinding(cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+			},
+			wantWait: false,
+			wantErr:  false,
+		},
+		"test deleting binding cannot co-exsit with a bound binding on same cluster": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateDeletingClusterResourceBinding(cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			},
+			wantWait: false,
+			wantErr:  true,
+		},
+		"test no two non-deleting binding can co-exsit on same cluster, case one": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-2", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			},
+			wantWait: false,
+			wantErr:  true,
+		},
+		"test no two non-deleting binding can co-exsit on same cluster, case two": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-2", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+			},
+			wantWait: false,
+			wantErr:  true,
+		},
+	}
+	for name, tt := range tests {
+		crp := &fleetv1beta1.ClusterResourcePlacement{}
+		t.Run(name, func(t *testing.T) {
+			gotWait, err := waitForResourcesToCleanUp(tt.allBindings, crp)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("waitForResourcesToCleanUp test `%s` error = %v, wantErr %v", name, err, tt.wantErr)
+				return
+			}
+			if err != nil && !errors.Is(err, controller.ErrUnexpectedBehavior) {
+				t.Errorf("waitForResourcesToCleanUp test `%s` get an unexpected error = %v", name, err)
+			}
+			if gotWait != tt.wantWait {
+				t.Errorf("waitForResourcesToCleanUp test `%s` gotWait = %v, wantWait %v", name, gotWait, tt.wantWait)
+			}
+		})
+	}
+}
+
 func Test_pickBindingsToRoll(t *testing.T) {
 	tests := map[string]struct {
 		allBindings                []*fleetv1beta1.ClusterResourceBinding
@@ -152,7 +226,7 @@ func Test_pickBindingsToRoll(t *testing.T) {
 		// TODO: add more tests
 		"test bound with out dated bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", "cluster-1"),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -169,10 +243,10 @@ func Test_pickBindingsToRoll(t *testing.T) {
 				tobeUpdatedBindings = append(tobeUpdatedBindings, tt.allBindings[index])
 			}
 			if !reflect.DeepEqual(gotUpdatedBindings, tobeUpdatedBindings) {
-				t.Errorf("pickBindingsToRoll() gotUpdatedBindings = %v, wantReady %v", gotUpdatedBindings, tt.tobeUpdatedBindings)
+				t.Errorf("pickBindingsToRoll test `%s` gotUpdatedBindings = %v, wantReady %v", name, gotUpdatedBindings, tt.tobeUpdatedBindings)
 			}
 			if gotNeedRoll != tt.needRoll {
-				t.Errorf("pickBindingsToRoll() gotNeedRoll = %v, wantReady %v", gotNeedRoll, tt.needRoll)
+				t.Errorf("pickBindingsToRoll test `%s` gotNeedRoll = %v, wantReady %v", name, gotNeedRoll, tt.needRoll)
 			}
 		})
 	}
@@ -345,10 +419,10 @@ func Test_isBindingReady(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotWaitTime, gotReady := isBindingReady(tt.binding, tt.readyTimeCutOff)
 			if gotReady != tt.wantReady {
-				t.Errorf("gotReady = %v, wantReady %v", gotReady, tt.wantReady)
+				t.Errorf("isBindingReady test `%s` gotReady = %v, wantReady %v", name, gotReady, tt.wantReady)
 			}
 			if gotWaitTime != tt.wantWaitTime {
-				t.Errorf("gotWaitTime = %v, wantWaitTime %v", gotWaitTime, tt.wantWaitTime)
+				t.Errorf("isBindingReady test `%s` gotWaitTime = %v, wantWaitTime %v", name, gotWaitTime, tt.wantWaitTime)
 			}
 		})
 	}
