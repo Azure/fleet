@@ -414,8 +414,17 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				Spec: placementv1beta1.ClusterResourcePlacementSpec{
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(3),
+						PlacementType: placementv1beta1.PickNPlacementType,
+						// This spec uses a CRP of the PickN placement type with the number of
+						// target clusters equal to that of all clusters present in the environment.
+						//
+						// This is necessary as the CRP controller reports status for unselected clusters
+						// only in a partial manner; specifically, for a CRP of the PickN placement with
+						// N target clusters but only M matching clusters, only N - M decisions for
+						// unselected clusters will be reported in the CRP status. To avoid
+						// undeterministic behaviors, here this value is set to make sure that all
+						// unselected clusters will be included in the status.
+						NumberOfClusters: pointer.Int32(5),
 						Affinity: &placementv1beta1.Affinity{
 							ClusterAffinity: &placementv1beta1.ClusterAffinity{
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
@@ -452,7 +461,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1Name, memberCluster2Name}, []string{memberCluster3Name})
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1Name, memberCluster2Name}, []string{memberCluster3Name, memberCluster4Name, memberCluster5Name})
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
