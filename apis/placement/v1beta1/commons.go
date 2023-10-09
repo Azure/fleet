@@ -79,5 +79,5 @@ const (
 
 	// PreviousBindingStateAnnotation is the annotation that records the previous state of a binding.
 	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
-	PreviousBindingStateAnnotation = fleetPrefix + "PreviousBindingState"
+	PreviousBindingStateAnnotation = fleetPrefix + "previous-binding-state"
 )

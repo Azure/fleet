@@ -164,7 +164,7 @@ func readTestManifests() {
 	Expect(err).Should(Succeed())
 
 	By("Read ResourceQuota")
-	rawByte, err = os.ReadFile("manifests/resourceQuota.yaml")
+	rawByte, err = os.ReadFile("manifests/resourcequota.yaml")
 	Expect(err).Should(Succeed())
 	testEnvelopeResourceQuota, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())

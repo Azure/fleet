@@ -279,7 +279,7 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 			// generate a work object for the manifests if there are still any non enveloped resources
 			newWork = append(newWork, generateSnapshotWorkObj(workNamePrefix, resourceBinding, snapshot, simpleManifests))
 		} else {
-			klog.V(2).InfoS("Skip generating work for the snapshot since there is no none-enveloped resource in the snapshot", "snapshot", klog.KObj(snapshot))
+			klog.V(2).InfoS("the snapshot contains enveloped resource only", "snapshot", klog.KObj(snapshot))
 		}
 		// issue all the create/update requests for the corresponding works for each snapshot in parallel
 		for i := range newWork {
@@ -393,7 +393,8 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 			"resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
 		return nil, controller.NewUserError(err)
 	}
-	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifest), "configMapWrapper", klog.KObj(envelopeObj))
+	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifest),
+		"snapshot", klog.KObj(resourceSnapshot), "resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
 	// Try to see if we already have a work represent the same enveloped object for this CRP in the same cluster
 	envelopWorkLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
