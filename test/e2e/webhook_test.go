@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -87,7 +88,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 
-	It("should deny update on CRP with invalid placement policy", func() {
+	It("should deny update on CRP with invalid placement policy for PickFixed", func() {
 		Eventually(func(g Gomega) error {
 			var numOfClusters int32 = 1
 			var crp placementv1beta1.ClusterResourcePlacement
@@ -104,6 +105,42 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cluster names cannot be empty for policy type"))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of clusters must be nil for policy type PickFixed"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should deny update on CRP with invalid placement policy for PickAll", func() {
+		Eventually(func(g Gomega) error {
+			var crp placementv1beta1.ClusterResourcePlacement
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      "test-key",
+												Operator: metav1.LabelSelectorOpIn,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Update(ctx, &crp)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in cluster selector %+v is invalid:", &crp.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[0].LabelSelector))))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})

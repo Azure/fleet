@@ -79,9 +79,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 			if len(selector.Name) != 0 {
 				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
 			}
-			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
-			}
+			allErr = append(allErr, validateLabelSelector(selector.LabelSelector, "resource selector"))
 		}
 	}
 
@@ -175,11 +173,16 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	allErr := make([]error, 0)
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
-		if _, err := metav1.LabelSelectorAsSelector(&clusterSelectorTerm.LabelSelector); err != nil {
-			allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", clusterSelectorTerm.LabelSelector, err))
-		}
+		allErr = append(allErr, validateLabelSelector(&clusterSelectorTerm.LabelSelector, "cluster selector"))
 	}
 	return apiErrors.NewAggregate(allErr)
+}
+
+func validateLabelSelector(labelSelector *metav1.LabelSelector, parent string) error {
+	if _, err := metav1.LabelSelectorAsSelector(labelSelector); err != nil {
+		return fmt.Errorf("the labelSelector in %s %+v is invalid: %w", parent, labelSelector, err)
+	}
+	return nil
 }
 
 func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) error {
