@@ -10,7 +10,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/atomic"
@@ -396,6 +398,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifest),
 		"snapshot", klog.KObj(resourceSnapshot), "resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
 	// Try to see if we already have a work represent the same enveloped object for this CRP in the same cluster
+	// The ParentResourceSnapshotIndexLabel can change between snapshots so we have to exclude that label in the match
 	envelopWorkLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
 		fleetv1beta1.CRPTrackingLabel:       resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
@@ -574,15 +577,23 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 	if err != nil {
 		return nil, err
 	}
+	// the list order is not stable as the map traverse is random
 	for _, value := range configMap.Data {
-		content, err := yaml.ToJSON([]byte(value))
-		if err != nil {
-			return nil, err
+		content, jsonErr := yaml.ToJSON([]byte(value))
+		if jsonErr != nil {
+			return nil, jsonErr
 		}
 		manifests = append(manifests, fleetv1beta1.Manifest{
 			RawExtension: runtime.RawExtension{Raw: content},
 		})
 	}
+	// stable sort the manifests so that we can have a deterministic order
+	sort.Slice(manifests, func(i, j int) bool {
+		obj1 := manifests[i].Raw
+		obj2 := manifests[j].Raw
+		// order by its json formatted string
+		return strings.Compare(string(obj1), string(obj2)) > 0
+	})
 	return manifests, nil
 }
 
