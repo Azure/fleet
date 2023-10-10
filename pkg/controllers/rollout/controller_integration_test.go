@@ -388,11 +388,11 @@ var _ = Describe("Test the rollout Controller", func() {
 		Consistently(func() bool {
 			for _, binding := range bindings {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
-				if err != nil {
+				if err == nil && binding.Spec.State == fleetv1beta1.BindingStateBound {
 					return false
-				}
-				if binding.Spec.State == fleetv1beta1.BindingStateBound {
-					return false
+				} else if err != nil && !apierrors.IsNotFound(err) {
+					// do not return false on api error to reduce test flakyness
+					By(fmt.Sprintf("failed to get resource binding  %s", binding.Name))
 				}
 			}
 			return true
