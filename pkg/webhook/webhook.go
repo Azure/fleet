@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
@@ -286,6 +287,19 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 			},
 			{
 				Name:                    "fleet.membercluster.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
+					},
+				},
+			},
+			{
+				Name:                    "fleet.v1alpha1.membercluster.validating",
 				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 				FailurePolicy:           &failPolicy,
 				SideEffects:             &sideEffortsNone,
