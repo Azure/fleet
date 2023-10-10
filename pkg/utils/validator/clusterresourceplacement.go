@@ -8,8 +8,6 @@ package validator
 
 import (
 	"fmt"
-	"reflect"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -92,13 +90,6 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 		}
 	}
 
-	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
-		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
-		if err := validateClusterAffinity(clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity, clusterResourcePlacement.Spec.Policy.PlacementType); err != nil {
-			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
-		}
-	}
-
 	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
 		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
 	}
@@ -107,23 +98,22 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
-	allErr := make([]error, 0)
 	switch policy.PlacementType {
 	case placementv1beta1.PickFixedPlacementType:
 		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
-			allErr = append(allErr, err)
+			return err
 		}
 	case placementv1beta1.PickAllPlacementType:
 		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
-			allErr = append(allErr, err)
+			return err
 		}
 	case placementv1beta1.PickNPlacementType:
 		if err := validatePolicyForPickNPolicyType(policy); err != nil {
-			allErr = append(allErr, err)
+			return err
 		}
 	}
 
-	return apiErrors.NewAggregate(allErr)
+	return nil
 }
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
@@ -168,26 +158,24 @@ func validatePolicyForPickNPolicyType(_ *placementv1beta1.PlacementPolicy) error
 }
 
 func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, placementType placementv1beta1.PlacementType) error {
-	allErr := make([]error, 0)
 	switch placementType {
 	case placementv1beta1.PickAllPlacementType:
+		// PreferredDuringSchedulingIgnoredDuringExecution will be ignored when the placementType is PickAll.
 		if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-			allErr = append(allErr, validateClusterSelector(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution))
+			return validateClusterSelector(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution)
 		}
 	case placementv1beta1.PickNPlacementType:
 		//TODO(Arvindthiru): implement this
 	}
-	return apiErrors.NewAggregate(allErr)
+	return nil
 }
 
 func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) error {
 	allErr := make([]error, 0)
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
-		// why is label selector not a pointer here ?
-		if !reflect.DeepEqual(clusterSelectorTerm.LabelSelector, metav1.LabelSelector{}) {
-			if _, err := metav1.LabelSelectorAsSelector(&clusterSelectorTerm.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", clusterSelectorTerm.LabelSelector, err))
-			}
+		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
+		if _, err := metav1.LabelSelectorAsSelector(&clusterSelectorTerm.LabelSelector); err != nil {
+			allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", clusterSelectorTerm.LabelSelector, err))
 		}
 	}
 	return apiErrors.NewAggregate(allErr)
