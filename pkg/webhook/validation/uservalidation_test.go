@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	roleGVK        = &metav1.GroupVersionKind{Group: metav1.SchemeGroupVersion.Group, Version: metav1.SchemeGroupVersion.Version, Kind: "Role"}
-	roleBindingGVK = &metav1.GroupVersionKind{Group: metav1.SchemeGroupVersion.Group, Version: metav1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
-	podGVK         = &metav1.GroupVersionKind{Group: metav1.SchemeGroupVersion.Group, Version: metav1.SchemeGroupVersion.Version, Kind: "Pod"}
+	roleGVK        = metav1.GroupVersionKind{Group: metav1.SchemeGroupVersion.Group, Version: metav1.SchemeGroupVersion.Version, Kind: "Role"}
+	roleBindingGVK = metav1.GroupVersionKind{Group: metav1.SchemeGroupVersion.Group, Version: metav1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
+	podGVK         = metav1.GroupVersionKind{Group: metav1.SchemeGroupVersion.Group, Version: metav1.SchemeGroupVersion.Version, Kind: "Pod"}
 )
 
 func TestValidateUserForResource(t *testing.T) {
@@ -31,7 +31,7 @@ func TestValidateUserForResource(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-role",
 					Namespace:   "test-namespace",
-					RequestKind: roleGVK,
+					RequestKind: &roleGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{mastersGroup},
@@ -46,7 +46,7 @@ func TestValidateUserForResource(t *testing.T) {
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-role-binding",
 					Namespace:   "test-namespace",
-					RequestKind: roleBindingGVK,
+					RequestKind: &roleBindingGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{"test-group"},
@@ -55,14 +55,14 @@ func TestValidateUserForResource(t *testing.T) {
 				},
 			},
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, &roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow valid service account": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-role-binding",
 					Namespace:   "test-namespace",
-					RequestKind: roleBindingGVK,
+					RequestKind: &roleBindingGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{serviceAccountsGroup},
@@ -70,14 +70,14 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, admissionv1.Delete, roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, admissionv1.Delete, &roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow user in system:node group": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-pod",
 					Namespace:   "test-namespace",
-					RequestKind: podGVK,
+					RequestKind: &podGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{nodeGroup},
@@ -85,14 +85,14 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{nodeGroup}, admissionv1.Create, podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{nodeGroup}, admissionv1.Create, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"allow system:kube-scheduler user": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-pod",
 					Namespace:   "test-namespace",
-					RequestKind: podGVK,
+					RequestKind: &podGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "system:kube-scheduler",
 						Groups:   []string{"system:authenticated"},
@@ -100,14 +100,14 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", []string{"system:authenticated"}, admissionv1.Update, podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", []string{"system:authenticated"}, admissionv1.Update, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"allow system:kube-controller-manager user": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-pod",
 					Namespace:   "test-namespace",
-					RequestKind: podGVK,
+					RequestKind: &podGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "system:kube-controller-manager",
 						Groups:   []string{"system:authenticated"},
@@ -115,14 +115,14 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-controller-manager", []string{"system:authenticated"}, admissionv1.Delete, podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-controller-manager", []string{"system:authenticated"}, admissionv1.Delete, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"fail to validate user with invalid username, groups": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Name:        "test-role",
 					Namespace:   "test-namespace",
-					RequestKind: roleGVK,
+					RequestKind: &roleGVK,
 					UserInfo: authenticationv1.UserInfo{
 						Username: "test-user",
 						Groups:   []string{"test-group"},
@@ -130,7 +130,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Delete, roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Delete, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 	}
 
