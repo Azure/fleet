@@ -755,9 +755,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 
 		By("creating work namespace on member cluster")
 		ns := workNamespace()
-		memberCluster := allMemberClusters[0]
 
-		Expect(memberCluster.KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+		Expect(memberCluster1.KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
@@ -897,12 +896,10 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 	})
 
 	It("namespace should be kept on member cluster", func() {
-		memberCluster := allMemberClusters[0]
-
 		Consistently(func() error {
 			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 			ns := &corev1.Namespace{}
-			return memberCluster.KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
+			return memberCluster1.KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
 		}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
 	})
 })
