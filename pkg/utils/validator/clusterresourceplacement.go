@@ -147,26 +147,58 @@ func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPol
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickAllPlacementType))
 	}
+
 	return apiErrors.NewAggregate(allErr)
 }
 
-func validatePolicyForPickNPolicyType(_ *placementv1beta1.PlacementPolicy) error {
-	// TODO(Arvindthiru): implement this.
+func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) error {
 	allErr := make([]error, 0)
+	if len(policy.ClusterNames) > 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s, only valid for PickFixed policy type", placementv1beta1.PickNPlacementType))
+	}
+	if policy.Affinity != nil && policy.Affinity.ClusterAffinity != nil {
+		allErr = append(allErr, validateClusterAffinity(policy.Affinity.ClusterAffinity, policy.PlacementType))
+	}
+	if len(policy.TopologySpreadConstraints) > 0 {
+		allErr = append(allErr, validateTopologySpreadConstraints(policy.TopologySpreadConstraints))
+	}
+
 	return apiErrors.NewAggregate(allErr)
 }
 
 func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, placementType placementv1beta1.PlacementType) error {
+	allErr := make([]error, 0)
 	switch placementType {
 	case placementv1beta1.PickAllPlacementType:
-		// PreferredDuringSchedulingIgnoredDuringExecution will be ignored when the placementType is PickAll.
+		// what if RequiredDuringSchedulingIgnoredDuringExecution is nil, should we return error, may need to refactor
 		if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
-			return validateClusterSelector(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution)
+			allErr = append(allErr, validateClusterSelector(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution))
+		}
+		if len(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) > 0 {
+			allErr = append(allErr, fmt.Errorf("PreferredDuringSchedulingIgnoredDuringExecution will be ignored for placement policy type %s", placementType))
 		}
 	case placementv1beta1.PickNPlacementType:
-		//TODO(Arvindthiru): implement this
+		if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+			allErr = append(allErr, validateClusterSelector(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution))
+		}
+		if len(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) > 0 {
+			allErr = append(allErr, validatePreferredClusterSelectors(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution))
+		}
 	}
-	return nil
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
+	allErr := make([]error, 0)
+	for _, tc := range topologyConstraints {
+		if len(tc.TopologyKey) == 0 {
+			allErr = append(allErr, fmt.Errorf("topology key cannot be empty"))
+		}
+		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule || tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
+			allErr = append(allErr, fmt.Errorf("unknown when satisfiable type %s", tc.WhenUnsatisfiable))
+		}
+	}
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) error {
@@ -174,6 +206,16 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
 		allErr = append(allErr, validateLabelSelector(&clusterSelectorTerm.LabelSelector, "cluster selector"))
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1beta1.PreferredClusterSelector) error {
+	allErr := make([]error, 0)
+	for _, preferredClusterSelector := range preferredClusterSelectors {
+		// API server validation on object occurs before webhook is triggered hence not validating weight.
+		allErr = append(allErr, validateLabelSelector(&preferredClusterSelector.Preference.LabelSelector, "cluster selector"))
+
 	}
 	return apiErrors.NewAggregate(allErr)
 }
