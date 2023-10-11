@@ -133,6 +133,11 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 						},
 					},
 				},
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						TopologyKey: "test-key",
+					},
+				},
 			}
 			err := hubClient.Update(ctx, &crp)
 			if k8sErrors.IsConflict(err) {
@@ -141,6 +146,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in cluster selector %+v is invalid:", &crp.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[0].LabelSelector))))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("topology spread constraints needs to be empty for policy type PickAll"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})

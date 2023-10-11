@@ -16,6 +16,17 @@ import (
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
+var (
+	unavailablePeriodSeconds       = -10
+	numberOfClusters         int32 = 1
+	resourceSelector               = placementv1beta1.ClusterResourceSelector{
+		Group:   "rbac.authorization.k8s.io",
+		Version: "v1",
+		Kind:    "ClusterRole",
+		Name:    "test-cluster-role",
+	}
+)
+
 func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
 		crp              *fleetv1alpha1.ClusterResourcePlacement
@@ -172,15 +183,7 @@ func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 	}
 }
 
-func Test_validateClusterResourcePlacement(t *testing.T) {
-	unavailablePeriodSeconds := -10
-	var numberOfClusters int32 = 1
-	resourceSelector := placementv1beta1.ClusterResourceSelector{
-		Group:   "rbac.authorization.k8s.io",
-		Version: "v1",
-		Kind:    "ClusterRole",
-		Name:    "test-cluster-role",
-	}
+func Test_ValidateClusterResourcePlacement(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -238,6 +241,23 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
+	}
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			ResourceInformer = testCase.resourceInformer
+			if err := ValidateClusterResourcePlacement(testCase.crp); (err != nil) != testCase.wantErr {
+				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func Test_ValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
+	tests := map[string]struct {
+		crp              *placementv1beta1.ClusterResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+	}{
 		"empty rollout strategy": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -360,6 +380,24 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
+	}
+
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			ResourceInformer = testCase.resourceInformer
+			if err := ValidateClusterResourcePlacement(testCase.crp); (err != nil) != testCase.wantErr {
+				t.Errorf("ValidateClusterResourcePlacement_RolloutStrategy() error = %v, wantErr %v", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func Test_ValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T) {
+	tests := map[string]struct {
+		crp              *placementv1beta1.ClusterResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+	}{
 		"valid placement policy - PickFixed with non-empty cluster names": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -456,6 +494,24 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			},
 			wantErr: true,
 		},
+	}
+
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			ResourceInformer = testCase.resourceInformer
+			if err := ValidateClusterResourcePlacement(testCase.crp); (err != nil) != testCase.wantErr {
+				t.Errorf("ValidateClusterResourcePlacement_PickFixedPlacementPolicy() error = %v, wantErr %v", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func Test_ValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
+	tests := map[string]struct {
+		crp              *placementv1beta1.ClusterResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+	}{
 		"invalid placement policy - PickAll with non-empty cluster names": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -568,11 +624,12 @@ func Test_validateClusterResourcePlacement(t *testing.T) {
 			wantErr: true,
 		},
 	}
+
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
 			ResourceInformer = testCase.resourceInformer
 			if err := ValidateClusterResourcePlacement(testCase.crp); (err != nil) != testCase.wantErr {
-				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", err, testCase.wantErr)
+				t.Errorf("ValidateClusterResourcePlacement_PickAllPlacementPolicy() error = %v, wantErr %v", err, testCase.wantErr)
 			}
 		})
 	}
