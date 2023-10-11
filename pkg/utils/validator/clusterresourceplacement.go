@@ -141,7 +141,7 @@ func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPol
 	if policy.NumberOfClusters != nil {
 		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickAllPlacementType))
 	}
-	// Allowing user to supply empty cluster affinity, only validating cluster affinity if non nil
+	// Allowing user to supply empty cluster affinity, only validating cluster affinity if non-nil
 	if policy.Affinity != nil && policy.Affinity.ClusterAffinity != nil {
 		allErr = append(allErr, validateClusterAffinity(policy.Affinity.ClusterAffinity, policy.PlacementType))
 	}
@@ -170,7 +170,7 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 
 func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, placementType placementv1beta1.PlacementType) error {
 	allErr := make([]error, 0)
-	// Both RequiredDuringSchedulingIgnoredDuringExecution and PreferredDuringSchedulingIgnoredDuringExecution are optional fields, so validating is non-nil/length is grater than zero
+	// Both RequiredDuringSchedulingIgnoredDuringExecution and PreferredDuringSchedulingIgnoredDuringExecution are optional fields, so validating only if non-nil/length is greater than zero
 	switch placementType {
 	case placementv1beta1.PickAllPlacementType:
 		if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
