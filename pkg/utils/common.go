@@ -158,6 +158,12 @@ var (
 		Version:  corev1.SchemeGroupVersion.Version,
 		Resource: "services",
 	}
+
+	ConfigMapGVK = schema.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "ConfigMap",
+	}
 )
 
 // RandSecureInt returns a uniform random value in [1, max] or panic.

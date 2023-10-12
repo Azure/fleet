@@ -39,7 +39,10 @@ var (
 	cancel    context.CancelFunc
 
 	// pre loaded test manifests
-	testClonesetCRD, testNameSpace, testCloneset, testConfigMap, testPdb []byte
+	testClonesetCRD, testNameSpace, testCloneset, testConfigMap, testEnvelopConfigMap, testEnvelopConfigMap2, testPdb []byte
+
+	// the content of the enveloped resources
+	testEnvelopeWebhook, testEnvelopeResourceQuota []byte
 )
 
 func TestAPIs(t *testing.T) {
@@ -136,9 +139,33 @@ func readTestManifests() {
 	testConfigMap, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 
+	By("Read testEnvelopConfigMap resource")
+	rawByte, err = os.ReadFile("manifests/test-envelop-configmap.yaml")
+	Expect(err).Should(Succeed())
+	testEnvelopConfigMap, err = yaml.ToJSON(rawByte)
+	Expect(err).Should(Succeed())
+
+	By("Read testEnvelopConfigMap2 resource")
+	rawByte, err = os.ReadFile("manifests/test-envelop-configmap2.yaml")
+	Expect(err).Should(Succeed())
+	testEnvelopConfigMap2, err = yaml.ToJSON(rawByte)
+	Expect(err).Should(Succeed())
+
 	By("Read PodDisruptionBudget")
 	rawByte, err = os.ReadFile("manifests/test_pdb.yaml")
 	Expect(err).Should(Succeed())
 	testPdb, err = yaml.ToJSON(rawByte)
+	Expect(err).Should(Succeed())
+
+	By("Read EnvelopeWebhook")
+	rawByte, err = os.ReadFile("manifests/webhook.yaml")
+	Expect(err).Should(Succeed())
+	testEnvelopeWebhook, err = yaml.ToJSON(rawByte)
+	Expect(err).Should(Succeed())
+
+	By("Read ResourceQuota")
+	rawByte, err = os.ReadFile("manifests/resourceQuota.yaml")
+	Expect(err).Should(Succeed())
+	testEnvelopeResourceQuota, err = yaml.ToJSON(rawByte)
 	Expect(err).Should(Succeed())
 }

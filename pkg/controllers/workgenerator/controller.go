@@ -13,10 +13,17 @@ import (
 	"strconv"
 	"time"
 
+	"go.uber.org/atomic"
+	"golang.org/x/sync/errgroup"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -224,52 +231,98 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 
 // syncAllWork generates all the work for the resourceSnapshot and apply them to the corresponding target cluster.
 // it returns if we actually made any changes on the hub cluster.
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, works map[string]*fleetv1beta1.Work) (bool, error) {
-	updateAny := false
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work) (bool, error) {
+	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
 
 	// Gather all the resource resourceSnapshots
 	resourceSnapshots, err := r.fetchAllResourceSnapshots(ctx, resourceBinding)
 	if err != nil {
-		// TODO(RZ): handle errResourceNotFullyCreated error
+		// TODO(RZ): handle errResourceNotFullyCreated error so we don't need to wait for all the snapshots to be created
 		return false, err
 	}
 
-	// create/update the corresponding work for each snapshot
-	activeWork := make(map[string]bool, len(resourceSnapshots))
-	for _, snapshot := range resourceSnapshots {
-		// TODO(RZ): issue those requests in parallel to speed up the process
-		updated := false
-		workName, err := getWorkNameFromSnapshotName(snapshot)
+	// issue all the create/update requests for the corresponding works for each snapshot in parallel
+	activeWork := make(map[string]*fleetv1beta1.Work, len(resourceSnapshots))
+	errs, cctx := errgroup.WithContext(ctx)
+	// generate work objects for each resource snapshot
+	for i := range resourceSnapshots {
+		snapshot := resourceSnapshots[i]
+		var newWork []*fleetv1beta1.Work
+		workNamePrefix, err := getWorkNamePrefixFromSnapshotName(snapshot)
 		if err != nil {
 			klog.ErrorS(err, "Encountered a mal-formatted resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
 			return false, err
 		}
-		activeWork[workName] = true
-		if updated, err = r.upsertWork(ctx, works[workName], workName, snapshot, resourceBinding); err != nil {
-			return false, err
+		var simpleManifests []fleetv1beta1.Manifest
+		for _, selectedResource := range snapshot.Spec.SelectedResources {
+			// we need to special treat configMap with envelopeConfigMapAnnotation annotation,
+			// so we need to check the GVK and annotation of the selected resource
+			var uResource unstructured.Unstructured
+			if err := uResource.UnmarshalJSON(selectedResource.Raw); err != nil {
+				klog.ErrorS(err, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
+				return false, controller.NewUnexpectedBehaviorError(err)
+			}
+			if uResource.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
+				len(uResource.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
+				// get a work object for the enveloped configMap
+				work, err := r.getConfigMapEnvelopWorkObj(ctx, workNamePrefix, resourceBinding, snapshot, &uResource)
+				if err != nil {
+					return false, err
+				}
+				newWork = append(newWork, work)
+			} else {
+				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(selectedResource))
+			}
 		}
-		if updated {
-			updateAny = true
+		if len(simpleManifests) != 0 {
+			// generate a work object for the manifests if there are still any non enveloped resources
+			newWork = append(newWork, generateSnapshotWorkObj(workNamePrefix, resourceBinding, snapshot, simpleManifests))
+		} else {
+			klog.V(2).InfoS("Skip generating work for the snapshot since there is no none-enveloped resource in the snapshot", "snapshot", klog.KObj(snapshot))
+		}
+		// issue all the create/update requests for the corresponding works for each snapshot in parallel
+		for i := range newWork {
+			work := newWork[i]
+			activeWork[work.Name] = work
+			errs.Go(func() error {
+				updated, err := r.upsertWork(cctx, work, existingWorks[work.Name], snapshot)
+				if err != nil {
+					return err
+				}
+				if updated {
+					updateAny.Store(true)
+				}
+				return nil
+			})
 		}
 	}
 
 	//  delete the works that are not associated with any resource snapshot
-	for _, work := range works {
-		if activeWork[work.Name] {
+	for i := range existingWorks {
+		work := existingWorks[i]
+		if _, exist := activeWork[work.Name]; exist {
 			continue
 		}
-		klog.V(2).InfoS("Delete the work that is not associated with any resource snapshot", "work", klog.KObj(work))
-		if err := r.Client.Delete(ctx, work); err != nil {
-			if !apierrors.IsNotFound(err) {
-				klog.ErrorS(err, "Failed to delete the no longer needed work", "work", klog.KObj(work))
-				return false, controller.NewAPIServerError(false, err)
+		errs.Go(func() error {
+			if err := r.Client.Delete(ctx, work); err != nil {
+				if !apierrors.IsNotFound(err) {
+					klog.ErrorS(err, "Failed to delete the no longer needed work", "work", klog.KObj(work))
+					return controller.NewAPIServerError(false, err)
+				}
 			}
-		}
-		updateAny = true
+			klog.V(2).InfoS("Deleted the work that is not associated with any resource snapshot", "work", klog.KObj(work))
+			updateAny.Store(true)
+			return nil
+		})
 	}
-	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "updateAny", updateAny, "resourceBinding", resourceBindingRef)
-	return updateAny, nil
+
+	// wait for all the create/update/delete requests to finish
+	if updateErr := errs.Wait(); updateErr != nil {
+		return false, updateErr
+	}
+	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "updateAny", updateAny.Load(), "resourceBinding", resourceBindingRef)
+	return updateAny.Load(), nil
 }
 
 // fetchAllResourceSnapshots gathers all the resource snapshots for the resource binding.
@@ -328,25 +381,47 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 	return resourceSnapshots, nil
 }
 
-// upsertWork creates or updates the work for the corresponding resource snapshot.
-// it returns if any change is made to the work and the possible error code.
-func (r *Reconciler) upsertWork(ctx context.Context, work *fleetv1beta1.Work, workName string, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot,
-	resourceBinding *fleetv1beta1.ClusterResourceBinding) (bool, error) {
-	needCreate := false
-	var workObj klog.ObjectRef
-	resourceBindingObj := klog.KObj(resourceBinding)
-	resourceSnapshotObj := klog.KObj(resourceSnapshot)
-	// we already checked the label in fetchAllResourceSnapShots function so no need to check again
-	resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
-	if work == nil {
-		needCreate = true
-		work = &fleetv1beta1.Work{
+// getConfigMapEnvelopWorkObj first try to locate a work object for the corresponding envelopObj of type configMap.
+// we create a new one if the work object doesn't exist. We do this to avoid repeatedly delete and create the same work object.
+// TODO: take into consider the override policy in the future
+func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePrefix string, resourceBinding *fleetv1beta1.ClusterResourceBinding,
+	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, envelopeObj *unstructured.Unstructured) (*fleetv1beta1.Work, error) {
+	// we group all the resources in one configMap to one work
+	manifest, err := extractResFromConfigMap(envelopeObj)
+	if err != nil {
+		klog.ErrorS(err, "configMap has invalid content", "snapshot", klog.KObj(resourceSnapshot),
+			"resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
+		return nil, controller.NewUserError(err)
+	}
+	klog.V(2).InfoS("Successfully extract the enveloped resources from the configMap", "numOfResources", len(manifest), "configMapWrapper", klog.KObj(envelopeObj))
+	// Try to see if we already have a work represent the same enveloped object for this CRP in the same cluster
+	envelopWorkLabelMatcher := client.MatchingLabels{
+		fleetv1beta1.ParentBindingLabel:     resourceBinding.Name,
+		fleetv1beta1.CRPTrackingLabel:       resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+		fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ConfigMapEnvelopeType),
+		fleetv1beta1.EnvelopeNameLabel:      envelopeObj.GetName(),
+		fleetv1beta1.EnvelopeNamespaceLabel: envelopeObj.GetNamespace(),
+	}
+	workList := &fleetv1beta1.WorkList{}
+	if err := r.Client.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
+		return nil, controller.NewAPIServerError(true, err)
+	}
+	// we need to create a new work object
+	if len(workList.Items) == 0 {
+		// we limit the CRP name length to be 63 (DNS1123LabelMaxLength) characters,
+		// so we have plenty of characters left to fit into 253 (DNS1123SubdomainMaxLength) characters for a CR
+		workName := fmt.Sprintf(fleetv1beta1.WorkNameWithConfigEnvelopeFmt, workNamePrefix, uuid.NewUUID())
+		return &fleetv1beta1.Work{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      workName,
 				Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
 				Labels: map[string]string{
-					fleetv1beta1.ParentBindingLabel: resourceBinding.Name,
-					fleetv1beta1.CRPTrackingLabel:   resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+					fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
+					fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+					fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
+					fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ConfigMapEnvelopeType),
+					fleetv1beta1.EnvelopeNameLabel:                envelopeObj.GetName(),
+					fleetv1beta1.EnvelopeNamespaceLabel:           envelopeObj.GetNamespace(),
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -358,53 +433,95 @@ func (r *Reconciler) upsertWork(ctx context.Context, work *fleetv1beta1.Work, wo
 					},
 				},
 			},
-		}
-	} else {
-		// check if we need to update the work
-		workObj = klog.KObj(work)
-		workResourceIndex, err := labels.ExtractResourceSnapshotIndexFromWork(work)
-		if err != nil {
-			klog.ErrorS(err, "work has invalid parent resource index", "work", workObj)
-			return false, controller.NewUnexpectedBehaviorError(err)
-		}
-		if workResourceIndex == resourceIndex {
-			// no need to do anything since the resource snapshot is immutable.
-			klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot", "work", workObj, "resourceSnapshot", resourceSnapshotObj)
-			return false, nil
-		}
+			Spec: fleetv1beta1.WorkSpec{
+				Workload: fleetv1beta1.WorkloadTemplate{
+					Manifests: manifest,
+				},
+			},
+		}, nil
 	}
-	workObj = klog.KObj(work)
-	// the work is pointing to a different resource snapshot, need to reset the manifest list
-	// reset the manifest list regardless and make sure the work is pointing to the right resource snapshot
+	if len(workList.Items) > 1 {
+		// return error here won't get us out of this
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("find %d work representing configMap", len(workList.Items))),
+			"snapshot", klog.KObj(resourceSnapshot), "resourceBinding", klog.KObj(resourceBinding), "configMapWrapper", klog.KObj(envelopeObj))
+	}
+	// we just pick the first one if there are more than one.
+	work := workList.Items[0]
 	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
-	work.Spec.Workload.Manifests = make([]fleetv1beta1.Manifest, 0)
-	for _, selectedResource := range resourceSnapshot.Spec.SelectedResources {
-		work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, fleetv1beta1.Manifest(selectedResource))
-	}
+	work.Spec.Workload.Manifests = manifest
+	return &work, nil
+}
 
-	// upsert the work
-	if needCreate {
-		if err := r.Client.Create(ctx, work); err != nil {
-			klog.ErrorS(err, "Failed to create the work associated with the resourceSnapshot", "resourceBinding", resourceBindingObj,
-				"resourceSnapshot", resourceSnapshotObj, "work", workObj)
-			return true, controller.NewCreateIgnoreAlreadyExistError(err)
+// generateSnapshotWorkObj generates the work object for the corresponding snapshot
+// TODO: take into consider the override policy in the future
+func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.ClusterResourceBinding, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, manifest []fleetv1beta1.Manifest) *fleetv1beta1.Work {
+	work := &fleetv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      workName,
+			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
+			Labels: map[string]string{
+				fleetv1beta1.ParentBindingLabel:               resourceBinding.Name,
+				fleetv1beta1.CRPTrackingLabel:                 resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
+				fleetv1beta1.ParentResourceSnapshotIndexLabel: resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel],
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         fleetv1beta1.GroupVersion.String(),
+					Kind:               resourceBinding.Kind,
+					Name:               resourceBinding.Name,
+					UID:                resourceBinding.UID,
+					BlockOwnerDeletion: pointer.Bool(true), // make sure that the k8s will call work delete when the binding is deleted
+				},
+			},
+		},
+	}
+	work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, manifest...)
+	return work
+}
+
+// upsertWork creates or updates the new work for the corresponding resource snapshot.
+// it returns if any change is made to the existing work and the possible error code.
+func (r *Reconciler) upsertWork(ctx context.Context, newWork, existingWork *fleetv1beta1.Work, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
+	workObj := klog.KObj(newWork)
+	resourceSnapshotObj := klog.KObj(resourceSnapshot)
+	if existingWork == nil {
+		if err := r.Client.Create(ctx, newWork); err != nil {
+			klog.ErrorS(err, "Failed to create the work associated with the resourceSnapshot", "resourceSnapshot", resourceSnapshotObj, "work", workObj)
+			return false, controller.NewCreateIgnoreAlreadyExistError(err)
 		}
-	} else if err := r.Client.Update(ctx, work); err != nil {
-		klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceBinding", resourceBindingObj,
+		klog.V(2).InfoS("Successfully create the work associated with the resourceSnapshot",
 			"resourceSnapshot", resourceSnapshotObj, "work", workObj)
+		return true, nil
+	}
+	// check if we need to update the existing work object
+	workResourceIndex, err := labels.ExtractResourceSnapshotIndexFromWork(existingWork)
+	if err != nil {
+		klog.ErrorS(err, "work has invalid parent resource index", "work", workObj)
+		return false, controller.NewUnexpectedBehaviorError(err)
+	}
+	// we already checked the label in fetchAllResourceSnapShots function so no need to check again
+	resourceIndex, _ := labels.ExtractResourceIndexFromClusterResourceSnapshot(resourceSnapshot)
+	if workResourceIndex == resourceIndex {
+		// no need to do anything if the work is generated from the same resource snapshot group since the resource snapshot is immutable.
+		klog.V(2).InfoS("Work is already associated with the desired resourceSnapshot", "resourceIndex", resourceIndex, "work", workObj, "resourceSnapshot", resourceSnapshotObj)
+		return false, nil
+	}
+	// need to update the existing work, only two possible changes:
+	existingWork.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
+	existingWork.Spec.Workload.Manifests = newWork.Spec.Workload.Manifests
+	if err := r.Client.Update(ctx, existingWork); err != nil {
+		klog.ErrorS(err, "Failed to update the work associated with the resourceSnapshot", "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 		return true, controller.NewUpdateIgnoreConflictError(err)
 	}
-
-	klog.V(2).InfoS("Successfully upsert the work associated with the resourceSnapshot", "isCreate", needCreate,
-		"resourceBinding", resourceBindingObj, "resourceSnapshot", resourceSnapshotObj, "work", workObj)
+	klog.V(2).InfoS("Successfully updated the work associated with the resourceSnapshot", "resourceSnapshot", resourceSnapshotObj, "work", workObj)
 	return true, nil
 }
 
-// getWorkNameFromSnapshotName extract the CRP and sub-index name from the corresponding resource snapshot.
-// The corresponding work name is the CRP name + sub-index if there is a sub-index. Otherwise, it is the CRP name +"-work".
+// getWorkNamePrefixFromSnapshotName extract the CRP and sub-index name from the corresponding resource snapshot.
+// The corresponding work name prefix is the CRP name + sub-index if there is a sub-index. Otherwise, it is the CRP name +"-work".
 // For example, if the resource snapshot name is "crp-1-0", the corresponding work name is "crp-0".
 // If the resource snapshot name is "crp-1", the corresponding work name is "crp-work".
-func getWorkNameFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (string, error) {
+func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (string, error) {
 	// The validation webhook should make sure the label and annotation are valid on all resource snapshot.
 	// We are just being defensive here.
 	crpName, exist := resourceSnapshot.Labels[fleetv1beta1.CRPTrackingLabel]
@@ -447,6 +564,25 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		Message:            "not all corresponding work objects are applied",
 		ObservedGeneration: binding.GetGeneration(),
 	}
+}
+
+func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1beta1.Manifest, error) {
+	manifests := make([]fleetv1beta1.Manifest, 0)
+	var configMap v1.ConfigMap
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(uConfigMap.Object, &configMap)
+	if err != nil {
+		return nil, err
+	}
+	for _, value := range configMap.Data {
+		content, err := yaml.ToJSON([]byte(value))
+		if err != nil {
+			return nil, err
+		}
+		manifests = append(manifests, fleetv1beta1.Manifest{
+			RawExtension: runtime.RawExtension{Raw: content},
+		})
+	}
+	return manifests, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -507,7 +643,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				// we only need to handle the case the applied condition is flipped between true and NOT true between the
 				// new and old work objects. Otherwise, it won't affect the binding applied condition
 				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) {
-					klog.V(2).InfoS("The work applied condition didn't flip between true and false", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+					klog.V(2).InfoS("The work applied condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return
 				}
 				klog.V(2).InfoS("Received a work update event", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
