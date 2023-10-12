@@ -79,9 +79,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 			if len(selector.Name) != 0 {
 				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
 			}
-			if _, err := metav1.LabelSelectorAsSelector(selector.LabelSelector); err != nil {
-				allErr = append(allErr, fmt.Errorf("the labelSelector in resource selector %+v is invalid: %w", selector, err))
-			}
+			allErr = append(allErr, validateLabelSelector(selector.LabelSelector, "resource selector"))
 		}
 	}
 
@@ -91,12 +89,6 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 		}
 	}
 
-	if clusterResourcePlacement.Spec.Policy != nil && clusterResourcePlacement.Spec.Policy.Affinity != nil &&
-		clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity != nil {
-		if err := validateClusterAffinity(clusterResourcePlacement.Spec.Policy.Affinity.ClusterAffinity); err != nil {
-			allErr = append(allErr, fmt.Errorf("the clusterAffinity field is invalid: %w", err))
-		}
-	}
 	if err := validateRolloutStrategy(clusterResourcePlacement.Spec.Strategy); err != nil {
 		allErr = append(allErr, fmt.Errorf("the rollout Strategy field  is invalid: %w", err))
 	}
@@ -105,23 +97,22 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
-	allErr := make([]error, 0)
 	switch policy.PlacementType {
 	case placementv1beta1.PickFixedPlacementType:
 		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
-			allErr = append(allErr, err)
+			return err
 		}
 	case placementv1beta1.PickAllPlacementType:
 		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
-			allErr = append(allErr, err)
+			return err
 		}
 	case placementv1beta1.PickNPlacementType:
 		if err := validatePolicyForPickNPolicyType(policy); err != nil {
-			allErr = append(allErr, err)
+			return err
 		}
 	}
 
-	return apiErrors.NewAggregate(allErr)
+	return nil
 }
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
@@ -142,9 +133,20 @@ func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementP
 	return apiErrors.NewAggregate(allErr)
 }
 
-func validatePolicyForPickAllPlacementType(_ *placementv1beta1.PlacementPolicy) error {
-	// TODO(Arvindthiru): implement this.
+func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPolicy) error {
 	allErr := make([]error, 0)
+	if len(policy.ClusterNames) > 0 {
+		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s, only valid for PickFixed policy type", placementv1beta1.PickAllPlacementType))
+	}
+	if policy.NumberOfClusters != nil {
+		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickAllPlacementType))
+	}
+	if policy.Affinity != nil && policy.Affinity.ClusterAffinity != nil {
+		allErr = append(allErr, validateClusterAffinity(policy.Affinity.ClusterAffinity, policy.PlacementType))
+	}
+	if len(policy.TopologySpreadConstraints) > 0 {
+		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickAllPlacementType))
+	}
 	return apiErrors.NewAggregate(allErr)
 }
 
@@ -154,8 +156,32 @@ func validatePolicyForPickNPolicyType(_ *placementv1beta1.PlacementPolicy) error
 	return apiErrors.NewAggregate(allErr)
 }
 
-func validateClusterAffinity(_ *placementv1beta1.ClusterAffinity) error {
-	// TODO: implement this
+func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, placementType placementv1beta1.PlacementType) error {
+	switch placementType {
+	case placementv1beta1.PickAllPlacementType:
+		// PreferredDuringSchedulingIgnoredDuringExecution will be ignored when the placementType is PickAll.
+		if clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+			return validateClusterSelector(clusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution)
+		}
+	case placementv1beta1.PickNPlacementType:
+		//TODO(Arvindthiru): implement this
+	}
+	return nil
+}
+
+func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) error {
+	allErr := make([]error, 0)
+	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
+		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
+		allErr = append(allErr, validateLabelSelector(&clusterSelectorTerm.LabelSelector, "cluster selector"))
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validateLabelSelector(labelSelector *metav1.LabelSelector, parent string) error {
+	if _, err := metav1.LabelSelectorAsSelector(labelSelector); err != nil {
+		return fmt.Errorf("the labelSelector in %s %+v is invalid: %w", parent, labelSelector, err)
+	}
 	return nil
 }
 
