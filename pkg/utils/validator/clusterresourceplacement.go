@@ -157,6 +157,13 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 	if len(policy.ClusterNames) > 0 {
 		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s, only valid for PickFixed policy type", placementv1beta1.PickNPlacementType))
 	}
+	if policy.NumberOfClusters != nil {
+		if *policy.NumberOfClusters <= 0 {
+			allErr = append(allErr, fmt.Errorf("number of clusters cannot be %d for policy type %s", *policy.NumberOfClusters, placementv1beta1.PickNPlacementType))
+		}
+	} else {
+		allErr = append(allErr, fmt.Errorf("number of cluster cannot be nil for policy type %s", placementv1beta1.PickNPlacementType))
+	}
 	// Allowing user to supply empty cluster affinity, only validating cluster affinity if non-nil
 	if policy.Affinity != nil && policy.Affinity.ClusterAffinity != nil {
 		allErr = append(allErr, validateClusterAffinity(policy.Affinity.ClusterAffinity, policy.PlacementType))
@@ -196,8 +203,8 @@ func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.To
 		if len(tc.TopologyKey) == 0 {
 			allErr = append(allErr, fmt.Errorf("topology key cannot be empty"))
 		}
-		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule || tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
-			allErr = append(allErr, fmt.Errorf("unknown when satisfiable type %s", tc.WhenUnsatisfiable))
+		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule && tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
+			allErr = append(allErr, fmt.Errorf("unknown when unsatisfiable type %s", tc.WhenUnsatisfiable))
 		}
 	}
 	return apiErrors.NewAggregate(allErr)
@@ -216,8 +223,7 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 	allErr := make([]error, 0)
 	for _, preferredClusterSelector := range preferredClusterSelectors {
 		// API server validation on object occurs before webhook is triggered hence not validating weight.
-		allErr = append(allErr, validateLabelSelector(&preferredClusterSelector.Preference.LabelSelector, "cluster selector"))
-
+		allErr = append(allErr, validateLabelSelector(&preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
 	}
 	return apiErrors.NewAggregate(allErr)
 }
