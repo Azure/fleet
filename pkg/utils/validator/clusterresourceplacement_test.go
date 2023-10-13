@@ -706,7 +706,7 @@ func Test_ValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		"invalid placement policy - PickN with zero/negative number of clusters": {
+		"invalid placement policy - PickN with negative number of clusters": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-crp",
@@ -783,26 +783,6 @@ func Test_ValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 										},
 									},
 								},
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		"invalid placement policy - PickN with invalid topology constraint with empty topology key": {
-			crp: &placementv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-crp",
-				},
-				Spec: placementv1beta1.ClusterResourcePlacementSpec{
-					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
-					Policy: &placementv1beta1.PlacementPolicy{
-						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: &positiveNumberOfClusters,
-						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
-							{
-								TopologyKey: "",
 							},
 						},
 					},

@@ -158,7 +158,7 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 		allErr = append(allErr, fmt.Errorf("cluster names needs to be empty for policy type %s, only valid for PickFixed policy type", placementv1beta1.PickNPlacementType))
 	}
 	if policy.NumberOfClusters != nil {
-		if *policy.NumberOfClusters <= 0 {
+		if *policy.NumberOfClusters < 0 {
 			allErr = append(allErr, fmt.Errorf("number of clusters cannot be %d for policy type %s", *policy.NumberOfClusters, placementv1beta1.PickNPlacementType))
 		}
 	} else {
@@ -200,9 +200,6 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
 	allErr := make([]error, 0)
 	for _, tc := range topologyConstraints {
-		if len(tc.TopologyKey) == 0 {
-			allErr = append(allErr, fmt.Errorf("topology key cannot be empty"))
-		}
 		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule && tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
 			allErr = append(allErr, fmt.Errorf("unknown when unsatisfiable type %s", tc.WhenUnsatisfiable))
 		}
