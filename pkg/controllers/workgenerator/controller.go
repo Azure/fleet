@@ -278,14 +278,16 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 				simpleManifests = append(simpleManifests, fleetv1beta1.Manifest(selectedResource))
 			}
 		}
-		if len(simpleManifests) != 0 {
-			// generate a work object for the manifests if there are still any non enveloped resources
-			work := generateSnapshotWorkObj(workNamePrefix, resourceBinding, snapshot, simpleManifests)
-			activeWork[work.Name] = work
-			newWork = append(newWork, work)
-		} else {
+		if len(simpleManifests) == 0 {
 			klog.V(2).InfoS("the snapshot contains enveloped resource only", "snapshot", klog.KObj(snapshot))
 		}
+		// generate a work object for the manifests even if there is nothing to place
+		// to allow CRP to collect the status of the placement
+		// TODO (RZ): revisit to see if we need this hack
+		work := generateSnapshotWorkObj(workNamePrefix, resourceBinding, snapshot, simpleManifests)
+		activeWork[work.Name] = work
+		newWork = append(newWork, work)
+
 		// issue all the create/update requests for the corresponding works for each snapshot in parallel
 		for i := range newWork {
 			work := newWork[i]
