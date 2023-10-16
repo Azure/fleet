@@ -22,6 +22,14 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+var statusCmpOptions = []cmp.Option{
+	// ignore the message as we may change the message in the future
+	cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime"),
+	cmpopts.SortSlices(func(c1, c2 metav1.Condition) bool {
+		return c1.Type < c2.Type
+	}),
+}
+
 func TestSetPlacementStatus(t *testing.T) {
 	crpGeneration := int64(25)
 	selectedResources := []fleetv1beta1.ResourceIdentifier{
@@ -954,15 +962,218 @@ func TestSetPlacementStatus(t *testing.T) {
 			if err := r.setPlacementStatus(context.Background(), crp, selectedResources, tc.latestPolicySnapshot, tc.latestResourceSnapshot); err != nil {
 				t.Fatalf("setPlacementStatus() failed: %v", err)
 			}
-			statusCmpOptions := []cmp.Option{
-				// ignore the message as we may change the message in the future
-				cmpopts.IgnoreFields(metav1.Condition{}, "Message", "LastTransitionTime"),
-				cmpopts.SortSlices(func(c1, c2 metav1.Condition) bool {
-					return c1.Type < c2.Type
-				}),
-			}
+
 			if diff := cmp.Diff(tc.wantStatus, &crp.Status, statusCmpOptions...); diff != "" {
 				t.Errorf("buildPlacementStatus() status mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestBuildFailedResourcePlacements(t *testing.T) {
+	tests := map[string]struct {
+		work          *fleetv1beta1.Work
+		wantIsPending bool
+		wantRes       []fleetv1beta1.FailedResourcePlacement
+	}{
+		"pending if not applied": {
+			work:          &fleetv1beta1.Work{},
+			wantIsPending: true,
+			wantRes:       nil,
+		},
+		"No resource if applied successfully": {
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: fleetv1beta1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							ObservedGeneration: 1,
+							Status:             metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			wantIsPending: false,
+			wantRes:       nil,
+		},
+		"pending if applied not on the latest generation": {
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 2,
+				},
+				Status: fleetv1beta1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							ObservedGeneration: 1,
+							Status:             metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			wantIsPending: true,
+			wantRes:       nil,
+		},
+		"report failure if applied failed with multiple object": {
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+				Status: fleetv1beta1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							ObservedGeneration: 1,
+							Status:             metav1.ConditionFalse,
+						},
+					},
+					ManifestConditions: []fleetv1beta1.ManifestCondition{
+						{
+							Identifier: fleetv1beta1.WorkResourceIdentifier{
+								Ordinal:   1,
+								Group:     corev1.GroupName,
+								Version:   "v1",
+								Kind:      "secret",
+								Name:      "secretName",
+								Namespace: "app",
+							},
+							Conditions: []metav1.Condition{
+								{
+									Type:               fleetv1beta1.WorkConditionTypeApplied,
+									ObservedGeneration: 1,
+									Status:             metav1.ConditionFalse,
+								},
+							},
+						},
+						{
+							Identifier: fleetv1beta1.WorkResourceIdentifier{
+								Ordinal:   1,
+								Group:     corev1.GroupName,
+								Version:   "v1",
+								Kind:      "pod",
+								Name:      "secretPod",
+								Namespace: "app",
+							},
+							Conditions: []metav1.Condition{
+								{
+									Type:               fleetv1beta1.WorkConditionTypeApplied,
+									ObservedGeneration: 2,
+									Status:             metav1.ConditionFalse,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantIsPending: false,
+			wantRes: []fleetv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     corev1.GroupName,
+						Version:   "v1",
+						Kind:      "secret",
+						Name:      "secretName",
+						Namespace: "app",
+					},
+					Condition: metav1.Condition{
+						Type:               fleetv1beta1.WorkConditionTypeApplied,
+						ObservedGeneration: 1,
+						Status:             metav1.ConditionFalse,
+					},
+				},
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     corev1.GroupName,
+						Version:   "v1",
+						Kind:      "pod",
+						Name:      "secretPod",
+						Namespace: "app",
+					},
+					Condition: metav1.Condition{
+						Type:               fleetv1beta1.WorkConditionTypeApplied,
+						ObservedGeneration: 2,
+						Status:             metav1.ConditionFalse,
+					},
+				},
+			},
+		},
+		"report failure if applied failed with an envelop object": {
+			work: &fleetv1beta1.Work{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+					Labels: map[string]string{
+						fleetv1beta1.ParentBindingLabel:     "bindingName",
+						fleetv1beta1.CRPTrackingLabel:       "testCRPName",
+						fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ConfigMapEnvelopeType),
+						fleetv1beta1.EnvelopeNameLabel:      "envelop-configmap",
+						fleetv1beta1.EnvelopeNamespaceLabel: "app",
+					},
+				},
+				Status: fleetv1beta1.WorkStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							ObservedGeneration: 1,
+							Status:             metav1.ConditionFalse,
+						},
+					},
+					ManifestConditions: []fleetv1beta1.ManifestCondition{
+						{
+							Identifier: fleetv1beta1.WorkResourceIdentifier{
+								Ordinal:   1,
+								Group:     corev1.GroupName,
+								Version:   "v1",
+								Kind:      "secret",
+								Name:      "secretName",
+								Namespace: "app",
+							},
+							Conditions: []metav1.Condition{
+								{
+									Type:               fleetv1beta1.WorkConditionTypeApplied,
+									ObservedGeneration: 1,
+									Status:             metav1.ConditionFalse,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantIsPending: false,
+			wantRes: []fleetv1beta1.FailedResourcePlacement{
+				{
+					ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+						Group:     corev1.GroupName,
+						Version:   "v1",
+						Kind:      "secret",
+						Name:      "secretName",
+						Namespace: "app",
+						Envelope: &fleetv1beta1.EnvelopeIdentifier{
+							Name:      "envelop-configmap",
+							Namespace: "app",
+							Type:      fleetv1beta1.ConfigMapEnvelopeType,
+						},
+					},
+					Condition: metav1.Condition{
+
+						Type:               fleetv1beta1.WorkConditionTypeApplied,
+						ObservedGeneration: 1,
+						Status:             metav1.ConditionFalse,
+					},
+				},
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			gotIsPending, gotRes := buildFailedResourcePlacements(tt.work)
+			if tt.wantIsPending != gotIsPending {
+				t.Errorf("buildFailedResourcePlacements `%s` mismatch, want: %t, got : %t", name, tt.wantIsPending, gotIsPending)
+			}
+			if diff := cmp.Diff(tt.wantRes, gotRes, statusCmpOptions...); diff != "" {
+				t.Errorf("buildFailedResourcePlacements `%s` status mismatch (-want, +got):\n%s", name, diff)
 			}
 		})
 	}

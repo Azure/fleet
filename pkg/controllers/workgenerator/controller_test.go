@@ -17,7 +17,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-func Test_getWorkNameFromSnapshotName(t *testing.T) {
+func TestGetWorkNamePrefixFromSnapshotName(t *testing.T) {
 	tests := map[string]struct {
 		resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
 		wantErr          error
@@ -110,19 +110,19 @@ func Test_getWorkNameFromSnapshotName(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			workName, err := getWorkNameFromSnapshotName(tt.resourceSnapshot)
+			workName, err := getWorkNamePrefixFromSnapshotName(tt.resourceSnapshot)
 			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("failed getWorkNameFromSnapshotName test `%s` error = %v, wantErr %v", name, err, tt.wantErr)
+				t.Errorf("failed getWorkNamePrefixFromSnapshotName test `%s` error = %v, wantErr %v", name, err, tt.wantErr)
 				return
 			}
 			if workName != tt.wantedName {
-				t.Errorf("getWorkNameFromSnapshotName test `%s` workName = `%v`, wantedName `%v`", name, workName, tt.wantedName)
+				t.Errorf("getWorkNamePrefixFromSnapshotName test `%s` workName = `%v`, wantedName `%v`", name, workName, tt.wantedName)
 			}
 		})
 	}
 }
 
-func Test_buildAllWorkAppliedCondition(t *testing.T) {
+func TestBuildAllWorkAppliedCondition(t *testing.T) {
 	tests := map[string]struct {
 		works      map[string]*fleetv1beta1.Work
 		generation int64
