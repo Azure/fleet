@@ -391,7 +391,7 @@ func pickAllPolicySnapshotStatusUpdatedActual(scored, filtered []string, policyS
 	}
 }
 
-func hasNScheduledOrBoundBindingsPresentActual(crpName string, N int) func() error {
+func hasNScheduledOrBoundBindingsPresentActual(crpName string, n int) func() error {
 	return func() error {
 		bindingList := &placementv1beta1.ClusterResourceBindingList{}
 		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
@@ -407,8 +407,8 @@ func hasNScheduledOrBoundBindingsPresentActual(crpName string, N int) func() err
 			}
 		}
 
-		if scheduledOrBoundBindingCount != N {
-			return fmt.Errorf("want %d scheduled or bound bindings, got %d", N, scheduledOrBoundBindingCount)
+		if scheduledOrBoundBindingCount != n {
+			return fmt.Errorf("got %d, want %d scheduled or bound bindings", scheduledOrBoundBindingCount, n)
 		}
 
 		return nil
