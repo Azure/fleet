@@ -162,7 +162,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		scheduleCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             invalidResourceSelectorsReason,
+			Reason:             InvalidResourceSelectorsReason,
 			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: crp.Generation,
 		}
@@ -785,7 +785,7 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 			{
 				Status:             metav1.ConditionUnknown,
 				Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-				Reason:             synchronizePendingReason,
+				Reason:             SynchronizePendingReason,
 				Message:            "Scheduling has not completed",
 				ObservedGeneration: crp.Generation,
 			},
@@ -823,7 +823,7 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             schedulingUnknownReason,
+			Reason:             SchedulingUnknownReason,
 			Message:            "Scheduling has not completed",
 			ObservedGeneration: crp.Generation,
 		}
@@ -883,7 +883,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             resourceScheduleSucceededReason,
+			Reason:             ResourceScheduleSucceededReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
 			ObservedGeneration: crp.Generation,
 		}

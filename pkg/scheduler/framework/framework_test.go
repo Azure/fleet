@@ -2235,7 +2235,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason: pickedByPolicyReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "with filtered clusters and existing bindings",
@@ -2311,7 +2311,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "with not picked clusters and existing bindings",
@@ -2394,7 +2394,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "with both filtered/not picked clusters and existing bindings",
@@ -2467,12 +2467,12 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "none",
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
-			wantCondition:                     newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition:                     newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "too many filtered",
@@ -2531,7 +2531,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "too many not picked",
@@ -2600,7 +2600,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 	}
 
