@@ -465,6 +465,85 @@ func ensureProvisionalClusterDeletion(clusterName string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 }
 
+func createPickAllCRPWithPolicySnapshot(crpName string, affinity *placementv1beta1.Affinity, policySnapshotName string) {
+	policy := &placementv1beta1.PlacementPolicy{
+		PlacementType: placementv1beta1.PickAllPlacementType,
+		Affinity:      affinity,
+	}
+
+	// Create a CRP of the PickAll placement type.
+	crp := placementv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       crpName,
+			Finalizers: []string{customDeletionBlockerFinalizer},
+		},
+		Spec: placementv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: defaultResourceSelectors,
+			Policy:            policy,
+		},
+	}
+	Expect(hubClient.Create(ctx, &crp)).Should(Succeed(), "Failed to create CRP")
+
+	crpGeneration := crp.Generation
+
+	// Create the associated policy snapshot.
+	policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policySnapshotName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.CRPTrackingLabel:      crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy:     policy,
+			PolicyHash: []byte(policyHash),
+		},
+	}
+	Expect(hubClient.Create(ctx, policySnapshot)).Should(Succeed(), "Failed to create policy snapshot")
+}
+
+func updatePickAllCRPWithNewAffinity(crpName string, affinity *placementv1beta1.Affinity, oldPolicySnapshotName, newPolicySnapshotName string) {
+	// Update the CRP.
+	crp := &placementv1beta1.ClusterResourcePlacement{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
+
+	policy := crp.Spec.Policy.DeepCopy()
+	policy.Affinity = affinity
+	crp.Spec.Policy = policy
+	Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
+
+	crpGeneration := crp.Generation
+
+	// Mark the old policy snapshot as inactive.
+	policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: oldPolicySnapshotName}, policySnapshot)).To(Succeed(), "Failed to get policy snapshot")
+	policySnapshot.Labels[placementv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
+	Expect(hubClient.Update(ctx, policySnapshot)).To(Succeed(), "Failed to update policy snapshot")
+
+	// Create a new policy snapshot.
+	policySnapshot = &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: newPolicySnapshotName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.CRPTrackingLabel:      crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: strconv.FormatInt(crpGeneration, 10),
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy:     policy,
+			PolicyHash: []byte(policyHash),
+		},
+	}
+	Expect(hubClient.Create(ctx, policySnapshot)).To(Succeed(), "Failed to create policy snapshot")
+}
+
 func createPickNCRPWithPolicySnapshot(
 	crpName string,
 	numOfClusters int32,

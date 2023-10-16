@@ -298,9 +298,9 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
 		crp.Spec.Policy.NumberOfClusters != nil {
-		latestPolicySnapshot.Annotations = map[string]string{
-			fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(*crp.Spec.Policy.NumberOfClusters)),
-		}
+		// Note that all policy snapshots should have the CRP generation annotation set already,
+		// so the Annotations field will not be nil.
+		latestPolicySnapshot.Annotations[fleetv1beta1.NumberOfClustersAnnotation] = strconv.Itoa(int(*crp.Spec.Policy.NumberOfClusters))
 	}
 
 	if err := r.Client.Create(ctx, latestPolicySnapshot); err != nil {

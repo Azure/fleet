@@ -169,6 +169,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -400,6 +401,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},
@@ -459,6 +461,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
+							fleetv1beta1.CRPGenerationAnnotation:    strconv.Itoa(crpGeneration),
 							fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(3),
 						},
 					},

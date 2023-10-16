@@ -384,13 +384,21 @@ var _ = Describe("Test the rollout Controller", func() {
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 		}
-		// check that no bindings are rolled out
-		Consistently(func() bool {
+		// wait until the client informer is populated
+		Eventually(func() error {
 			for _, binding := range bindings {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
 				if err != nil {
-					return false
+					return err
 				}
+			}
+			return nil
+		}, timeout, interval).Should(Succeed(), "make sure the cache is populated")
+		// check that no bindings are rolled out
+		Consistently(func(g Gomega) bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				g.Expect(err).Should(Succeed())
 				if binding.Spec.State == fleetv1beta1.BindingStateBound {
 					return false
 				}
