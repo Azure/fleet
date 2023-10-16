@@ -16,6 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -84,16 +86,19 @@ func crpRolloutCompletedConditions(generation int64) []metav1.Condition {
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             clusterresourceplacement.SynchronizeSucceededReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             clusterresourceplacement.ApplySucceededReason,
 			ObservedGeneration: generation,
 		},
 	}
@@ -104,16 +109,19 @@ func resourcePlacementRolloutCompletedConditions(generation int64) []metav1.Cond
 		{
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             clusterresourceplacement.WorkSynchronizeSucceededReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             clusterresourceplacement.ResourceApplySucceededReason,
 			ObservedGeneration: generation,
 		},
 	}

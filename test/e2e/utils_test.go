@@ -19,6 +19,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -53,10 +54,12 @@ func checkIfAllMemberClustersHaveJoined() {
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(clusterv1beta1.AgentHealthy),
+					Reason: imcv1beta1.EventReasonInternalMemberClusterHealthy,
 				},
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(clusterv1beta1.AgentJoined),
+					Reason: imcv1beta1.EventReasonInternalMemberClusterJoined,
 				},
 			},
 		},
@@ -76,7 +79,7 @@ func checkIfAllMemberClustersHaveJoined() {
 				wantAgentStatus,
 				cmpopts.SortSlices(lessFuncCondition),
 				ignoreConditionObservedGenerationField,
-				ignoreConditionLTTReasonAndMessageFields,
+				ignoreConditionLTTAndMessageFields,
 				ignoreAgentStatusHeartbeatField,
 			); diff != "" {
 				return fmt.Errorf("agent status diff (-got, +want): %s", diff)

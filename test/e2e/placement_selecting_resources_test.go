@@ -19,6 +19,9 @@ import (
 	"k8s.io/utils/pointer"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/controllers/work"
+	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
 )
 
 // Note that this container will run in parallel with other containers.
@@ -640,6 +643,7 @@ var _ = Describe("validating CRP when resource selector is not valid", Ordered, 
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Status:             metav1.ConditionFalse,
+						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
 						ObservedGeneration: crp.Generation,
 					},
 				},
@@ -718,6 +722,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Status:             metav1.ConditionFalse,
+						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
 						ObservedGeneration: crp.Generation,
 					},
 				},
@@ -799,16 +804,19 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 						Status:             metav1.ConditionTrue,
+						Reason:             scheduler.FullyScheduledReason,
 						ObservedGeneration: crp.Generation,
 					},
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
 						Status:             metav1.ConditionTrue,
+						Reason:             clusterresourceplacement.SynchronizeSucceededReason,
 						ObservedGeneration: crp.Generation,
 					},
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
 						Status:             metav1.ConditionFalse,
+						Reason:             clusterresourceplacement.ApplyFailedReason,
 						ObservedGeneration: crp.Generation,
 					},
 				},
@@ -825,6 +833,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
+									Reason:             work.AppliedManifestFailedReason,
 									ObservedGeneration: 0,
 								},
 							},
@@ -833,16 +842,19 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 							{
 								Type:               string(placementv1beta1.ResourceScheduledConditionType),
 								Status:             metav1.ConditionTrue,
+								Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
 								ObservedGeneration: crp.Generation,
 							},
 							{
 								Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
 								Status:             metav1.ConditionTrue,
+								Reason:             clusterresourceplacement.WorkSynchronizeSucceededReason,
 								ObservedGeneration: crp.Generation,
 							},
 							{
 								Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 								Status:             metav1.ConditionFalse,
+								Reason:             clusterresourceplacement.ResourceApplyFailedReason,
 								ObservedGeneration: crp.Generation,
 							},
 						},
