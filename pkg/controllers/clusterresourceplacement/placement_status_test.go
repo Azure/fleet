@@ -1007,7 +1007,7 @@ func TestBuildFailedResourcePlacements(t *testing.T) {
 				Status: fleetv1beta1.WorkStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.WorkConditionTypeApplied),
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
 							ObservedGeneration: 1,
 							Status:             metav1.ConditionTrue,
 						},
@@ -1017,7 +1017,7 @@ func TestBuildFailedResourcePlacements(t *testing.T) {
 			wantIsPending: true,
 			wantRes:       nil,
 		},
-		"pending if applied failed with multiple object": {
+		"report failure if applied failed with multiple object": {
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
@@ -1100,7 +1100,7 @@ func TestBuildFailedResourcePlacements(t *testing.T) {
 				},
 			},
 		},
-		"pending if applied failed with an envelop object": {
+		"report failure if applied failed with an envelop object": {
 			work: &fleetv1beta1.Work{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 1,
