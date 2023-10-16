@@ -313,19 +313,17 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		}
 	}
 
-	klog.V(3).InfoS("starting hub manager")
-	startErr := make(chan error)
+	klog.InfoS("starting hub manager")
 	go func() {
-		defer klog.V(3).InfoS("shutting down hub manager")
-		err := hubMgr.Start(ctx)
-		if err != nil {
-			startErr <- fmt.Errorf("problem starting hub manager: %w", err)
+		defer klog.InfoS("shutting down hub manager")
+		if err := hubMgr.Start(ctx); err != nil {
+			klog.ErrorS(err, "problem starting hub manager")
 			return
 		}
 	}()
 
-	klog.V(3).InfoS("starting member manager")
-	defer klog.V(3).InfoS("shutting down member manager")
+	klog.InfoS("starting member manager")
+	defer klog.InfoS("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
 		return fmt.Errorf("problem starting member manager: %w", err)
 	}
