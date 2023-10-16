@@ -57,6 +57,16 @@ const (
 	workFieldManagerName = "work-api-agent"
 )
 
+// WorkCondition condition reasons
+const (
+	// AppliedWorkFailedReason is the reason string of work condition when it failed to apply the work.
+	AppliedWorkFailedReason = "AppliedWorkFailed"
+	// AppliedWorkCompleteReason is the reason string of work condition when it finished applying work.
+	AppliedWorkCompleteReason = "AppliedWorkComplete"
+	// AppliedManifestFailedReason is the reason string of condition when it failed to apply manifest.
+	AppliedManifestFailedReason = "AppliedManifestFailedReason"
+)
+
 // ApplyWorkReconciler reconciles a Work object
 type ApplyWorkReconciler struct {
 	client             client.Client
@@ -650,7 +660,7 @@ func buildManifestAppliedCondition(err error, action applyAction, observedGenera
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "appliedManifestFailed",
+			Reason:             AppliedManifestFailedReason,
 			Message:            fmt.Sprintf("Failed to apply manifest: %v", err),
 		}
 	}
@@ -674,7 +684,7 @@ func generateWorkAppliedCondition(manifestConditions []fleetv1beta1.ManifestCond
 				Type:               fleetv1beta1.WorkConditionTypeApplied,
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "appliedWorkFailed",
+				Reason:             AppliedWorkFailedReason,
 				Message:            "Failed to apply work",
 				ObservedGeneration: observedGeneration,
 			}
@@ -685,7 +695,7 @@ func generateWorkAppliedCondition(manifestConditions []fleetv1beta1.ManifestCond
 		Type:               fleetv1beta1.WorkConditionTypeApplied,
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
-		Reason:             "appliedWorkComplete",
+		Reason:             AppliedWorkCompleteReason,
 		Message:            "Apply work complete",
 		ObservedGeneration: observedGeneration,
 	}

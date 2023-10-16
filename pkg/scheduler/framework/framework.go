@@ -44,9 +44,11 @@ const (
 	pickFixedNotFoundClusterReason        = "specified cluster is not found"
 	notPickedByScoreReason                = "cluster does not score high enough"
 
-	// The reasons and messages for scheduled conditions.
-	fullyScheduledReason     = "SchedulingPolicyFulfilled"
-	notFullyScheduledReason  = "SchedulingPolicyUnfulfilled"
+	// FullyScheduledReason is the reason string of placement condition when the placement is scheduled.
+	FullyScheduledReason = "SchedulingPolicyFulfilled"
+	// NotFullyScheduledReason is the reason string of placement condition when the placement policy cannot be fully satisfied.
+	NotFullyScheduledReason = "SchedulingPolicyUnfulfilled"
+
 	fullyScheduledMessage    = "found all the clusters needed as specified by the scheduling policy"
 	notFullyScheduledMessage = "could not find all the clusters needed as specified by the scheduling policy"
 
@@ -1280,10 +1282,10 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 	var newCondition metav1.Condition
 	if len(invalid)+len(notFound) == 0 {
 		// The scheduler has selected all the clusters, as the scheduling policy dictates.
-		newCondition = newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage)
+		newCondition = newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage)
 	} else {
 		// Some of the targets cannot be selected.
-		newCondition = newScheduledCondition(policy, metav1.ConditionFalse, notFullyScheduledReason, notFullyScheduledMessage)
+		newCondition = newScheduledCondition(policy, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage)
 	}
 
 	// Compare new decisions + condition with the old ones.

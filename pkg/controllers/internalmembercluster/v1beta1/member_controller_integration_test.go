@@ -120,7 +120,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			By("checking updated join condition")
 			updatedJoinedCond := imc.GetConditionWithType(clusterv1beta1.MemberAgent, string(clusterv1beta1.AgentJoined))
 			Expect(updatedJoinedCond.Status).To(Equal(metav1.ConditionTrue))
-			Expect(updatedJoinedCond.Reason).To(Equal(eventReasonInternalMemberClusterJoined))
+			Expect(updatedJoinedCond.Reason).To(Equal(EventReasonInternalMemberClusterJoined))
 
 			By("checking updated heartbeat condition")
 			agentStatus := imc.Status.AgentStatus[0]
@@ -129,7 +129,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			By("checking updated health condition")
 			updatedHealthCond := imc.GetConditionWithType(clusterv1beta1.MemberAgent, string(clusterv1beta1.AgentHealthy))
 			Expect(updatedHealthCond.Status).To(Equal(metav1.ConditionTrue))
-			Expect(updatedHealthCond.Reason).To(Equal(eventReasonInternalMemberClusterHealthy))
+			Expect(updatedHealthCond.Reason).To(Equal(EventReasonInternalMemberClusterHealthy))
 
 			By("checking updated member cluster usage")
 			Expect(imc.Status.ResourceUsage.Allocatable).ShouldNot(BeNil())
@@ -206,7 +206,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			By("checking updated join condition")
 			updatedJoinedCond := internalMemberCluster.GetConditionWithType(clusterv1beta1.MemberAgent, string(clusterv1beta1.AgentJoined))
 			Expect(updatedJoinedCond.Status).Should(Equal(metav1.ConditionFalse))
-			Expect(updatedJoinedCond.Reason).Should(Equal(eventReasonInternalMemberClusterLeft))
+			Expect(updatedJoinedCond.Reason).Should(Equal(EventReasonInternalMemberClusterLeft))
 		})
 	})
 })
