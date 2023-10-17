@@ -960,17 +960,15 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			wantSelectedResources := []placementv1beta1.ResourceIdentifier{
-				{
-					Group:   "rbac.authorization.k8s.io",
-					Kind:    "ClusterRole",
-					Version: "v1",
-					Name:    clusterRoleName,
-				},
-			}
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, wantSelectedResources)
+		wantSelectedResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
+			{
+				Group:   "rbac.authorization.k8s.io",
+				Kind:    "ClusterRole",
+				Version: "v1",
+				Name:    clusterRoleName,
+			},
 		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResourceIdentifiers, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
