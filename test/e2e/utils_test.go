@@ -7,16 +7,15 @@ package e2e
 
 import (
 	"fmt"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -152,7 +151,6 @@ func deleteResourcesForFleetGuardRail() {
 
 func createMemberClusterResource(name string) {
 	// Create the MC.
-	By(fmt.Sprintf("In MC BeforeAll %s", name))
 	mc := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -170,7 +168,6 @@ func createMemberClusterResource(name string) {
 }
 
 func deleteMemberClusterResource(name string) {
-	By(fmt.Sprintf("In MC AfterAll %s", name))
 	Eventually(func(g Gomega) error {
 		var mc clusterv1beta1.MemberCluster
 		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc)
@@ -178,7 +175,17 @@ func deleteMemberClusterResource(name string) {
 			return nil
 		}
 		g.Expect(err).Should(Succeed(), "Failed to get MC %s", name)
+		controllerutil.RemoveFinalizer(&mc, placementv1beta1.MemberClusterFinalizer)
+		g.Expect(hubClient.Update(ctx, &mc)).Should(Succeed())
 		g.Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+	Eventually(func(g Gomega) error {
+		var mc clusterv1beta1.MemberCluster
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc); !errors.IsNotFound(err) {
+			return fmt.Errorf("MC still exists or an unexpected error occurred: %w", err)
+		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }

@@ -676,7 +676,7 @@ func TestHandleMemberCluster(t *testing.T) {
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := testCase.resourceValidator.handleV1Alpha1MemberCluster(testCase.req)
+			gotResult := testCase.resourceValidator.handleMemberCluster(testCase.req)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}
