@@ -14,7 +14,10 @@ import (
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 )
 
@@ -35,7 +38,11 @@ const (
 )
 
 var (
-	fleetCRDGroups = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
+	fleetCRDGroups  = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
+	v1Alpha1IMCGVK  = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	v1Alpha1WorkGVK = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	imcGVK          = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	workGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.
@@ -163,17 +170,31 @@ func checkCRDGroup(group string) bool {
 
 // ValidateMCIdentity returns admission allowed/denied based on the member cluster's identity.
 func ValidateMCIdentity(ctx context.Context, client client.Client, req admission.Request, mcName string) admission.Response {
+	var identity string
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	var mc fleetv1alpha1.MemberCluster
-	if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
-		// fail open, if the webhook cannot get member cluster resources we don't block the request.
-		klog.V(2).ErrorS(err, fmt.Sprintf("failed to get member cluster resource for request to modify %+v/%s, allowing request to be handled by api server", req.RequestKind, req.SubResource),
-			"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
-		return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
+	if *req.RequestKind == v1Alpha1IMCGVK || *req.RequestKind == v1Alpha1WorkGVK {
+		var mc fleetv1alpha1.MemberCluster
+		if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
+			// fail open, if the webhook cannot get member cluster resources we don't block the request.
+			klog.V(2).ErrorS(err, fmt.Sprintf("failed to get v1alpha1 member cluster resource for request to modify %+v/%s, allowing request to be handled by api server", req.RequestKind, req.SubResource),
+				"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
+			return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
+		}
+		identity = mc.Spec.Identity.Name
+	} else if *req.RequestKind == imcGVK || *req.RequestKind == workGVK {
+		var mc clusterv1beta1.MemberCluster
+		if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
+			// fail open, if the webhook cannot get member cluster resources we don't block the request.
+			klog.V(2).ErrorS(err, fmt.Sprintf("failed to get member cluster resource for request to modify %+v/%s, allowing request to be handled by api server", req.RequestKind, req.SubResource),
+				"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
+			return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
+		}
+		identity = mc.Spec.Identity.Name
 	}
+
 	// For the upstream E2E we use hub agent service account's token which allows member agent to modify Work status, hence we use serviceAccountFmt to make the check.
-	if mc.Spec.Identity.Name == userInfo.Username || fmt.Sprintf(serviceAccountFmt, mc.Spec.Identity.Name) == userInfo.Username {
+	if identity == userInfo.Username || fmt.Sprintf(serviceAccountFmt, identity) == userInfo.Username {
 		klog.V(2).InfoS(allowedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		return admission.Allowed(fmt.Sprintf(resourceAllowedFormat, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}

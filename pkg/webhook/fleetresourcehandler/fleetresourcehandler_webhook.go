@@ -21,6 +21,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
@@ -33,16 +34,19 @@ const (
 	fleetMemberNamespacePrefix = "fleet-member"
 	fleetNamespacePrefix       = "fleet"
 	kubeNamespacePrefix        = "kube"
+	handleResourceFmt          = "handling %s resource"
 )
 
 var (
-	crdGVK        = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	v1Alpha1MCGVK = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	mcGVK         = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	imcGVK        = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	namespaceGVK  = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
-	workGVK       = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	eventGVK      = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
+	crdGVK          = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	v1Alpha1MCGVK   = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
+	v1Alpha1IMCGVK  = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	v1Alpha1WorkGVK = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	mcGVK           = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
+	imcGVK          = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	workGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	namespaceGVK    = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	eventGVK        = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -59,7 +63,6 @@ type fleetResourceValidator struct {
 }
 
 // Handle receives the request then allows/denies the request to modify fleet resources.
-// TODO(Arvindthiru): Need to handle fleet v1beta1 resources before enabling webhook in RP cause events for v1beta1 IMC will be blocked.
 func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	// special case for Kind:Namespace resources req.Name and req.Namespace has the same value the ObjectMeta.Name of Namespace.
 	if req.Kind.Kind == "Namespace" {
@@ -81,20 +84,17 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == namespaceGVK:
 			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
-		case req.Kind == imcGVK:
-			klog.V(2).InfoS("handling internal member cluster resource", "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
-			response = v.handleFleetMemberNamespacedResource(ctx, req)
-		case req.Kind == workGVK:
-			klog.V(2).InfoS("handling work resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation)
+		case req.Kind == v1Alpha1IMCGVK || req.Kind == v1Alpha1WorkGVK || req.Kind == imcGVK || req.Kind == workGVK:
+			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetMemberNamespacedResource(ctx, req)
 		case req.Kind == eventGVK:
 			klog.V(2).InfoS("handling event resource", "GVK", eventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
-			klog.V(2).InfoS(fmt.Sprintf("handling %s resource", req.Kind.Kind), "GVK", req.Kind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.Kind.String(), "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
@@ -164,22 +164,15 @@ func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context
 }
 
 // handleEvent allows/denies request to modify event after validation.
-func (v *fleetResourceValidator) handleEvent(ctx context.Context, req admission.Request) admission.Response {
-	// hub agent creates events for MC which is cluster scoped, only member agent creates events in fleet-member prefixed namespaces.
-	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
-		mcName := parseMemberClusterNameFromNamespace(req.Namespace)
-		return validation.ValidateMCIdentity(ctx, v.client, req, mcName)
-	}
-	if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
-		return validation.ValidateUserForResource(req, v.whiteListedUsers)
-	}
-	return admission.Allowed("namespace name for this event is not a reserved namespace so we allow all operations for events on these namespaces")
+func (v *fleetResourceValidator) handleEvent(_ context.Context, _ admission.Request) admission.Response {
+	// currently allowing all events will handle events after v1alpha1 resources are removed.
+	return admission.Allowed("all events are allowed")
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.
 func (v *fleetResourceValidator) handleNamespace(req admission.Request) admission.Response {
-	fleetMatchResult := strings.HasPrefix(req.Name, "fleet")
-	kubeMatchResult := strings.HasPrefix(req.Name, "kube")
+	fleetMatchResult := strings.HasPrefix(req.Name, fleetNamespacePrefix)
+	kubeMatchResult := strings.HasPrefix(req.Name, kubeNamespacePrefix)
 	if fleetMatchResult || kubeMatchResult {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
