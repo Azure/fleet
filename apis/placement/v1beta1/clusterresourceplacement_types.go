@@ -337,8 +337,7 @@ type RollingUpdateConfig struct {
 // ClusterResourcePlacementStatus defines the observed state of the ClusterResourcePlacement object.
 type ClusterResourcePlacementStatus struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
-	// +optional
-	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
+	SelectedResources []ResourceIdentifier `json:"selectedResources"`
 
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
 	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.

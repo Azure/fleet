@@ -166,6 +166,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: crp.Generation,
 		}
+		// SelectedResources is a required field, so it should be set when updating the status.
+		crp.Status.SelectedResources = []fleetv1beta1.ResourceIdentifier{}
 		crp.SetConditions(scheduleCondition)
 		if updateErr := r.Client.Status().Update(ctx, crp); updateErr != nil {
 			klog.ErrorS(updateErr, "Failed to update the status", "clusterResourcePlacement", crpKObj)

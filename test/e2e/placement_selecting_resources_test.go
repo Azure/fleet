@@ -197,7 +197,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
+			return validateCRPStatus(types.NamespacedName{Name: crpName}, []placementv1beta1.ResourceIdentifier{})
 		}
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -305,7 +305,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
+			return validateCRPStatus(types.NamespacedName{Name: crpName}, []placementv1beta1.ResourceIdentifier{})
 		}
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -639,6 +639,7 @@ var _ = Describe("validating CRP when resource selector is not valid", Ordered, 
 			}
 
 			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []placementv1beta1.ResourceIdentifier{},
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
@@ -718,6 +719,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 			}
 
 			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
+				SelectedResources: []placementv1beta1.ResourceIdentifier{},
 				Conditions: []metav1.Condition{
 					{
 						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
@@ -1080,7 +1082,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
+			return validateCRPStatus(types.NamespacedName{Name: crpName}, []placementv1beta1.ResourceIdentifier{})
 		}
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
@@ -1173,7 +1175,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
+			return validateCRPStatus(types.NamespacedName{Name: crpName}, []placementv1beta1.ResourceIdentifier{})
 		}
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
