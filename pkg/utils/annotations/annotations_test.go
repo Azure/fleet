@@ -375,10 +375,10 @@ func TestExtractNumberOfEnvelopeObjFromResourceSnapshot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := ExtractNumberOfEnvelopeObjFromResourceSnapshot(tc.snapshot)
 			if gotErr := err != nil; gotErr != tc.wantError {
-				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot teset `%s` got err %v, want err %v", tc.name, err, tc.wantError)
+				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot() got err %v, want err %v", err, tc.wantError)
 			}
 			if !tc.wantError && got != tc.want {
-				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot teset `%s` = %v, want err %v", tc.name, got, tc.want)
+				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot() got %d, want %d", got, tc.want)
 			}
 		})
 	}

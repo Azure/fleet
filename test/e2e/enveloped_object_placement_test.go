@@ -36,7 +36,7 @@ var (
 )
 
 // Note that this container will run in parallel with other containers.
-var _ = FDescribe("placing wrapped resources using a CRP", Ordered, func() {
+var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	var wantSelectedResources []placementv1beta1.ResourceIdentifier
