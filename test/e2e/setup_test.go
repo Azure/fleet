@@ -68,6 +68,7 @@ var (
 	memberCluster3 *framework.Cluster
 
 	hubClient            client.Client
+	impersonateHubClient client.Client
 	memberCluster1Client client.Client
 	memberCluster2Client client.Client
 	memberCluster3Client client.Client
@@ -174,6 +175,8 @@ func beforeSuiteForAllProcesses() {
 	framework.GetClusterClient(hubCluster)
 	hubClient = hubCluster.KubeClient
 	Expect(hubClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
+	impersonateHubClient = hubCluster.ImpersonateKubeClient
+	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 
 	memberCluster1 = framework.NewCluster(memberCluster1Name, scheme)
 	Expect(memberCluster1).NotTo(BeNil(), "Failed to initialize cluster object")
@@ -213,11 +216,13 @@ func beforeSuiteForProcess1() {
 	//
 	// Note that these clusters are not real kind clusters.
 	setupInvalidClusters()
+	createResourcesForFleetGuardRail()
 }
 
 var _ = SynchronizedBeforeSuite(beforeSuiteForProcess1, beforeSuiteForAllProcesses)
 
 var _ = SynchronizedAfterSuite(func() {}, func() {
+	deleteResourcesForFleetGuardRail()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
 

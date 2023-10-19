@@ -3,7 +3,6 @@ kind: MemberCluster
 metadata:
   name: kind-member-testing-v1beta1
 spec:
-  state: Join
   identity:
     name: member-agent-sa
     kind: ServiceAccount
