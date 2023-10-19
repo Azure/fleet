@@ -1023,3 +1023,190 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
+
+var _ = Describe("validating CRP revision history allowing single revision when updating resource selector", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    "invalid-namespace",
+					},
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: pointer.Int(5),
+					},
+				},
+				RevisionHistoryLimit: pointer.Int32(1),
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s", crpName))
+		cleanupCRP(crpName)
+
+		By("deleting created work resources")
+		cleanupWorkResources()
+	})
+
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := func() error {
+			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
+		}
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("adding resource selectors", func() {
+		updateFunc := func() error {
+			crp := &placementv1beta1.ClusterResourcePlacement{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				return err
+			}
+
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, placementv1beta1.ClusterResourceSelector{
+				Group:   "",
+				Kind:    "Namespace",
+				Version: "v1",
+				Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+			})
+			// may hit 409
+			return hubClient.Update(ctx, crp)
+		}
+		Eventually(updateFunc(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+	})
+
+	It("should update CRP status as expected", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have one policy snapshot revision and one resource snapshot revision", func() {
+		Expect(validateCRPSnapshotRevisions(crpName, 1, 1)).Should(Succeed(), "Failed to validate the revision history")
+	})
+
+	It("can delete the CRP", func() {
+		// Delete the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+		}
+		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
+	})
+
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+	It("should remove controller finalizers from CRP", func() {
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
+	})
+})
+
+var _ = Describe("validating CRP revision history allowing multiple revisions when updating resource selector", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    "invalid-namespace",
+					},
+				},
+				Strategy: placementv1beta1.RolloutStrategy{
+					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+						UnavailablePeriodSeconds: pointer.Int(5),
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s", crpName))
+		cleanupCRP(crpName)
+
+		By("deleting created work resources")
+		cleanupWorkResources()
+	})
+
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := func() error {
+			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
+		}
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("adding resource selectors", func() {
+		updateFunc := func() error {
+			crp := &placementv1beta1.ClusterResourcePlacement{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+				return err
+			}
+
+			crp.Spec.ResourceSelectors = append(crp.Spec.ResourceSelectors, placementv1beta1.ClusterResourceSelector{
+				Group:   "",
+				Kind:    "Namespace",
+				Version: "v1",
+				Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+			})
+			// may hit 409
+			return hubClient.Update(ctx, crp)
+		}
+		Eventually(updateFunc(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+	})
+
+	It("should update CRP status as expected", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should have one policy snapshot revision and two resource snapshot revisions", func() {
+		Expect(validateCRPSnapshotRevisions(crpName, 1, 2)).Should(Succeed(), "Failed to validate the revision history")
+	})
+
+	It("can delete the CRP", func() {
+		// Delete the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+		}
+		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
+	})
+
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+	It("should remove controller finalizers from CRP", func() {
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
+	})
+})

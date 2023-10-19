@@ -48,7 +48,7 @@ const (
 	reasonMemberClusterNotReadyToJoin = "MemberClusterNotReadyToJoin"
 	reasonMemberClusterJoined         = "MemberClusterJoined"
 	reasonMemberClusterLeft           = "MemberClusterLeft"
-	reasonMemberClusterUnknown        = "MemberClusterUnknown"
+	reasonMemberClusterUnknown        = "MemberClusterJoinStateUnknown"
 )
 
 // Reconciler reconciles a MemberCluster object
@@ -581,8 +581,8 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 	// Joined status changed.
 	existingCondition := mc.GetCondition(newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
-		recorder.Event(mc, corev1.EventTypeWarning, reasonMemberClusterUnknown, "member cluster unknown")
-		klog.V(2).InfoS("memberCluster unknown", "memberCluster", klog.KObj(mc))
+		recorder.Event(mc, corev1.EventTypeWarning, reasonMemberClusterUnknown, "member cluster join state unknown")
+		klog.V(2).InfoS("memberCluster join state unknown", "memberCluster", klog.KObj(mc))
 	}
 
 	mc.SetConditions(newCondition)

@@ -2157,27 +2157,63 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 
 	filteredStatus := NewNonErrorStatus(ClusterUnschedulable, dummyPluginName, "filtered")
 
-	crpGeneration := 1
-	policy := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+	crpGeneration1 := int64(1)
+	crpGeneration2 := int64(2)
+	policyWithNoStatus := &placementv1beta1.ClusterSchedulingPolicySnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 			Annotations: map[string]string{
-				placementv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration),
+				placementv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration1),
 			},
+		},
+	}
+	policyWithOldStatus := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration2),
+			},
+		},
+	}
+	policyWithOldStatus.Status.ObservedCRPGeneration = crpGeneration1
+	policyWithOldStatus.Status.Conditions = []metav1.Condition{
+		newScheduledCondition(policyWithOldStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+	}
+	policyWithOldStatus.Status.ClusterDecisions = []placementv1beta1.ClusterDecision{
+		{
+			ClusterName: clusterName,
+			Selected:    true,
+			ClusterScore: &placementv1beta1.ClusterScore{
+				AffinityScore:       &affinityScore1,
+				TopologySpreadScore: &topologySpreadScore1,
+			},
+			Reason: pickedByPolicyReason,
+		},
+		{
+			ClusterName: altClusterName,
+			Selected:    true,
+			ClusterScore: &placementv1beta1.ClusterScore{
+				AffinityScore:       &affinityScore2,
+				TopologySpreadScore: &topologySpreadScore2,
+			},
+			Reason: pickedByPolicyReason,
 		},
 	}
 
 	testCases := []struct {
 		name                              string
+		policy                            *placementv1beta1.ClusterSchedulingPolicySnapshot
 		maxUnselectedClusterDecisionCount int
 		notPicked                         ScoredClusters
 		filtered                          []*filteredClusterWithStatus
 		existing                          [][]*placementv1beta1.ClusterResourceBinding
+		wantObservedCRPGeneration         int64
 		wantDecisions                     []placementv1beta1.ClusterDecision
 		wantCondition                     metav1.Condition
 	}{
 		{
 			name:                              "no filtered/not picked clusters",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2215,6 +2251,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
+			wantObservedCRPGeneration: crpGeneration1,
 			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
@@ -2235,10 +2272,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason: pickedByPolicyReason,
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "with filtered clusters and existing bindings",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2286,6 +2324,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
+			wantObservedCRPGeneration: crpGeneration1,
 			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
@@ -2311,10 +2350,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "with not picked clusters and existing bindings",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2365,6 +2405,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
+			wantObservedCRPGeneration: crpGeneration1,
 			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
@@ -2394,10 +2435,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "with both filtered/not picked clusters and existing bindings",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2442,6 +2484,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
+			wantObservedCRPGeneration: crpGeneration1,
 			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
@@ -2467,15 +2510,18 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "none",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
-			wantCondition:                     newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantObservedCRPGeneration:         crpGeneration1,
+			wantCondition:                     newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "too many filtered",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: 1,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2515,6 +2561,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					status: filteredStatus,
 				},
 			},
+			wantObservedCRPGeneration: crpGeneration1,
 			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
@@ -2531,10 +2578,11 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					Reason:      filteredStatus.String(),
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 		{
 			name:                              "too many not picked",
+			policy:                            policyWithNoStatus,
 			maxUnselectedClusterDecisionCount: 1,
 			existing: [][]*placementv1beta1.ClusterResourceBinding{
 				{
@@ -2580,6 +2628,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
+			wantObservedCRPGeneration: crpGeneration1,
 			wantDecisions: []placementv1beta1.ClusterDecision{
 				{
 					ClusterName: clusterName,
@@ -2600,7 +2649,70 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 					},
 				},
 			},
-			wantCondition: newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+		},
+		{
+			name:                              "observed a new CRP generation only",
+			policy:                            policyWithOldStatus,
+			maxUnselectedClusterDecisionCount: defaultMaxUnselectedClusterDecisionCount,
+			existing: [][]*placementv1beta1.ClusterResourceBinding{
+				{
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: bindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: clusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore1,
+									TopologySpreadScore: &topologySpreadScore1,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+					&placementv1beta1.ClusterResourceBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altBindingName,
+						},
+						Spec: placementv1beta1.ResourceBindingSpec{
+							ClusterDecision: placementv1beta1.ClusterDecision{
+								ClusterName: altClusterName,
+								Selected:    true,
+								ClusterScore: &placementv1beta1.ClusterScore{
+									AffinityScore:       &affinityScore2,
+									TopologySpreadScore: &topologySpreadScore2,
+								},
+								Reason: pickedByPolicyReason,
+							},
+						},
+					},
+				},
+			},
+			wantObservedCRPGeneration: crpGeneration2,
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore1,
+						TopologySpreadScore: &topologySpreadScore1,
+					},
+					Reason: pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					ClusterScore: &placementv1beta1.ClusterScore{
+						AffinityScore:       &affinityScore2,
+						TopologySpreadScore: &topologySpreadScore2,
+					},
+					Reason: pickedByPolicyReason,
+				},
+			},
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
 		},
 	}
 
@@ -2608,7 +2720,7 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme.Scheme).
-				WithObjects(policy).
+				WithObjects(tc.policy).
 				Build()
 			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
 			f := &framework{
@@ -2621,8 +2733,8 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 			for _, bindingSet := range tc.existing {
 				numOfClusters += len(bindingSet)
 			}
-			if err := f.updatePolicySnapshotStatusFromBindings(ctx, policy, numOfClusters, tc.notPicked, tc.filtered, tc.existing...); err != nil {
-				t.Fatalf("updatePolicySnapshotStatusFrom() = %v, want no error", err)
+			if err := f.updatePolicySnapshotStatusFromBindings(ctx, tc.policy, numOfClusters, tc.notPicked, tc.filtered, tc.existing...); err != nil {
+				t.Fatalf("updatePolicySnapshotStatusFromBindings() = %v, want no error", err)
 			}
 
 			updatedPolicy := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
@@ -2639,8 +2751,8 @@ func TestUpdatePolicySnapshotStatusFromBindings(t *testing.T) {
 				t.Errorf("policy snapshot scheduled condition not equal (-got, +want): %s", diff)
 			}
 
-			if policy.Status.ObservedCRPGeneration != int64(crpGeneration) {
-				t.Errorf("policy snapshot observed CRP generation: got %d, want %d", policy.Status.ObservedCRPGeneration, crpGeneration)
+			if updatedPolicy.Status.ObservedCRPGeneration != tc.wantObservedCRPGeneration {
+				t.Errorf("policy snapshot observed CRP generation: got %d, want %d", updatedPolicy.Status.ObservedCRPGeneration, tc.wantObservedCRPGeneration)
 			}
 		})
 	}
@@ -5894,6 +6006,260 @@ func TestRunAllPluginsForPickNPlacementType(t *testing.T) {
 			}
 			if diff := cmp.Diff(filtered, tc.wantFiltered, cmpopts.SortSlices(lessFuncFilteredCluster), cmp.AllowUnexported(filteredClusterWithStatus{}, Status{})); diff != "" {
 				t.Errorf("runAllPluginsForPickNPlacementType() filtered diff (-got, +want): %s", diff)
+			}
+		})
+	}
+}
+
+func TestUpdatePolicySnapshotStatusForPickFixedPlacementType(t *testing.T) {
+	crpGeneration1 := int64(1)
+	crpGeneration2 := int64(2)
+	policyWithNoStatus := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration1),
+			},
+		},
+	}
+	policyWithOldStatus := &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation: fmt.Sprintf("%d", crpGeneration2),
+			},
+		},
+	}
+	policyWithOldStatus.Status.ObservedCRPGeneration = crpGeneration1
+	policyWithOldStatus.Status.Conditions = []metav1.Condition{
+		newScheduledCondition(policyWithOldStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+	}
+	policyWithOldStatus.Status.ClusterDecisions = []placementv1beta1.ClusterDecision{
+		{
+			ClusterName: clusterName,
+			Selected:    true,
+			Reason:      pickedByPolicyReason,
+		},
+		{
+			ClusterName: altClusterName,
+			Selected:    true,
+			Reason:      pickedByPolicyReason,
+		},
+	}
+
+	invalidClusterDummyReason := "cluster is not a valid target"
+
+	testCases := []struct {
+		name                      string
+		policy                    *placementv1beta1.ClusterSchedulingPolicySnapshot
+		valid                     []*clusterv1beta1.MemberCluster
+		invalid                   []*invalidClusterWithReason
+		notFound                  []string
+		wantObservedCRPGeneration int64
+		wantDecisions             []placementv1beta1.ClusterDecision
+		wantCondition             metav1.Condition
+	}{
+		{
+			name:   "with only valid clusters",
+			policy: policyWithNoStatus,
+			valid: []*clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: altClusterName,
+					},
+				},
+			},
+			wantObservedCRPGeneration: crpGeneration1,
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					Reason:      pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					Reason:      pickedByPolicyReason,
+				},
+			},
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+		},
+		{
+			name:   "with invalid clusters",
+			policy: policyWithNoStatus,
+			invalid: []*invalidClusterWithReason{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: clusterName,
+						},
+					},
+					reason: invalidClusterDummyReason,
+				},
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					reason: invalidClusterDummyReason,
+				},
+			},
+			wantObservedCRPGeneration: crpGeneration1,
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    false,
+					Reason:      fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, invalidClusterDummyReason),
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, invalidClusterDummyReason),
+				},
+			},
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage),
+		},
+		{
+			name:   "with not found clusters",
+			policy: policyWithNoStatus,
+			notFound: []string{
+				clusterName,
+				altClusterName,
+			},
+			wantObservedCRPGeneration: crpGeneration1,
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    false,
+					Reason:      pickFixedNotFoundClusterReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      pickFixedNotFoundClusterReason,
+				},
+			},
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage),
+		},
+		{
+			name:   "mixed",
+			policy: policyWithNoStatus,
+			valid: []*clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName,
+					},
+				},
+			},
+			invalid: []*invalidClusterWithReason{
+				{
+					cluster: &clusterv1beta1.MemberCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: altClusterName,
+						},
+					},
+					reason: invalidClusterDummyReason,
+				},
+			},
+			notFound: []string{
+				anotherClusterName,
+			},
+			wantObservedCRPGeneration: crpGeneration1,
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					Reason:      pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    false,
+					Reason:      fmt.Sprintf(pickFixedInvalidClusterReasonTemplate, invalidClusterDummyReason),
+				},
+				{
+					ClusterName: anotherClusterName,
+					Selected:    false,
+					Reason:      pickFixedNotFoundClusterReason,
+				},
+			},
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage),
+		},
+		{
+			name:                      "none",
+			policy:                    policyWithNoStatus,
+			wantObservedCRPGeneration: crpGeneration1,
+			wantCondition:             newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+		},
+		{
+			name:   "observed a new CRP generation only",
+			policy: policyWithOldStatus,
+			valid: []*clusterv1beta1.MemberCluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: clusterName,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: altClusterName,
+					},
+				},
+			},
+			wantObservedCRPGeneration: crpGeneration2,
+			wantDecisions: []placementv1beta1.ClusterDecision{
+				{
+					ClusterName: clusterName,
+					Selected:    true,
+					Reason:      pickedByPolicyReason,
+				},
+				{
+					ClusterName: altClusterName,
+					Selected:    true,
+					Reason:      pickedByPolicyReason,
+				},
+			},
+			wantCondition: newScheduledCondition(policyWithNoStatus, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme.Scheme).
+				WithObjects(tc.policy).
+				Build()
+			// Construct framework manually instead of using NewFramework() to avoid mocking the controller manager.
+			f := &framework{
+				client: fakeClient,
+			}
+
+			ctx := context.Background()
+			if err := f.updatePolicySnapshotStatusForPickFixedPlacementType(ctx, tc.policy, tc.valid, tc.invalid, tc.notFound); err != nil {
+				t.Fatalf("updatePolicySnapshotStatusForPickFixedPlacementType() = %v, want no error", err)
+			}
+
+			updatedPolicy := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
+			if err := f.client.Get(ctx, types.NamespacedName{Name: policyName}, updatedPolicy); err != nil {
+				t.Fatalf("Get policy snapshot, got %v, want no error", err)
+			}
+
+			if diff := cmp.Diff(updatedPolicy.Status.ClusterDecisions, tc.wantDecisions); diff != "" {
+				t.Errorf("policy snapshot status cluster decisions not equal (-got, +want): %s", diff)
+			}
+
+			updatedCondition := meta.FindStatusCondition(updatedPolicy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
+			if diff := cmp.Diff(updatedCondition, &tc.wantCondition, ignoredCondFields); diff != "" {
+				t.Errorf("policy snapshot scheduled condition not equal (-got, +want): %s", diff)
+			}
+
+			if updatedPolicy.Status.ObservedCRPGeneration != tc.wantObservedCRPGeneration {
+				t.Errorf("policy snapshot observed CRP generation: got %d, want %d", updatedPolicy.Status.ObservedCRPGeneration, tc.wantObservedCRPGeneration)
 			}
 		})
 	}

@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
@@ -264,4 +265,24 @@ func crpRemovedActual() func() error {
 
 		return nil
 	}
+}
+
+func validateCRPSnapshotRevisions(crpName string, wantPolicySnapshotRevision, wantResourceSnapshotRevision int) error {
+	matchingLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+
+	snapshotList := &placementv1beta1.ClusterSchedulingPolicySnapshotList{}
+	if err := hubClient.List(ctx, snapshotList, matchingLabels); err != nil {
+		return err
+	}
+	if len(snapshotList.Items) != wantPolicySnapshotRevision {
+		return fmt.Errorf("clusterSchedulingPolicySnapshotList got %v, want 1", len(snapshotList.Items))
+	}
+	resourceSnapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
+	if err := hubClient.List(ctx, resourceSnapshotList, matchingLabels); err != nil {
+		return err
+	}
+	if len(resourceSnapshotList.Items) != wantResourceSnapshotRevision {
+		return fmt.Errorf("clusterResourceSnapshotList got %v, want 2", len(snapshotList.Items))
+	}
+	return nil
 }

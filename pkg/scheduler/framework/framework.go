@@ -696,6 +696,13 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 ) error {
 	policyRef := klog.KObj(policy)
 
+	// Retrieve the corresponding CRP generation.
+	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+
 	// Prepare new scheduling decisions.
 	newDecisions := newSchedulingDecisionsFromBindings(f.maxUnselectedClusterDecisionCount, notPicked, filtered, existing...)
 	// Prepare new scheduling condition.
@@ -704,16 +711,14 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	// Compare the new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
 	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
-	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
+	if observedCRPGeneration == policy.Status.ObservedCRPGeneration &&
+		equalDecisions(currentDecisions, newDecisions) &&
+		condition.EqualCondition(currentCondition, &newCondition) {
 		// Skip if there is no change in decisions and conditions.
+		klog.InfoS(
+			"No change in scheduling decisions and condition, and the observed CRP generation remains the same",
+			"clusterSchedulingPolicySnapshot", policyRef)
 		return nil
-	}
-
-	// Retrieve the corresponding CRP generation.
-	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
-	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
-		return controller.NewUnexpectedBehaviorError(err)
 	}
 
 	// Update the status.
@@ -1276,6 +1281,13 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 ) error {
 	policyRef := klog.KObj(policy)
 
+	// Retrieve the corresponding CRP generation.
+	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+
 	// Prepare new scheduling decisions.
 	newDecisions := newSchedulingDecisionsForPickFixedPlacementType(valid, invalid, notFound)
 	// Prepare new scheduling condition.
@@ -1291,16 +1303,14 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 	// Compare new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
 	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
-	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
+	if observedCRPGeneration == policy.Status.ObservedCRPGeneration &&
+		equalDecisions(currentDecisions, newDecisions) &&
+		condition.EqualCondition(currentCondition, &newCondition) {
 		// Skip if there is no change in decisions and conditions.
+		klog.InfoS(
+			"No change in scheduling decisions and condition, and the observed CRP generation remains the same",
+			"clusterSchedulingPolicySnapshot", policyRef)
 		return nil
-	}
-
-	// Retrieve the corresponding CRP generation.
-	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
-	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
-		return controller.NewUnexpectedBehaviorError(err)
 	}
 
 	// Update the status.
