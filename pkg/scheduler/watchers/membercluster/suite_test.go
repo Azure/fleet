@@ -100,6 +100,7 @@ func setupResources() {
 	})
 	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
 	// Update the status.
+	crp.Status.SelectedResources = []placementv1beta1.ResourceIdentifier{}
 	meta.SetStatusCondition(&crp.Status.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 		Status:             metav1.ConditionTrue,
@@ -115,6 +116,7 @@ func setupResources() {
 	})
 	Expect(hubClient.Create(ctx, crp)).Should(Succeed(), "Failed to create CRP")
 	// Update the status.
+	crp.Status.SelectedResources = []placementv1beta1.ResourceIdentifier{}
 	meta.SetStatusCondition(&crp.Status.Conditions, metav1.Condition{
 		Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
 		Status:             metav1.ConditionTrue,

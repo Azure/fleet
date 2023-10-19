@@ -1103,7 +1103,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 			// may hit 409
 			return hubClient.Update(ctx, crp)
 		}
-		Eventually(updateFunc(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+		Eventually(updateFunc, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
 	})
 
 	It("should update CRP status as expected", checkIfPlacedWorkResourcesOnAllMemberClusters)
@@ -1196,7 +1196,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 			// may hit 409
 			return hubClient.Update(ctx, crp)
 		}
-		Eventually(updateFunc(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+		Eventually(updateFunc, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
 	})
 
 	It("should update CRP status as expected", checkIfPlacedWorkResourcesOnAllMemberClusters)

@@ -105,6 +105,7 @@ var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
 				Reason:             "applied",
 				ObservedGeneration: createdCRP.GetGeneration(),
 			}
+			createdCRP.Status.SelectedResources = []fleetv1beta1.ResourceIdentifier{}
 			createdCRP.SetConditions(newCondition)
 			Expect(k8sClient.Status().Update(ctx, createdCRP)).Should(Succeed())
 

@@ -268,6 +268,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					SelectedResources: []placementv1beta1.ResourceIdentifier{},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionUnknown,
@@ -316,6 +317,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					SelectedResources: []placementv1beta1.ResourceIdentifier{},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -373,6 +375,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					SelectedResources: []placementv1beta1.ResourceIdentifier{},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionUnknown,
@@ -445,6 +448,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					SelectedResources: []placementv1beta1.ResourceIdentifier{},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
