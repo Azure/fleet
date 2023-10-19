@@ -70,3 +70,18 @@ func ExtractNumberOfResourceSnapshotsFromResourceSnapshot(snapshot *fleetv1beta1
 	}
 	return snapshotCount, nil
 }
+
+// ExtractNumberOfEnvelopeObjFromResourceSnapshot extracts the number of envelope object in a group from the master clusterResourceSnapshot.
+func ExtractNumberOfEnvelopeObjFromResourceSnapshot(snapshot *fleetv1beta1.ClusterResourceSnapshot) (int, error) {
+	countAnnotation, exist := snapshot.Annotations[fleetv1beta1.NumberOfEnvelopedObjectsAnnotation]
+	// doesn't exist means no enveloped object in the snapshot group
+	if !exist {
+		return 0, nil
+	}
+	envelopeObjCount, err := strconv.Atoi(countAnnotation)
+	if err != nil || envelopeObjCount < 0 {
+		return 0, fmt.Errorf(
+			"resource snapshot %s has an invalid enveloped object count %d or err %w", snapshot.Name, envelopeObjCount, err)
+	}
+	return envelopeObjCount, nil
+}

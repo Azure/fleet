@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	workNamespaceNameTemplate = "work-%d"
+	workNamespaceNameTemplate = "application-%d"
 	appConfigMapNameTemplate  = "app-config-%d"
 	crpNameTemplate           = "crp-%d"
 	mcNameTemplate            = "mc-%d"

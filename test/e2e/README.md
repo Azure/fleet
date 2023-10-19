@@ -37,9 +37,9 @@ To access the `Kind` clusters, after the test environment is set up using `setup
 between the following contexts using the command `kubectl config use-context`:
 
 * `kind-hub` for accessing the hub cluster
-* `kind-bravelion` for accessing the bravelion cluster
-* `kind-smartfish` for accessing the smartfish cluster
-* `kind-singingbutterfly` for accessing the singingbutterfly cluster
+* `kind-cluster-1` for accessing the first cluster
+* `kind-cluster-2` for accessing the second cluster
+* `kind-cluster-3` for accessing the third cluster
 
 Fleet agents run in the namespace `fleet-system`; to retrieve their logs, switch to a `Kind`
 cluster, and run the following steps:

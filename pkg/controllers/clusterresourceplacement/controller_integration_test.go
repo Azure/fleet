@@ -250,6 +250,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Annotations: map[string]string{
 						placementv1beta1.NumberOfResourceSnapshotsAnnotation: strconv.Itoa(1),
 						placementv1beta1.ResourceGroupHashAnnotation:         jsonBytes,
+						placementv1beta1.NumberOfEnvelopedObjectsAnnotation:  strconv.Itoa(0),
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						crpOwnerReference,

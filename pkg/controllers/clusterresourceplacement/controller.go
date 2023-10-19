@@ -151,7 +151,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 
 	// validate the resource selectors first before creating any snapshot
-	selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
+	envelopeObjCount, selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to select the resources", "clusterResourcePlacement", crpKObj)
 		if !errors.Is(err, controller.ErrUserError) {
@@ -182,7 +182,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: selectedResources,
 	}
-	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, &resourceSnapshotSpec, int(revisionLimit))
+	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount, &resourceSnapshotSpec, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -387,7 +387,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 }
 
 // TODO handle all the resources selected by placement larger than 1MB size limit of k8s objects.
-func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
+func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, envelopeObjCount int, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
 	resourceHash, err := generateResourceHash(resourceSnapshotSpec)
 	crpKObj := klog.KObj(crp)
 	if err != nil {
@@ -449,8 +449,9 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.ResourceGroupHashAnnotation: resourceHash,
-				// TODO need to updated once we support multiple snapshots
+				// TODO: need to update this once we support multiple snapshots
 				fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+				fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  strconv.Itoa(envelopeObjCount),
 			},
 		},
 		Spec: *resourceSnapshotSpec,
