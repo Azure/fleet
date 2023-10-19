@@ -65,8 +65,7 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
     --set enableV1Alpha1APIs=false \
-    --set enableV1Beta1APIs=true \
-    --set enableGuardRail=false
+    --set enableV1Beta1APIs=true
 
 # Instal the member agent and related components to the member clusters
 

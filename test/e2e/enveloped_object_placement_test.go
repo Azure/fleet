@@ -88,18 +88,18 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
+		It("should update CRP status as expected", func() {
+			Eventually(func() error {
+				return validateCRPStatus(types.NamespacedName{Name: crpName}, wantSelectedResources)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
 				workResourcesPlacedActual := checkEnvelopResourcePlacement(memberCluster)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
-		})
-
-		It("should update CRP status as expected", func() {
-			Eventually(func() error {
-				return validateCRPStatus(types.NamespacedName{Name: crpName}, wantSelectedResources)
-			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("Update the envelop configMap with bad configuration", func() {
