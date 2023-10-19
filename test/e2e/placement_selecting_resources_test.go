@@ -1069,9 +1069,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
-		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
@@ -1162,9 +1160,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			return validateCRPStatus(types.NamespacedName{Name: crpName}, nil)
-		}
+		crpStatusUpdatedActual := crpStatusUpdatedActual(nil, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 

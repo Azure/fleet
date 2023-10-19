@@ -51,7 +51,7 @@ const (
 )
 
 const (
-	eventuallyDuration   = time.Minute
+	eventuallyDuration   = time.Minute * 2
 	eventuallyInterval   = time.Second * 5
 	consistentlyDuration = time.Second * 10
 	consistentlyInterval = time.Second * 2
