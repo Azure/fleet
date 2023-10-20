@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -25,11 +24,6 @@ const (
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
-)
-
-var (
-	mcGVK                = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	resourceDeniedFormat = "user: %s in groups: %v is not allowed to %s resource %+v/%s: %+v"
 )
 
 func workResourceSelector() []placementv1beta1.ClusterResourceSelector {

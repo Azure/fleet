@@ -6,18 +6,21 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -218,7 +221,7 @@ func createResourcesForFleetGuardRail() {
 			{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "User",
-				Name:     "test-user",
+				Name:     testUser,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -250,7 +253,7 @@ func deleteResourcesForFleetGuardRail() {
 	Expect(hubClient.Delete(ctx, &cr)).Should(Succeed())
 }
 
-func createMemberClusterResource(name string) {
+func createMemberClusterResource(name, user string) {
 	// Create the MC.
 	mc := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -258,7 +261,7 @@ func createMemberClusterResource(name string) {
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
-				Name:      testUser,
+				Name:      user,
 				Kind:      "ServiceAccount",
 				Namespace: utils.FleetSystemNamespace,
 			},
@@ -286,6 +289,76 @@ func deleteMemberClusterResource(name string) {
 		var mc clusterv1beta1.MemberCluster
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc); !errors.IsNotFound(err) {
 			return fmt.Errorf("MC still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
+func checkInternalMemberClusterExists(name, namespace string) {
+	imc := &clusterv1beta1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	Eventually(func() error {
+		return hubClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
+func createWorkResource(name, namespace string) {
+	testDeployment := appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "Deployment",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: utilrand.String(10),
+					Kind:       utilrand.String(10),
+					Name:       utilrand.String(10),
+					UID:        types.UID(utilrand.String(10)),
+				},
+			},
+		},
+	}
+	deploymentBytes, err := json.Marshal(testDeployment)
+	Expect(err).Should(Succeed())
+	w := placementv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: placementv1beta1.WorkSpec{
+			Workload: placementv1beta1.WorkloadTemplate{
+				Manifests: []placementv1beta1.Manifest{
+					{
+						RawExtension: runtime.RawExtension{
+							Raw: deploymentBytes,
+						},
+					},
+				},
+			},
+		},
+	}
+	Expect(hubClient.Create(ctx, &w)).Should(Succeed())
+}
+
+func deleteWorkResource(name, namespace string) {
+	w := placementv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	Expect(hubClient.Delete(ctx, &w)).Should(Succeed())
+
+	Eventually(func(g Gomega) error {
+		var w placementv1beta1.Work
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &w); !errors.IsNotFound(err) {
+			return fmt.Errorf("work still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
