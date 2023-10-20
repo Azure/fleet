@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,6 +40,9 @@ const (
 	memberCluster1Name = "kind-cluster-1"
 	memberCluster2Name = "kind-cluster-2"
 	memberCluster3Name = "kind-cluster-3"
+	memberCluster4Name = "kind-unhealthy-cluster"
+	memberCluster5Name = "kind-left-cluster"
+	memberCluster6Name = "kind-non-existent-cluster"
 
 	hubClusterSAName = "hub-agent-sa"
 	fleetSystemNS    = "fleet-system"
@@ -47,15 +51,16 @@ const (
 )
 
 const (
-	eventuallyDuration   = time.Minute * 10
+	eventuallyDuration   = time.Minute * 2
 	eventuallyInterval   = time.Second * 5
-	consistentlyDuration = time.Second * 60
-	consistentlyInterval = time.Second * 5
+	consistentlyDuration = time.Second * 10
+	consistentlyInterval = time.Second * 2
 )
 
 var (
 	ctx    = context.Background()
 	scheme = runtime.NewScheme()
+	once   = sync.Once{}
 
 	hubCluster     *framework.Cluster
 	memberCluster1 *framework.Cluster
@@ -68,7 +73,32 @@ var (
 	memberCluster2Client client.Client
 	memberCluster3Client client.Client
 
-	allMemberClusters []*framework.Cluster
+	allMemberClusters     []*framework.Cluster
+	allMemberClusterNames = []string{}
+)
+
+var (
+	regionLabelName   = "region"
+	regionLabelValue1 = "east"
+	regionLabelValue2 = "west"
+	envLabelName      = "env"
+	envLabelValue1    = "prod"
+	envLabelValue2    = "canary"
+
+	labelsByClusterName = map[string]map[string]string{
+		memberCluster1Name: {
+			regionLabelName: regionLabelValue1,
+			envLabelName:    envLabelValue1,
+		},
+		memberCluster2Name: {
+			regionLabelName: regionLabelValue1,
+			envLabelName:    envLabelValue2,
+		},
+		memberCluster3Name: {
+			regionLabelName: regionLabelValue2,
+			envLabelName:    envLabelValue1,
+		},
+	}
 )
 
 var (
@@ -102,6 +132,7 @@ var (
 		cmpopts.SortSlices(lessFuncResourceIdentifier),
 		cmpopts.SortSlices(lessFuncFailedResourcePlacements),
 		ignoreConditionLTTAndMessageFields,
+		cmpopts.EquateEmpty(),
 	}
 )
 
@@ -166,6 +197,13 @@ func beforeSuiteForAllProcesses() {
 	Expect(memberCluster3Client).NotTo(BeNil(), "Failed to initialize client for accessing kubernetes cluster")
 
 	allMemberClusters = []*framework.Cluster{memberCluster1, memberCluster2, memberCluster3}
+	once.Do(func() {
+		// Set these arrays only once; this is necessary as for the first spawned Ginkgo process,
+		// the `beforeSuiteForAllProcesses` function is called twice.
+		for _, cluster := range allMemberClusters {
+			allMemberClusterNames = append(allMemberClusterNames, cluster.ClusterName)
+		}
+	})
 }
 
 func beforeSuiteForProcess1() {
@@ -173,6 +211,11 @@ func beforeSuiteForProcess1() {
 
 	setAllMemberClustersToJoin()
 	checkIfAllMemberClustersHaveJoined()
+
+	// Simulate that member cluster 4 become unhealthy, and member cluster 5 has left the fleet.
+	//
+	// Note that these clusters are not real kind clusters.
+	setupInvalidClusters()
 	createResourcesForFleetGuardRail()
 }
 
@@ -182,4 +225,6 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	deleteResourcesForFleetGuardRail()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
+
+	cleanupInvalidClusters()
 })
