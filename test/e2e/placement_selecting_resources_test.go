@@ -1089,10 +1089,15 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 			// may hit 409
 			return hubClient.Update(ctx, crp)
 		}
-		Eventually(updateFunc(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+		Eventually(updateFunc, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
 	})
 
-	It("should update CRP status as expected", checkIfPlacedWorkResourcesOnAllMemberClusters)
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should have one policy snapshot revision and one resource snapshot revision", func() {
 		Expect(validateCRPSnapshotRevisions(crpName, 1, 1)).Should(Succeed(), "Failed to validate the revision history")
@@ -1180,10 +1185,15 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 			// may hit 409
 			return hubClient.Update(ctx, crp)
 		}
-		Eventually(updateFunc(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
+		Eventually(updateFunc, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the crp %s", crpName)
 	})
 
-	It("should update CRP status as expected", checkIfPlacedWorkResourcesOnAllMemberClusters)
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should have one policy snapshot revision and two resource snapshot revisions", func() {
 		Expect(validateCRPSnapshotRevisions(crpName, 1, 2)).Should(Succeed(), "Failed to validate the revision history")
