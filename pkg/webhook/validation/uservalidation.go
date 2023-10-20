@@ -8,6 +8,8 @@ import (
 	"reflect"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -39,10 +41,15 @@ const (
 
 var (
 	fleetCRDGroups  = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
-	v1Alpha1IMCGVK  = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	v1Alpha1WorkGVK = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	imcGVK          = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	workGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	CRDGVK          = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	V1Alpha1MCGVK   = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
+	V1Alpha1IMCGVK  = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	V1Alpha1WorkGVK = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	MCGVK           = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
+	IMCGVK          = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	WorkGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	NamespaceGVK    = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	EventGVK        = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.
@@ -173,7 +180,7 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 	var identity string
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	if *req.RequestKind == v1Alpha1IMCGVK || *req.RequestKind == v1Alpha1WorkGVK {
+	if *req.RequestKind == V1Alpha1IMCGVK || *req.RequestKind == V1Alpha1WorkGVK {
 		var mc fleetv1alpha1.MemberCluster
 		if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 			// fail open, if the webhook cannot get member cluster resources we don't block the request.
@@ -182,7 +189,7 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 			return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
 		}
 		identity = mc.Spec.Identity.Name
-	} else if *req.RequestKind == imcGVK || *req.RequestKind == workGVK {
+	} else if *req.RequestKind == IMCGVK || *req.RequestKind == WorkGVK {
 		var mc clusterv1beta1.MemberCluster
 		if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 			// fail open, if the webhook cannot get member cluster resources we don't block the request.

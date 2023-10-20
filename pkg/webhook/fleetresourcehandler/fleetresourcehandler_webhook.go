@@ -8,9 +8,6 @@ import (
 	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -18,10 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
@@ -35,18 +30,6 @@ const (
 	fleetNamespacePrefix       = "fleet"
 	kubeNamespacePrefix        = "kube"
 	handleResourceFmt          = "handling %s resource"
-)
-
-var (
-	crdGVK          = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	v1Alpha1MCGVK   = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	v1Alpha1IMCGVK  = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	v1Alpha1WorkGVK = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	mcGVK           = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	imcGVK          = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	workGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
-	namespaceGVK    = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
-	eventGVK        = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -72,23 +55,23 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch {
-		case req.Kind == crdGVK:
-			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+		case req.Kind == validation.CRDGVK:
+			klog.V(2).InfoS("handling CRD resource", "GVK", validation.CRDGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
-		case req.Kind == v1Alpha1MCGVK:
-			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "GVK", v1Alpha1MCGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+		case req.Kind == validation.V1Alpha1MCGVK:
+			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "GVK", validation.V1Alpha1MCGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleV1Alpha1MemberCluster(req)
-		case req.Kind == mcGVK:
-			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+		case req.Kind == validation.MCGVK:
+			klog.V(2).InfoS("handling member cluster resource", "GVK", validation.MCGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
-		case req.Kind == namespaceGVK:
-			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+		case req.Kind == validation.NamespaceGVK:
+			klog.V(2).InfoS("handling namespace resource", "GVK", validation.NamespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
-		case req.Kind == v1Alpha1IMCGVK || req.Kind == v1Alpha1WorkGVK || req.Kind == imcGVK || req.Kind == workGVK:
+		case req.Kind == validation.V1Alpha1IMCGVK || req.Kind == validation.V1Alpha1WorkGVK || req.Kind == validation.IMCGVK || req.Kind == validation.WorkGVK:
 			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetMemberNamespacedResource(ctx, req)
-		case req.Kind == eventGVK:
-			klog.V(2).InfoS("handling event resource", "GVK", eventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+		case req.Kind == validation.EventGVK:
+			klog.V(2).InfoS("handling event resource", "GVK", validation.EventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
 			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
