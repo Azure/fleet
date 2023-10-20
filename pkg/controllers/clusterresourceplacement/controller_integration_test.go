@@ -250,6 +250,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 					Annotations: map[string]string{
 						placementv1beta1.NumberOfResourceSnapshotsAnnotation: strconv.Itoa(1),
 						placementv1beta1.ResourceGroupHashAnnotation:         jsonBytes,
+						placementv1beta1.NumberOfEnvelopedObjectsAnnotation:  strconv.Itoa(0),
 					},
 					OwnerReferences: []metav1.OwnerReference{
 						crpOwnerReference,
@@ -277,12 +278,12 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionUnknown,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: schedulingUnknownReason,
+							Reason: SchedulingUnknownReason,
 						},
 						{
 							Status: metav1.ConditionUnknown,
 							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: synchronizePendingReason,
+							Reason: SynchronizePendingReason,
 						},
 					},
 				},
@@ -301,7 +302,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			scheduledCondition := metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
-				Reason:             resourceScheduleSucceededReason,
+				Reason:             ResourceScheduleSucceededReason,
 				ObservedGeneration: gotCRP.Generation,
 			}
 			meta.SetStatusCondition(&gotPolicySnapshot.Status.Conditions, scheduledCondition)
@@ -325,12 +326,12 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: resourceScheduleSucceededReason,
+							Reason: ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: synchronizeSucceededReason,
+							Reason: SynchronizeSucceededReason,
 						},
 					},
 				},
@@ -343,7 +344,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			scheduledCondition := metav1.Condition{
 				Status:             metav1.ConditionTrue,
 				Type:               string(placementv1beta1.PolicySnapshotScheduled),
-				Reason:             resourceScheduleSucceededReason,
+				Reason:             ResourceScheduleSucceededReason,
 				ObservedGeneration: gotCRP.Generation,
 			}
 			meta.SetStatusCondition(&gotPolicySnapshot.Status.Conditions, scheduledCondition)
@@ -382,12 +383,12 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: resourceScheduleSucceededReason,
+							Reason: ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionFalse,
 							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: synchronizePendingReason,
+							Reason: SynchronizePendingReason,
 						},
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -397,17 +398,17 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: resourceApplySucceededReason,
+									Reason: ResourceApplySucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: resourceScheduleSucceededReason,
+									Reason: ResourceScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: workSynchronizeSucceededReason,
+									Reason: WorkSynchronizeSucceededReason,
 								},
 							},
 						},
@@ -417,17 +418,17 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 								{
 									Status: metav1.ConditionUnknown,
 									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: resourceApplyPendingReason,
+									Reason: ResourceApplyPendingReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: resourceScheduleSucceededReason,
+									Reason: ResourceScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionFalse,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: workSynchronizePendingReason,
+									Reason: WorkSynchronizePendingReason,
 								},
 							},
 						},
@@ -454,12 +455,12 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-							Reason: resourceScheduleSucceededReason,
+							Reason: ResourceScheduleSucceededReason,
 						},
 						{
 							Status: metav1.ConditionTrue,
 							Type:   string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-							Reason: synchronizeSucceededReason,
+							Reason: SynchronizeSucceededReason,
 						},
 					},
 					PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
@@ -469,17 +470,17 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: resourceApplySucceededReason,
+									Reason: ResourceApplySucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: resourceScheduleSucceededReason,
+									Reason: ResourceScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: workSynchronizeSucceededReason,
+									Reason: WorkSynchronizeSucceededReason,
 								},
 							},
 						},
@@ -489,17 +490,17 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourcesAppliedConditionType),
-									Reason: resourceApplySucceededReason,
+									Reason: ResourceApplySucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceScheduledConditionType),
-									Reason: resourceScheduleSucceededReason,
+									Reason: ResourceScheduleSucceededReason,
 								},
 								{
 									Status: metav1.ConditionTrue,
 									Type:   string(placementv1beta1.ResourceWorkSynchronizedConditionType),
-									Reason: workSynchronizeSucceededReason,
+									Reason: WorkSynchronizeSucceededReason,
 								},
 							},
 						},

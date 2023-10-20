@@ -46,7 +46,7 @@ func (a *AuthTokenProvider) FetchToken(ctx context.Context) (interfaces.AuthToke
 	if err != nil {
 		return token, fmt.Errorf("failed to create managed identity cred: %w", err)
 	}
-	var azToken *azcore.AccessToken
+	var azToken azcore.AccessToken
 	err = retry.OnError(retry.DefaultBackoff,
 		func(err error) bool {
 			return ctx.Err() == nil

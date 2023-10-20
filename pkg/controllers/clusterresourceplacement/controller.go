@@ -151,7 +151,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 
 	// validate the resource selectors first before creating any snapshot
-	selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
+	envelopeObjCount, selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to select the resources", "clusterResourcePlacement", crpKObj)
 		if !errors.Is(err, controller.ErrUserError) {
@@ -162,7 +162,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		scheduleCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             invalidResourceSelectorsReason,
+			Reason:             InvalidResourceSelectorsReason,
 			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: crp.Generation,
 		}
@@ -182,7 +182,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: selectedResources,
 	}
-	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, &resourceSnapshotSpec, int(revisionLimit))
+	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount, &resourceSnapshotSpec, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -298,9 +298,9 @@ func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Cont
 	if crp.Spec.Policy != nil &&
 		crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType &&
 		crp.Spec.Policy.NumberOfClusters != nil {
-		latestPolicySnapshot.Annotations = map[string]string{
-			fleetv1beta1.NumberOfClustersAnnotation: strconv.Itoa(int(*crp.Spec.Policy.NumberOfClusters)),
-		}
+		// Note that all policy snapshots should have the CRP generation annotation set already,
+		// so the Annotations field will not be nil.
+		latestPolicySnapshot.Annotations[fleetv1beta1.NumberOfClustersAnnotation] = strconv.Itoa(int(*crp.Spec.Policy.NumberOfClusters))
 	}
 
 	if err := r.Client.Create(ctx, latestPolicySnapshot); err != nil {
@@ -387,7 +387,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 }
 
 // TODO handle all the resources selected by placement larger than 1MB size limit of k8s objects.
-func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
+func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, envelopeObjCount int, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
 	resourceHash, err := generateResourceHash(resourceSnapshotSpec)
 	crpKObj := klog.KObj(crp)
 	if err != nil {
@@ -449,8 +449,9 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.ResourceGroupHashAnnotation: resourceHash,
-				// TODO need to updated once we support multiple snapshots
+				// TODO: need to update this once we support multiple snapshots
 				fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+				fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  strconv.Itoa(envelopeObjCount),
 			},
 		},
 		Spec: *resourceSnapshotSpec,
@@ -785,7 +786,7 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 			{
 				Status:             metav1.ConditionUnknown,
 				Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-				Reason:             synchronizePendingReason,
+				Reason:             SynchronizePendingReason,
 				Message:            "Scheduling has not completed",
 				ObservedGeneration: crp.Generation,
 			},
@@ -823,7 +824,7 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             schedulingUnknownReason,
+			Reason:             SchedulingUnknownReason,
 			Message:            "Scheduling has not completed",
 			ObservedGeneration: crp.Generation,
 		}
@@ -883,7 +884,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             resourceScheduleSucceededReason,
+			Reason:             ResourceScheduleSucceededReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
 			ObservedGeneration: crp.Generation,
 		}

@@ -23,16 +23,16 @@ spec:
     - jsonPath: .metadata.generation
       name: Gen
       type: string
-    - jsonPath: .status.conditions[?(@.type=="Scheduled")].status
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status
       name: Scheduled
       type: string
-    - jsonPath: .status.conditions[?(@.type=="Scheduled")].observedGeneration
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration
       name: ScheduledGen
       type: string
-    - jsonPath: .status.conditions[?(@.type=="Applied")].status
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementApplied")].status
       name: Applied
       type: string
-    - jsonPath: .status.conditions[?(@.type=="Applied")].observedGeneration
+    - jsonPath: .status.conditions[?(@.type=="ClusterResourcePlacementApplied")].observedGeneration
       name: AppliedGen
       type: string
     - jsonPath: .metadata.creationTimestamp

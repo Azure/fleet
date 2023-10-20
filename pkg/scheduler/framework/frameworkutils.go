@@ -344,10 +344,10 @@ func newScheduledConditionFromBindings(policy *placementv1beta1.ClusterSchedulin
 
 	if count < numOfClusters {
 		// The current count of scheduled + bound bindings is less than the desired number.
-		return newScheduledCondition(policy, metav1.ConditionFalse, notFullyScheduledReason, notFullyScheduledMessage)
+		return newScheduledCondition(policy, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage)
 	}
 	// The desired number has been achieved.
-	return newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage)
+	return newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage)
 }
 
 // newSchedulingDecisionsForPickFixedPlacementType returns a list of scheduling decisions, based on different

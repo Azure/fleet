@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -36,12 +37,13 @@ var (
 	ignoreConditionOption = cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "Message")
 )
 
+const (
+	timeout  = time.Second * 6
+	duration = time.Second * 20
+	interval = time.Millisecond * 250
+)
+
 var _ = Describe("Test Work Generator Controller", func() {
-	const (
-		timeout  = time.Second * 6
-		duration = time.Second * 20
-		interval = time.Millisecond * 250
-	)
 
 	Context("Test Bound ClusterResourceBinding", func() {
 		var binding *fleetv1beta1.ClusterResourceBinding
@@ -375,7 +377,257 @@ var _ = Describe("Test Work Generator Controller", func() {
 					diff = cmp.Diff(wantMC, binding.Status, ignoreConditionOption)
 					return diff
 				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+			})
+		})
 
+		Context("Test Bound ClusterResourceBinding with a single resource snapshot with envelop objects", func() {
+			var masterSnapshot *fleetv1beta1.ClusterResourceSnapshot
+
+			BeforeEach(func() {
+				masterSnapshot = generateResourceSnapshot(1, 1, 0, [][]byte{
+					testConfigMap, testEnvelopConfigMap, testClonesetCRD, testNameSpace,
+				})
+				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+				By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
+				binding = generateClusterResourceBinding(fleetv1beta1.BindingStateBound, masterSnapshot.Name, memberClusterName)
+				Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
+				By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			})
+
+			AfterEach(func() {
+				By("Deleting master clusterResourceSnapshot")
+				Expect(k8sClient.Delete(ctx, masterSnapshot)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
+			})
+
+			It("Should create enveloped work object in the target namespace with master resource snapshot only", func() {
+				// check the work that contains none enveloped object is created by now
+				work := fleetv1beta1.Work{}
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
+				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
+				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
+				//inspect the work
+				wantWork := fleetv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: namespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         fleetv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: pointer.Bool(true),
+							},
+						},
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:                 testCRPName,
+							fleetv1beta1.ParentBindingLabel:               binding.Name,
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+						},
+					},
+					Spec: fleetv1beta1.WorkSpec{
+						Workload: fleetv1beta1.WorkloadTemplate{
+							Manifests: []fleetv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testConfigMap}},
+								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+							},
+						},
+					},
+				}
+				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				var workList fleetv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding)
+				work = workList.Items[0]
+				By(fmt.Sprintf("envelope work %s is created in %s", work.Name, work.Namespace))
+				//inspect the envelope work
+				wantWork = fleetv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      work.Name,
+						Namespace: namespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         fleetv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: pointer.Bool(true),
+							},
+						},
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:                 testCRPName,
+							fleetv1beta1.ParentBindingLabel:               binding.Name,
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "1",
+							fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ConfigMapEnvelopeType),
+							fleetv1beta1.EnvelopeNameLabel:                "envelop-configmap",
+							fleetv1beta1.EnvelopeNamespaceLabel:           "app",
+						},
+					},
+					Spec: fleetv1beta1.WorkSpec{
+						Workload: fleetv1beta1.WorkloadTemplate{
+							Manifests: []fleetv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testEnvelopeResourceQuota}},
+								{RawExtension: runtime.RawExtension{Raw: testEnvelopeWebhook}},
+							},
+						},
+					},
+				}
+				diff = cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("envelop work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+			})
+
+			It("Should modify the enveloped work object with the same name", func() {
+				// make sure the enveloped work is created
+				var workList fleetv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding)
+				// create a second snapshot with a modified enveloped object
+				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
+					testEnvelopConfigMap2, testClonesetCRD, testNameSpace,
+				})
+				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+				By(fmt.Sprintf("another master resource snapshot  %s created", masterSnapshot.Name))
+				// update binding
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
+				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
+				// check the binding status till the bound condition is true for the second generation
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
+						return false
+					}
+					if binding.GetGeneration() <= 1 {
+						return false
+					}
+					// only check the bound status as the applied status reason changes depends on where the reconcile logic is
+					return condition.IsConditionStatusTrue(
+						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingBound)), binding.GetGeneration())
+				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
+				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
+				// check the work that contains none enveloped object is updated
+				work := fleetv1beta1.Work{}
+				Eventually(func() error {
+					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
+				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
+				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
+				//inspect the work
+				wantWork := fleetv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName),
+						Namespace: namespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         fleetv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: pointer.Bool(true),
+							},
+						},
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:                 testCRPName,
+							fleetv1beta1.ParentBindingLabel:               binding.Name,
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "2",
+						},
+					},
+					Spec: fleetv1beta1.WorkSpec{
+						Workload: fleetv1beta1.WorkloadTemplate{
+							Manifests: []fleetv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testClonesetCRD}},
+								{RawExtension: runtime.RawExtension{Raw: testNameSpace}},
+							},
+						},
+					},
+				}
+				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				// check the enveloped work is updated
+				fetchEnvelopedWork(&workList, binding)
+				work = workList.Items[0]
+				By(fmt.Sprintf("envelope work %s is updated in %s", work.Name, work.Namespace))
+				//inspect the envelope work
+				wantWork = fleetv1beta1.Work{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      work.Name,
+						Namespace: namespaceName,
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion:         fleetv1beta1.GroupVersion.String(),
+								Kind:               "ClusterResourceBinding",
+								Name:               binding.Name,
+								UID:                binding.UID,
+								BlockOwnerDeletion: pointer.Bool(true),
+							},
+						},
+						Labels: map[string]string{
+							fleetv1beta1.CRPTrackingLabel:                 testCRPName,
+							fleetv1beta1.ParentBindingLabel:               binding.Name,
+							fleetv1beta1.ParentResourceSnapshotIndexLabel: "2",
+							fleetv1beta1.EnvelopeTypeLabel:                string(fleetv1beta1.ConfigMapEnvelopeType),
+							fleetv1beta1.EnvelopeNameLabel:                "envelop-configmap",
+							fleetv1beta1.EnvelopeNamespaceLabel:           "app",
+						},
+					},
+					Spec: fleetv1beta1.WorkSpec{
+						Workload: fleetv1beta1.WorkloadTemplate{
+							Manifests: []fleetv1beta1.Manifest{
+								{RawExtension: runtime.RawExtension{Raw: testEnvelopeWebhook}},
+							},
+						},
+					},
+				}
+				diff = cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("envelop work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+			})
+
+			It("Should delete the enveloped work object in the target namespace after it's removed from snapshot", func() {
+				// make sure the enveloped work is created
+				var workList fleetv1beta1.WorkList
+				fetchEnvelopedWork(&workList, binding)
+				By("create a second snapshot without an enveloped object")
+				// create a second snapshot without an enveloped object
+				masterSnapshot = generateResourceSnapshot(2, 1, 0, [][]byte{
+					testClonesetCRD, testNameSpace,
+				})
+				Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+				By(fmt.Sprintf("another master resource snapshot  %s created", masterSnapshot.Name))
+				// update binding
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+				binding.Spec.ResourceSnapshotName = masterSnapshot.Name
+				Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
+				By(fmt.Sprintf("resource binding  %s updated", binding.Name))
+				// check the binding status till the bound condition is true for the second binding generation
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
+						return false
+					}
+					if binding.GetGeneration() <= 1 {
+						return false
+					}
+					// only check the bound status as the applied status reason changes depends on where the reconcile logic is
+					return condition.IsConditionStatusTrue(
+						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingBound)), binding.GetGeneration())
+				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
+				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
+				// check the enveloped work is deleted
+				Eventually(func() error {
+					envelopWorkLabelMatcher := client.MatchingLabels{
+						fleetv1beta1.ParentBindingLabel:     binding.Name,
+						fleetv1beta1.CRPTrackingLabel:       testCRPName,
+						fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ConfigMapEnvelopeType),
+						fleetv1beta1.EnvelopeNameLabel:      "envelop-configmap",
+						fleetv1beta1.EnvelopeNamespaceLabel: "app",
+					}
+					if err := k8sClient.List(ctx, &workList, envelopWorkLabelMatcher); err != nil {
+						return err
+					}
+					if len(workList.Items) != 0 {
+						return fmt.Errorf("expect to not get any enveloped work but got %d", len(workList.Items))
+					}
+					return nil
+				}, timeout, interval).Should(Succeed(), "Failed to delete the expected enveloped work in hub cluster")
 			})
 		})
 
@@ -709,6 +961,26 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 	})
 })
+
+func fetchEnvelopedWork(workList *fleetv1beta1.WorkList, binding *fleetv1beta1.ClusterResourceBinding) {
+	// try to locate the work that contains enveloped object
+	Eventually(func() error {
+		envelopWorkLabelMatcher := client.MatchingLabels{
+			fleetv1beta1.ParentBindingLabel:     binding.Name,
+			fleetv1beta1.CRPTrackingLabel:       testCRPName,
+			fleetv1beta1.EnvelopeTypeLabel:      string(fleetv1beta1.ConfigMapEnvelopeType),
+			fleetv1beta1.EnvelopeNameLabel:      "envelop-configmap",
+			fleetv1beta1.EnvelopeNamespaceLabel: "app",
+		}
+		if err := k8sClient.List(ctx, workList, envelopWorkLabelMatcher); err != nil {
+			return err
+		}
+		if len(workList.Items) != 1 {
+			return fmt.Errorf("expect to get one enveloped work but got %d", len(workList.Items))
+		}
+		return nil
+	}, timeout, interval).Should(Succeed(), "Failed to get the expected enveloped work in hub cluster")
+}
 
 func generateClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string) *fleetv1beta1.ClusterResourceBinding {
 	return &fleetv1beta1.ClusterResourceBinding{

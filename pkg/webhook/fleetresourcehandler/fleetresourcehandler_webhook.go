@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
@@ -35,12 +36,13 @@ const (
 )
 
 var (
-	crdGVK       = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	mcGVK        = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	imcGVK       = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	namespaceGVK = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
-	workGVK      = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	eventGVK     = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
+	crdGVK        = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	v1Alpha1MCGVK = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
+	mcGVK         = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
+	imcGVK        = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	namespaceGVK  = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	workGVK       = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	eventGVK      = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -70,6 +72,9 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == crdGVK:
 			klog.V(2).InfoS("handling CRD resource", "GVK", crdGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
+		case req.Kind == v1Alpha1MCGVK:
+			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "GVK", v1Alpha1MCGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			response = v.handleV1Alpha1MemberCluster(req)
 		case req.Kind == mcGVK:
 			klog.V(2).InfoS("handling member cluster resource", "GVK", mcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
@@ -107,14 +112,30 @@ func (v *fleetResourceValidator) handleCRD(req admission.Request) admission.Resp
 	return validation.ValidateUserForFleetCRD(req, v.whiteListedUsers, group)
 }
 
-// handleMemberCluster allows/denies the request to modify member cluster object after validation.
-func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admission.Response {
+// handleV1Alpha1MemberCluster allows/denies the request to modify v1alpha1 member cluster object after validation.
+func (v *fleetResourceValidator) handleV1Alpha1MemberCluster(req admission.Request) admission.Response {
 	var currentMC fleetv1alpha1.MemberCluster
 	if err := v.decodeRequestObject(req, &currentMC); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 	if req.Operation == admissionv1.Update {
 		var oldMC fleetv1alpha1.MemberCluster
+		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+		return validation.ValidateMemberClusterUpdate(&currentMC, &oldMC, req, v.whiteListedUsers)
+	}
+	return validation.ValidateUserForResource(req, v.whiteListedUsers)
+}
+
+// handleMemberCluster allows/denies the request to modify member cluster object after validation.
+func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admission.Response {
+	var currentMC clusterv1beta1.MemberCluster
+	if err := v.decodeRequestObject(req, &currentMC); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
+	if req.Operation == admissionv1.Update {
+		var oldMC clusterv1beta1.MemberCluster
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
