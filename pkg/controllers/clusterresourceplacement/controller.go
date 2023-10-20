@@ -916,11 +916,10 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
 		// For now, it starts from adding some sample failures of unselected clusters.
 		var rp fleetv1beta1.ResourcePlacementStatus
-		rp.ClusterName = unselected[i].ClusterName
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             "ScheduleFailed",
+			Reason:             ResourceScheduleFailedReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, unselected[i].ClusterName, unselected[i].Reason),
 			ObservedGeneration: crp.Generation,
 		}

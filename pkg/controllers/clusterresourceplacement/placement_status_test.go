@@ -788,23 +788,21 @@ func TestSetPlacementStatus(t *testing.T) {
 						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
 					},
 					{
-						ClusterName: "member-2",
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleFailed",
+								Reason:             ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 							},
 						},
 					},
 					{
-						ClusterName: "member-3",
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleFailed",
+								Reason:             ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 							},
 						},
