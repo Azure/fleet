@@ -398,11 +398,13 @@ func generateResourceContent(object *unstructured.Unstructured) (*fleetv1beta1.R
 }
 
 // selectResourcesForPlacement selects the resources according to the placement resourceSelectors.
-// It also generates an array of resource content based on the selected resources.
-func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.ClusterResourcePlacement) ([]fleetv1beta1.ResourceContent, []fleetv1beta1.ResourceIdentifier, error) {
+// It also generates an array of resource content and resource identifier based on the selected resources.
+// It also returns the number of envelope configmaps so the CRP controller can have the right expectation of the number of work objects.
+func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.ClusterResourcePlacement) (int, []fleetv1beta1.ResourceContent, []fleetv1beta1.ResourceIdentifier, error) {
+	envelopeObjCount := 0
 	selectedObjects, err := r.gatherSelectedResource(placement.GetName(), placement.Spec.ResourceSelectors)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, nil, err
 	}
 
 	resources := make([]fleetv1beta1.ResourceContent, len(selectedObjects))
@@ -411,7 +413,11 @@ func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.Cluster
 		unstructuredObj := obj.DeepCopyObject().(*unstructured.Unstructured)
 		rc, err := generateResourceContent(unstructuredObj)
 		if err != nil {
-			return nil, nil, err
+			return 0, nil, nil, err
+		}
+		if unstructuredObj.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
+			len(unstructuredObj.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
+			envelopeObjCount++
 		}
 		resources[i] = *rc
 		ri := fleetv1beta1.ResourceIdentifier{
@@ -423,5 +429,5 @@ func (r *Reconciler) selectResourcesForPlacement(placement *fleetv1beta1.Cluster
 		}
 		resourcesIDs[i] = ri
 	}
-	return resources, resourcesIDs, nil
+	return envelopeObjCount, resources, resourcesIDs, nil
 }

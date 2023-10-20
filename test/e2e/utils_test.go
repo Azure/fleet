@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +32,7 @@ import (
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-
+		//TODO: clean up the member cluster object if it already exists
 		mcObj := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   memberCluster.ClusterName,
@@ -75,6 +77,7 @@ func checkIfAllMemberClustersHaveJoined() {
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); err != nil {
+				By(fmt.Sprintf("Failed to get member cluster object %s", memberCluster.ClusterName))
 				return err
 			}
 

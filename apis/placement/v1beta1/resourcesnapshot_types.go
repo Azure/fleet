@@ -19,6 +19,9 @@ const (
 	// value of all the snapshots belong to the same snapshot index.
 	ResourceGroupHashAnnotation = fleetPrefix + "resourceHash"
 
+	// NumberOfEnvelopedObjectsAnnotation is the annotation that contains the number of the enveloped objects in the resource snapshot group.
+	NumberOfEnvelopedObjectsAnnotation = fleetPrefix + "numberOfEnvelopedObject"
+
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
 	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
 

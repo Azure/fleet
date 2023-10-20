@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	policyName = "test-policy"
+	policyName   = "test-policy"
+	snapshotName = "test-snapshot"
 )
 
 // TestExtractNumOfClustersFromPolicySnapshot tests the extractNumOfClustersFromPolicySnapshot function.
@@ -90,8 +91,6 @@ func TestExtractNumOfClustersFromPolicySnapshot(t *testing.T) {
 }
 
 func TestExtractSubindexFromClusterResourceSnapshot(t *testing.T) {
-	snapshotName := "test-snapshot"
-
 	testCases := []struct {
 		name         string
 		snapshot     *fleetv1beta1.ClusterResourceSnapshot
@@ -301,6 +300,85 @@ func TestExtractNumberOfResourceSnapshots(t *testing.T) {
 			}
 			if !tc.wantError && got != tc.want {
 				t.Fatalf("ExtractNumberOfResourceSnapshotsFromResourceSnapshot() = %v, want err %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractNumberOfEnvelopeObjFromResourceSnapshot(t *testing.T) {
+	testCases := []struct {
+		name      string
+		snapshot  *fleetv1beta1.ClusterResourceSnapshot
+		want      int
+		wantError bool
+	}{
+		{
+			name: "valid annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfEnvelopedObjectsAnnotation: "0",
+					},
+				},
+			},
+			want: 0,
+		},
+		{
+			name: "valid annotation",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfEnvelopedObjectsAnnotation: "1",
+					},
+				},
+			},
+			want: 1,
+		},
+		{
+			name: "no annotation means no enveloped objects",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+				},
+			},
+			want: 0,
+		},
+		{
+			name: "invalid annotation: not an integer",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfEnvelopedObjectsAnnotation: "abc",
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid annotation: negative integer",
+			snapshot: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: snapshotName,
+					Annotations: map[string]string{
+						fleetv1beta1.NumberOfEnvelopedObjectsAnnotation: "-1",
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ExtractNumberOfEnvelopeObjFromResourceSnapshot(tc.snapshot)
+			if gotErr := err != nil; gotErr != tc.wantError {
+				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot() got err %v, want err %v", err, tc.wantError)
+			}
+			if !tc.wantError && got != tc.want {
+				t.Fatalf("ExtractNumberOfEnvelopeObjFromResourceSnapshot() got %d, want %d", got, tc.want)
 			}
 		})
 	}

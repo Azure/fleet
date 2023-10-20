@@ -213,7 +213,14 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 		klog.ErrorS(err, "Master resource snapshot has invalid numberOfResourceSnapshots annotation", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
 	}
-	isSync, workSynchronizedCondition, err := buildWorkSynchronizedCondition(crp, desiredWorkCounter, newWorkCounter, oldWorkCounter)
+
+	desiredEnvelopWorkCounter, err := annotations.ExtractNumberOfEnvelopeObjFromResourceSnapshot(latestResourceSnapshot)
+	if err != nil {
+		klog.ErrorS(err, "Master resource snapshot has invalid envelopeObjCountAnnotation annotation", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
+		return nil, nil, controller.NewUnexpectedBehaviorError(err)
+	}
+
+	isSync, workSynchronizedCondition, err := buildWorkSynchronizedCondition(crp, desiredWorkCounter+desiredEnvelopWorkCounter, newWorkCounter, oldWorkCounter)
 	if err != nil {
 		return nil, nil, err
 	}
