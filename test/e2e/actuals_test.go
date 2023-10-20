@@ -258,7 +258,7 @@ func crpStatusUpdatedActual(
 			return err
 		}
 
-		wantPlacementStatus := []placementv1beta1.ResourcePlacementStatus{}
+		var wantPlacementStatus []placementv1beta1.ResourcePlacementStatus
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
 				ClusterName: name,
