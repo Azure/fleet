@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,7 +19,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
@@ -57,7 +61,7 @@ const (
 )
 
 var (
-	crdGVK       = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	crdGVK       = metav1.GroupVersionKind{Group: apiextensionsv1.SchemeGroupVersion.Group, Version: apiextensionsv1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
 	mcGVK        = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
 	imcGVK       = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	namespaceGVK = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
@@ -510,7 +514,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 	Context("CRD validation webhook", func() {
 		It("should deny CREATE operation on Fleet CRD for user not in system:masters group", func() {
-			var crd v1.CustomResourceDefinition
+			var crd apiextensionsv1.CustomResourceDefinition
 			Expect(utils.GetObjectFromManifest("./config/crd/bases/fleet.azure.com_clusterresourceplacements.yaml", &crd)).Should(Succeed())
 
 			By("expecting denial of operation CREATE of CRD")
@@ -522,7 +526,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 		It("should deny UPDATE operation on Fleet CRD for user not in system:masters group", func() {
 			Eventually(func(g Gomega) error {
-				var crd v1.CustomResourceDefinition
+				var crd apiextensionsv1.CustomResourceDefinition
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)).Should(Succeed())
 				By("update labels in CRD")
 				labels := crd.GetLabels()
@@ -541,7 +545,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		})
 
 		It("should deny DELETE operation on Fleet CRD for user not in system:masters group", func() {
-			crd := v1.CustomResourceDefinition{
+			crd := apiextensionsv1.CustomResourceDefinition{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "works.multicluster.x-k8s.io",
 				},
@@ -554,7 +558,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		})
 
 		It("should allow UPDATE operation on Fleet CRDs even if user in system:masters group", func() {
-			var crd v1.CustomResourceDefinition
+			var crd apiextensionsv1.CustomResourceDefinition
 			Eventually(func(g Gomega) error {
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "memberclusters.fleet.azure.com"}, &crd)).Should(Succeed())
 
@@ -579,7 +583,7 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 		})
 
 		It("should allow CREATE operation on Other CRDs", func() {
-			var crd v1.CustomResourceDefinition
+			var crd apiextensionsv1.CustomResourceDefinition
 			Expect(utils.GetObjectFromManifest("./test/integration/manifests/resources/test_clonesets_crd.yaml", &crd)).Should(Succeed())
 
 			By("expecting error to be nil")
@@ -1440,6 +1444,65 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 			Expect(HubCluster.ImpersonateKubeClient.Update(ctx, &ns)).Should(Succeed())
 			By("expecting successful DELETE of namespace")
 			Expect(HubCluster.ImpersonateKubeClient.Delete(ctx, &ns)).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Ordered, func() {
+	Context("allow requests to modify fleet networking resources", Ordered, func() {
+		var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
+		var ns corev1.Namespace
+
+		BeforeAll(func() {
+			By("Create internalServiceExport CRD")
+			Expect(utils.GetObjectFromManifest("./test/e2e/v1alpha1/manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(Succeed())
+			Expect(HubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)).Should(Succeed())
+			By("internalServiceExport CRD created")
+
+			ns = corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "fleet-member-test-internal-service-export",
+					Labels: map[string]string{fleetv1beta1.FleetResourceLabelKey: "true"},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &ns)).Should(Succeed())
+			By(fmt.Sprintf("namespace `%s` is created", ns.Name))
+		})
+
+		It("should allow CREATE operation on Internal service export resource in fleet-member namespace for user not in system:masters group", func() {
+			ise := fleetnetworkingv1alpha1.InternalServiceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-internal-service-export",
+					Namespace: ns.Name,
+				},
+				Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
+					Ports: []fleetnetworkingv1alpha1.ServicePort{
+						{
+							Protocol: corev1.ProtocolTCP,
+							Port:     4848,
+						},
+					},
+					ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
+						NamespacedName:  "test-svc",
+						ResourceVersion: "test-resource-version",
+						ClusterID:       "member-1",
+						ExportedSince:   metav1.NewTime(time.Now().Round(time.Second)),
+					},
+				},
+			}
+			By("expecting successful CREATE of Internal Service Export")
+			Expect(HubCluster.ImpersonateKubeClient.Create(ctx, &ise)).Should(Succeed())
+			By("expecting successful DELETE of namespace")
+			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
+			By(fmt.Sprintf("namespace %s is deleted", ns.Name))
+
+			Expect(HubCluster.KubeClient.Delete(ctx, &internalServiceExportCRD)).Should(Succeed())
+			By(fmt.Sprintf("crd %s is deleted", internalServiceExportCRD.Name))
+
 		})
 	})
 })

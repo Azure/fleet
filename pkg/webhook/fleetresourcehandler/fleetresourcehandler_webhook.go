@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,7 +30,6 @@ const (
 	fleetMemberNamespacePrefix = "fleet-member"
 	fleetNamespacePrefix       = "fleet"
 	kubeNamespacePrefix        = "kube"
-	handleResourceFmt          = "handling %s resource"
 )
 
 // Add registers the webhook for K8s built-in object types.
@@ -56,28 +56,31 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch {
 		case req.Kind == validation.CRDGVK:
-			klog.V(2).InfoS("handling CRD resource", "GVK", validation.CRDGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling CRD resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
 		case req.Kind == validation.V1Alpha1MCGVK:
-			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "GVK", validation.V1Alpha1MCGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleV1Alpha1MemberCluster(req)
 		case req.Kind == validation.MCGVK:
-			klog.V(2).InfoS("handling member cluster resource", "GVK", validation.MCGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
 		case req.Kind == validation.NamespaceGVK:
-			klog.V(2).InfoS("handling namespace resource", "GVK", validation.NamespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling namespace resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
 		case req.Kind == validation.V1Alpha1IMCGVK || req.Kind == validation.V1Alpha1WorkGVK || req.Kind == validation.IMCGVK || req.Kind == validation.WorkGVK:
-			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling fleet owned namespaced resource in system namespace", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetMemberNamespacedResource(ctx, req)
 		case req.Kind == validation.EventGVK:
-			klog.V(2).InfoS("handling event resource", "GVK", validation.EventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(3).InfoS("handling event resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
+		case req.Kind.Group == fleetnetworkingv1alpha1.GroupVersion.Group && req.Kind.Version == fleetnetworkingv1alpha1.GroupVersion.Version:
+			klog.V(2).InfoS("handling fleet networking resource", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			response = v.handleFleetNetworkingResources(req)
 		case req.Namespace != "":
-			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling namespaced resource created in system namespace", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		default:
-			klog.V(2).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(3).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = admission.Allowed(fmt.Sprintf("user: %s in groups: %v is allowed to modify resource with GVK: %s", req.UserInfo.Username, req.UserInfo.Groups, req.Kind.String()))
 		}
 	}
@@ -141,7 +144,7 @@ func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context
 		}
 		return response
 	}
-	klog.InfoS("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces",
+	klog.V(3).InfoS("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces",
 		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
 	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object")
 }
@@ -150,6 +153,12 @@ func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context
 func (v *fleetResourceValidator) handleEvent(_ context.Context, _ admission.Request) admission.Response {
 	// currently allowing all events will handle events after v1alpha1 resources are removed.
 	return admission.Allowed("all events are allowed")
+}
+
+// handleFleetNetworkingResources allows requests to modify fleet networking resources.
+func (v *fleetResourceValidator) handleFleetNetworkingResources(_ admission.Request) admission.Response {
+	// TODO: add more check on the fleet networking resources.
+	return admission.Allowed("requests for fleet networking resources are all allowed")
 }
 
 // handlerNamespace allows/denies request to modify namespace after validation.

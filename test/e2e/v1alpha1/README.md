@@ -30,7 +30,7 @@ test suites, follow the steps below:
 5. Run the tests:
 
     ```shell
-    make run-e2e
+    make run-e2e-v1alpha1
     ```
 
 ## Access the `Kind` clusters
