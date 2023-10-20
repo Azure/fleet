@@ -85,7 +85,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			klog.V(2).InfoS("handling namespace resource", "GVK", namespaceGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
 		case req.Kind == v1Alpha1IMCGVK || req.Kind == v1Alpha1WorkGVK || req.Kind == imcGVK || req.Kind == workGVK:
-			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", imcGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS(fmt.Sprintf(handleResourceFmt, req.RequestKind.Kind), "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetMemberNamespacedResource(ctx, req)
 		case req.Kind == eventGVK:
 			klog.V(2).InfoS("handling event resource", "GVK", eventGVK, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
