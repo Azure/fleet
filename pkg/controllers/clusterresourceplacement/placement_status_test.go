@@ -792,7 +792,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleFailed",
+								Reason:             ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 							},
 						},
@@ -802,7 +802,7 @@ func TestSetPlacementStatus(t *testing.T) {
 							{
 								Status:             metav1.ConditionFalse,
 								Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-								Reason:             "ScheduleFailed",
+								Reason:             ResourceScheduleFailedReason,
 								ObservedGeneration: crpGeneration,
 							},
 						},

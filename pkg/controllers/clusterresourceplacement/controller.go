@@ -919,7 +919,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             "ScheduleFailed",
+			Reason:             ResourceScheduleFailedReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, unselected[i].ClusterName, unselected[i].Reason),
 			ObservedGeneration: crp.Generation,
 		}

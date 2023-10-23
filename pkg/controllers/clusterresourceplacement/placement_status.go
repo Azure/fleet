@@ -65,6 +65,8 @@ const (
 
 	// ResourceScheduleSucceededReason is the reason string of placement condition when the selected resources are scheduled.
 	ResourceScheduleSucceededReason = "ScheduleSucceeded"
+	// ResourceScheduleFailedReason is the reason string of placement condition when the scheduler failed to schedule the selected resources.
+	ResourceScheduleFailedReason = "ScheduleFailed"
 
 	// ResourcePlacementStatus schedule condition message formats
 	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
