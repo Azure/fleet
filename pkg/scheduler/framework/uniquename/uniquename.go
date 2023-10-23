@@ -27,7 +27,7 @@ func minInt(a, b int) int {
 }
 
 // NewClusterResourceBindingName returns a unique name for a cluster resource binding in the
-// format of DNS label names (RFC 1123).
+// format of DNS label names (RFC 1123). It will be used as a label on the work resource.
 //
 // The name is generated using the following format:
 // * [CRP-NAME] - [TARGET-CLUSTER-NAME] - [RANDOM-SUFFIX]
@@ -38,7 +38,7 @@ func minInt(a, b int) int {
 // of name collisions are extremely low.
 //
 // In addition, note that this function assumes that both the CRP name and the cluster name
-// are valid label subdomain names (RFC 1123).
+// are valid DNS label names (RFC 1123).
 func NewClusterResourceBindingName(CRPName string, clusterName string) (string, error) {
 	reservedSlots := 2 + uuidLength // 2 dashs + 8 character UUID string
 
