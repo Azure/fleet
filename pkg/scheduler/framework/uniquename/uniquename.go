@@ -51,7 +51,7 @@ func NewClusterResourceBindingName(CRPName string, clusterName string) (string, 
 
 	if errs := validation.IsDNS1123Label(uniqueName); len(errs) != 0 {
 		// Do a sanity check here; normally this would not occur.
-		return "", fmt.Errorf("failed to format a unique RFC 1123 label name with namespace %s, name %s: %v", CRPName, clusterName, errs)
+		return "", fmt.Errorf("failed to format a unique RFC 1123 label name with CRP name %s, cluster name %s: %v", CRPName, clusterName, errs)
 	}
 	return uniqueName, nil
 }
