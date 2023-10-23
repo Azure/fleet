@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	uuidLength = 6
+	uuidLength = 8
 )
 
 // minInt returns the smaller one of two integers.
@@ -27,7 +27,7 @@ func minInt(a, b int) int {
 }
 
 // NewClusterResourceBindingName returns a unique name for a cluster resource binding in the
-// format of DNS subdomain names (RFC 1123).
+// format of DNS label names (RFC 1123).
 //
 // The name is generated using the following format:
 // * [CRP-NAME] - [TARGET-CLUSTER-NAME] - [RANDOM-SUFFIX]
@@ -38,20 +38,20 @@ func minInt(a, b int) int {
 // of name collisions are extremely low.
 //
 // In addition, note that this function assumes that both the CRP name and the cluster name
-// are valid DNS subdomain names (RFC 1123).
+// are valid label subdomain names (RFC 1123).
 func NewClusterResourceBindingName(CRPName string, clusterName string) (string, error) {
-	reservedSlots := 2 + uuidLength // 2 dashs + 6 character UUID string
+	reservedSlots := 2 + uuidLength // 2 dashs + 8 character UUID string
 
-	slotsPerSeg := (validation.DNS1123SubdomainMaxLength - reservedSlots) / 2
+	slotsPerSeg := (validation.DNS1123LabelMaxLength - reservedSlots) / 2
 	uniqueName := fmt.Sprintf("%s-%s-%s",
 		CRPName[:minInt(slotsPerSeg, len(CRPName))],
-		clusterName[:minInt(slotsPerSeg, len(clusterName))],
+		clusterName[:minInt(slotsPerSeg+1, len(clusterName))],
 		uuid.NewUUID()[:uuidLength],
 	)
 
-	if errs := validation.IsDNS1123Subdomain(uniqueName); len(errs) != 0 {
+	if errs := validation.IsDNS1123Label(uniqueName); len(errs) != 0 {
 		// Do a sanity check here; normally this would not occur.
-		return "", fmt.Errorf("failed to format a unique RFC 1123 DNS subdomain name with namespace %s, name %s: %v", CRPName, clusterName, errs)
+		return "", fmt.Errorf("failed to format a unique RFC 1123 label name with namespace %s, name %s: %v", CRPName, clusterName, errs)
 	}
 	return uniqueName, nil
 }
