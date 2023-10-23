@@ -15,10 +15,7 @@ const (
 	crpName     = "app"
 	clusterName = "bravelion"
 
-	longName = "c7t2c6oppjnryqcihwweexeobs7tlmf08ha4qb5htc4cifzpalhb5ec2lbh3" +
-		"j73reciaz2f0jfd2rl5qba6rzuuwgyw6d9e6la19bo89k41lphln4s4dy1gr" +
-		"h1dvua17iu4ro61dxo91ayovns8cgnmshlsflmi68e3najm7dw5dqe17pih7" +
-		"up0dtyvrqxyp90sxedbf"
+	longName = "c7t2c6oppjnryqcihwweexeobs7tlmf08ha4qb5htc4cifzpalhb5ec2lbh3"
 )
 
 // TO-DO (chenyu1): Expand the test cases as development proceeds.
@@ -44,8 +41,8 @@ func TestClusterResourceBindingUniqueName(t *testing.T) {
 			name:        "valid name (truncated)",
 			crpName:     longName,
 			clusterName: longName,
-			wantPrefix:  fmt.Sprintf("%s-%s", longName[:122], longName[:122]),
-			wantLength:  252,
+			wantPrefix:  fmt.Sprintf("%s-%s", longName[:26], longName[:27]),
+			wantLength:  63,
 		},
 		{
 			name:           "invalid name",
