@@ -20,8 +20,11 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=="ResourceBindingApplied")].status
-      name: Applied
+    - jsonPath: .status.conditions[?(@.type=="Bound")].status
+      name: WorkCreated
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Applied")].status
+      name: ResourcesApplied
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age

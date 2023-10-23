@@ -13,7 +13,8 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement},shortName=rb
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ResourceBindingApplied")].status`,name="Applied",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Bound")].status`,name="WorkCreated",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="Applied")].status`,name="ResourcesApplied",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // ClusterResourceBinding represents a scheduling decision that binds a group of resources to a cluster.
