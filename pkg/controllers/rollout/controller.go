@@ -354,7 +354,7 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 		"lowerBoundAvailableBindings", lowerBoundAvailableNumber, "maxNumberOfBindingsToRemove", maxNumberToRemove)
 
 	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
-	for i := 0; i < maxUnavailableNumber && i < len(applyFailedUpdateCandidates); i++ {
+	for i := 0; i < len(applyFailedUpdateCandidates); i++ {
 		toBeUpdatedBinding = append(toBeUpdatedBinding, applyFailedUpdateCandidates[i])
 	}
 	if maxNumberToRemove > 0 {

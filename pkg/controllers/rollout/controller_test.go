@@ -337,6 +337,12 @@ func TestIsBindingReady(t *testing.T) {
 }
 
 func TestPickBindingsToRoll(t *testing.T) {
+	noMaxUnavailableCRP := clusterResourcePlacementForTest("test",
+		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5))
+	noMaxUnavailableCRP.Spec.Strategy.RollingUpdate.MaxUnavailable = &intstr.IntOrString{
+		Type:   intstr.Int,
+		IntVal: 0,
+	}
 	tests := map[string]struct {
 		allBindings                []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName string
@@ -368,6 +374,19 @@ func TestPickBindingsToRoll(t *testing.T) {
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
 			tobeUpdatedBindings: []int{0},
 			needRoll:            true,
+		},
+		"test bound with failed to apply bindings when there is no max unavailable allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        noMaxUnavailableCRP,
+			tobeUpdatedBindings:        []int{0, 1, 2},
+			needRoll:                   true,
 		},
 	}
 	for name, tt := range tests {
