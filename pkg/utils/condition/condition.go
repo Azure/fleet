@@ -44,3 +44,8 @@ func EqualConditionIgnoreReason(current, desired *metav1.Condition) bool {
 func IsConditionStatusTrue(cond *metav1.Condition, latestGeneration int64) bool {
 	return cond != nil && cond.Status == metav1.ConditionTrue && cond.ObservedGeneration == latestGeneration
 }
+
+// IsConditionStatusFalse returns true if the condition is false and the observed generation matches the latest generation.
+func IsConditionStatusFalse(cond *metav1.Condition, latestGeneration int64) bool {
+	return cond != nil && cond.Status == metav1.ConditionFalse && cond.ObservedGeneration == latestGeneration
+}

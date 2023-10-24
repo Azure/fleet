@@ -153,6 +153,32 @@ func retrieveAndValidateCRPDeletion(crp *placementv1beta1.ClusterResourcePlaceme
 	}, eventuallyTimeout, interval).Should(BeTrue(), "Get() clusterResourcePlacement, want not found")
 }
 
+func createClusterResourceBinding(cluster string, policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot, resourceSnapshot *placementv1beta1.ClusterResourceSnapshot) {
+	binding := &placementv1beta1.ClusterResourceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "binding-" + cluster,
+			Labels: map[string]string{
+				placementv1beta1.CRPTrackingLabel: resourceSnapshot.Labels[placementv1beta1.CRPTrackingLabel],
+			},
+		},
+		Spec: placementv1beta1.ResourceBindingSpec{
+			State:                        placementv1beta1.BindingStateBound,
+			ResourceSnapshotName:         resourceSnapshot.Name,
+			SchedulingPolicySnapshotName: policySnapshot.Name,
+			TargetCluster:                cluster,
+		},
+	}
+	Expect(k8sClient.Create(ctx, binding)).Should(Succeed(), "Failed to create clusterResourceBinding")
+	condition := metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               string(placementv1beta1.ResourceBindingBound),
+		Reason:             "resourceBindingTrue",
+		ObservedGeneration: binding.Generation,
+	}
+	meta.SetStatusCondition(&binding.Status.Conditions, condition)
+	Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed(), "Failed to update the binding status")
+}
+
 func createApplySucceededWork(resourceSnapshot *placementv1beta1.ClusterResourceSnapshot, namespace string) {
 	work := &placementv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
@@ -363,6 +389,9 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, gotPolicySnapshot)).Should(Succeed(), "Failed to update the policy snapshot status")
 
+			By("By creating clusterResourceBinding on member-1")
+			createClusterResourceBinding(member1Name, gotPolicySnapshot, gotResourceSnapshot)
+
 			By("By creating appliedSuccess works on member-1")
 			createApplySucceededWork(gotResourceSnapshot, member1Namespace)
 
@@ -436,6 +465,9 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 			}
 			retrieveAndValidateClusterResourcePlacement(testName, wantCRP)
+
+			By("By creating clusterResourceBinding on member-1")
+			createClusterResourceBinding(member2Name, gotPolicySnapshot, gotResourceSnapshot)
 
 			By("By creating appliedSuccess works on member-2")
 			createApplySucceededWork(gotResourceSnapshot, member2Namespace)
