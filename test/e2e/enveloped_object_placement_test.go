@@ -102,9 +102,11 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("Update the envelop configMap with bad configuration", func() {
-			// modify the embedded namespaced resource to add a bad scope
+			// modify the embedded namespaced resource to add a scope but it will be rejected as its immutable
 			badEnvelopeResourceQuota := testEnvelopeResourceQuota.DeepCopy()
-			badEnvelopeResourceQuota.Spec.Scopes = append(badEnvelopeResourceQuota.Spec.Scopes, corev1.ResourceQuotaScope("NotSupportedScope"))
+			badEnvelopeResourceQuota.Spec.Scopes = []corev1.ResourceQuotaScope{
+				corev1.ResourceQuotaScopeNotBestEffort, corev1.ResourceQuotaScopeNotTerminating,
+			}
 			badResourceQuotaByte, err := json.Marshal(badEnvelopeResourceQuota)
 			Expect(err).Should(Succeed())
 			// Get the config map.
@@ -116,6 +118,29 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should update CRP status with failed to apply resourceQuota", func() {
 			crpStatusUpdatedActual := checkForOneClusterFailedToApplyStatus(wantSelectedResources)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("Update the envelop configMap back with good configuration", func() {
+			// Get the config map.
+			Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: testEnvelopConfigMap.Name}, &testEnvelopConfigMap)).To(Succeed(), "Failed to get config map")
+			resourceQuotaByte, err := json.Marshal(testEnvelopeResourceQuota)
+			Expect(err).Should(Succeed())
+			testEnvelopConfigMap.Data["resourceQuota.yaml"] = string(resourceQuotaByte)
+			Expect(hubClient.Update(ctx, &testEnvelopConfigMap)).To(Succeed(), "Failed to update the enveloped config map")
+		})
+
+		It("should update CRP status as success again", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil)
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place the resources on all member clusters again", func() {
+			for idx := range allMemberClusters {
+				memberCluster := allMemberClusters[idx]
+				workResourcesPlacedActual := checkEnvelopResourcePlacement(memberCluster)
+				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+			}
 		})
 
 		It("can delete the CRP", func() {
@@ -249,7 +274,8 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 				if diff := cmp.Diff(placementStatus.FailedResourcePlacements, failedResourcePlacement, crpStatusCmpOptions...); diff != "" {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
-				if !strings.Contains(placementStatus.FailedResourcePlacements[0].Condition.Message, "unsupported scope") {
+				// check that the applied error message is correct
+				if !strings.Contains(placementStatus.FailedResourcePlacements[0].Condition.Message, "field is immutable") {
 					return fmt.Errorf("CRP failed resource placement does not have unsupported scope message")
 				}
 				if diff := cmp.Diff(placementStatus.Conditions, resourcePlacementApplyFailedConditions(crp.Generation), crpStatusCmpOptions...); diff != "" {

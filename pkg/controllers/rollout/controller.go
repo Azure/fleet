@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
@@ -245,6 +246,11 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 	// Those are the bindings that are candidates to be updated to latest resources during the rolling phase.
 	updateCandidates := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 
+	// Those are the bindings that are a sub-set of the candidates to be updated to latest resources but also are failed to apply.
+	// We can safely update those bindings to latest resources even if we can't update the rest of the bindings when we don't meet the
+	// minimum AvailableNumber of copies as we won't reduce the total unavailable number of bindings.
+	applyFailedUpdateCandidates := make([]*fleetv1beta1.ClusterResourceBinding, 0)
+
 	// calculate the cutoff time for a binding to be applied before so that it can be considered ready
 	readyTimeCutOff := time.Now().Add(-time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second)
 
@@ -254,14 +260,20 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 		binding := allBindings[idx]
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
-			canBeReadyBindings = append(canBeReadyBindings, binding)
+			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
+			if appliedCondition != nil && appliedCondition.Status == metav1.ConditionFalse && appliedCondition.ObservedGeneration == binding.Generation {
+				klog.V(3).InfoS("Found an failed to apply unscheduled binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
+			} else {
+				canBeReadyBindings = append(canBeReadyBindings, binding)
+			}
 			_, bindingReady := isBindingReady(binding, readyTimeCutOff)
 			if bindingReady {
-				klog.V(8).InfoS("Found a ready unscheduled binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
+				klog.V(3).InfoS("Found a ready unscheduled binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
 				readyBindings = append(readyBindings, binding)
 			}
 			if binding.DeletionTimestamp.IsZero() {
 				// it's not been deleted yet, so it is a removal candidate
+				klog.V(3).InfoS("Found a not yet deleted unscheduled binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
 				removeCandidates = append(removeCandidates, binding)
 			} else if bindingReady {
 				// it is being deleted, it can be removed from the cluster at any time, so it can be unavailable at any time
@@ -275,15 +287,26 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 			boundingCandidates = append(boundingCandidates, binding)
 
 		case fleetv1beta1.BindingStateBound:
+			bindingFailed := false
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
-			canBeReadyBindings = append(canBeReadyBindings, binding)
 			if _, bindingReady := isBindingReady(binding, readyTimeCutOff); bindingReady {
-				klog.V(8).InfoS("Found a ready bound binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
+				klog.V(3).InfoS("Found a ready bound binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
 				readyBindings = append(readyBindings, binding)
+			}
+			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
+			if appliedCondition != nil && appliedCondition.Status == metav1.ConditionFalse && appliedCondition.ObservedGeneration == binding.Generation {
+				klog.V(3).InfoS("Found a failed to apply bound binding", "clusterResourcePlacement", klog.KObj(crp), "binding", klog.KObj(binding))
+				bindingFailed = true
+			} else {
+				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
 			// The binding needs update if it's not pointing to the latest resource resourceBinding
 			if binding.Spec.ResourceSnapshotName != latestResourceSnapshotName {
 				updateCandidates = append(updateCandidates, binding)
+				if bindingFailed {
+					// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
+					applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, binding)
+				}
 			}
 		}
 	}
@@ -311,7 +334,7 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 	klog.V(2).InfoS("Calculated the targetNumber", "clusterResourcePlacement", klog.KObj(crp),
 		"targetNumber", targetNumber, "readyBindingNumber", len(readyBindings), "canBeUnavailableBindingNumber", len(canBeUnavailableBindings),
 		"canBeReadyBindingNumber", len(canBeReadyBindings), "boundingCandidateNumber", len(boundingCandidates),
-		"removeCandidateNumber", len(removeCandidates), "updateCandidateNumber", len(updateCandidates))
+		"removeCandidateNumber", len(removeCandidates), "updateCandidateNumber", len(updateCandidates), "applyFailedUpdateCandidateNumber", len(applyFailedUpdateCandidates))
 
 	// the list of bindings that are to be updated by this rolling phase
 	toBeUpdatedBinding := make([]*fleetv1beta1.ClusterResourceBinding, 0)
@@ -329,6 +352,11 @@ func pickBindingsToRoll(allBindings []*fleetv1beta1.ClusterResourceBinding, late
 	klog.V(2).InfoS("Calculated the max number of bindings to remove", "clusterResourcePlacement", klog.KObj(crp),
 		"maxUnavailableNumber", maxUnavailableNumber, "minAvailableNumber", minAvailableNumber,
 		"lowerBoundAvailableBindings", lowerBoundAvailableNumber, "maxNumberOfBindingsToRemove", maxNumberToRemove)
+
+	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
+	for i := 0; i < len(applyFailedUpdateCandidates); i++ {
+		toBeUpdatedBinding = append(toBeUpdatedBinding, applyFailedUpdateCandidates[i])
+	}
 	if maxNumberToRemove > 0 {
 		i := 0
 		// we first remove the bindings that are not selected by the scheduler anymore
