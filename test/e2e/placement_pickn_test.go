@@ -51,18 +51,18 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
-		It("should place resources on the picked clusters", func() {
-			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3)
-			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
-		})
-
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3Name}, nil)
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
+		It("should place resources on the picked clusters", func() {
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3WestProd)
+			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
+		})
+
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -96,15 +96,17 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
 
-			// Verify that resources have been placed on the picked clusters.
-			targetClusters := []*framework.Cluster{memberCluster3, memberCluster2}
+		It("should place resources on the picked clusters", func() {
+			targetClusters := []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 			}
+		})
 
-			// Downscale.
+		It("can downscale", func() {
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -116,23 +118,23 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to downscale")
 		})
 
-		It("should place resources on the picked clusters", func() {
-			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3)
+		It("should update CRP status as expected", func() {
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place resources on the newly picked clusters", func() {
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3WestProd)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 		})
 
 		It("should remove resources from the downscaled clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2)
+			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
 		})
 
-		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3Name}, nil)
-			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd})
 		})
 	})
 
@@ -166,12 +168,15 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
 
+		It("should place resources on the picked clusters", func() {
 			// Verify that resources have been placed on the picked clusters.
-			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3)
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster3WestProd)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
+		})
 
-			// Upscale.
+		It("can upscale", func() {
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -183,21 +188,21 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to downscale")
 		})
 
-		It("should place resources on the picked clusters", func() {
-			targetClusters := []*framework.Cluster{memberCluster3, memberCluster2}
+		It("should update CRP status as expected", func() {
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName, memberCluster2EastCanaryName}, nil)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place resources on the newly picked clusters", func() {
+			targetClusters := []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 			}
 		})
 
-		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3Name, memberCluster2Name}, nil)
-			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3, memberCluster2})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -261,21 +266,21 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
+		It("should update CRP status as expected", func() {
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
 		It("should place resources on the picked clusters", func() {
-			targetClusters := []*framework.Cluster{memberCluster1, memberCluster2}
+			targetClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 			}
 		})
 
-		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1Name, memberCluster2Name}, nil)
-			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1, memberCluster2})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -331,14 +336,17 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
 
-			// Verify that resources have been placed on the picked clusters.
-			targetClusters := []*framework.Cluster{memberCluster1, memberCluster2}
+		It("should place resources on the picked clusters", func() {
+			targetClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 			}
+		})
 
+		It("can update the CRP", func() {
 			// Specify new affinity and topology spread constraints.
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
@@ -373,8 +381,13 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP with new affinity and topology spread constraints")
 		})
 
-		It("should place resources on the picked clusters", func() {
-			targetClusters := []*framework.Cluster{memberCluster1, memberCluster3}
+		It("should update CRP status as expected", func() {
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster3WestProdName}, nil)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("should place resources on the newly picked clusters", func() {
+			targetClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
@@ -382,17 +395,12 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should remove resources from the unpicked clusters", func() {
-			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2)
+			resourceRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster2EastCanary)
 			Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
 		})
 
-		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1Name, memberCluster3Name}, nil)
-			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1, memberCluster3})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster3WestProd})
 		})
 	})
 
@@ -452,21 +460,21 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
+		It("should update CRP status as expected", func() {
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, []string{memberCluster3WestProdName, memberCluster4UnhealthyName, memberCluster5LeftName})
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
 		It("should place resources on the picked clusters", func() {
-			targetClusters := []*framework.Cluster{memberCluster1, memberCluster2}
+			targetClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 			}
 		})
 
-		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1Name, memberCluster2Name}, []string{memberCluster3Name, memberCluster4Name, memberCluster5Name})
-			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
-		})
-
 		AfterAll(func() {
-			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1, memberCluster2})
+			ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary})
 		})
 	})
 
@@ -500,15 +508,17 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				},
 			}
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
+		})
 
-			// Verify that resources have been placed on the picked clusters.
-			targetClusters := []*framework.Cluster{memberCluster3, memberCluster2}
+		It("should place resources on the picked clusters", func() {
+			targetClusters := []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary}
 			for _, cluster := range targetClusters {
 				resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(cluster)
 				Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on the picked clusters")
 			}
+		})
 
-			// Downscale.
+		It("can downscale", func() {
 			Eventually(func() error {
 				crp := &placementv1beta1.ClusterResourcePlacement{}
 				if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -521,7 +531,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 		})
 
 		It("should remove resources from the downscaled clusters", func() {
-			downscaledClusters := []*framework.Cluster{memberCluster3, memberCluster2}
+			downscaledClusters := []*framework.Cluster{memberCluster3WestProd, memberCluster2EastCanary}
 			for _, cluster := range downscaledClusters {
 				resourceRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
 				Eventually(resourceRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove resources from the downscaled clusters")
