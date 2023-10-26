@@ -30,9 +30,11 @@ var (
 	cluster1 = "cluster-1"
 	cluster2 = "cluster-2"
 	cluster3 = "cluster-3"
+	cluster4 = "cluster-4"
+	cluster5 = "cluster-5"
 )
 
-func TestReconciler_handleResourceSnapshot(t *testing.T) {
+func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	tests := map[string]struct {
 		snapshot      client.Object
 		shouldEnqueue bool
@@ -113,7 +115,7 @@ func TestReconciler_handleResourceSnapshot(t *testing.T) {
 	}
 }
 
-func TestReconciler_handleResourceBinding(t *testing.T) {
+func TestReconcilerHandleResourceBinding(t *testing.T) {
 	tests := map[string]struct {
 		resourceBinding client.Object
 		shouldEnqueue   bool
@@ -149,7 +151,7 @@ func TestReconciler_handleResourceBinding(t *testing.T) {
 	}
 }
 
-func Test_waitForResourcesToCleanUp(t *testing.T) {
+func TestWaitForResourcesToCleanUp(t *testing.T) {
 	tests := map[string]struct {
 		allBindings []*fleetv1beta1.ClusterResourceBinding
 		wantWait    bool
@@ -215,44 +217,7 @@ func Test_waitForResourcesToCleanUp(t *testing.T) {
 	}
 }
 
-func Test_pickBindingsToRoll(t *testing.T) {
-	tests := map[string]struct {
-		allBindings                []*fleetv1beta1.ClusterResourceBinding
-		latestResourceSnapshotName string
-		crp                        *fleetv1beta1.ClusterResourcePlacement
-		tobeUpdatedBindings        []int
-		needRoll                   bool
-	}{
-		// TODO: add more tests
-		"test bound with out dated bindings": {
-			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-			},
-			latestResourceSnapshotName: "snapshot-2",
-			crp: clusterResourcePlacementForTest("test",
-				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			tobeUpdatedBindings: []int{0},
-			needRoll:            true,
-		},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			gotUpdatedBindings, gotNeedRoll := pickBindingsToRoll(tt.allBindings, tt.latestResourceSnapshotName, tt.crp)
-			tobeUpdatedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
-			for _, index := range tt.tobeUpdatedBindings {
-				tobeUpdatedBindings = append(tobeUpdatedBindings, tt.allBindings[index])
-			}
-			if !reflect.DeepEqual(gotUpdatedBindings, tobeUpdatedBindings) {
-				t.Errorf("pickBindingsToRoll test `%s` gotUpdatedBindings = %v, wantReady %v", name, gotUpdatedBindings, tt.tobeUpdatedBindings)
-			}
-			if gotNeedRoll != tt.needRoll {
-				t.Errorf("pickBindingsToRoll test `%s` gotNeedRoll = %v, wantReady %v", name, gotNeedRoll, tt.needRoll)
-			}
-		})
-	}
-}
-
-func TestReconciler_updateBindings(t *testing.T) {
+func TestReconcilerUpdateBindings(t *testing.T) {
 	tests := map[string]struct {
 		name                       string
 		Client                     client.Client
@@ -274,64 +239,7 @@ func TestReconciler_updateBindings(t *testing.T) {
 	}
 }
 
-func createPlacementPolicyForTest(placementType fleetv1beta1.PlacementType, numberOfClusters int32) *fleetv1beta1.PlacementPolicy {
-	return &fleetv1beta1.PlacementPolicy{
-		PlacementType:    placementType,
-		NumberOfClusters: pointer.Int32(numberOfClusters),
-		Affinity: &fleetv1beta1.Affinity{
-			ClusterAffinity: &fleetv1beta1.ClusterAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
-					ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-						{
-							LabelSelector: metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"key1": "value1",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.PlacementPolicy) *fleetv1beta1.ClusterResourcePlacement {
-	return &fleetv1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crpName,
-		},
-		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-				{
-					Group:   corev1.GroupName,
-					Version: "v1",
-					Kind:    "Service",
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"region": "east"},
-					},
-				},
-			},
-			Policy: policy,
-			Strategy: fleetv1beta1.RolloutStrategy{
-				Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-				RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-					MaxUnavailable: &intstr.IntOrString{
-						Type:   intstr.String,
-						StrVal: "20%",
-					},
-					MaxSurge: &intstr.IntOrString{
-						Type:   intstr.Int,
-						IntVal: 3,
-					},
-					UnavailablePeriodSeconds: pointer.Int(1),
-				},
-			},
-		},
-	}
-}
-
-func Test_isBindingReady(t *testing.T) {
+func TestIsBindingReady(t *testing.T) {
 	tests := map[string]struct {
 		binding         *fleetv1beta1.ClusterResourceBinding
 		readyTimeCutOff time.Time
@@ -426,4 +334,140 @@ func Test_isBindingReady(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPickBindingsToRoll(t *testing.T) {
+	noMaxUnavailableCRP := clusterResourcePlacementForTest("test",
+		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5))
+	noMaxUnavailableCRP.Spec.Strategy.RollingUpdate.MaxUnavailable = &intstr.IntOrString{
+		Type:   intstr.Int,
+		IntVal: 0,
+	}
+	tests := map[string]struct {
+		allBindings                []*fleetv1beta1.ClusterResourceBinding
+		latestResourceSnapshotName string
+		crp                        *fleetv1beta1.ClusterResourcePlacement
+		tobeUpdatedBindings        []int
+		needRoll                   bool
+	}{
+		// TODO: add more tests
+		"test bound with out dated bindings": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
+			tobeUpdatedBindings: []int{0},
+			needRoll:            true,
+		},
+		"test bound with failed to apply bindings": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
+			tobeUpdatedBindings: []int{0},
+			needRoll:            true,
+		},
+		"test bound with failed to apply bindings when there is no max unavailable allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        noMaxUnavailableCRP,
+			tobeUpdatedBindings:        []int{0, 1, 2},
+			needRoll:                   true,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			gotUpdatedBindings, gotNeedRoll := pickBindingsToRoll(tt.allBindings, tt.latestResourceSnapshotName, tt.crp)
+			tobeUpdatedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
+			for _, index := range tt.tobeUpdatedBindings {
+				tobeUpdatedBindings = append(tobeUpdatedBindings, tt.allBindings[index])
+			}
+			if !reflect.DeepEqual(gotUpdatedBindings, tobeUpdatedBindings) {
+				t.Errorf("pickBindingsToRoll test `%s` gotUpdatedBindings = %v, wantReady %v", name, gotUpdatedBindings, tt.tobeUpdatedBindings)
+			}
+			if gotNeedRoll != tt.needRoll {
+				t.Errorf("pickBindingsToRoll test `%s` gotNeedRoll = %v, wantReady %v", name, gotNeedRoll, tt.needRoll)
+			}
+		})
+	}
+}
+
+func createPlacementPolicyForTest(placementType fleetv1beta1.PlacementType, numberOfClusters int32) *fleetv1beta1.PlacementPolicy {
+	return &fleetv1beta1.PlacementPolicy{
+		PlacementType:    placementType,
+		NumberOfClusters: pointer.Int32(numberOfClusters),
+		Affinity: &fleetv1beta1.Affinity{
+			ClusterAffinity: &fleetv1beta1.ClusterAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
+					ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						{
+							LabelSelector: metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key1": "value1",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.PlacementPolicy) *fleetv1beta1.ClusterResourcePlacement {
+	return &fleetv1beta1.ClusterResourcePlacement{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crpName,
+		},
+		Spec: fleetv1beta1.ClusterResourcePlacementSpec{
+			ResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+				{
+					Group:   corev1.GroupName,
+					Version: "v1",
+					Kind:    "Service",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"region": "east"},
+					},
+				},
+			},
+			Policy: policy,
+			Strategy: fleetv1beta1.RolloutStrategy{
+				Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
+				RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
+					MaxUnavailable: &intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "20%",
+					},
+					MaxSurge: &intstr.IntOrString{
+						Type:   intstr.Int,
+						IntVal: 3,
+					},
+					UnavailablePeriodSeconds: pointer.Int(1),
+				},
+			},
+		},
+	}
+}
+
+func generateFailedToApplyClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string) *fleetv1beta1.ClusterResourceBinding {
+	binding := generateClusterResourceBinding(state, resourceSnapshotName, targetCluster)
+	binding.Status.Conditions = append(binding.Status.Conditions, metav1.Condition{
+		Type:   string(fleetv1beta1.ResourceBindingApplied),
+		Status: metav1.ConditionFalse,
+	})
+	return binding
 }

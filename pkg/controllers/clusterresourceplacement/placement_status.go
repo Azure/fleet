@@ -16,7 +16,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/annotations"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
 )
@@ -26,14 +26,20 @@ var (
 	maxFailedResourcePlacementLimit = 100
 )
 
+// ClusterResourcePlacementStatus condition reasons
 const (
-	// ClusterResourcePlacementStatus condition reasons
-	invalidResourceSelectorsReason = "InvalidResourceSelectors"
+	// InvalidResourceSelectorsReason is the reason string of placement condition when the selected resources are invalid
+	// or forbidden.
+	InvalidResourceSelectorsReason = "InvalidResourceSelectors"
+	// SchedulingUnknownReason is the reason string of placement condition when the schedule status is unknown.
+	SchedulingUnknownReason = "SchedulePending"
 
-	schedulingUnknownReason = "SchedulePending"
-
-	synchronizePendingReason   = "SynchronizePending"
-	synchronizeSucceededReason = "SynchronizeSucceeded"
+	// SynchronizePendingReason is the reason string of placement condition when the selected resources have not synchronized
+	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	SynchronizePendingReason = "SynchronizePending"
+	// SynchronizeSucceededReason is the reason string of placement condition when the selected resources are
+	// successfully synchronized under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
+	SynchronizeSucceededReason = "SynchronizeSucceeded"
 
 	// ApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
 	ApplyFailedReason = "ApplyFailed"
@@ -41,21 +47,28 @@ const (
 	ApplyPendingReason = "ApplyPending"
 	// ApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
 	ApplySucceededReason = "ApplySucceeded"
+)
 
-	// ResourcePlacementStatus condition reasons
-	// resourceApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
-	resourceApplyFailedReason = "ApplyFailed"
-	// resourceApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
-	resourceApplyPendingReason = "ApplyPending"
-	// resourceApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
-	resourceApplySucceededReason = "ApplySucceeded"
+// ResourcePlacementStatus condition reasons and message formats
+const (
+	// ResourceApplyFailedReason is the reason string of placement condition when the selected resources fail to apply.
+	ResourceApplyFailedReason = "ApplyFailed"
+	// ResourceApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
+	ResourceApplyPendingReason = "ApplyPending"
+	// ResourceApplySucceededReason is the reason string of placement condition when the selected resources are applied successfully.
+	ResourceApplySucceededReason = "ApplySucceeded"
 
-	// workSynchronizePendingReason is the reason string of placement condition when the work(s) are pending to synchronize.
-	workSynchronizePendingReason = "WorkSynchronizePending"
-	// workSynchronizeSucceededReason is the reason string of placement condition when the work(s) are synchronized successfully.
-	workSynchronizeSucceededReason = "WorkSynchronizeSucceeded"
+	// WorkSynchronizePendingReason is the reason string of placement condition when the work(s) are pending to synchronize.
+	WorkSynchronizePendingReason = "WorkSynchronizePending"
+	// WorkSynchronizeFailedReason is the reason string of placement condition when the work(s) failed to synchronize.
+	WorkSynchronizeFailedReason = "WorkSynchronizeFailed"
+	// WorkSynchronizeSucceededReason is the reason string of placement condition when the work(s) are synchronized successfully.
+	WorkSynchronizeSucceededReason = "WorkSynchronizeSucceeded"
 
-	resourceScheduleSucceededReason = "ScheduleSucceeded"
+	// ResourceScheduleSucceededReason is the reason string of placement condition when the selected resources are scheduled.
+	ResourceScheduleSucceededReason = "ScheduleSucceeded"
+	// ResourceScheduleFailedReason is the reason string of placement condition when the scheduler failed to schedule the selected resources.
+	ResourceScheduleFailedReason = "ScheduleFailed"
 
 	// ResourcePlacementStatus schedule condition message formats
 	resourcePlacementConditionScheduleFailedMessageFormat             = "%s is not selected: %s"
@@ -71,7 +84,7 @@ func buildClusterResourcePlacementSyncCondition(crp *fleetv1beta1.ClusterResourc
 		return metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-			Reason:             synchronizePendingReason,
+			Reason:             SynchronizePendingReason,
 			Message:            fmt.Sprintf("There are still %d cluster(s) pending to be sychronized on the hub cluster", pendingCount),
 			ObservedGeneration: crp.Generation,
 		}
@@ -79,7 +92,7 @@ func buildClusterResourcePlacementSyncCondition(crp *fleetv1beta1.ClusterResourc
 	return metav1.Condition{
 		Status:             metav1.ConditionTrue,
 		Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-		Reason:             synchronizeSucceededReason,
+		Reason:             SynchronizeSucceededReason,
 		Message:            fmt.Sprintf("All %d cluster(s) are synchronized to the latest resources on the hub cluster", succeededCount),
 		ObservedGeneration: crp.Generation,
 	}
@@ -131,7 +144,9 @@ func buildClusterResourcePlacementApplyCondition(crp *fleetv1beta1.ClusterResour
 
 // setWorkStatusForResourcePlacementStatus will list all the associated works with latest resourceSnapshots and build the work conditions.
 // Returns workSynchronizedCondition & workAppliedCondition.
-func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, status *fleetv1beta1.ResourcePlacementStatus) (*metav1.Condition, *metav1.Condition, error) {
+func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context,
+	crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, clusterResourceBinding *fleetv1beta1.ClusterResourceBinding,
+	status *fleetv1beta1.ResourcePlacementStatus) (*metav1.Condition, *metav1.Condition, error) {
 	crpKObj := klog.KObj(crp)
 	namespaceMatcher := client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, status.ClusterName))
 	workLabelMatcher := client.MatchingLabels{
@@ -144,42 +159,33 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 		return nil, nil, controller.NewAPIServerError(true, err)
 	}
 
-	resourceIndex, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(latestResourceSnapshot)
+	latestResourceIndex, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(latestResourceSnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to parse the resource snapshot index label from latest clusterResourceSnapshot", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
 		return nil, nil, controller.NewUnexpectedBehaviorError(err)
 	}
-	// Used to build the work synchronized condition
-	oldWorkCounter := 0 // The work is pointing to the old resourceSnapshot.
-	newWorkCounter := 0 // The work is pointing to the latest resourceSnapshot.
 	// Used to build the work applied condition
 	pendingWorkCounter := 0 // The work has not been applied yet.
 
 	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit) // preallocate the memory
 	for i := range workList.Items {
-		if workList.Items[i].DeletionTimestamp != nil {
+		work := workList.Items[i]
+		if work.DeletionTimestamp != nil {
 			continue // ignore the deleting work
 		}
-
-		workKObj := klog.KObj(&workList.Items[i])
-		indexFromWork, err := labels.ExtractResourceSnapshotIndexFromWork(&workList.Items[i])
+		workKObj := klog.KObj(&work)
+		resourceIndexFromWork, err := labels.ExtractResourceSnapshotIndexFromWork(&work)
 		if err != nil {
 			klog.ErrorS(err, "Failed to parse the resource snapshot index label from work", "clusterResourcePlacement", crpKObj, "work", workKObj)
 			return nil, nil, controller.NewUnexpectedBehaviorError(err)
 		}
-		if indexFromWork > resourceIndex {
-			err := fmt.Errorf("invalid work %s: resource snapshot index %d on the work is greater than resource index %d on the latest clusterResourceSnapshot", workKObj, indexFromWork, resourceIndex)
+		if resourceIndexFromWork > latestResourceIndex {
+			err := fmt.Errorf("invalid work %s: resource snapshot index %d on the work is greater than resource index %d on the latest clusterResourceSnapshot", workKObj, resourceIndexFromWork, latestResourceIndex)
 			klog.ErrorS(err, "Invalid work", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot), "work", workKObj)
 			return nil, nil, controller.NewUnexpectedBehaviorError(err)
-		} else if indexFromWork < resourceIndex {
-			// The work is pointing to the old resourceSnapshot.
-			// it means the rollout controller has not updated the binding yet or work generator has not handled this work yet.
-			oldWorkCounter++
-		} else { // indexFromWork = resourceIndex
-			// The work is pointing to the latest resourceSnapshot.
-			newWorkCounter++
+		} else if resourceIndexFromWork == latestResourceIndex {
 			// We only build the work applied status on the new works.
-			isPending, failedManifests := buildFailedResourcePlacements(&workList.Items[i])
+			isPending, failedManifests := buildFailedResourcePlacements(&work)
 			if isPending {
 				pendingWorkCounter++
 			}
@@ -194,20 +200,11 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 	}
 
 	klog.V(2).InfoS("Building the resourcePlacementStatus", "clusterResourcePlacement", crpKObj, "clusterName", status.ClusterName,
-		"numberOfOldWorks", oldWorkCounter, "numberOfNewWorks", newWorkCounter,
 		"numberOfPendingWorks", pendingWorkCounter, "numberOfFailedResources", len(failedResourcePlacements))
 
 	status.FailedResourcePlacements = failedResourcePlacements
 
-	desiredWorkCounter, err := annotations.ExtractNumberOfResourceSnapshotsFromResourceSnapshot(latestResourceSnapshot)
-	if err != nil {
-		klog.ErrorS(err, "Master resource snapshot has invalid numberOfResourceSnapshots annotation", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
-		return nil, nil, controller.NewUnexpectedBehaviorError(err)
-	}
-	isSync, workSynchronizedCondition, err := buildWorkSynchronizedCondition(crp, desiredWorkCounter, newWorkCounter, oldWorkCounter)
-	if err != nil {
-		return nil, nil, err
-	}
+	isSync, workSynchronizedCondition := buildWorkSynchronizedCondition(crp, clusterResourceBinding)
 	meta.SetStatusCondition(&status.Conditions, workSynchronizedCondition)
 
 	workAppliedCondition := buildWorkAppliedCondition(crp, !isSync || pendingWorkCounter > 0, len(failedResourcePlacements) > 0)
@@ -215,24 +212,35 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 	return &workSynchronizedCondition, &workAppliedCondition, nil
 }
 
-func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, desiredWorkCounter, newWorkCounter, oldWorkCounter int) (bool, metav1.Condition, error) {
-	if desiredWorkCounter == newWorkCounter && oldWorkCounter == 0 {
-		// We have created all the works according to the latest resource snapshot.
-		return true, metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
-			Reason:             workSynchronizeSucceededReason,
-			Message:            "Successfully Synchronized work(s) for placement",
-			ObservedGeneration: crp.Generation,
-		}, nil
+func buildWorkSynchronizedCondition(crp *fleetv1beta1.ClusterResourcePlacement, binding *fleetv1beta1.ClusterResourceBinding) (bool, metav1.Condition) {
+	if binding != nil {
+		boundCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingBound))
+		if condition.IsConditionStatusTrue(boundCondition, binding.Generation) {
+			// This condition is set to true only if the work generator have created all the works according to the latest resource snapshot.
+			return true, metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+				Reason:             WorkSynchronizeSucceededReason,
+				Message:            "Successfully Synchronized work(s) for placement",
+				ObservedGeneration: crp.Generation,
+			}
+		} else if condition.IsConditionStatusFalse(boundCondition, binding.Generation) {
+			return false, metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+				Reason:             WorkSynchronizeFailedReason,
+				Message:            boundCondition.Message,
+				ObservedGeneration: crp.Generation,
+			}
+		}
 	}
 	return false, metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
-		Reason:             workSynchronizePendingReason,
+		Reason:             WorkSynchronizePendingReason,
 		Message:            "In the process of synchronizing or operation is blocked by the rollout strategy ",
 		ObservedGeneration: crp.Generation,
-	}, nil
+	}
 }
 
 func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPendingWork, hasFailedResource bool) metav1.Condition {
@@ -243,7 +251,7 @@ func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPe
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
-			Reason:             resourceApplyPendingReason,
+			Reason:             ResourceApplyPendingReason,
 			Message:            "Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the member cluster",
 			ObservedGeneration: crp.Generation,
 		}
@@ -253,7 +261,7 @@ func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPe
 		return metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
-			Reason:             resourceApplyFailedReason,
+			Reason:             ResourceApplyFailedReason,
 			Message:            "Failed to apply manifests, please check the `failedResourcePlacements` status",
 			ObservedGeneration: crp.Generation,
 		}
@@ -262,7 +270,7 @@ func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPe
 	return metav1.Condition{ // if !hasFailedResource && !hasPendingWork
 		Status:             metav1.ConditionTrue,
 		Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
-		Reason:             resourceApplySucceededReason,
+		Reason:             ResourceApplySucceededReason,
 		Message:            "Successfully applied resources",
 		ObservedGeneration: crp.Generation,
 	}
@@ -288,15 +296,30 @@ func buildFailedResourcePlacements(work *fleetv1beta1.Work) (isPending bool, res
 		return false, nil
 	}
 
+	// check if the work is generated by an enveloped object
+	envelopeType, isEnveloped := work.GetLabels()[fleetv1beta1.EnvelopeTypeLabel]
+	var envelopObjName, envelopObjNamespace string
+	if isEnveloped {
+		// If the work  generated by an enveloped object, it must contain those labels.
+		envelopObjName = work.GetLabels()[fleetv1beta1.EnvelopeNameLabel]
+		envelopObjNamespace = work.GetLabels()[fleetv1beta1.EnvelopeNamespaceLabel]
+	}
 	res = make([]fleetv1beta1.FailedResourcePlacement, 0, len(work.Status.ManifestConditions))
 	for _, manifestCondition := range work.Status.ManifestConditions {
 		appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		// collect if there is an explicit fail
 		if appliedCond != nil && appliedCond.Status != metav1.ConditionTrue {
-			klog.V(2).InfoS("Find a failed to apply manifest",
-				"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
-				"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
-
+			if isEnveloped {
+				klog.V(2).InfoS("Find a failed to apply enveloped manifest",
+					"manifestName", manifestCondition.Identifier.Name,
+					"group", manifestCondition.Identifier.Group,
+					"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind,
+					"envelopeType", envelopeType, "envelopObjName", envelopObjName, "envelopObjNamespace", envelopObjNamespace)
+			} else {
+				klog.V(2).InfoS("Find a failed to apply manifest",
+					"manifestName", manifestCondition.Identifier.Name, "group", manifestCondition.Identifier.Group,
+					"version", manifestCondition.Identifier.Version, "kind", manifestCondition.Identifier.Kind)
+			}
 			failedManifest := fleetv1beta1.FailedResourcePlacement{
 				ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 					Group:     manifestCondition.Identifier.Group,
@@ -306,6 +329,13 @@ func buildFailedResourcePlacements(work *fleetv1beta1.Work) (isPending bool, res
 					Namespace: manifestCondition.Identifier.Namespace,
 				},
 				Condition: *appliedCond,
+			}
+			if isEnveloped {
+				failedManifest.ResourceIdentifier.Envelope = &fleetv1beta1.EnvelopeIdentifier{
+					Name:      envelopObjName,
+					Namespace: envelopObjNamespace,
+					Type:      fleetv1beta1.EnvelopeType(envelopeType),
+				}
 			}
 			res = append(res, failedManifest)
 		}

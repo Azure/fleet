@@ -390,3 +390,100 @@ func pickAllPolicySnapshotStatusUpdatedActual(scored, filtered []string, policyS
 		return nil
 	}
 }
+
+func hasNScheduledOrBoundBindingsPresentActual(crpName string, n int) func() error {
+	return func() error {
+		bindingList := &placementv1beta1.ClusterResourceBindingList{}
+		labelSelector := labels.SelectorFromSet(labels.Set{placementv1beta1.CRPTrackingLabel: crpName})
+		listOptions := &client.ListOptions{LabelSelector: labelSelector}
+		if err := hubClient.List(ctx, bindingList, listOptions); err != nil {
+			return err
+		}
+
+		scheduledOrBoundBindingCount := 0
+		for _, binding := range bindingList.Items {
+			if binding.Spec.State == placementv1beta1.BindingStateBound || binding.Spec.State == placementv1beta1.BindingStateScheduled {
+				scheduledOrBoundBindingCount++
+			}
+		}
+
+		if scheduledOrBoundBindingCount != n {
+			return fmt.Errorf("got %d, want %d scheduled or bound bindings", scheduledOrBoundBindingCount, n)
+		}
+
+		return nil
+	}
+}
+
+func pickNPolicySnapshotStatusUpdatedActual(
+	numOfClusters int,
+	picked, notPicked, filtered []string,
+	scoreByCluster map[string]*placementv1beta1.ClusterScore,
+	policySnapshotName string,
+) func() error {
+	return func() error {
+		policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: policySnapshotName}, policySnapshot); err != nil {
+			return err
+		}
+
+		// Verify that the observed CRP generation field is populated correctly.
+		wantCRPGeneration := policySnapshot.Annotations[placementv1beta1.CRPGenerationAnnotation]
+		observedCRPGeneration := policySnapshot.Status.ObservedCRPGeneration
+		if strconv.FormatInt(observedCRPGeneration, 10) != wantCRPGeneration {
+			return fmt.Errorf("policy snapshot observed CRP generation not match: want %s, got %d", wantCRPGeneration, observedCRPGeneration)
+		}
+
+		// Verify that cluster decisions are populated correctly.
+		wantClusterDecisions := []placementv1beta1.ClusterDecision{}
+		for _, clusterName := range picked {
+			wantClusterDecisions = append(wantClusterDecisions, placementv1beta1.ClusterDecision{
+				ClusterName:  clusterName,
+				Selected:     true,
+				ClusterScore: scoreByCluster[clusterName],
+			})
+		}
+		for _, clusterName := range notPicked {
+			wantClusterDecisions = append(wantClusterDecisions, placementv1beta1.ClusterDecision{
+				ClusterName:  clusterName,
+				Selected:     false,
+				ClusterScore: scoreByCluster[clusterName],
+			})
+		}
+		for _, clusterName := range filtered {
+			wantClusterDecisions = append(wantClusterDecisions, placementv1beta1.ClusterDecision{
+				ClusterName: clusterName,
+				Selected:    false,
+			})
+		}
+		if diff := cmp.Diff(
+			policySnapshot.Status.ClusterDecisions, wantClusterDecisions,
+			ignoreClusterDecisionReasonField,
+			cmpopts.SortSlices(lessFuncClusterDecision),
+			cmpopts.EquateEmpty(),
+		); diff != "" {
+			return fmt.Errorf("policy snapshot status cluster decisions (-got, +want): %s", diff)
+		}
+
+		// Verify that the scheduled condition is added correctly.
+		scheduledCondition := meta.FindStatusCondition(policySnapshot.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
+		wantScheduledCondition := &metav1.Condition{
+			Type:               string(placementv1beta1.PolicySnapshotScheduled),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: policySnapshot.Generation,
+		}
+		if len(picked) != numOfClusters {
+			wantScheduledCondition = &metav1.Condition{
+				Type:               string(placementv1beta1.PolicySnapshotScheduled),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: policySnapshot.Generation,
+			}
+		}
+
+		if diff := cmp.Diff(scheduledCondition, wantScheduledCondition, ignoreConditionTimeReasonAndMessageFields); diff != "" {
+			return fmt.Errorf("policy snapshot status scheduled condition (-got, +want): %s", diff)
+		}
+
+		return nil
+	}
+}

@@ -44,9 +44,11 @@ const (
 	pickFixedNotFoundClusterReason        = "specified cluster is not found"
 	notPickedByScoreReason                = "cluster does not score high enough"
 
-	// The reasons and messages for scheduled conditions.
-	fullyScheduledReason     = "SchedulingPolicyFulfilled"
-	notFullyScheduledReason  = "SchedulingPolicyUnfulfilled"
+	// FullyScheduledReason is the reason string of placement condition when the placement is scheduled.
+	FullyScheduledReason = "SchedulingPolicyFulfilled"
+	// NotFullyScheduledReason is the reason string of placement condition when the placement policy cannot be fully satisfied.
+	NotFullyScheduledReason = "SchedulingPolicyUnfulfilled"
+
 	fullyScheduledMessage    = "found all the clusters needed as specified by the scheduling policy"
 	notFullyScheduledMessage = "could not find all the clusters needed as specified by the scheduling policy"
 
@@ -694,6 +696,13 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 ) error {
 	policyRef := klog.KObj(policy)
 
+	// Retrieve the corresponding CRP generation.
+	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+
 	// Prepare new scheduling decisions.
 	newDecisions := newSchedulingDecisionsFromBindings(f.maxUnselectedClusterDecisionCount, notPicked, filtered, existing...)
 	// Prepare new scheduling condition.
@@ -702,16 +711,14 @@ func (f *framework) updatePolicySnapshotStatusFromBindings(
 	// Compare the new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
 	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
-	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
+	if observedCRPGeneration == policy.Status.ObservedCRPGeneration &&
+		equalDecisions(currentDecisions, newDecisions) &&
+		condition.EqualCondition(currentCondition, &newCondition) {
 		// Skip if there is no change in decisions and conditions.
+		klog.InfoS(
+			"No change in scheduling decisions and condition, and the observed CRP generation remains the same",
+			"clusterSchedulingPolicySnapshot", policyRef)
 		return nil
-	}
-
-	// Retrieve the corresponding CRP generation.
-	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
-	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annoation", "clusterSchedulingPolicySnapshot", policyRef)
-		return controller.NewUnexpectedBehaviorError(err)
 	}
 
 	// Update the status.
@@ -1274,31 +1281,36 @@ func (f *framework) updatePolicySnapshotStatusForPickFixedPlacementType(
 ) error {
 	policyRef := klog.KObj(policy)
 
+	// Retrieve the corresponding CRP generation.
+	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
+		return controller.NewUnexpectedBehaviorError(err)
+	}
+
 	// Prepare new scheduling decisions.
 	newDecisions := newSchedulingDecisionsForPickFixedPlacementType(valid, invalid, notFound)
 	// Prepare new scheduling condition.
 	var newCondition metav1.Condition
 	if len(invalid)+len(notFound) == 0 {
 		// The scheduler has selected all the clusters, as the scheduling policy dictates.
-		newCondition = newScheduledCondition(policy, metav1.ConditionTrue, fullyScheduledReason, fullyScheduledMessage)
+		newCondition = newScheduledCondition(policy, metav1.ConditionTrue, FullyScheduledReason, fullyScheduledMessage)
 	} else {
 		// Some of the targets cannot be selected.
-		newCondition = newScheduledCondition(policy, metav1.ConditionFalse, notFullyScheduledReason, notFullyScheduledMessage)
+		newCondition = newScheduledCondition(policy, metav1.ConditionFalse, NotFullyScheduledReason, notFullyScheduledMessage)
 	}
 
 	// Compare new decisions + condition with the old ones.
 	currentDecisions := policy.Status.ClusterDecisions
 	currentCondition := meta.FindStatusCondition(policy.Status.Conditions, string(placementv1beta1.PolicySnapshotScheduled))
-	if equalDecisions(currentDecisions, newDecisions) && condition.EqualCondition(currentCondition, &newCondition) {
+	if observedCRPGeneration == policy.Status.ObservedCRPGeneration &&
+		equalDecisions(currentDecisions, newDecisions) &&
+		condition.EqualCondition(currentCondition, &newCondition) {
 		// Skip if there is no change in decisions and conditions.
+		klog.InfoS(
+			"No change in scheduling decisions and condition, and the observed CRP generation remains the same",
+			"clusterSchedulingPolicySnapshot", policyRef)
 		return nil
-	}
-
-	// Retrieve the corresponding CRP generation.
-	observedCRPGeneration, err := annotations.ExtractObservedCRPGenerationFromPolicySnapshot(policy)
-	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve CRP generation from annotation", "clusterSchedulingPolicySnapshot", policyRef)
-		return controller.NewUnexpectedBehaviorError(err)
 	}
 
 	// Update the status.

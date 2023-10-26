@@ -6,29 +6,36 @@ Licensed under the MIT license.
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/test/e2e/framework"
-	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-
+		//TODO: clean up the member cluster object if it already exists
 		mcObj := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   memberCluster.ClusterName,
@@ -56,10 +63,12 @@ func checkIfAllMemberClustersHaveJoined() {
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(clusterv1beta1.AgentHealthy),
+					Reason: imcv1beta1.EventReasonInternalMemberClusterHealthy,
 				},
 				{
 					Status: metav1.ConditionTrue,
 					Type:   string(clusterv1beta1.AgentJoined),
+					Reason: imcv1beta1.EventReasonInternalMemberClusterJoined,
 				},
 			},
 		},
@@ -71,6 +80,7 @@ func checkIfAllMemberClustersHaveJoined() {
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); err != nil {
+				By(fmt.Sprintf("Failed to get member cluster object %s", memberCluster.ClusterName))
 				return err
 			}
 
@@ -79,7 +89,7 @@ func checkIfAllMemberClustersHaveJoined() {
 				wantAgentStatus,
 				cmpopts.SortSlices(lessFuncCondition),
 				ignoreConditionObservedGenerationField,
-				ignoreConditionLTTReasonAndMessageFields,
+				ignoreConditionLTTAndMessageFields,
 				ignoreAgentStatusHeartbeatField,
 			); diff != "" {
 				return fmt.Errorf("agent status diff (-got, +want): %s", diff)
@@ -185,6 +195,175 @@ func cleanupInvalidClusters() {
 	}
 }
 
+// createResourcesForFleetGuardRail create resources required for guard rail E2Es.
+func createResourcesForFleetGuardRail() {
+	cr := rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster-role",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"*"},
+				Verbs:     []string{"*"},
+				Resources: []string{"*"},
+			},
+		},
+	}
+	Eventually(func() error {
+		return hubClient.Create(ctx, &cr)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "failed to create cluster role %s for fleet guard rail E2E", cr.Name)
+
+	crb := rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster-role-binding",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				APIGroup: rbacv1.GroupName,
+				Kind:     "User",
+				Name:     testUser,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     "test-cluster-role",
+		},
+	}
+
+	Eventually(func() error {
+		return hubClient.Create(ctx, &crb)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "failed to create cluster role binding %s for fleet guard rail E2E", crb.Name)
+}
+
+// deleteResourcesForFleetGuardRail deletes resources created for guard rail E2Es.
+func deleteResourcesForFleetGuardRail() {
+	crb := rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster-role-binding",
+		},
+	}
+	Expect(hubClient.Delete(ctx, &crb)).Should(Succeed())
+
+	cr := rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster-role",
+		},
+	}
+	Expect(hubClient.Delete(ctx, &cr)).Should(Succeed())
+}
+
+func createMemberClusterResource(name, user string) {
+	// Create the MC.
+	mc := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Name:      user,
+				Kind:      "ServiceAccount",
+				Namespace: utils.FleetSystemNamespace,
+			},
+			HeartbeatPeriodSeconds: 60,
+		},
+	}
+	Expect(hubClient.Create(ctx, mc)).To(Succeed(), "Failed to create MC %s", mc)
+}
+
+func deleteMemberClusterResource(name string) {
+	Eventually(func(g Gomega) error {
+		var mc clusterv1beta1.MemberCluster
+		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc)
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		g.Expect(err).Should(Succeed(), "Failed to get MC %s", name)
+		controllerutil.RemoveFinalizer(&mc, placementv1beta1.MemberClusterFinalizer)
+		g.Expect(hubClient.Update(ctx, &mc)).Should(Succeed())
+		g.Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+	Eventually(func(g Gomega) error {
+		var mc clusterv1beta1.MemberCluster
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc); !errors.IsNotFound(err) {
+			return fmt.Errorf("MC still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
+func checkInternalMemberClusterExists(name, namespace string) {
+	imc := &clusterv1beta1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	Eventually(func() error {
+		return hubClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
+func createWorkResource(name, namespace string) {
+	testDeployment := appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "Deployment",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: utilrand.String(10),
+					Kind:       utilrand.String(10),
+					Name:       utilrand.String(10),
+					UID:        types.UID(utilrand.String(10)),
+				},
+			},
+		},
+	}
+	deploymentBytes, err := json.Marshal(testDeployment)
+	Expect(err).Should(Succeed())
+	w := placementv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: placementv1beta1.WorkSpec{
+			Workload: placementv1beta1.WorkloadTemplate{
+				Manifests: []placementv1beta1.Manifest{
+					{
+						RawExtension: runtime.RawExtension{
+							Raw: deploymentBytes,
+						},
+					},
+				},
+			},
+		},
+	}
+	Expect(hubClient.Create(ctx, &w)).Should(Succeed())
+}
+
+func deleteWorkResource(name, namespace string) {
+	w := placementv1beta1.Work{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	Expect(hubClient.Delete(ctx, &w)).Should(Succeed())
+
+	Eventually(func(g Gomega) error {
+		var w placementv1beta1.Work
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &w); !errors.IsNotFound(err) {
+			return fmt.Errorf("work still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources() {
 	ns := workNamespace()
@@ -196,11 +375,15 @@ func createWorkResources() {
 
 // cleanupWorkResources deletes the resources created by createWorkResources and waits until the resources are not found.
 func cleanupWorkResources() {
-	ns := workNamespace()
-	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
+	cleanWorkResourcesOnCluster(hubCluster)
+}
 
-	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(hubCluster)
-	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from hub cluster")
+func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
+	ns := workNamespace()
+	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
+
+	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
+	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -253,22 +436,26 @@ func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 // cleanupCRP deletes the CRP and waits until the resources are not found.
 func cleanupCRP(name string) {
 	// TODO(Arvindthiru): There is a conflict which requires the Eventually block, not sure of series of operations that leads to it yet.
-	Eventually(func(g Gomega) error {
+	Eventually(func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)
 		if errors.IsNotFound(err) {
 			return nil
 		}
-		g.Expect(err).Should(Succeed(), "Failed to get CRP %s", name)
+		if err != nil {
+			return err
+		}
 
 		// Delete the CRP (again, if applicable).
 		//
 		// This helps the After All node to run successfully even if the steps above fail early.
-		g.Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", name)
+		if err := hubClient.Delete(ctx, crp); err != nil {
+			return err
+		}
 
 		crp.Finalizers = []string{}
 		return hubClient.Update(ctx, crp)
-	}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP %s", name)
 
 	// Wait until the CRP is removed.
 	removedActual := crpRemovedActual()

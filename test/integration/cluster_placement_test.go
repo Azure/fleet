@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
@@ -1628,7 +1627,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Namespace: ns.Name,
 				},
 				Spec: kruisev1alpha1.CloneSetSpec{
-					Replicas: to.Int32Ptr(20),
+					Replicas: pointer.Int32(20),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"app.kubernetes.io/name": "test-clone-set"},
 					},

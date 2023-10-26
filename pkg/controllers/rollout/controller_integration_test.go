@@ -161,7 +161,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		// simulate that some of the bindings are applied
 		firstApplied := 3
 		for i := 0; i < firstApplied; i++ {
-			markBindingApplied(bindings[i])
+			markBindingApplied(bindings[i], true)
 		}
 		// simulate another scheduling decision, pick some cluster to unselect from the bottom of the list
 		var newTarget int32 = 9
@@ -182,7 +182,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// simulate that some of the bindings are applied
 		for i := firstApplied; i < int(newTarget); i++ {
-			markBindingApplied(bindings[i])
+			markBindingApplied(bindings[i], true)
 		}
 		newScheduled := int(newTarget) - stillScheduled
 		for i := 0; i < newScheduled; i++ {
@@ -194,7 +194,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// simulate that some of the bindings are applied
 		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i])
+			markBindingApplied(bindings[i], true)
 		}
 		// check that the second round of bindings are scheduled
 		Eventually(func() bool {
@@ -211,7 +211,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
 		// simulate that the new bindings are applied
 		for i := 0; i < len(secondRoundBindings); i++ {
-			markBindingApplied(secondRoundBindings[i])
+			markBindingApplied(secondRoundBindings[i], true)
 		}
 		// check that the unselected bindings are deleted
 		Eventually(func() bool {
@@ -258,7 +258,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		// simulate that some of the bindings are applied
 		firstApplied := 3
 		for i := 0; i < firstApplied; i++ {
-			markBindingApplied(bindings[i])
+			markBindingApplied(bindings[i], true)
 		}
 		// simulate another scheduling decision, pick some cluster to unselect from the bottom of the list
 		var newTarget int32 = 9
@@ -280,7 +280,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// simulate that some of the bindings are applied
 		for i := firstApplied; i < int(newTarget); i++ {
-			markBindingApplied(bindings[i])
+			markBindingApplied(bindings[i], true)
 		}
 		// create the newly scheduled bindings
 		newScheduled := int(newTarget) - stillScheduled
@@ -293,7 +293,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}
 		// simulate that some of the bindings are applied
 		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i])
+			markBindingApplied(bindings[i], true)
 		}
 		// mark the master snapshot as not latest
 		masterSnapshot.SetLabels(map[string]string{
@@ -319,7 +319,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
 		// simulate that the new bindings are applied
 		for i := 0; i < len(secondRoundBindings); i++ {
-			markBindingApplied(secondRoundBindings[i])
+			markBindingApplied(secondRoundBindings[i], true)
 		}
 		// check that the unselected bindings are deleted
 		Eventually(func() bool {
@@ -342,7 +342,7 @@ var _ = Describe("Test the rollout Controller", func() {
 				}
 				if binding.Spec.ResourceSnapshotName == newMasterSnapshot.Name {
 					// simulate the work generator to make the newly updated bindings to be applied
-					markBindingApplied(binding)
+					markBindingApplied(binding, true)
 				} else {
 					misMatch = true
 				}
@@ -384,13 +384,21 @@ var _ = Describe("Test the rollout Controller", func() {
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 		}
-		// check that no bindings are rolled out
-		Consistently(func() bool {
+		// wait until the client informer is populated
+		Eventually(func() error {
 			for _, binding := range bindings {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
 				if err != nil {
-					return false
+					return err
 				}
+			}
+			return nil
+		}, timeout, interval).Should(Succeed(), "make sure the cache is populated")
+		// check that no bindings are rolled out
+		Consistently(func(g Gomega) bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				g.Expect(err).Should(Succeed())
 				if binding.Spec.State == fleetv1beta1.BindingStateBound {
 					return false
 				}
@@ -444,23 +452,103 @@ var _ = Describe("Test the rollout Controller", func() {
 		By("Verified that the rollout is finally unblocked")
 	})
 
+	It("Should rollout both the old applied and failed to apply bond the new resources", func() {
+		// create CRP
+		var targetCluster int32 = 5
+		rolloutCRP = clusterResourcePlacementForTest(testCRPName, createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, targetCluster))
+		Expect(k8sClient.Create(ctx, rolloutCRP)).Should(Succeed())
+		// create master resource snapshot that is latest
+		masterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 0, true)
+		Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+		By(fmt.Sprintf("master resource snapshot  %s created", masterSnapshot.Name))
+		// create scheduled bindings for master snapshot on target clusters
+		clusters := make([]string, targetCluster)
+		for i := 0; i < int(targetCluster); i++ {
+			clusters[i] = "cluster-" + strconv.Itoa(i)
+			binding := generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, masterSnapshot.Name, clusters[i])
+			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
+			By(fmt.Sprintf("resource binding  %s created", binding.Name))
+			bindings = append(bindings, binding)
+		}
+		// check that all bindings are scheduled
+		Eventually(func() bool {
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					return false
+				}
+				if binding.Spec.State != fleetv1beta1.BindingStateBound {
+					return false
+				}
+			}
+			return true
+		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
+		// simulate that some of the bindings are applied successfully
+		applySuccessfully := 3
+		for i := 0; i < applySuccessfully; i++ {
+			markBindingApplied(bindings[i], true)
+		}
+		// simulate that some of the bindings fail to apply
+		for i := applySuccessfully; i < int(targetCluster); i++ {
+			markBindingApplied(bindings[i], false)
+		}
+		// mark the master snapshot as not latest
+		masterSnapshot.SetLabels(map[string]string{
+			fleetv1beta1.CRPTrackingLabel:      testCRPName,
+			fleetv1beta1.IsLatestSnapshotLabel: "false"},
+		)
+		Expect(k8sClient.Update(ctx, masterSnapshot)).Should(Succeed())
+		// create a new master resource snapshot
+		newMasterSnapshot := generateResourceSnapshot(rolloutCRP.Name, 1, true)
+		Expect(k8sClient.Create(ctx, newMasterSnapshot)).Should(Succeed())
+		Eventually(func() bool {
+			allMatch := true
+			for _, binding := range bindings {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)
+				if err != nil {
+					allMatch = false
+				}
+				if binding.Spec.ResourceSnapshotName == newMasterSnapshot.Name {
+					// simulate the work generator to make the newly updated bindings to be applied successfully
+					markBindingApplied(binding, true)
+				} else {
+					allMatch = false
+				}
+			}
+			return allMatch
+		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to use the latest resource snapshot")
+	})
+
 	// TODO: should update scheduled bindings to the latest snapshot when it is updated to bound state.
 
 	// TODO: should count the deleting bindings as can be Unavailable.
 
 })
 
-func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding) {
-	// get the binding again to avoid conflict
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)).Should(Succeed())
-	binding.SetConditions(metav1.Condition{
-		Status:             metav1.ConditionTrue,
-		Type:               string(fleetv1beta1.ResourceBindingApplied),
-		Reason:             "applied",
-		ObservedGeneration: binding.Generation,
-	})
-	Expect(k8sClient.Status().Update(ctx, binding)).Should(Succeed())
-	By(fmt.Sprintf("resource binding `%s` is marked as applied", binding.Name))
+func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding, success bool) {
+	applyCondition := metav1.Condition{
+		Type: string(fleetv1beta1.ResourceBindingApplied),
+	}
+	if success {
+		applyCondition.Status = metav1.ConditionTrue
+		applyCondition.Reason = "applySucceeded"
+	} else {
+		applyCondition.Status = metav1.ConditionFalse
+		applyCondition.Reason = "applyFailed"
+	}
+	Eventually(func() error {
+		applyCondition.ObservedGeneration = binding.Generation
+		binding.SetConditions(applyCondition)
+		if err := k8sClient.Status().Update(ctx, binding); err != nil {
+			if apierrors.IsConflict(err) {
+				// get the binding again to avoid conflict
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+			}
+			return err
+		}
+		return nil
+	}, timeout, interval).Should(Succeed(), "should update the binding status successfully")
+	By(fmt.Sprintf("resource binding `%s` is marked as applied with status %t", binding.Name, success))
 }
 
 func generateClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string) *fleetv1beta1.ClusterResourceBinding {

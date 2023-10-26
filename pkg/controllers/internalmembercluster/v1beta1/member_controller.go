@@ -43,12 +43,18 @@ type Reconciler struct {
 }
 
 const (
-	eventReasonInternalMemberClusterHealthy       = "InternalMemberClusterHealthy"
-	eventReasonInternalMemberClusterUnhealthy     = "InternalMemberClusterUnhealthy"
-	eventReasonInternalMemberClusterJoined        = "InternalMemberClusterJoined"
-	eventReasonInternalMemberClusterFailedToJoin  = "InternalMemberClusterFailedToJoin"
-	eventReasonInternalMemberClusterFailedToLeave = "InternalMemberClusterFailedToLeave"
-	eventReasonInternalMemberClusterLeft          = "InternalMemberClusterLeft"
+	// EventReasonInternalMemberClusterHealthy is the event type and reason string when the agent is healthy.
+	EventReasonInternalMemberClusterHealthy = "InternalMemberClusterHealthy"
+	// EventReasonInternalMemberClusterUnhealthy is the event type and reason string when the agent is unhealthy.
+	EventReasonInternalMemberClusterUnhealthy = "InternalMemberClusterUnhealthy"
+	// EventReasonInternalMemberClusterJoined is the event type and reason string when the agent has joined.
+	EventReasonInternalMemberClusterJoined = "InternalMemberClusterJoined"
+	// EventReasonInternalMemberClusterFailedToJoin is the event type and reason string when the agent failed to join.
+	EventReasonInternalMemberClusterFailedToJoin = "InternalMemberClusterFailedToJoin"
+	// EventReasonInternalMemberClusterFailedToLeave is the event type and reason string when the agent failed to leave.
+	EventReasonInternalMemberClusterFailedToLeave = "InternalMemberClusterFailedToLeave"
+	// EventReasonInternalMemberClusterLeft is the event type and reason string when the agent left.
+	EventReasonInternalMemberClusterLeft = "InternalMemberClusterLeft"
 
 	// we add +-5% jitter
 	jitterPercent = 10
@@ -215,7 +221,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc clusterv1beta1.Conditi
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentHealthy),
 		Status:             metav1.ConditionTrue,
-		Reason:             eventReasonInternalMemberClusterHealthy,
+		Reason:             EventReasonInternalMemberClusterHealthy,
 		ObservedGeneration: imc.GetGeneration(),
 	}
 
@@ -223,7 +229,7 @@ func (r *Reconciler) markInternalMemberClusterHealthy(imc clusterv1beta1.Conditi
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		klog.V(2).InfoS("healthy", "InternalMemberCluster", klog.KObj(imc))
-		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
+		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterHealthy, "internal member cluster healthy")
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
@@ -234,7 +240,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc clusterv1beta1.Condi
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentHealthy),
 		Status:             metav1.ConditionFalse,
-		Reason:             eventReasonInternalMemberClusterUnhealthy,
+		Reason:             EventReasonInternalMemberClusterUnhealthy,
 		Message:            err.Error(),
 		ObservedGeneration: imc.GetGeneration(),
 	}
@@ -243,7 +249,7 @@ func (r *Reconciler) markInternalMemberClusterUnhealthy(imc clusterv1beta1.Condi
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.Status != newCondition.Status {
 		klog.V(2).InfoS("unhealthy", "InternalMemberCluster", klog.KObj(imc))
-		r.recorder.Event(imc, corev1.EventTypeWarning, eventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
+		r.recorder.Event(imc, corev1.EventTypeWarning, EventReasonInternalMemberClusterUnhealthy, "internal member cluster unhealthy")
 	}
 
 	imc.SetConditionsWithType(clusterv1beta1.MemberAgent, newCondition)
@@ -254,14 +260,14 @@ func (r *Reconciler) markInternalMemberClusterJoined(imc clusterv1beta1.Conditio
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionTrue,
-		Reason:             eventReasonInternalMemberClusterJoined,
+		Reason:             EventReasonInternalMemberClusterJoined,
 		ObservedGeneration: imc.GetGeneration(),
 	}
 
 	// Joined status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
-		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterJoined, "internal member cluster joined")
+		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterJoined, "internal member cluster joined")
 		klog.V(2).InfoS("joined", "InternalMemberCluster", klog.KObj(imc))
 		metrics.ReportJoinResultMetric()
 	}
@@ -274,7 +280,7 @@ func (r *Reconciler) markInternalMemberClusterJoinFailed(imc clusterv1beta1.Cond
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionUnknown,
-		Reason:             eventReasonInternalMemberClusterFailedToJoin,
+		Reason:             EventReasonInternalMemberClusterFailedToJoin,
 		Message:            err.Error(),
 		ObservedGeneration: imc.GetGeneration(),
 	}
@@ -282,7 +288,7 @@ func (r *Reconciler) markInternalMemberClusterJoinFailed(imc clusterv1beta1.Cond
 	// Joined status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
-		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterFailedToJoin, "internal member cluster failed to join")
+		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToJoin, "internal member cluster failed to join")
 		klog.ErrorS(err, "agent join failed", "InternalMemberCluster", klog.KObj(imc))
 	}
 
@@ -294,14 +300,14 @@ func (r *Reconciler) markInternalMemberClusterLeft(imc clusterv1beta1.Conditione
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionFalse,
-		Reason:             eventReasonInternalMemberClusterLeft,
+		Reason:             EventReasonInternalMemberClusterLeft,
 		ObservedGeneration: imc.GetGeneration(),
 	}
 
 	// Joined status changed.
 	existingCondition := imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type)
 	if existingCondition == nil || existingCondition.ObservedGeneration != imc.GetGeneration() || existingCondition.Status != newCondition.Status {
-		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterLeft, "internal member cluster left")
+		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterLeft, "internal member cluster left")
 		klog.V(2).InfoS("left", "InternalMemberCluster", klog.KObj(imc))
 		metrics.ReportLeaveResultMetric()
 	}
@@ -314,14 +320,14 @@ func (r *Reconciler) markInternalMemberClusterLeaveFailed(imc clusterv1beta1.Con
 	newCondition := metav1.Condition{
 		Type:               string(clusterv1beta1.AgentJoined),
 		Status:             metav1.ConditionUnknown,
-		Reason:             eventReasonInternalMemberClusterFailedToLeave,
+		Reason:             EventReasonInternalMemberClusterFailedToLeave,
 		Message:            err.Error(),
 		ObservedGeneration: imc.GetGeneration(),
 	}
 
 	// Joined status changed.
 	if !condition.IsConditionStatusTrue(imc.GetConditionWithType(clusterv1beta1.MemberAgent, newCondition.Type), imc.GetGeneration()) {
-		r.recorder.Event(imc, corev1.EventTypeNormal, eventReasonInternalMemberClusterFailedToLeave, "internal member cluster failed to leave")
+		r.recorder.Event(imc, corev1.EventTypeNormal, EventReasonInternalMemberClusterFailedToLeave, "internal member cluster failed to leave")
 		klog.ErrorS(err, "agent leave failed", "InternalMemberCluster", klog.KObj(imc))
 	}
 

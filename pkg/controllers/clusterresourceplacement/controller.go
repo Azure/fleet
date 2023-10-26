@@ -141,17 +141,16 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	crpKObj := klog.KObj(crp)
 	oldCRP := crp.DeepCopy()
 	if crp.Spec.RevisionHistoryLimit != nil {
-		revisionLimit = *crp.Spec.RevisionHistoryLimit
 		if revisionLimit <= 0 {
 			err := fmt.Errorf("invalid clusterResourcePlacement %s: invalid revisionHistoryLimit %d", crp.Name, revisionLimit)
 			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Invalid revisionHistoryLimit value and using default value instead", "clusterResourcePlacement", crpKObj)
-			// use the default value instead
-			revisionLimit = fleetv1beta1.RevisionHistoryLimitDefaultValue
+		} else {
+			revisionLimit = *crp.Spec.RevisionHistoryLimit
 		}
 	}
 
 	// validate the resource selectors first before creating any snapshot
-	selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
+	envelopeObjCount, selectedResources, selectedResourceIDs, err := r.selectResourcesForPlacement(crp)
 	if err != nil {
 		klog.ErrorS(err, "Failed to select the resources", "clusterResourcePlacement", crpKObj)
 		if !errors.Is(err, controller.ErrUserError) {
@@ -162,7 +161,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		scheduleCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             invalidResourceSelectorsReason,
+			Reason:             InvalidResourceSelectorsReason,
 			Message:            fmt.Sprintf("The resource selectors are invalid: %v", err),
 			ObservedGeneration: crp.Generation,
 		}
@@ -182,7 +181,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	resourceSnapshotSpec := fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: selectedResources,
 	}
-	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, &resourceSnapshotSpec, int(revisionLimit))
+	latestResourceSnapshot, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, envelopeObjCount, &resourceSnapshotSpec, int(revisionLimit))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -205,6 +204,8 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementSyncSuccess", "Successfully synchronized the placement")
 	}
 
+	// There is no need to check if the CRP is applied or not.
+	// If the applied condition is true, it means the scheduling is done & works have been synchronized which means the rollout is completed.
 	if isRolloutCompleted(crp) {
 		if !isRolloutCompleted(oldCRP) {
 			klog.V(2).InfoS("Placement rollout has finished", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
@@ -215,12 +216,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
-	// There is no need to check if the CRP is applied or not.
-	// If the applied condition is true, it means the scheduling is done & works have been synchronized.
-	// So that the rollout should be completed, and it will never reach to this line.
-
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status)
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	// we need to requeue the request to update the status of the resources.
+	// TODO: adept the requeue time based on the rollout status.
+	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
@@ -387,7 +386,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 }
 
 // TODO handle all the resources selected by placement larger than 1MB size limit of k8s objects.
-func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
+func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, envelopeObjCount int, resourceSnapshotSpec *fleetv1beta1.ResourceSnapshotSpec, revisionHistoryLimit int) (*fleetv1beta1.ClusterResourceSnapshot, error) {
 	resourceHash, err := generateResourceHash(resourceSnapshotSpec)
 	crpKObj := klog.KObj(crp)
 	if err != nil {
@@ -449,8 +448,9 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			},
 			Annotations: map[string]string{
 				fleetv1beta1.ResourceGroupHashAnnotation: resourceHash,
-				// TODO need to updated once we support multiple snapshots
+				// TODO: need to update this once we support multiple snapshots
 				fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+				fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  strconv.Itoa(envelopeObjCount),
 			},
 		},
 		Spec: *resourceSnapshotSpec,
@@ -785,7 +785,7 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 			{
 				Status:             metav1.ConditionUnknown,
 				Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-				Reason:             synchronizePendingReason,
+				Reason:             SynchronizePendingReason,
 				Message:            "Scheduling has not completed",
 				ObservedGeneration: crp.Generation,
 			},
@@ -823,7 +823,7 @@ func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestS
 		return metav1.Condition{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-			Reason:             schedulingUnknownReason,
+			Reason:             SchedulingUnknownReason,
 			Message:            "Scheduling has not completed",
 			ObservedGeneration: crp.Generation,
 		}
@@ -849,6 +849,53 @@ func classifyClusterDecisions(decisions []fleetv1beta1.ClusterDecision) (selecte
 		}
 	}
 	return selected, unselected
+}
+
+func buildResourcePlacementStatusMap(crp *fleetv1beta1.ClusterResourcePlacement) map[string][]metav1.Condition {
+	status := crp.Status.PlacementStatuses
+	m := make(map[string][]metav1.Condition, len(status))
+	for i := range status {
+		if len(status[i].ClusterName) == 0 || len(status[i].Conditions) == 0 {
+			continue
+		}
+		m[status[i].ClusterName] = status[i].Conditions
+	}
+	return m
+}
+
+func (r *Reconciler) buildClusterResourceBindingMap(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (map[string]*fleetv1beta1.ClusterResourceBinding, error) {
+	// List all bindings derived from the CRP.
+	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
+	listOptions := client.MatchingLabels{
+		fleetv1beta1.CRPTrackingLabel: crp.Name,
+	}
+	crpKObj := klog.KObj(crp)
+	if err := r.Client.List(ctx, bindingList, listOptions); err != nil {
+		klog.ErrorS(err, "Failed to list all bindings", "clusterResourcePlacement", crpKObj)
+		return nil, controller.NewAPIServerError(true, err)
+	}
+
+	res := make(map[string]*fleetv1beta1.ClusterResourceBinding, len(bindingList.Items))
+	bindings := bindingList.Items
+	// filter out the latest resource bindings
+	for i := range bindings {
+		if !bindings[i].DeletionTimestamp.IsZero() {
+			klog.V(2).InfoS("Filtering out the deleting clusterResourceBinding", "clusterResourceBinding", klog.KObj(&bindings[i]))
+			continue
+		}
+
+		if len(bindings[i].Spec.TargetCluster) == 0 {
+			err := fmt.Errorf("targetCluster is empty on clusterResourceBinding %s", bindings[i].Name)
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid clusterResourceBinding and skipping it when building placement status", "clusterResourceBinding", klog.KObj(&bindings[i]), "clusterResourcePlacement", crpKObj)
+			continue
+		}
+		if bindings[i].Spec.ResourceSnapshotName != latestResourceSnapshot.Name ||
+			bindings[i].Spec.SchedulingPolicySnapshotName != latestSchedulingPolicySnapshot.Name {
+			continue
+		}
+		res[bindings[i].Spec.TargetCluster] = &bindings[i]
+	}
+	return res, nil
 }
 
 func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
@@ -877,13 +924,18 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 	appliedPendingCount := 0
 	appliedFailedCount := 0
 	appliedSucceededCount := 0
+	oldResourcePlacementStatusMap := buildResourcePlacementStatusMap(crp)
+	resourceBindingMap, err := r.buildClusterResourceBindingMap(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	if err != nil {
+		return err
+	}
 
 	for _, c := range selected {
 		var rp fleetv1beta1.ResourcePlacementStatus
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             resourceScheduleSucceededReason,
+			Reason:             ResourceScheduleSucceededReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
 			ObservedGeneration: crp.Generation,
 		}
@@ -891,8 +943,13 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		if c.ClusterScore != nil {
 			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, *c.ClusterScore.AffinityScore, *c.ClusterScore.TopologySpreadScore, c.Reason)
 		}
+		oldConditions, ok := oldResourcePlacementStatusMap[c.ClusterName]
+		if ok {
+			// update the lastTransitionTime considering the existing condition status instead of overwriting
+			rp.Conditions = oldConditions
+		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, &rp)
+		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rp)
 		if err != nil {
 			return err
 		}
@@ -919,7 +976,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             "ScheduleFailed",
+			Reason:             ResourceScheduleFailedReason,
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, unselected[i].ClusterName, unselected[i].Reason),
 			ObservedGeneration: crp.Generation,
 		}

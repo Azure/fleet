@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	workNamespaceNameTemplate = "work-%d"
+	workNamespaceNameTemplate = "application-%d"
 	appConfigMapNameTemplate  = "app-config-%d"
 	crpNameTemplate           = "crp-%d"
+	mcNameTemplate            = "mc-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"

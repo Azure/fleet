@@ -280,3 +280,51 @@ func TestIsConditionStatusTrue(t *testing.T) {
 		})
 	}
 }
+
+func TestIsConditionStatusFalse(t *testing.T) {
+	tests := map[string]struct {
+		cond             *metav1.Condition
+		latestGeneration int64
+		want             bool
+	}{
+		"nil condition is considered false": {
+			cond: nil,
+			want: false,
+		},
+		"condition is considered false if status is true": {
+			cond: &metav1.Condition{
+				Status: metav1.ConditionTrue,
+			},
+			want: false,
+		},
+		"condition is considered false if status is unknown": {
+			cond: &metav1.Condition{
+				Status: metav1.ConditionUnknown,
+			},
+			want: false,
+		},
+		"condition is considered false if status is false but generation is not up to date": {
+			cond: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 1,
+			},
+			latestGeneration: 2,
+			want:             false,
+		},
+		"condition is considered true if status is false and generation is up to date": {
+			cond: &metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: 2,
+			},
+			latestGeneration: 2,
+			want:             true,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsConditionStatusFalse(tt.cond, tt.latestGeneration); got != tt.want {
+				t.Errorf("IsConditionStatusFalse() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

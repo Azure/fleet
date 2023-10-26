@@ -18,7 +18,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -41,7 +40,11 @@ func TestMemberCluster(t *testing.T) {
 var _ = BeforeSuite(func() {
 	done := make(chan interface{})
 	go func() {
-		klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+
+		By("Setup klog")
+		fs := flag.NewFlagSet("klog", flag.ContinueOnError)
+		klog.InitFlags(fs)
+		Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
 		By("bootstrapping test environment")
 		testEnv = &envtest.Environment{

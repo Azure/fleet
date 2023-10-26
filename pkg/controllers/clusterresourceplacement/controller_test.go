@@ -1086,6 +1086,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 	resourceSnapshotBHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 	tests := []struct {
 		name                    string
+		envelopeObjCount        int
 		resourceSnapshotSpec    *fleetv1beta1.ResourceSnapshotSpec
 		revisionHistoryLimit    *int32
 		resourceSnapshots       []fleetv1beta1.ClusterResourceSnapshot
@@ -1148,6 +1149,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
 					Spec: *resourceSnapshotSpecA,
@@ -1214,7 +1216,8 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 0,
 		},
 		{
-			name: "resource has changed and there is no active snapshot with single revisionLimit",
+			name:             "resource has changed and there is no active snapshot with single revisionLimit",
+			envelopeObjCount: 2,
 			// It happens when last reconcile loop fails after setting the latest label to false and
 			// before creating a new resource snapshot.
 			resourceSnapshotSpec: resourceSnapshotSpecB,
@@ -1333,6 +1336,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotBHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "2",
 						},
 					},
 					Spec: *resourceSnapshotSpecB,
@@ -1342,6 +1346,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 		},
 		{
 			name:                 "resource has changed and there is an active snapshot with multiple revisionLimit",
+			envelopeObjCount:     3,
 			resourceSnapshotSpec: resourceSnapshotSpecB,
 			revisionHistoryLimit: &multipleRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1504,6 +1509,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotBHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "3",
 						},
 					},
 					Spec: *resourceSnapshotSpecB,
@@ -1534,6 +1540,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
 					Spec: *resourceSnapshotSpecA,
@@ -1604,6 +1611,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 						Annotations: map[string]string{
 							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
+							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
 					Spec: *resourceSnapshotSpecA,
@@ -1635,7 +1643,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
 			}
-			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.resourceSnapshotSpec, int(limit))
+			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.envelopeObjCount, tc.resourceSnapshotSpec, int(limit))
 			if err != nil {
 				t.Fatalf("failed to handle getOrCreateClusterResourceSnapshot: %v", err)
 			}
@@ -1670,24 +1678,6 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 		name              string
 		resourceSnapshots []fleetv1beta1.ClusterResourceSnapshot
 	}{
-		{
-			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
-			name: "existing active resource snapshot does not have resourceIndex label",
-			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
-						Labels: map[string]string{
-							fleetv1beta1.IsLatestSnapshotLabel: "true",
-							fleetv1beta1.CRPTrackingLabel:      testName,
-						},
-						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation: "abc",
-						},
-					},
-				},
-			},
-		},
 		{
 			// Should never hit this case unless there is a bug in the controller or customers manually modify the clusterResourceSnapshot.
 			name: "existing active resource snapshot does not have resourceIndex label",
@@ -2016,7 +2006,7 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 				Client: fakeClient,
 				Scheme: scheme,
 			}
-			_, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, resourceSnapshotSpecA, 1)
+			_, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, 0, resourceSnapshotSpecA, 1)
 			if err == nil { // if error is nil
 				t.Fatal("getOrCreateClusterResourceSnapshot() = nil, want err")
 			}
