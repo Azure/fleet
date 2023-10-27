@@ -10,7 +10,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.7
-	github.com/openkruise/kruise v1.2.0
+	github.com/openkruise/kruise v1.4.0
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
@@ -96,11 +96,9 @@ replace (
 	// https://nvd.nist.gov/vuln/detail/CVE-2022-1996
 	github.com/emicklei/go-restful => github.com/emicklei/go-restful v2.16.0+incompatible
 
-	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.8
-
 	// https://avd.aquasec.com/nvd/2022/cve-2022-27191/
 	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
 
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.26.1 // weird bug that the goland won't compile without this
-	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.4.3
+	sigs.k8s.io/work-api => github.com/Azure/k8s-work-api v0.5.0
 )
