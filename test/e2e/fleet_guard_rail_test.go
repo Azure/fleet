@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -38,6 +39,8 @@ var (
 	mcGVK                = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
 	imcGVK               = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	workGVK              = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	iseGVK               = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
+	siGVK                = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "ServiceImport"}
 	resourceDeniedFormat = "user: %s in groups: %v is not allowed to %s resource %+v/%s: %+v"
 	testGroups           = []string{"system:authenticated"}
 )
@@ -511,5 +514,89 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			By("expecting successful UPDATE of work Spec")
 			return hubClient.Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+})
+
+var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
+	BeforeAll(func() {
+		setupNetworkingCRDs()
+	})
+
+	AfterAll(func() {
+		cleanupNetworkingCRDs()
+	})
+
+	Context("deny request to modify network resources in fleet member namespaces, for user not in member cluster identity", func() {
+		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(iseNameTemplate, GinkgoParallelProcess())
+		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+
+		BeforeEach(func() {
+			createMemberClusterResource(mcName, "random-user")
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+			createInternalServiceExport(iseName, imcNamespace)
+		})
+
+		AfterEach(func() {
+			ise := fleetnetworkingv1alpha1.InternalServiceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: iseName,
+				},
+			}
+			Expect(hubClient.Delete(ctx, &ise))
+			deleteMemberClusterResource(mcName)
+			checkMemberClusterNamespaceIsDeleted(imcNamespace)
+		})
+
+		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in MC identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: iseName, Namespace: imcNamespace}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				err := impersonateHubClient.Update(ctx, &ise)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("deny request to modify network resources in fleet member namespaces, for user in member cluster identity", func() {
+		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(iseNameTemplate, GinkgoParallelProcess())
+		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+
+		BeforeEach(func() {
+			createMemberClusterResource(mcName, testUser)
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+			createInternalServiceExport(iseName, imcNamespace)
+		})
+
+		AfterEach(func() {
+			ise := fleetnetworkingv1alpha1.InternalServiceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: iseName,
+				},
+			}
+			Expect(hubClient.Delete(ctx, &ise))
+			deleteMemberClusterResource(mcName)
+			checkMemberClusterNamespaceIsDeleted(imcNamespace)
+		})
+
+		It("should allow update operation on Internal service export resource in fleet-member namespace for user in MC identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: iseName, Namespace: imcNamespace}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				Expect(impersonateHubClient.Update(ctx, &ise)).Should(Succeed())
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
 	})
 })

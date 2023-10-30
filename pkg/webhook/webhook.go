@@ -50,7 +50,7 @@ const (
 
 	crdResourceName           = "customresourcedefinitions"
 	memberClusterResourceName = "memberclusters"
-	namespaceResouceName      = "namespaces"
+	namespaceResourceName     = "namespaces"
 	replicaSetResourceName    = "replicasets"
 	podResourceName           = "pods"
 )
@@ -347,7 +347,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: cudOperations,
-						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResouceName}, &clusterScope),
+						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResourceName}, &clusterScope),
 					},
 				},
 			},

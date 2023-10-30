@@ -16,7 +16,8 @@ import (
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,7 +49,7 @@ var (
 func DeleteMemberCluster(ctx context.Context, cluster framework.Cluster, mc *fleetv1alpha1.MemberCluster) {
 	gomega.Expect(cluster.KubeClient.Delete(ctx, mc)).Should(gomega.Succeed(), "Failed to delete member cluster %s in %s cluster", mc.Name, cluster.ClusterName)
 	gomega.Eventually(func() bool {
-		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
+		return errors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for member cluster %s to be deleted in %s cluster", mc.Name, cluster.ClusterName)
 }
 
@@ -96,7 +97,7 @@ func WaitWork(ctx context.Context, cluster framework.Cluster, workName, workName
 func DeleteNamespace(ctx context.Context, cluster framework.Cluster, ns *corev1.Namespace) {
 	gomega.Expect(cluster.KubeClient.Delete(context.TODO(), ns)).Should(gomega.Succeed(), "Failed to delete namespace %s in %s cluster", ns.Name, cluster.ClusterName)
 	gomega.Eventually(func() bool {
-		return apierrors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns))
+		return errors.IsNotFound(cluster.KubeClient.Get(ctx, types.NamespacedName{Name: ns.Name}, ns))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for namespace %s to be deleted in %s cluster", ns.Name, cluster.ClusterName)
 }
 
@@ -239,7 +240,7 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
 	gomega.Eventually(func() bool {
 		var imc fleetv1alpha1.InternalMemberCluster
-		return apierrors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc))
+		return errors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue(), "Failed to wait for internal member cluster %s to be deleted in %s cluster", "test-mc", hubCluster.ClusterName)
 
 	crb := rbacv1.ClusterRoleBinding{
@@ -255,4 +256,71 @@ func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 		},
 	}
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
+}
+
+func CreateMemberClusterResource(ctx context.Context, hubCluster *framework.Cluster, name, user string) {
+	// Create the MC.
+	mc := &fleetv1alpha1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: fleetv1alpha1.MemberClusterSpec{
+			State: fleetv1alpha1.ClusterStateJoin,
+			Identity: rbacv1.Subject{
+				Name:      user,
+				Kind:      "ServiceAccount",
+				Namespace: utils.FleetSystemNamespace,
+			},
+			HeartbeatPeriodSeconds: 60,
+		},
+	}
+	gomega.Expect(hubCluster.KubeClient.Create(ctx, mc)).To(gomega.Succeed(), "Failed to create MC %s", mc)
+}
+
+func CheckInternalMemberClusterExists(ctx context.Context, hubCluster *framework.Cluster, name, namespace string) {
+	imc := &fleetv1alpha1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	gomega.Eventually(func() error {
+		return hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed())
+}
+
+func CleanUpMemberClusterResources(ctx context.Context, hubCluster *framework.Cluster, name string) {
+	mc := fleetv1alpha1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &mc)).Should(gomega.Succeed())
+
+	gomega.Eventually(func(g gomega.Gomega) error {
+		var mc fleetv1alpha1.MemberCluster
+		if err := hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: name}, &mc); !errors.IsNotFound(err) {
+			return fmt.Errorf("MC still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed())
+
+	imc := &fleetv1alpha1.InternalMemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, name),
+		},
+	}
+	gomega.Eventually(func() bool {
+		return errors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
+	}, PollTimeout, PollInterval).Should(gomega.BeTrue())
+}
+
+func CreateInternalServiceExportCRD(ctx context.Context, hubCluster *framework.Cluster) {
+	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
+	gomega.Expect(utils.GetObjectFromManifest("./test/e2e/manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(gomega.Succeed())
+
+	gomega.Eventually(func(g gomega.Gomega) error {
+		return hubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)
+	}, PollTimeout, PollInterval).Should(gomega.Succeed())
 }

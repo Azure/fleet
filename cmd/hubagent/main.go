@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -56,6 +58,8 @@ func init() {
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(fleetnetworkingv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 

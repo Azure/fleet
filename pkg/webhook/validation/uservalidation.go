@@ -9,7 +9,8 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -18,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -31,25 +33,30 @@ const (
 	kubeControllerManagerUser = "system:kube-controller-manager"
 	serviceAccountFmt         = "system:serviceaccount:fleet-system:%s"
 
-	resourceAllowedFormat      = "user: %s in groups: %v is allowed to %s resource %+v/%s: %+v"
-	resourceDeniedFormat       = "user: %s in groups: %v is not allowed to %s resource %+v/%s: %+v"
-	resourceAllowedGetMCFailed = "user: %s in groups: %v is allowed to %s resource %+v/%s: %+v because we failed to get MC"
+	resourceAllowedFormat            = "user: %s in groups: %v is allowed to %s resource %+v/%s: %+v"
+	resourceDeniedFormat             = "user: %s in groups: %v is not allowed to %s resource %+v/%s: %+v"
+	resourceAllowedGetMCFailed       = "user: %s in groups: %v is allowed to %s resource %+v/%s: %+v because we failed to get MC"
+	resourceAllowedGetFleetAPIFailed = "user: %s in groups: %v is allowed to %s resource %+v/%s: %+v because we failed to get current Fleet API version"
 
 	allowedModifyResource = "user in groups is allowed to modify resource"
 	deniedModifyResource  = "user in groups is not allowed to modify resource"
 )
 
 var (
-	fleetCRDGroups  = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
-	CRDGVK          = metav1.GroupVersionKind{Group: v1.SchemeGroupVersion.Group, Version: v1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	V1Alpha1MCGVK   = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	V1Alpha1IMCGVK  = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	V1Alpha1WorkGVK = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	MCGVK           = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	IMCGVK          = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	WorkGVK         = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
-	NamespaceGVK    = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
-	EventGVK        = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
+	fleetCRDGroups           = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
+	CRDGVK                   = metav1.GroupVersionKind{Group: apiextensionsv1.SchemeGroupVersion.Group, Version: apiextensionsv1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
+	V1Alpha1MCGVK            = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
+	V1Alpha1IMCGVK           = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	V1Alpha1WorkGVK          = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	MCGVK                    = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
+	IMCGVK                   = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	WorkGVK                  = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	NamespaceGVK             = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
+	EventGVK                 = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
+	EndpointSliceExportGVK   = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "EndpointSliceExport"}
+	EndpointSliceImportGVK   = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "EndpointSliceImport"}
+	InternalServiceExportGVK = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
+	InternalServiceImportGVK = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceImport"}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.
@@ -180,7 +187,14 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 	var identity string
 	namespacedName := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	userInfo := req.UserInfo
-	if *req.RequestKind == V1Alpha1IMCGVK || *req.RequestKind == V1Alpha1WorkGVK {
+	isV1Beta1MC, err := isFleetV1Beta1API(ctx, client)
+	if err != nil {
+		klog.InfoS("error in getting v1beta1", "user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName, "isV1Beta1MC", isV1Beta1MC)
+		klog.ErrorS(err, fmt.Sprintf("failed to get fleet API version for request to modify %+v/%s, allowing request to be handled by api server", req.RequestKind, req.SubResource),
+			"user", userInfo.Username, "groups", userInfo.Groups, "namespacedName", namespacedName)
+		return admission.Allowed(fmt.Sprintf(resourceAllowedGetFleetAPIFailed, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
+	}
+	if !isV1Beta1MC {
 		var mc fleetv1alpha1.MemberCluster
 		if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 			// fail open, if the webhook cannot get member cluster resources we don't block the request.
@@ -189,7 +203,7 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 			return admission.Allowed(fmt.Sprintf(resourceAllowedGetMCFailed, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
 		}
 		identity = mc.Spec.Identity.Name
-	} else if *req.RequestKind == IMCGVK || *req.RequestKind == WorkGVK {
+	} else {
 		var mc clusterv1beta1.MemberCluster
 		if err := client.Get(ctx, types.NamespacedName{Name: mcName}, &mc); err != nil {
 			// fail open, if the webhook cannot get member cluster resources we don't block the request.
@@ -207,4 +221,16 @@ func ValidateMCIdentity(ctx context.Context, client client.Client, req admission
 	}
 	klog.V(2).InfoS(deniedModifyResource, "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 	return admission.Denied(fmt.Sprintf(resourceDeniedFormat, userInfo.Username, userInfo.Groups, req.Operation, req.RequestKind, req.SubResource, namespacedName))
+}
+
+func isFleetV1Beta1API(ctx context.Context, client client.Client) (bool, error) {
+	var crd apiextensionsv1.CustomResourceDefinition
+	v1Beta1MCCRDName := "memberclusters.cluster.kubernetes-fleet.io"
+	if err := client.Get(ctx, types.NamespacedName{Name: v1Beta1MCCRDName}, &crd); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

@@ -21,6 +21,7 @@ const (
 	appConfigMapNameTemplate  = "app-config-%d"
 	crpNameTemplate           = "crp-%d"
 	mcNameTemplate            = "mc-%d"
+	iseNameTemplate           = "ise-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
