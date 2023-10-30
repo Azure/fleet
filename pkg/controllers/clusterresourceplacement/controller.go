@@ -185,7 +185,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.setPlacementStatus(ctx, crp, selectedResourceIDs, latestSchedulingPolicySnapshot, latestResourceSnapshot); err != nil {
+
+	// isClusterScheduled is to indicate whether we need to requeue the CRP request to track the rollout status.
+	isClusterScheduled, err := r.setPlacementStatus(ctx, crp, selectedResourceIDs, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -216,9 +219,24 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
-	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status)
+	if !isClusterScheduled {
+		// Note:
+		// 1. If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
+		// pickN deployment requires 5 clusters and scheduler schedules the resources on 3 clusters. And the appliedCondition
+		// could be true when resources are applied successfully on these 3 clusters and the detailed the resourcePlacementStatuses
+		// need to be populated.
+		// So that we cannot reply on the scheduledCondition as false to decide whether to requeue the request.
+
+		// When isClusterScheduled is false, either scheduler has not finished the scheduling or none of the clusters could be selected.
+		// Once the policy snapshot status changes, the policy snapshot watcher will enqueue the request.
+		klog.V(2).InfoS("Scheduler has not scheduled any cluster yet and skipping the request",
+			"clusterResourcePlacement", crpKObj, "scheduledCondition", crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), "generation", crp.Generation)
+		return ctrl.Result{}, nil
+	}
+
+	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
 	// we need to requeue the request to update the status of the resources.
-	// TODO: adept the requeue time based on the rollout status.
+	// TODO: adjust the requeue time based on the rollout status.
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
@@ -769,8 +787,9 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 	return v, nil
 }
 
+// setPlacementStatus returns if there is a cluster scheduled by the scheduler.
 func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
-	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
+	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
 	crp.Status.SelectedResources = selectedResourceIDs
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
 	crp.SetConditions(scheduledCondition)
@@ -804,7 +823,7 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 		// The undeleted resources on these old clusters could lead to failed synchronized or applied condition.
 		// Today, we only track the resources progress if the same cluster is selected again.
 		crp.Status.PlacementStatuses = []fleetv1beta1.ResourcePlacementStatus{}
-		return nil
+		return false, nil
 	}
 
 	return r.setResourcePlacementStatusAndResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
@@ -898,7 +917,9 @@ func (r *Reconciler) buildClusterResourceBindingMap(ctx context.Context, crp *fl
 	return res, nil
 }
 
-func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) error {
+// setResourcePlacementStatusAndResourceConditions returns whether the scheduler selects any cluster or not.
+func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement,
+	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
 	placementStatuses := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
 	decisions := latestSchedulingPolicySnapshot.Status.ClusterDecisions
 	selected, unselected := classifyClusterDecisions(decisions)
@@ -927,7 +948,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 	oldResourcePlacementStatusMap := buildResourcePlacementStatusMap(crp)
 	resourceBindingMap, err := r.buildClusterResourceBindingMap(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	for _, c := range selected {
@@ -951,7 +972,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
 		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rp)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if syncCondition == nil || syncCondition.Status != metav1.ConditionTrue {
 			syncPendingCount++
@@ -967,6 +988,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 		}
 		placementStatuses = append(placementStatuses, rp)
 	}
+	isClusterScheduled := len(placementStatuses) > 0
 
 	for i := 0; i < unscheduledClusterCount && i < len(unselected); i++ {
 		// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
@@ -988,7 +1010,7 @@ func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context
 	crp.Status.PlacementStatuses = placementStatuses
 	crp.SetConditions(buildClusterResourcePlacementSyncCondition(crp, syncPendingCount, syncSucceededCount))
 	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, syncPendingCount == 0, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
-	return nil
+	return isClusterScheduled, nil
 }
 
 func isRolloutCompleted(crp *fleetv1beta1.ClusterResourcePlacement) bool {
