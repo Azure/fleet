@@ -12,8 +12,11 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -25,7 +28,8 @@ import (
 )
 
 const (
-	mcName = "test-mc"
+	mcName           = "test-mc"
+	v1Beta1MCCRDName = "memberclusters.cluster.kubernetes-fleet.io"
 )
 
 func TestHandleCRD(t *testing.T) {
@@ -695,6 +699,8 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 					},
 				}
 				return nil
+			} else if key.Name == v1Beta1MCCRDName {
+				return apierrors.NewNotFound(schema.GroupResource{}, v1Beta1MCCRDName)
 			}
 			return errors.New("cannot find member cluster")
 		},
@@ -714,8 +720,21 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 					},
 				}
 				return nil
+			} else if key.Name == v1Beta1MCCRDName {
+				o := obj.(*apiextensionsv1.CustomResourceDefinition)
+				*o = apiextensionsv1.CustomResourceDefinition{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: v1Beta1MCCRDName,
+					},
+				}
+				return nil
 			}
 			return errors.New("cannot find member cluster")
+		},
+	}
+	mockFailCRDGetClient := &test.MockClient{
+		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			return errors.New("cannot get fleet API version")
 		},
 	}
 	testCases := map[string]struct {
@@ -842,6 +861,24 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 				client: mockClient,
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.WorkGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow any user with update in fleet member cluster namespace with v1beta1 work when fleet API get fails": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-work",
+					Namespace:   "fleet-member-test-mc",
+					RequestKind: &validation.WorkGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"system:authenticated"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				client: mockFailCRDGetClient,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedGetFleetAPIFailed, "testUser", []string{"system:authenticated"}, admissionv1.Update, &validation.WorkGVK, "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc"})),
 		},
 		"deny user not in MC identity with update in fleet member cluster namespace with v1beta1 IMC": {
 			req: admission.Request{
