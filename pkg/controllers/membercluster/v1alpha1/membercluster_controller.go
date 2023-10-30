@@ -389,7 +389,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1a
 	}
 
 	// Updates internal member cluster if currentImc != expectedImc.
-	if relfect.DeepEqual(currentImc.Spec, expectedImc.Spec) {
+	if reflect.DeepEqual(currentImc.Spec, expectedImc.Spec) {
 		return currentImc, nil
 	}
 	currentImc.Spec = expectedImc.Spec
