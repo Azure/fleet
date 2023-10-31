@@ -18,8 +18,8 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-// Note that this container will run in parallel with other containers.
-var _ = Describe("Updating member cluster", func() {
+// Note that this container won't run in parallel with other containers as it manipulates the member cluster information.
+var _ = Describe("Updating member cluster", Serial, func() {
 	Context("Updating member cluster label", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		clusterLabelKey := "updating-member-key"

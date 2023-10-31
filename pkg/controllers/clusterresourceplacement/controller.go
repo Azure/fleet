@@ -221,17 +221,18 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 
 	if !isClusterScheduled {
 		// Note:
-		// 1. If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
+		// If the scheduledCondition is failed, it means the placement requirement cannot be satisfied fully. For example,
 		// pickN deployment requires 5 clusters and scheduler schedules the resources on 3 clusters. And the appliedCondition
 		// could be true when resources are applied successfully on these 3 clusters and the detailed the resourcePlacementStatuses
 		// need to be populated.
-		// So that we cannot reply on the scheduledCondition as false to decide whether to requeue the request.
+		// So that we cannot rely on the scheduledCondition as false to decide whether to requeue the request.
 
 		// When isClusterScheduled is false, either scheduler has not finished the scheduling or none of the clusters could be selected.
-		// Once the policy snapshot status changes, the policy snapshot watcher will enqueue the request.
-		klog.V(2).InfoS("Scheduler has not scheduled any cluster yet and skipping the request",
+		// Once the policy snapshot status changes, the policy snapshot watcher should enqueue the request.
+		// Here we requeue the request to prevent a bug in the watcher.
+		klog.V(2).InfoS("Scheduler has not scheduled any cluster yet and requeue the request as a backup",
 			"clusterResourcePlacement", crpKObj, "scheduledCondition", crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), "generation", crp.Generation)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
