@@ -18,8 +18,11 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
+// Note that the scheduler will pick by names in alphanumeric order, when there are
+// multiple candidate clusters with the same score.
+
 var _ = Describe("placing resources using a CRP of PickN placement", func() {
-	Context("picking N clusters with no affinities/topology spread constraints", Ordered, func() {
+	Context("picking N clusters with no affinities/topology spread constraints (pick by cluster names in alphanumeric order)", Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 		BeforeAll(func() {
