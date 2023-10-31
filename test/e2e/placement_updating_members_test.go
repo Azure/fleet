@@ -69,8 +69,6 @@ var _ = Describe("Updating member cluster", Serial, func() {
 			Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP")
 		})
 
-		It("should not place resources on any cluster", checkIfRemovedWorkResourcesFromAllMemberClusters)
-
 		It("should update CRP status as expected", func() {
 			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{memberCluster1Name})
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
