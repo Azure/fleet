@@ -8,9 +8,9 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -299,7 +299,7 @@ func (r *Reconciler) syncRole(ctx context.Context, mc *fleetv1alpha1.MemberClust
 	}
 
 	// Updates role if currentRole != expectedRole.
-	if cmp.Equal(currentRole.Rules, expectedRole.Rules) {
+	if reflect.DeepEqual(currentRole.Rules, expectedRole.Rules) {
 		return roleName, nil
 	}
 	currentRole.Rules = expectedRole.Rules
@@ -347,7 +347,7 @@ func (r *Reconciler) syncRoleBinding(ctx context.Context, mc *fleetv1alpha1.Memb
 	}
 
 	// Updates role binding if currentRoleBinding != expectedRoleBinding.
-	if cmp.Equal(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) && cmp.Equal(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) {
+	if reflect.DeepEqual(currentRoleBinding.Subjects, expectedRoleBinding.Subjects) && reflect.DeepEqual(currentRoleBinding.RoleRef, expectedRoleBinding.RoleRef) {
 		return nil
 	}
 	currentRoleBinding.Subjects = expectedRoleBinding.Subjects
@@ -389,7 +389,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *fleetv1a
 	}
 
 	// Updates internal member cluster if currentImc != expectedImc.
-	if cmp.Equal(currentImc.Spec, expectedImc.Spec) {
+	if reflect.DeepEqual(currentImc.Spec, expectedImc.Spec) {
 		return currentImc, nil
 	}
 	currentImc.Spec = expectedImc.Spec
