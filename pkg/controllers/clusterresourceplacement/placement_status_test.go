@@ -69,6 +69,7 @@ func TestSetPlacementStatus(t *testing.T) {
 		latestResourceSnapshot  *fleetv1beta1.ClusterResourceSnapshot
 		clusterResourceBindings []fleetv1beta1.ClusterResourceBinding
 		works                   []fleetv1beta1.Work
+		want                    bool
 		wantStatus              *fleetv1beta1.ClusterResourcePlacementStatus
 	}{
 		{
@@ -118,6 +119,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -207,6 +209,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: []fleetv1beta1.ResourceIdentifier{
 					{
@@ -304,6 +307,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -394,6 +398,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -504,6 +509,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: true,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -684,6 +690,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -790,6 +797,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: true,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -959,6 +967,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -1105,6 +1114,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -1251,6 +1261,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: false,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -1452,6 +1463,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: true,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -1717,6 +1729,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: true,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -2092,6 +2105,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 				},
 			},
+			want: true,
 			wantStatus: &fleetv1beta1.ClusterResourcePlacementStatus{
 				SelectedResources: selectedResources,
 				Conditions: []metav1.Condition{
@@ -2250,8 +2264,12 @@ func TestSetPlacementStatus(t *testing.T) {
 				Recorder: record.NewFakeRecorder(10),
 			}
 			crp.Generation = crpGeneration
-			if err := r.setPlacementStatus(context.Background(), crp, selectedResources, tc.latestPolicySnapshot, tc.latestResourceSnapshot); err != nil {
+			got, err := r.setPlacementStatus(context.Background(), crp, selectedResources, tc.latestPolicySnapshot, tc.latestResourceSnapshot)
+			if err != nil {
 				t.Fatalf("setPlacementStatus() failed: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("setPlacementStatus() = %v, want %v", got, tc.want)
 			}
 
 			if diff := cmp.Diff(tc.wantStatus, &crp.Status, statusCmpOptions...); diff != "" {
