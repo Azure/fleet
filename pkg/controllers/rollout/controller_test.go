@@ -343,6 +343,12 @@ func TestPickBindingsToRoll(t *testing.T) {
 		Type:   intstr.Int,
 		IntVal: 0,
 	}
+	noMaxSurgeCRP := clusterResourcePlacementForTest("test",
+		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5))
+	noMaxSurgeCRP.Spec.Strategy.RollingUpdate.MaxSurge = &intstr.IntOrString{
+		Type:   intstr.Int,
+		IntVal: 0,
+	}
 	tests := map[string]struct {
 		allBindings                []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName string
@@ -387,6 +393,59 @@ func TestPickBindingsToRoll(t *testing.T) {
 			crp:                        noMaxUnavailableCRP,
 			tobeUpdatedBindings:        []int{0, 1, 2},
 			needRoll:                   true,
+		},
+		"test bound with failed to apply bindings when there is no max surge allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        noMaxSurgeCRP,
+			tobeUpdatedBindings:        []int{0, 1},
+			needRoll:                   true,
+		},
+		"test bound with failed to apply bindings when there is no max unavailable allowed and there is no bound binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        noMaxUnavailableCRP,
+			tobeUpdatedBindings:        []int{0, 1, 2, 3, 4},
+			needRoll:                   true,
+		},
+		"test bound with failed to apply bindings when there is no max surge allowed and there is no bound binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        noMaxSurgeCRP,
+			tobeUpdatedBindings:        []int{0, 1, 2, 3, 4},
+			needRoll:                   true,
+		},
+		"test bound with unscheduled bindings": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
+			tobeUpdatedBindings: []int{},
+			needRoll:            true,
 		},
 	}
 	for name, tt := range tests {
