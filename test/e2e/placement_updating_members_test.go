@@ -70,14 +70,14 @@ var _ = Describe("Updating member cluster", Serial, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{memberCluster1Name})
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{memberCluster1EastProdName})
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("update the member cluster label", func() {
 			Eventually(func() error {
 				mcObj := &clusterv1beta1.MemberCluster{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster1Name}, mcObj); err != nil {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster1EastProdName}, mcObj); err != nil {
 					return err
 				}
 				mcObj.Labels[clusterLabelKey] = clusterLabelValue
@@ -86,19 +86,19 @@ var _ = Describe("Updating member cluster", Serial, func() {
 		})
 
 		It("should place resources on matching clusters", func() {
-			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster1)
+			resourcePlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster1EastProd)
 			Eventually(resourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place resources on matching clusters")
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1Name}, nil)
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			Eventually(func() error {
 				mcObj := &clusterv1beta1.MemberCluster{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster1Name}, mcObj); err != nil {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster1EastProdName}, mcObj); err != nil {
 					return err
 				}
 				delete(mcObj.Labels, clusterLabelKey)
