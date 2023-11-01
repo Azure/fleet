@@ -106,7 +106,7 @@ func setupInvalidClusters() {
 	// Create a member cluster object that represents the unhealthy cluster.
 	mcObj := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: memberCluster4Name,
+			Name: memberCluster4UnhealthyName,
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -124,7 +124,7 @@ func setupInvalidClusters() {
 	// to reconcile this object at the same time.
 	Eventually(func() error {
 		memberCluster := clusterv1beta1.MemberCluster{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster4Name}, &memberCluster); err != nil {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster4UnhealthyName}, &memberCluster); err != nil {
 			return err
 		}
 
@@ -155,7 +155,7 @@ func setupInvalidClusters() {
 	// Note that we use a custom finalizer to block the member cluster's deletion.
 	mcObj = &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       memberCluster5Name,
+			Name:       memberCluster5LeftName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
@@ -171,7 +171,7 @@ func setupInvalidClusters() {
 }
 
 func cleanupInvalidClusters() {
-	invalidClusterNames := []string{memberCluster4Name, memberCluster5Name}
+	invalidClusterNames := []string{memberCluster4UnhealthyName, memberCluster5LeftName}
 	for _, name := range invalidClusterNames {
 		mcObj := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{

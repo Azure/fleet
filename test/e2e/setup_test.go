@@ -36,13 +36,13 @@ const (
 	// The names of the hub cluster + the member clusters set up in this E2E test environment.
 	//
 	// Note that these names must match with those in `setup.sh`, with a prefix `kind-`.
-	hubClusterName     = "kind-hub"
-	memberCluster1Name = "kind-cluster-1"
-	memberCluster2Name = "kind-cluster-2"
-	memberCluster3Name = "kind-cluster-3"
-	memberCluster4Name = "kind-unhealthy-cluster"
-	memberCluster5Name = "kind-left-cluster"
-	memberCluster6Name = "kind-non-existent-cluster"
+	hubClusterName                = "kind-hub"
+	memberCluster1EastProdName    = "kind-cluster-1"
+	memberCluster2EastCanaryName  = "kind-cluster-2"
+	memberCluster3WestProdName    = "kind-cluster-3"
+	memberCluster4UnhealthyName   = "kind-unhealthy-cluster"
+	memberCluster5LeftName        = "kind-left-cluster"
+	memberCluster6NonExistentName = "kind-non-existent-cluster"
 
 	hubClusterSAName = "hub-agent-sa"
 	fleetSystemNS    = "fleet-system"
@@ -62,16 +62,16 @@ var (
 	scheme = runtime.NewScheme()
 	once   = sync.Once{}
 
-	hubCluster     *framework.Cluster
-	memberCluster1 *framework.Cluster
-	memberCluster2 *framework.Cluster
-	memberCluster3 *framework.Cluster
+	hubCluster               *framework.Cluster
+	memberCluster1EastProd   *framework.Cluster
+	memberCluster2EastCanary *framework.Cluster
+	memberCluster3WestProd   *framework.Cluster
 
-	hubClient            client.Client
-	impersonateHubClient client.Client
-	memberCluster1Client client.Client
-	memberCluster2Client client.Client
-	memberCluster3Client client.Client
+	hubClient                      client.Client
+	impersonateHubClient           client.Client
+	memberCluster1EastProdClient   client.Client
+	memberCluster2EastCanaryClient client.Client
+	memberCluster3WestProdClient   client.Client
 
 	allMemberClusters     []*framework.Cluster
 	allMemberClusterNames = []string{}
@@ -86,15 +86,15 @@ var (
 	envLabelValue2    = "canary"
 
 	labelsByClusterName = map[string]map[string]string{
-		memberCluster1Name: {
+		memberCluster1EastProdName: {
 			regionLabelName: regionLabelValue1,
 			envLabelName:    envLabelValue1,
 		},
-		memberCluster2Name: {
+		memberCluster2EastCanaryName: {
 			regionLabelName: regionLabelValue1,
 			envLabelName:    envLabelValue2,
 		},
-		memberCluster3Name: {
+		memberCluster3WestProdName: {
 			regionLabelName: regionLabelValue2,
 			envLabelName:    envLabelValue1,
 		},
@@ -178,25 +178,25 @@ func beforeSuiteForAllProcesses() {
 	impersonateHubClient = hubCluster.ImpersonateKubeClient
 	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 
-	memberCluster1 = framework.NewCluster(memberCluster1Name, scheme)
-	Expect(memberCluster1).NotTo(BeNil(), "Failed to initialize cluster object")
-	framework.GetClusterClient(memberCluster1)
-	memberCluster1Client = memberCluster1.KubeClient
-	Expect(memberCluster1Client).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
+	memberCluster1EastProd = framework.NewCluster(memberCluster1EastProdName, scheme)
+	Expect(memberCluster1EastProd).NotTo(BeNil(), "Failed to initialize cluster object")
+	framework.GetClusterClient(memberCluster1EastProd)
+	memberCluster1EastProdClient = memberCluster1EastProd.KubeClient
+	Expect(memberCluster1EastProdClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
-	memberCluster2 = framework.NewCluster(memberCluster2Name, scheme)
-	Expect(memberCluster2).NotTo(BeNil(), "Failed to initialize cluster object")
-	framework.GetClusterClient(memberCluster2)
-	memberCluster2Client = memberCluster2.KubeClient
-	Expect(memberCluster2Client).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
+	memberCluster2EastCanary = framework.NewCluster(memberCluster2EastCanaryName, scheme)
+	Expect(memberCluster2EastCanary).NotTo(BeNil(), "Failed to initialize cluster object")
+	framework.GetClusterClient(memberCluster2EastCanary)
+	memberCluster2EastCanaryClient = memberCluster2EastCanary.KubeClient
+	Expect(memberCluster2EastCanaryClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
-	memberCluster3 = framework.NewCluster(memberCluster3Name, scheme)
-	Expect(memberCluster3).NotTo(BeNil(), "Failed to initialize cluster object")
-	framework.GetClusterClient(memberCluster3)
-	memberCluster3Client = memberCluster3.KubeClient
-	Expect(memberCluster3Client).NotTo(BeNil(), "Failed to initialize client for accessing kubernetes cluster")
+	memberCluster3WestProd = framework.NewCluster(memberCluster3WestProdName, scheme)
+	Expect(memberCluster3WestProd).NotTo(BeNil(), "Failed to initialize cluster object")
+	framework.GetClusterClient(memberCluster3WestProd)
+	memberCluster3WestProdClient = memberCluster3WestProd.KubeClient
+	Expect(memberCluster3WestProdClient).NotTo(BeNil(), "Failed to initialize client for accessing kubernetes cluster")
 
-	allMemberClusters = []*framework.Cluster{memberCluster1, memberCluster2, memberCluster3}
+	allMemberClusters = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary, memberCluster3WestProd}
 	once.Do(func() {
 		// Set these arrays only once; this is necessary as for the first spawned Ginkgo process,
 		// the `beforeSuiteForAllProcesses` function is called twice.
