@@ -8,12 +8,19 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/test/e2e/framework"
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -22,13 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/test/e2e/framework"
 )
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
@@ -280,7 +280,10 @@ func deleteMemberClusterResource(name string) {
 		}
 		g.Expect(err).Should(Succeed(), "Failed to get MC %s", name)
 		controllerutil.RemoveFinalizer(&mc, placementv1beta1.MemberClusterFinalizer)
-		g.Expect(hubClient.Update(ctx, &mc)).Should(Succeed())
+		err = hubClient.Update(ctx, &mc)
+		if errors.IsConflict(err) {
+			return err
+		}
 		g.Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
@@ -303,6 +306,16 @@ func checkInternalMemberClusterExists(name, namespace string) {
 	}
 	Eventually(func() error {
 		return hubClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
+func checkMemberClusterNamespaceIsDeleted(name string) {
+	Eventually(func(g Gomega) error {
+		var ns corev1.Namespace
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &ns); !errors.IsNotFound(err) {
+			return fmt.Errorf("member cluster namespace %s still exists or an unexpected error occurred: %w", name, err)
+		}
+		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
