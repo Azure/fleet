@@ -96,6 +96,15 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 	return apiErrors.NewAggregate(allErr)
 }
 
+func IsPlacementTypeUpdated(oldCRP, currentCRP placementv1beta1.ClusterResourcePlacement) bool {
+	oldPolicy := oldCRP.Spec.Policy
+	currentPolicy := currentCRP.Spec.Policy
+	if oldPolicy != nil && currentPolicy != nil {
+		return oldPolicy.PlacementType != currentPolicy.PlacementType
+	}
+	return false
+}
+
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 	switch policy.PlacementType {
 	case placementv1beta1.PickFixedPlacementType:

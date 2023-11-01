@@ -42,6 +42,13 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			klog.ErrorS(err, "failed to decode v1beta1 CRP object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 			return admission.Errored(http.StatusBadRequest, err)
 		}
+		if req.Operation == admissionv1.Update {
+			var oldCRP placementv1beta1.ClusterResourcePlacement
+			if err := v.decoder.DecodeRaw(req.OldObject, &oldCRP); err != nil {
+				return admission.Errored(http.StatusBadRequest, err)
+			}
+		}
+		// handle special update case where placement type should be immutable.
 		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
 			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
 			return admission.Denied(err.Error())
