@@ -340,6 +340,11 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
+	// ClusterResourceSnapshots is a list of clusterResourceSnapshot names.
+	// ClusterResourceSnapshot is used to store a snapshot of selected resources by a resource placement policy.
+	// A placement could produce multiple clusterResourceSnapshots to select large amount of resources.
+	ClusterResourceSnapshots []string `json:"clusterResourceSnapshots,omitempty"`
+
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
 	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
 	// In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are

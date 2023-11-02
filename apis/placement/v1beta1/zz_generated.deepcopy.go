@@ -11,7 +11,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -353,6 +353,11 @@ func (in *ClusterResourcePlacementStatus) DeepCopyInto(out *ClusterResourcePlace
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.ClusterResourceSnapshots != nil {
+		in, out := &in.ClusterResourceSnapshots, &out.ClusterResourceSnapshots
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	if in.PlacementStatuses != nil {
 		in, out := &in.PlacementStatuses, &out.PlacementStatuses

@@ -479,6 +479,14 @@ spec:
           status:
             description: The observed status of ClusterResourcePlacement.
             properties:
+              clusterResourceSnapshots:
+                description: ClusterResourceSnapshots is a list of clusterResourceSnapshot
+                  names. ClusterResourceSnapshot is used to store a snapshot of selected
+                  resources by a resource placement policy. A placement could produce
+                  multiple clusterResourceSnapshots to select large amount of resources.
+                items:
+                  type: string
+                type: array
               conditions:
                 description: Conditions is an array of current observed conditions
                   for ClusterResourcePlacement.
