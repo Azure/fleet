@@ -792,6 +792,7 @@ func parseResourceGroupHashFromAnnotation(s *fleetv1beta1.ClusterResourceSnapsho
 func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, selectedResourceIDs []fleetv1beta1.ResourceIdentifier,
 	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
 	crp.Status.SelectedResources = selectedResourceIDs
+	crp.Status.ClusterResourceSnapshots = []string{latestResourceSnapshot.Name}
 	scheduledCondition := buildScheduledCondition(crp, latestSchedulingPolicySnapshot)
 	crp.SetConditions(scheduledCondition)
 

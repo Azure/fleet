@@ -280,14 +280,17 @@ func crpStatusUpdatedActual(
 			wantCRPConditions = crpRolloutFailedConditions(crp.Generation)
 		}
 
+		wantClusterResourceSnapshots := getLatestClusterResourceSnapshots(crpName)
+
 		// Note that the CRP controller will only keep decisions regarding unselected clusters for a CRP if:
 		//
 		// * The CRP is of the PickN placement type and the required N count cannot be fulfilled; or
 		// * The CRP is of the PickFixed placement type and the list of target clusters speciified cannot be fulfilled.
 		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-			Conditions:        wantCRPConditions,
-			PlacementStatuses: wantPlacementStatus,
-			SelectedResources: wantSelectedResourceIdentifiers,
+			Conditions:               wantCRPConditions,
+			PlacementStatuses:        wantPlacementStatus,
+			SelectedResources:        wantSelectedResourceIdentifiers,
+			ClusterResourceSnapshots: wantClusterResourceSnapshots,
 		}
 		if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)

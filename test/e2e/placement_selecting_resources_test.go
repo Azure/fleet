@@ -873,6 +873,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 						Namespace: workNamespaceName,
 					},
 				},
+				ClusterResourceSnapshots: getLatestClusterResourceSnapshots(crpName),
 			}
 			if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)

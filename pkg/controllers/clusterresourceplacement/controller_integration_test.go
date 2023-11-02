@@ -295,6 +295,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ClusterResourceSnapshots: []string{fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crp.Name, 0)},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionUnknown,
@@ -343,6 +344,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ClusterResourceSnapshots: []string{fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crp.Name, 0)},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,
@@ -403,6 +405,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ClusterResourceSnapshots: []string{fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crp.Name, 0)},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionUnknown,
@@ -478,6 +481,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 				},
 				Spec: crp.Spec,
 				Status: placementv1beta1.ClusterResourcePlacementStatus{
+					ClusterResourceSnapshots: []string{fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crp.Name, 0)},
 					Conditions: []metav1.Condition{
 						{
 							Status: metav1.ConditionTrue,

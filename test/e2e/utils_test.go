@@ -8,6 +8,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -398,6 +399,20 @@ func setAllMemberClustersToLeave() {
 		}
 		Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to set member cluster to leave state")
 	}
+}
+
+func getLatestClusterResourceSnapshots(crp string) []string {
+	snapshotList := &placementv1beta1.ClusterResourceSnapshotList{}
+	latestSnapshotLabelMatcher := client.MatchingLabels{
+		placementv1beta1.CRPTrackingLabel:      crp,
+		placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+	}
+	Expect(hubClient.List(ctx, snapshotList, latestSnapshotLabelMatcher)).Should(Succeed(), "Failed to list resourceSnapshot")
+	res := make([]string, len(snapshotList.Items))
+	for i := range snapshotList.Items {
+		res[i] = snapshotList.Items[i].Name
+	}
+	return res
 }
 
 func checkIfAllMemberClustersHaveLeft() {
