@@ -13,20 +13,20 @@ import (
 
 const (
 	// ResourceIndexLabel is the label that indicate the resource snapshot index of a cluster resource snapshot.
-	ResourceIndexLabel = fleetPrefix + "resourceIndex"
+	ResourceIndexLabel = fleetPrefix + "resource-index"
 
 	// ResourceGroupHashAnnotation is the annotation that contains the value of the sha-256 hash
 	// value of all the snapshots belong to the same snapshot index.
-	ResourceGroupHashAnnotation = fleetPrefix + "resourceHash"
+	ResourceGroupHashAnnotation = fleetPrefix + "resource-hash"
 
 	// NumberOfEnvelopedObjectsAnnotation is the annotation that contains the number of the enveloped objects in the resource snapshot group.
-	NumberOfEnvelopedObjectsAnnotation = fleetPrefix + "numberOfEnvelopedObject"
+	NumberOfEnvelopedObjectsAnnotation = fleetPrefix + "number-of-enveloped-object"
 
 	// NumberOfResourceSnapshotsAnnotation is the annotation that contains the total number of resource snapshots.
-	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "numberOfResourceSnapshots"
+	NumberOfResourceSnapshotsAnnotation = fleetPrefix + "number-of-resource-snapshots"
 
 	// SubindexOfResourceSnapshotAnnotation is the annotation to store the subindex of resource snapshot in the group.
-	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindexOfResourceSnapshot"
+	SubindexOfResourceSnapshotAnnotation = fleetPrefix + "subindex-of-resource-snapshot"
 
 	// ResourceSnapshotNameFmt is resourcePolicySnapshot name format: {CRPName}-{resourceIndex}-snapshot.
 	ResourceSnapshotNameFmt = "%s-%d-snapshot"
