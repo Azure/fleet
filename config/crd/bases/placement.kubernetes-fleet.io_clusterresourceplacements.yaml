@@ -552,7 +552,7 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              observedResourceSnapshots:
+              observedResourceIndex:
                 description: 'Resource index logically represents the generation of
                   the selected resources. We take a new snapshot of the selected resources
                   whenever the selection or their content change. Each snapshot has

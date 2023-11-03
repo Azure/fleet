@@ -350,7 +350,7 @@ type ClusterResourcePlacementStatus struct {
 	// For example, a condition of `ClusterResourcePlacementSynchronized` type
 	// is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
 	// +optional
-	ObservedResourceIndex string `json:"observedResourceSnapshots,omitempty"`
+	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
 
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
 	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
