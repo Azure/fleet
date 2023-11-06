@@ -411,6 +411,16 @@ func checkInternalMemberClusterExists(name, namespace string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
+func checkMemberClusterNamespaceIsDeleted(name string) {
+	Eventually(func(g Gomega) error {
+		var ns corev1.Namespace
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &ns); !errors.IsNotFound(err) {
+			return fmt.Errorf("member cluster namespace %s still exists or an unexpected error occurred: %w", name, err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
 func createWorkResource(name, namespace string) {
 	testDeployment := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{

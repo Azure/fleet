@@ -180,6 +180,7 @@ var _ = Describe("fleet guard rail tests for deny IMC CREATE operations", func()
 			},
 		}
 		Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -237,7 +238,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 		var imc clusterv1beta1.InternalMemberCluster
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 
-		By("expecting denial of operation UPDATE of Internal Member Cluster")
+		By("expecting denial of operation DELETE of Internal Member Cluster")
 		err := impersonateHubClient.Delete(ctx, &imc)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -346,6 +347,7 @@ var _ = Describe("fleet guard rail tests for deny Work CREATE operations", func(
 			},
 		}
 		Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
