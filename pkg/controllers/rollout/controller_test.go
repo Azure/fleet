@@ -240,8 +240,8 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 		},
 
 		"test update binding with no latestResourceSnapshotName": {
-			name:                       "Empty latestResourceSnapshotName",
-			Client:                     &test.MockClient{
+			name: "Empty latestResourceSnapshotName",
+			Client: &test.MockClient{
 				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					return nil
 				},
@@ -257,8 +257,8 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			wantErr: false,
 		},
 		"test update binding with nil toBeUpgradedBinding": {
-			name:                       "Nil toBeUpgradedBinding",
-			Client:                     &test.MockClient{
+			name: "Nil toBeUpgradedBinding",
+			Client: &test.MockClient{
 				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					return nil
 				},
@@ -268,8 +268,8 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			wantErr:                    false,
 		},
 		"test update binding with empty toBeUpgradedBinding": {
-			name:                       "Empty toBeUpgradedBinding",
-			Client:                     &test.MockClient{
+			name: "Empty toBeUpgradedBinding",
+			Client: &test.MockClient{
 				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					return nil
 				},
@@ -279,8 +279,8 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			wantErr:                    false,
 		},
 		"test update binding with failed binding": {
-			name:                       "Failed Binding",
-			Client:                     &test.MockClient{
+			name: "Failed Binding",
+			Client: &test.MockClient{
 				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					return errors.New("Failed to update binding")
 				},
@@ -293,7 +293,7 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
 			},
-		wantErr: true,
+			wantErr: true,
 		},
 	}
 	for name, tt := range tests {
