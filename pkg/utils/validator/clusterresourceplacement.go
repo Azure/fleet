@@ -161,6 +161,9 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 		if *policy.NumberOfClusters < 0 {
 			allErr = append(allErr, fmt.Errorf("number of clusters cannot be %d for policy type %s", *policy.NumberOfClusters, placementv1beta1.PickNPlacementType))
 		}
+		if *policy.NumberOfClusters > 100 {
+			allErr = append(allErr, fmt.Errorf("number of clusters %d cannot be greater than 100 for policy types %s", *policy.NumberOfClusters, placementv1beta1.PickNPlacementType))
+		}
 	} else {
 		allErr = append(allErr, fmt.Errorf("number of cluster cannot be nil for policy type %s", placementv1beta1.PickNPlacementType))
 	}
@@ -200,6 +203,10 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
 	allErr := make([]error, 0)
 	for _, tc := range topologyConstraints {
+		if *tc.MaxSkew > 98 {
+			// there are two buckets for cluster where resource can be scheduled and not scheduled. assuming the distribution is 1:99 or 99:1 the max skew has to be 98.
+			allErr = append(allErr, fmt.Errorf("max skew %d cannot exceed 98 cause the maximum number of clusters allowed is 100 for placement policy type %s", *tc.MaxSkew, placementv1beta1.PickNPlacementType))
+		}
 		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule && tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
 			allErr = append(allErr, fmt.Errorf("unknown when unsatisfiable type %s", tc.WhenUnsatisfiable))
 		}
