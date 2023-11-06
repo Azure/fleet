@@ -107,9 +107,7 @@ func IsPlacementPolicyUpdateValid(oldPolicy, currentPolicy *placementv1beta1.Pla
 		return oldPolicy.PlacementType == placementv1beta1.PickAllPlacementType
 	}
 	if oldPolicy != nil && currentPolicy != nil {
-		if currentPolicy.PlacementType != oldPolicy.PlacementType {
-			return false
-		}
+		return currentPolicy.PlacementType == oldPolicy.PlacementType
 	}
 	// general case where placement type wasn't updated but other fields in placement policy were updated.
 	return true
