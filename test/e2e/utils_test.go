@@ -15,14 +15,15 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -31,25 +32,131 @@ import (
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
+// createMemberCluster creates a MemberCluster object.
+func createMemberCluster(name, svcAccountName string, labels map[string]string) {
+	mcObj := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: labels,
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Identity: rbacv1.Subject{
+				Name:      svcAccountName,
+				Kind:      "ServiceAccount",
+				Namespace: fleetSystemNS,
+			},
+			HeartbeatPeriodSeconds: 60,
+		},
+	}
+	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member clsuter object %s", name)
+}
+
+// markMemberClusterAsHealthy marks the specified member cluster as healthy.
+func markMemberClusterAsHealthy(name string) {
+	Eventually(func() error {
+		imcObj := &clusterv1beta1.InternalMemberCluster{}
+		mcReservedNS := fmt.Sprintf(utils.NamespaceNameFormat, name)
+		if err := hubClient.Get(ctx, types.NamespacedName{Namespace: mcReservedNS, Name: name}, imcObj); err != nil {
+			return err
+		}
+
+		imcObj.Status = clusterv1beta1.InternalMemberClusterStatus{
+			AgentStatus: []clusterv1beta1.AgentStatus{
+				{
+					Type: clusterv1beta1.MemberAgent,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.AgentJoined),
+							LastTransitionTime: metav1.Now(),
+							ObservedGeneration: 0,
+							Status:             metav1.ConditionTrue,
+							Reason:             "JoinedCluster",
+							Message:            "set to be joined",
+						},
+						{
+							Type:               string(clusterv1beta1.AgentHealthy),
+							LastTransitionTime: metav1.Now(),
+							ObservedGeneration: 0,
+							Status:             metav1.ConditionTrue,
+							Reason:             "HealthyCluster",
+							Message:            "set to be healthy",
+						},
+					},
+					LastReceivedHeartbeat: metav1.Now(),
+				},
+			},
+		}
+
+		if err := hubClient.Status().Update(ctx, imcObj); err != nil {
+			return err
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as healthy")
+}
+
+// markMemberClusterAsUnhealthy marks the specified member cluster as unhealthy (last
+// received heartbeat expired).
+func markMemberClusterAsUnhealthy(name string) {
+	Eventually(func() error {
+		mcObj := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); err != nil {
+			return err
+		}
+
+		mcObj.Status = clusterv1beta1.MemberClusterStatus{
+			AgentStatus: []clusterv1beta1.AgentStatus{
+				{
+					Type: clusterv1beta1.MemberAgent,
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(clusterv1beta1.AgentJoined),
+							LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour * 24)),
+							ObservedGeneration: 0,
+							Status:             metav1.ConditionTrue,
+							Reason:             "JoinedCluster",
+							Message:            "set to be joined",
+						},
+						{
+							Type:               string(clusterv1beta1.AgentHealthy),
+							LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour * 24)),
+							ObservedGeneration: 0,
+							Status:             metav1.ConditionTrue,
+							Reason:             "HealthyCluster",
+							Message:            "set to be healthy",
+						},
+					},
+					LastReceivedHeartbeat: metav1.NewTime(time.Now().Add(-time.Hour * 24)),
+				},
+			},
+		}
+		if err := hubClient.Status().Update(ctx, mcObj); err != nil {
+			return err
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as unhealthy")
+}
+
+// markMemberClusterAsLeft marks the specified member cluster as left.
+func markMemberClusterAsLeft(name string) {
+	mcObj := &clusterv1beta1.MemberCluster{}
+	Eventually(func() error {
+		// Add a custom deletion blocker finalizer to the member cluster.
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); err != nil {
+			return err
+		}
+
+		mcObj.Finalizers = append(mcObj.Finalizers, customDeletionBlockerFinalizer)
+		return hubClient.Update(ctx, mcObj)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as left")
+
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to delete member cluster")
+}
+
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-		//TODO: clean up the member cluster object if it already exists
-		mcObj := &clusterv1beta1.MemberCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   memberCluster.ClusterName,
-				Labels: labelsByClusterName[memberCluster.ClusterName],
-			},
-			Spec: clusterv1beta1.MemberClusterSpec{
-				Identity: rbacv1.Subject{
-					Name:      hubClusterSAName,
-					Kind:      "ServiceAccount",
-					Namespace: fleetSystemNS,
-				},
-			},
-		}
-		Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object")
+		createMemberCluster(memberCluster.ClusterName, hubClusterSAName, labelsByClusterName[memberCluster.ClusterName])
 	}
 }
 
@@ -104,19 +211,7 @@ func checkIfAllMemberClustersHaveJoined() {
 // have left the fleet.
 func setupInvalidClusters() {
 	// Create a member cluster object that represents the unhealthy cluster.
-	mcObj := &clusterv1beta1.MemberCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: memberCluster4UnhealthyName,
-		},
-		Spec: clusterv1beta1.MemberClusterSpec{
-			Identity: rbacv1.Subject{
-				Name:      hubClusterSAName,
-				Kind:      "ServiceAccount",
-				Namespace: fleetSystemNS,
-			},
-		},
-	}
-	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object")
+	createMemberCluster(memberCluster4UnhealthyName, hubClusterSAName, nil)
 
 	// Mark the member cluster as unhealthy.
 
@@ -153,7 +248,7 @@ func setupInvalidClusters() {
 	// Create a member cluster object that represents the cluster that has left the fleet.
 	//
 	// Note that we use a custom finalizer to block the member cluster's deletion.
-	mcObj = &clusterv1beta1.MemberCluster{
+	mcObj := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       memberCluster5LeftName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
@@ -253,45 +348,55 @@ func deleteResourcesForFleetGuardRail() {
 	Expect(hubClient.Delete(ctx, &cr)).Should(Succeed())
 }
 
-func createMemberClusterResource(name, user string) {
-	// Create the MC.
-	mc := &clusterv1beta1.MemberCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Spec: clusterv1beta1.MemberClusterSpec{
-			Identity: rbacv1.Subject{
-				Name:      user,
-				Kind:      "ServiceAccount",
-				Namespace: utils.FleetSystemNamespace,
-			},
-			HeartbeatPeriodSeconds: 60,
-		},
-	}
-	Expect(hubClient.Create(ctx, mc)).To(Succeed(), "Failed to create MC %s", mc)
-}
-
-func deleteMemberClusterResource(name string) {
-	Eventually(func(g Gomega) error {
-		var mc clusterv1beta1.MemberCluster
-		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc)
+// cleanupMemberCluster removes finalizers (if any) from the member cluster, and
+// wait until its final removal.
+func cleanupMemberCluster(memberClusterName string) {
+	// Remove the custom deletion blocker finalizer from the member cluster.
+	Eventually(func() error {
+		mcObj := &clusterv1beta1.MemberCluster{}
+		err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj)
 		if errors.IsNotFound(err) {
 			return nil
 		}
-		g.Expect(err).Should(Succeed(), "Failed to get MC %s", name)
-		controllerutil.RemoveFinalizer(&mc, placementv1beta1.MemberClusterFinalizer)
-		g.Expect(hubClient.Update(ctx, &mc)).Should(Succeed())
-		g.Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		if err != nil {
+			return err
+		}
 
-	Eventually(func(g Gomega) error {
-		var mc clusterv1beta1.MemberCluster
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc); !errors.IsNotFound(err) {
-			return fmt.Errorf("MC still exists or an unexpected error occurred: %w", err)
+		mcObj.Finalizers = []string{}
+		return hubClient.Update(ctx, mcObj)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove custom deletion blocker finalizer from member cluster")
+
+	// Wait until the member cluster is fully removed.
+	Eventually(func() error {
+		mcObj := &clusterv1beta1.MemberCluster{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !errors.IsNotFound(err) {
+			return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to fully delete member cluster")
+}
+
+func ensureMemberClusterAndRelatedResourcesDeletion(memberClusterName string) {
+	// Delete the member cluster.
+	mcObj := &clusterv1beta1.MemberCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: memberClusterName,
+		},
+	}
+	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to delete member cluster")
+
+	// Remove the finalizers on the member cluster, and wait until the member cluster is fully removed.
+	cleanupMemberCluster(memberClusterName)
+
+	// Verify that the member cluster and the namespace reserved for the member cluster has been removed.
+	reservedNSName := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+	Eventually(func() error {
+		ns := corev1.Namespace{}
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !errors.IsNotFound(err) {
+			return fmt.Errorf("namespace still exists or an unexpected error occurred: %w", err)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove reserved namespace")
 }
 
 func checkInternalMemberClusterExists(name, namespace string) {
@@ -488,4 +593,85 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 
 	// Delete the created resources.
 	cleanupWorkResources()
+}
+
+// verifyWorkPropagationAndMarkAsApplied verifies that works derived from a specific CPR have been created
+// for a specific cluster, and marks these works in the specific member cluster's
+// reserved namespace as applied.
+//
+// This is mostly used for simulating member agents for virtual clusters.
+//
+// Note that this utility function currently assumes that there is only one work object.
+func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
+	memberClusterReservedNS := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
+	// Wait until the works are created.
+	workList := placementv1beta1.WorkList{}
+	Eventually(func() error {
+		workList = placementv1beta1.WorkList{}
+		matchLabelOptions := client.MatchingLabels{
+			placementv1beta1.CRPTrackingLabel: crpName,
+		}
+		if err := hubClient.List(ctx, &workList, client.InNamespace(memberClusterReservedNS), matchLabelOptions); err != nil {
+			return err
+		}
+
+		if len(workList.Items) == 0 {
+			return fmt.Errorf("no works found in namespace %s", memberClusterReservedNS)
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to list works")
+
+	for _, work := range workList.Items {
+		workName := work.Name
+		// To be on the safer set, update the status with retries.
+		Eventually(func() error {
+			work := placementv1beta1.Work{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: memberClusterReservedNS}, &work); err != nil {
+				return err
+			}
+
+			// Set the resource applied condition to the work object.
+			meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+				Type:               placementv1beta1.WorkConditionTypeApplied,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "WorkApplied",
+				Message:            "Set to be applied",
+				ObservedGeneration: work.Generation,
+			})
+
+			// Set the manifest conditions.
+			//
+			// Currently the CRP controller ignores this setup if the applied condition has been
+			// set as expected (i.e., resources applied). Here it adds the manifest conditions
+			// just in case the CRP controller changes its behavior in the future.
+			for idx := range resourceIdentifiers {
+				resourceIdentifier := resourceIdentifiers[idx]
+				work.Status.ManifestConditions = append(work.Status.ManifestConditions, placementv1beta1.ManifestCondition{
+					Identifier: placementv1beta1.WorkResourceIdentifier{
+						Group:     resourceIdentifier.Group,
+						Kind:      resourceIdentifier.Kind,
+						Version:   resourceIdentifier.Version,
+						Name:      resourceIdentifier.Name,
+						Namespace: resourceIdentifier.Namespace,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:               placementv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+							// Typically, this field is set to be the generation number of the
+							// applied object; here a dummy value is used as there is no object
+							// actually being applied in the case.
+							ObservedGeneration: 0,
+							Reason:             "ManifestApplied",
+							Message:            "Set to be applied",
+						},
+					},
+				})
+			}
+
+			return hubClient.Status().Update(ctx, &work)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	}
 }

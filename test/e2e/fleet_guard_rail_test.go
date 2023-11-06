@@ -72,11 +72,11 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberClusterResource(mcName, testUser)
+		createMemberCluster(mcName, testUser, nil)
 	})
 
 	AfterAll(func() {
-		deleteMemberClusterResource(mcName)
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should deny UPDATE operation on member cluster CR for user not in MC identity", func() {
@@ -207,12 +207,12 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
-		createMemberClusterResource(mcName, testIdentity)
+		createMemberCluster(mcName, testIdentity, nil)
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
 	AfterAll(func() {
-		deleteMemberClusterResource(mcName)
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -276,12 +276,12 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
-		createMemberClusterResource(mcName, testUser)
+		createMemberCluster(mcName, testUser, nil)
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
 	AfterAll(func() {
-		deleteMemberClusterResource(mcName)
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should allow UPDATE operation on internal member cluster CR status for user in MC identity", func() {
@@ -400,14 +400,14 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberClusterResource(mcName, testIdentity)
+		createMemberCluster(mcName, testIdentity, nil)
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 		createWorkResource(workName, imcNamespace)
 	})
 
 	AfterAll(func() {
 		deleteWorkResource(workName, imcNamespace)
-		deleteMemberClusterResource(mcName)
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should deny UPDATE operation on work CR status for user not in MC identity", func() {
@@ -454,14 +454,14 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		createMemberClusterResource(mcName, testUser)
+		createMemberCluster(mcName, testUser, nil)
 		checkInternalMemberClusterExists(mcName, imcNamespace)
 		createWorkResource(workName, imcNamespace)
 	})
 
 	AfterAll(func() {
 		deleteWorkResource(workName, imcNamespace)
-		deleteMemberClusterResource(mcName)
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should allow UPDATE operation on work CR for user in MC identity", func() {
