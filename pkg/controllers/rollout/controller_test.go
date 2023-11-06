@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -226,6 +227,74 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 		wantErr                    bool
 	}{
 		// TODO: Add negative test cases with fake client
+		"test update bindings with no bindings": {
+			name: "test3",
+			Client: &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					return nil
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding:        []*fleetv1beta1.ClusterResourceBinding{},
+			wantErr:                    false,
+		},
+
+		"test update binding with no latestResourceSnapshotName": {
+			name:                       "Empty latestResourceSnapshotName",
+			Client:                     &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					return nil
+				},
+			},
+			latestResourceSnapshotName: "",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			wantErr: false,
+		},
+		"test update binding with nil toBeUpgradedBinding": {
+			name:                       "Nil toBeUpgradedBinding",
+			Client:                     &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					return nil
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding:        nil,
+			wantErr:                    false,
+		},
+		"test update binding with empty toBeUpgradedBinding": {
+			name:                       "Empty toBeUpgradedBinding",
+			Client:                     &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					return nil
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding:        []*fleetv1beta1.ClusterResourceBinding{},
+			wantErr:                    false,
+		},
+		"test update binding with failed binding": {
+			name:                       "Failed Binding",
+			Client:                     &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					return errors.New("Failed to update binding")
+				},
+			},
+			latestResourceSnapshotName: "snapshot1",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+		wantErr: true,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
