@@ -2,6 +2,7 @@ package clusterresourceplacement
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -47,8 +48,11 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			if err := v.decoder.DecodeRaw(req.OldObject, &oldCRP); err != nil {
 				return admission.Errored(http.StatusBadRequest, err)
 			}
+			// handle update case where placement type should be immutable.
+			if !validator.IsPlacementPolicyUpdateValid(oldCRP.Spec.Policy, crp.Spec.Policy) {
+				return admission.Denied(fmt.Sprintf("placement type for CRP %s is immutable", crp.Name))
+			}
 		}
-		// handle special update case where placement type should be immutable.
 		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
 			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
 			return admission.Denied(err.Error())
