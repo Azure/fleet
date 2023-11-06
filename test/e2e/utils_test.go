@@ -87,10 +87,7 @@ func markMemberClusterAsHealthy(name string) {
 			},
 		}
 
-		if err := hubClient.Status().Update(ctx, imcObj); err != nil {
-			return err
-		}
-		return nil
+		return hubClient.Status().Update(ctx, imcObj)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as healthy")
 }
 
@@ -129,10 +126,7 @@ func markMemberClusterAsUnhealthy(name string) {
 				},
 			},
 		}
-		if err := hubClient.Status().Update(ctx, mcObj); err != nil {
-			return err
-		}
-		return nil
+		return hubClient.Status().Update(ctx, mcObj)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as unhealthy")
 }
 

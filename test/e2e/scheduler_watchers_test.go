@@ -12,11 +12,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 const (
@@ -395,7 +396,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			markMemberClusterAsUnhealthy(additionalClusterName1ForWatcherTests)
 		})
 
-		It("should keep the cluster in the scheduling decision (ignored during execution semantics)", func() {
+		It("should keep the cluster in the scheduling decision", func() {
 			targetClusterNames := allMemberClusterNames
 			targetClusterNames = append(targetClusterNames, additionalClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
@@ -716,17 +717,4 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
 		})
 	})
-
-	Context("cluster becomes eligible for unfulfilled PickN CRPs, just joined", func() {})
-
-	Context("cluster becomes eligible for unfulfilled PickN CRPs, health condition change", func() {})
-
-	Context("cluster becomes eligible for fulfilled PickN CRPs, just joined", func() {})
-
-	Context("cluster becomes eligible for fulfilled PickN CRPs, health condition change", func() {})
-
-	Context("cluster becomes eligible for unfulfilled PickN CRPs with affinities, label change", func() {})
-
-	Context("cluster becomes eligible for unfulfilled PickN CRPs with topology spread constraints, just joined", func() {})
-
 })
