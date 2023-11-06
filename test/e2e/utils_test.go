@@ -344,7 +344,7 @@ func cleanupNetworkingCRDs() {
 		},
 	}
 	Expect(hubClient.Delete(ctx, &internalServiceExportCRD)).Should(Succeed())
-	By(fmt.Sprintf("Networking CRDs are deleted"))
+	By("Networking CRDs are deleted")
 }
 
 func createInternalServiceExport(name, namespace string) {
