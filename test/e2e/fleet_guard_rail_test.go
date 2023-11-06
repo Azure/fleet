@@ -68,8 +68,9 @@ var _ = Describe("fleet guard rail tests for deny MC CREATE operations", func() 
 	})
 })
 
-var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operations", Ordered, func() {
+var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operations", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 	BeforeAll(func() {
 		createMemberClusterResource(mcName, testUser)
@@ -77,6 +78,7 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 
 	AfterAll(func() {
 		deleteMemberClusterResource(mcName)
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny UPDATE operation on member cluster CR for user not in MC identity", func() {
@@ -180,6 +182,7 @@ var _ = Describe("fleet guard rail tests for deny IMC CREATE operations", func()
 			},
 		}
 		Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -202,7 +205,7 @@ var _ = Describe("fleet guard rail tests for deny IMC CREATE operations", func()
 	})
 })
 
-var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-member prefixed namespace with user not in MC identity", Ordered, func() {
+var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-member prefixed namespace with user not in MC identity", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
@@ -213,6 +216,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 
 	AfterAll(func() {
 		deleteMemberClusterResource(mcName)
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -237,7 +241,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 		var imc clusterv1beta1.InternalMemberCluster
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 
-		By("expecting denial of operation UPDATE of Internal Member Cluster")
+		By("expecting denial of operation DELETE of Internal Member Cluster")
 		err := impersonateHubClient.Delete(ctx, &imc)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -271,7 +275,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	})
 })
 
-var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-member prefixed namespace with user in MC identity", Ordered, func() {
+var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-member prefixed namespace with user in MC identity", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
@@ -282,6 +286,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 
 	AfterAll(func() {
 		deleteMemberClusterResource(mcName)
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should allow UPDATE operation on internal member cluster CR status for user in MC identity", func() {
@@ -346,6 +351,7 @@ var _ = Describe("fleet guard rail tests for deny Work CREATE operations", func(
 			},
 		}
 		Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -394,7 +400,7 @@ var _ = Describe("fleet guard rail tests for deny Work CREATE operations", func(
 	})
 })
 
-var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed namespace with user not in MC identity", Ordered, func() {
+var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed namespace with user not in MC identity", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -408,6 +414,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	AfterAll(func() {
 		deleteWorkResource(workName, imcNamespace)
 		deleteMemberClusterResource(mcName)
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should deny UPDATE operation on work CR status for user not in MC identity", func() {
@@ -448,7 +455,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	})
 })
 
-var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed namespace with user in MC identity", Ordered, func() {
+var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed namespace with user in MC identity", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
@@ -462,6 +469,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	AfterAll(func() {
 		deleteWorkResource(workName, imcNamespace)
 		deleteMemberClusterResource(mcName)
+		checkMemberClusterNamespaceIsDeleted(imcNamespace)
 	})
 
 	It("should allow UPDATE operation on work CR for user in MC identity", func() {

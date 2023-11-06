@@ -340,6 +340,18 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
+	// Resource index logically represents the generation of the selected resources.
+	// We take a new snapshot of the selected resources whenever the selection or their content change.
+	// Each snapshot has a different resource index.
+	// One resource snapshot can contain multiple clusterResourceSnapshots CRs in order to store large amount of resources.
+	// To get clusterResourceSnapshot of a given resource index, use the following command:
+	// `kubectl get ClusterResourceSnapshot --selector=kubernetes-fleet.io/resource-index=$ObservedResourceIndex `
+	// ObservedResourceIndex is the resource index that the conditions in the ClusterResourcePlacementStatus observe.
+	// For example, a condition of `ClusterResourcePlacementSynchronized` type
+	// is observing the synchronization status of the resource snapshot with the resource index $ObservedResourceIndex.
+	// +optional
+	ObservedResourceIndex string `json:"observedResourceIndex,omitempty"`
+
 	// PlacementStatuses contains a list of placement status on the clusters that are selected by PlacementPolicy.
 	// Each selected cluster according to the latest resource placement is guaranteed to have a corresponding placementStatuses.
 	// In the pickN case, there are N placement statuses where N = NumberOfClusters; Or in the pickFixed case, there are

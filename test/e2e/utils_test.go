@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +107,7 @@ func setupInvalidClusters() {
 	// Create a member cluster object that represents the unhealthy cluster.
 	mcObj := &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: memberCluster4Name,
+			Name: memberCluster4UnhealthyName,
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
 			Identity: rbacv1.Subject{
@@ -124,7 +125,7 @@ func setupInvalidClusters() {
 	// to reconcile this object at the same time.
 	Eventually(func() error {
 		memberCluster := clusterv1beta1.MemberCluster{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster4Name}, &memberCluster); err != nil {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster4UnhealthyName}, &memberCluster); err != nil {
 			return err
 		}
 
@@ -155,7 +156,7 @@ func setupInvalidClusters() {
 	// Note that we use a custom finalizer to block the member cluster's deletion.
 	mcObj = &clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       memberCluster5Name,
+			Name:       memberCluster5LeftName,
 			Finalizers: []string{customDeletionBlockerFinalizer},
 		},
 		Spec: clusterv1beta1.MemberClusterSpec{
@@ -171,7 +172,7 @@ func setupInvalidClusters() {
 }
 
 func cleanupInvalidClusters() {
-	invalidClusterNames := []string{memberCluster4Name, memberCluster5Name}
+	invalidClusterNames := []string{memberCluster4UnhealthyName, memberCluster5LeftName}
 	for _, name := range invalidClusterNames {
 		mcObj := &clusterv1beta1.MemberCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -280,7 +281,10 @@ func deleteMemberClusterResource(name string) {
 		}
 		g.Expect(err).Should(Succeed(), "Failed to get MC %s", name)
 		controllerutil.RemoveFinalizer(&mc, placementv1beta1.MemberClusterFinalizer)
-		g.Expect(hubClient.Update(ctx, &mc)).Should(Succeed())
+		err = hubClient.Update(ctx, &mc)
+		if errors.IsConflict(err) {
+			return err
+		}
 		g.Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
@@ -303,6 +307,16 @@ func checkInternalMemberClusterExists(name, namespace string) {
 	}
 	Eventually(func() error {
 		return hubClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+}
+
+func checkMemberClusterNamespaceIsDeleted(name string) {
+	Eventually(func(g Gomega) error {
+		var ns corev1.Namespace
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &ns); !errors.IsNotFound(err) {
+			return fmt.Errorf("member cluster namespace %s still exists or an unexpected error occurred: %w", name, err)
+		}
+		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
