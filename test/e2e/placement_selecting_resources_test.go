@@ -753,7 +753,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		By("creating work namespace on member cluster")
 		ns := workNamespace()
 
-		Expect(memberCluster1.KubeClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
+		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
@@ -814,7 +814,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 				},
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName: memberCluster1Name,
+						ClusterName: memberCluster1EastProdName,
 						FailedResourcePlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
@@ -852,11 +852,11 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 						},
 					},
 					{
-						ClusterName: memberCluster2Name,
+						ClusterName: memberCluster2EastCanaryName,
 						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
 					},
 					{
-						ClusterName: memberCluster3Name,
+						ClusterName: memberCluster3WestProdName,
 						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
 					},
 				},
@@ -903,7 +903,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		Consistently(func() error {
 			workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 			ns := &corev1.Namespace{}
-			return memberCluster1.KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
+			return memberCluster1EastProdClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)
 		}, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Namespace which is not owned by the CRP should not be deleted")
 	})
 })
