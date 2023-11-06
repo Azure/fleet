@@ -89,11 +89,10 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 
 	It("should deny update on CRP with invalid placement policy for PickFixed", func() {
 		Eventually(func(g Gomega) error {
-			var numOfClusters int32 = 1
+			var numOfClusters int32 = 50
 			var crp placementv1beta1.ClusterResourcePlacement
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
 			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
-				PlacementType:    placementv1beta1.PickFixedPlacementType,
 				NumberOfClusters: &numOfClusters,
 			}
 			err := hubClient.Update(ctx, &crp)
