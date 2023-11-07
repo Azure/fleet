@@ -226,7 +226,7 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 		wantErr                    bool
 	}{
 		// TODO: Add negative test cases with fake client
-		
+
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -344,7 +344,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 		Type:   intstr.Int,
 		IntVal: 0,
 	}
-noMaxSurgeCRP := clusterResourcePlacementForTest("test",
+	noMaxSurgeCRP := clusterResourcePlacementForTest("test",
 		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5))
 	noMaxSurgeCRP.Spec.Strategy.RollingUpdate.MaxSurge = &intstr.IntOrString{
 		Type:   intstr.Int,
@@ -395,7 +395,7 @@ noMaxSurgeCRP := clusterResourcePlacementForTest("test",
 			tobeUpdatedBindings:        []int{0, 1, 2},
 			needRoll:                   true,
 		},
-"test bound with failed to apply bindings when there is no max surge allowed": {
+		"test bound with failed to apply bindings when there is no max surge allowed": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
@@ -449,7 +449,7 @@ noMaxSurgeCRP := clusterResourcePlacementForTest("test",
 			needRoll:            true,
 		},
 		"test bound with no bindings": {
-			allBindings: []*fleetv1beta1.ClusterResourceBinding{},
+			allBindings:                []*fleetv1beta1.ClusterResourceBinding{},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
