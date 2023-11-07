@@ -320,7 +320,7 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster5),
 			},
 			wantErr: false,
-		},		
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
