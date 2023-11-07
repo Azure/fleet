@@ -49,7 +49,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 				return admission.Errored(http.StatusBadRequest, err)
 			}
 			// handle update case where placement type should be immutable.
-			if !validator.IsPlacementPolicyUpdateValid(oldCRP.Spec.Policy, crp.Spec.Policy) {
+			if validator.IsPlacementPolicyTypeUpdated(oldCRP.Spec.Policy, crp.Spec.Policy) {
 				return admission.Denied(fmt.Sprintf("placement type for CRP %s is immutable", crp.Name))
 			}
 		}

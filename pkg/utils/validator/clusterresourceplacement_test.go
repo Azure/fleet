@@ -890,7 +890,7 @@ func Test_IsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: true,
+			wantResult: false,
 		},
 		"old policy nil, current policy non nil, current placement type is PickN": {
 			oldPolicy: nil,
@@ -910,9 +910,9 @@ func Test_IsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: false,
+			wantResult: true,
 		},
-		"old policy is nil, current policy is non nil, current placement type is PickAll": {
+		"old policy is non nil, current policy is nil, current placement type is PickAll": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 				Affinity: &placementv1beta1.Affinity{
@@ -930,9 +930,9 @@ func Test_IsPlacementPolicyUpdateValid(t *testing.T) {
 				},
 			},
 			currentPolicy: nil,
-			wantResult:    true,
+			wantResult:    false,
 		},
-		"old policy is nil, current policy is non nil, current placement type is PickFixed": {
+		"old policy is non nil, current policy is nil, current placement type is PickFixed": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickFixedPlacementType,
 				Affinity: &placementv1beta1.Affinity{
@@ -950,7 +950,7 @@ func Test_IsPlacementPolicyUpdateValid(t *testing.T) {
 				},
 			},
 			currentPolicy: nil,
-			wantResult:    false,
+			wantResult:    true,
 		},
 		"old policy is non nil, current policy is non nil, placement type changed": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
@@ -985,7 +985,7 @@ func Test_IsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: false,
+			wantResult: true,
 		},
 		"old policy is not nil, current policy is non nil, placement type unchanged": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
@@ -1020,12 +1020,12 @@ func Test_IsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: true,
+			wantResult: false,
 		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if actualResult := IsPlacementPolicyUpdateValid(testCase.oldPolicy, testCase.currentPolicy); actualResult != testCase.wantResult {
+			if actualResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); actualResult != testCase.wantResult {
 				t.Errorf("IsPlacementPolicyUpdateValid() actualResult = %v, wantResult %v", actualResult, testCase.wantResult)
 			}
 		})
