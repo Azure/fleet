@@ -98,8 +98,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 
 func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.PlacementPolicy) bool {
 	if oldPolicy == nil && currentPolicy != nil {
-		// if placement policy is left blank, by default PickAll is chosen. If false, in this case CRP was created with nil placement policy
-		// and then user immediately updates it to non nil before the controller reconciles the CRP to populate policy to use PickAll.
+		// if placement policy is left blank, by default PickAll is chosen.
 		return currentPolicy.PlacementType != placementv1beta1.PickAllPlacementType
 	}
 	// this case is essentially user trying to change placement type, if old placement type wasn't PickAll.
