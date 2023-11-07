@@ -321,6 +321,23 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		"test update binding with error for unscheduled state": {
+			name: "Delete unscheduled state with error",
+			Client: &test.MockClient{
+				MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+					return errors.New("Failed to delete binding")
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster5),
+			},
+			wantErr: true,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
