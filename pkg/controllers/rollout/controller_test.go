@@ -14,7 +14,9 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
@@ -226,7 +228,6 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 		toBeUpgradedBinding        []*fleetv1beta1.ClusterResourceBinding
 		wantErr                    bool
 	}{
-		// TODO: Add negative test cases with fake client
 		"test update binding with no latestResourceSnapshotName": {
 			name: "testResourceSnapshot1",
 			Client: &test.MockClient{
@@ -238,9 +239,6 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
 			},
 			wantErr: false,
 		},
@@ -275,11 +273,7 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
 			wantErr: true,
 		},
@@ -297,10 +291,6 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-1",
 			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster5),
 			},
 			wantErr: true,
 		},
@@ -314,10 +304,6 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster5),
 			},
 			wantErr: false,
 		},
@@ -325,18 +311,27 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 			name: "Delete unscheduled state with error",
 			Client: &test.MockClient{
 				MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-					return errors.New("Failed to delete binding")
+					return errors.New("Failed to delete unselected binding")
 				},
 			},
 			latestResourceSnapshotName: "snapshot-2",
 			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster5),
 			},
 			wantErr: true,
+		},
+		"test update binding with IsNotFound error for unscheduled state": {
+			name: "Delete unscheduled state with IsNotFound error",
+			Client: &test.MockClient{
+				MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+					return apierrors.NewNotFound(schema.GroupResource{}, "invalid")
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+			},
+			wantErr: false,
 		},
 	}
 	for name, tt := range tests {
