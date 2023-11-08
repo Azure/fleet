@@ -19,8 +19,9 @@ selected member clusters along with this namespace.
 
 - **Placement policy**: limit propagation of selected resources to a specific subset of member clusters.
   The following types of target cluster selection are supported:
-    - **PickAll (Default)**: select any member clusters with optional matching cluster `Affinity` scheduling rules. 
-    - **PickFixed**: select a fixed list of member clusters defined in the `ClusterNames`.
+    - **PickAll (Default)**: select any member clusters with matching cluster `Affinity` scheduling rules. If the `Affinity` 
+is not specified, it will select all joined and healthy member clusters.
+      - **PickFixed**: select a fixed list of member clusters defined in the `ClusterNames`.
     - **PickN**: select a `NumberOfClusters` of member clusters with optional matching cluster `Affinity` scheduling rules or topology spread constraints `TopologySpreadConstraints`.
 
 - **Rollout strategy**: how to propagate new changes to the selected member clusters.
@@ -102,20 +103,32 @@ may produce more than one `ClusterResourceSnapshot`s for all the selected resour
 generated whenever policy changes are made to the `ClusterResourcePlacement` that require a new scheduling. Similar to
 `ClusterResourceSnapshot`, its spec is immutable.
 
-Following the Kubernetes' original scheduler framework, the multi-cluster scheduling selects a cluster for the placement 
-in a 2-step operation:
-1. Filtering
-2. Scoring
+![](scheduling.jpg)
 
-The _filtering_ step finds the set of clusters where it's feasible to schedule the placement, for example, whether the cluster
+Compared with the Kubernetes' original scheduler framework, the multi-cluster scheduling selects a cluster for the placement 
+in a 5-step operations:
+1. Batch & PostBatch
+2. Filter 
+3. Score
+4. Sort
+5. Bind
+
+The _batch & postBatch_ step is to define the batch size according to the desired and current `ClusterResourceBinding`. 
+The postBatch is to adjust the batch size if needed.
+
+The _filter_ step finds the set of clusters where it's feasible to schedule the placement, for example, whether the cluster
 is matching required `Affinity` scheduling rules specified in the `Policy`. It also filters out any clusters which are 
 leaving the fleet or no longer connected to the fleet, for example, its heartbeat has been stopped for a prolonged period of time.
 
-In the _scoring_ step (only applied to the pickN type), the scheduler assigns a score to each cluster that survived filtering.
+In the _score_ step (only applied to the pickN type), the scheduler assigns a score to each cluster that survived filtering.
 Each cluster is given a topology spread score (how much a cluster would satisfy the topology spread
 constraints specified by the user), and an affinity score (how much a cluster would satisfy the preferred affinity terms
-specified by the user). A ranked list of clusters is created, sorting first by topology spread score and breaking ties 
-based on the affinity score.
+specified by the user). 
+
+In the _sort_ step (only applied to the pickN type), it sorts all eligible clusters by their scores, sorting first by topology 
+spread score and breaking ties based on the affinity score.
+
+The _bind_ step is to create/update/delete the `ClusterResourceBinding` based on the desired and current member cluster list.
 
 ## Rollout Strategy
 Update strategy determines how changes to the `ClusterWorkloadPlacement` will be rolled out across member clusters. 
