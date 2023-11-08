@@ -408,33 +408,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			tobeUpdatedBindings:        []int{0, 1},
 			needRoll:                   true,
 		},
-		"test bound with failed to apply bindings when there is no max unavailable allowed and there is no bound binding": {
-			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
-			},
-			latestResourceSnapshotName: "snapshot-2",
-			crp:                        noMaxUnavailableCRP,
-			tobeUpdatedBindings:        []int{0, 1, 2, 3, 4},
-			needRoll:                   true,
-		},
-		"test bound with failed to apply bindings when there is no max surge allowed and there is no bound binding": {
-			allBindings: []*fleetv1beta1.ClusterResourceBinding{
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
-				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
-			},
-			latestResourceSnapshotName: "snapshot-2",
-			crp:                        noMaxSurgeCRP,
-			tobeUpdatedBindings:        []int{0, 1, 2, 3, 4},
-			needRoll:                   true,
-		},
-		"test bound with unscheduled bindings": {
+		"test unscheduled bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
@@ -448,7 +422,7 @@ func TestPickBindingsToRoll(t *testing.T) {
 			tobeUpdatedBindings: []int{},
 			needRoll:            true,
 		},
-		"test bound with no bindings": {
+		"test with no bindings": {
 			allBindings:                []*fleetv1beta1.ClusterResourceBinding{},
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
@@ -456,6 +430,21 @@ func TestPickBindingsToRoll(t *testing.T) {
 			tobeUpdatedBindings: []int{},
 			needRoll:            false,
 		},
+		"test with failed unscheduled bindings": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
+			tobeUpdatedBindings: []int{},
+			needRoll:            true,
+		},
+
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
