@@ -2,7 +2,6 @@ package clusterresourceplacement
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -50,7 +49,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			}
 			// handle update case where placement type should be immutable.
 			if validator.IsPlacementPolicyTypeUpdated(oldCRP.Spec.Policy, crp.Spec.Policy) {
-				return admission.Denied(fmt.Sprintf("placement type is immutable"))
+				return admission.Denied("placement type is immutable")
 			}
 		}
 		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
