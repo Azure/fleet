@@ -69,6 +69,9 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == validation.V1Alpha1IMCGVK || req.Kind == validation.V1Alpha1WorkGVK || req.Kind == validation.IMCGVK || req.Kind == validation.WorkGVK || req.Kind == validation.EndpointSliceExportGVK || req.Kind == validation.EndpointSliceImportGVK || req.Kind == validation.InternalServiceExportGVK || req.Kind == validation.InternalServiceImportGVK:
 			klog.V(2).InfoS("handling fleet owned namespaced resource in system namespace", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetMemberNamespacedResource(ctx, req)
+		case req.Kind == validation.ServiceImportGVK:
+			klog.V(2).InfoS("handling service import resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		case req.Kind == validation.EventGVK:
 			klog.V(3).InfoS("handling event resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)

@@ -323,17 +323,18 @@ func checkMemberClusterNamespaceIsDeleted(name string) {
 }
 
 func setupNetworkingCRDs() {
-	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
+	var internalServiceExportCRD, serviceImportCRD apiextensionsv1.CustomResourceDefinition
 	Expect(utils.GetObjectFromManifest("./manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(Succeed())
+	Expect(utils.GetObjectFromManifest("./manifests/serviceimport-crd.yaml", &serviceImportCRD)).Should(Succeed())
 	Expect(hubClient.Create(ctx, &internalServiceExportCRD)).Should(Succeed())
+	Expect(hubClient.Create(ctx, &serviceImportCRD)).Should(Succeed())
 	By("Networking CRDs are created")
 
 	Eventually(func(g Gomega) error {
-		err := hubClient.Get(ctx, types.NamespacedName{Name: "internalserviceexports.networking.fleet.azure.com"}, &internalServiceExportCRD)
-		if k8serrors.IsNotFound(err) {
-			return err
-		}
-		return nil
+		return hubClient.Get(ctx, types.NamespacedName{Name: "internalserviceexports.networking.fleet.azure.com"}, &internalServiceExportCRD)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	Eventually(func(g Gomega) error {
+		return hubClient.Get(ctx, types.NamespacedName{Name: "serviceimports.networking.fleet.azure.com"}, &serviceImportCRD)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
@@ -343,7 +344,13 @@ func cleanupNetworkingCRDs() {
 			Name: "internalserviceexports.networking.fleet.azure.com",
 		},
 	}
+	serviceImportCRD := apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "serviceimports.networking.fleet.azure.com",
+		},
+	}
 	Expect(hubClient.Delete(ctx, &internalServiceExportCRD)).Should(Succeed())
+	Expect(hubClient.Delete(ctx, &serviceImportCRD)).Should(Succeed())
 	By("Networking CRDs are deleted")
 }
 

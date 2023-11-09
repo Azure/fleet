@@ -40,6 +40,7 @@ var (
 	imcGVK               = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	workGVK              = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
 	iseGVK               = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
+	siGVK                = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "ServiceImport"}
 	resourceDeniedFormat = "user: %s in groups: %v is not allowed to %s resource %+v/%s: %+v"
 	testGroups           = []string{"system:authenticated"}
 )
@@ -523,6 +524,128 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 
 	AfterAll(func() {
 		cleanupNetworkingCRDs()
+	})
+
+	Context("deny request to modify service import resource, for user not in system:masters group", func() {
+		siName := fmt.Sprintf(siNameTemplate, GinkgoParallelProcess())
+		ns := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-service-import-ns-1",
+			},
+		}
+
+		BeforeEach(func() {
+			Expect(hubClient.Create(ctx, &ns))
+			Eventually(func(g Gomega) error {
+				return hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
+			Eventually(func(g Gomega) error {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !k8sErrors.IsNotFound(err) {
+					return fmt.Errorf("namespace %s still exists or an unexpected error occurred: %w", ns.Name, err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("should deny create operation on service import, for user not in system:master group", func() {
+			si := fleetnetworkingv1alpha1.ServiceImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      siName,
+					Namespace: ns.Name,
+				},
+			}
+			err := impersonateHubClient.Create(ctx, &si)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create Service Import call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Create, &siGVK, "", types.NamespacedName{Name: si.Name, Namespace: si.Namespace})))
+		})
+	})
+
+	Context("allow request to modify service import resource, for user in system:masters group", func() {
+		siName := fmt.Sprintf(siNameTemplate, GinkgoParallelProcess())
+		nsName := "test-service-import-ns-2"
+
+		BeforeEach(func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}
+			Expect(hubClient.Create(ctx, &ns))
+			Eventually(func(g Gomega) error {
+				return hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			si := fleetnetworkingv1alpha1.ServiceImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      siName,
+					Namespace: ns.Name,
+				},
+			}
+			Expect(hubClient.Create(ctx, &si)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsName,
+				},
+			}
+			si := fleetnetworkingv1alpha1.ServiceImport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      siName,
+					Namespace: ns.Name,
+				},
+			}
+			Expect(hubClient.Delete(ctx, &si)).Should(Succeed())
+			Eventually(func(g Gomega) error {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: siName, Namespace: ns.Name}, &si); !k8sErrors.IsNotFound(err) {
+					return fmt.Errorf("service import %+v still exists or an unexpected error occurred: %w", types.NamespacedName{Name: si.Name, Namespace: si.Namespace}, err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+
+			Expect(hubClient.Delete(ctx, &ns))
+			Eventually(func(g Gomega) error {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &ns); !k8sErrors.IsNotFound(err) {
+					return fmt.Errorf("namespace %s still exists or an unexpected error occurred: %w", ns.Name, err)
+				}
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("should allow update operation on service import, for user in system:master group", func() {
+			Eventually(func(g Gomega) error {
+				var si fleetnetworkingv1alpha1.ServiceImport
+				Expect(hubClient.Get(ctx, types.NamespacedName{Name: siName, Namespace: nsName}, &si))
+				si.Status = fleetnetworkingv1alpha1.ServiceImportStatus{
+					IPs: []string{"test-ip"},
+				}
+				return hubClient.Status().Update(ctx, &si)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		It("should deny update operation on service import, for user not in system:master group", func() {
+			Eventually(func(g Gomega) error {
+				var si fleetnetworkingv1alpha1.ServiceImport
+				Expect(hubClient.Get(ctx, types.NamespacedName{Name: siName, Namespace: nsName}, &si))
+				si.Status = fleetnetworkingv1alpha1.ServiceImportStatus{
+					IPs: []string{"test-ip"},
+				}
+				err := impersonateHubClient.Status().Update(ctx, &si)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Service import call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, testGroups, admissionv1.Update, &siGVK, "status", types.NamespacedName{Name: siName, Namespace: si.Namespace})))
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
 	})
 
 	Context("deny request to modify network resources in fleet member namespaces, for user not in member cluster identity", func() {
