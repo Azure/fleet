@@ -253,7 +253,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 	}
 }
 
-func TestValidateClusterResourcePlacementRolloutStrategy(t *testing.T) {
+func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -393,7 +393,7 @@ func TestValidateClusterResourcePlacementRolloutStrategy(t *testing.T) {
 	}
 }
 
-func TestValidateClusterResourcePlacementPickFixedPlacementPolicy(t *testing.T) {
+func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -507,7 +507,7 @@ func TestValidateClusterResourcePlacementPickFixedPlacementPolicy(t *testing.T) 
 	}
 }
 
-func TestValidateClusterResourcePlacementPickAllPlacementPolicy(t *testing.T) {
+func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -664,7 +664,7 @@ func TestValidateClusterResourcePlacementPickAllPlacementPolicy(t *testing.T) {
 	}
 }
 
-func TestValidateClusterResourcePlacementPickNPlacementPolicy(t *testing.T) {
+func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
