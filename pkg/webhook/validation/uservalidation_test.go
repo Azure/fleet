@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,6 +22,8 @@ var (
 )
 
 func TestValidateUserForResource(t *testing.T) {
+	manyGroups := []string{mastersGroup, "random0", "random1", "random2", "random3", "random4", "random5", "random6", "random7", "random8", "random9"}
+	sort.Strings(manyGroups)
 	testCases := map[string]struct {
 		req              admission.Request
 		whiteListedUsers []string
@@ -40,6 +43,22 @@ func TestValidateUserForResource(t *testing.T) {
 				},
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{mastersGroup}), admissionv1.Create, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+		},
+		// UT to test GenerateGroupString in pkg/utils/common.gp
+		"allow user in system:masters group along with 10 other groups": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-role",
+					Namespace:   "test-namespace",
+					RequestKind: &roleGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   manyGroups,
+					},
+					Operation: admissionv1.Create,
+				},
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", "groups: [random0, random1, random2,......]", admissionv1.Create, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 		"allow white listed user not in system:masters group": {
 			req: admission.Request{

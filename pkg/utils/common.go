@@ -281,6 +281,8 @@ func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]boo
 	return true
 }
 
+// GenerateGroupString generates a string which prints groups in which a user belongs,
+// it compresses the string to just display three groups if length of groups is more than 10.
 func GenerateGroupString(groups []string) string {
 	var groupString string
 	if len(groups) > 10 {
