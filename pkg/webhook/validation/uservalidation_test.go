@@ -39,7 +39,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{mastersGroup}, admissionv1.Create, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{mastersGroup}), admissionv1.Create, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 		"allow white listed user not in system:masters group": {
 			req: admission.Request{
@@ -55,7 +55,7 @@ func TestValidateUserForResource(t *testing.T) {
 				},
 			},
 			whiteListedUsers: []string{"test-user"},
-			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{"test-group"}, admissionv1.Update, &roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse:     admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow valid service account": {
 			req: admission.Request{
@@ -70,7 +70,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{serviceAccountsGroup}, admissionv1.Delete, &roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{serviceAccountsGroup}), admissionv1.Delete, &roleBindingGVK, "", types.NamespacedName{Name: "test-role-binding", Namespace: "test-namespace"})),
 		},
 		"allow user in system:node group": {
 			req: admission.Request{
@@ -85,7 +85,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", []string{nodeGroup}, admissionv1.Create, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{nodeGroup}), admissionv1.Create, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"allow system:kube-scheduler user": {
 			req: admission.Request{
@@ -100,7 +100,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Update,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", []string{"system:authenticated"}, admissionv1.Update, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-scheduler", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"allow system:kube-controller-manager user": {
 			req: admission.Request{
@@ -115,7 +115,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-controller-manager", []string{"system:authenticated"}, admissionv1.Delete, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(resourceAllowedFormat, "system:kube-controller-manager", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Delete, &podGVK, "", types.NamespacedName{Name: "test-pod", Namespace: "test-namespace"})),
 		},
 		"fail to validate user with invalid username, groups": {
 			req: admission.Request{
@@ -130,7 +130,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Delete,
 				},
 			},
-			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", []string{"test-group"}, admissionv1.Delete, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse: admission.Denied(fmt.Sprintf(resourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Delete, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 	}
 

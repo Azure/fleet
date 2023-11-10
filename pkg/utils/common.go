@@ -32,12 +32,14 @@ import (
 )
 
 const (
-	kubePrefix            = "kube-"
-	fleetPrefix           = "fleet-"
-	FleetSystemNamespace  = fleetPrefix + "system"
-	NamespaceNameFormat   = fleetPrefix + "member-%s"
-	RoleNameFormat        = fleetPrefix + "role-%s"
-	RoleBindingNameFormat = fleetPrefix + "rolebinding-%s"
+	kubePrefix             = "kube-"
+	fleetPrefix            = "fleet-"
+	FleetSystemNamespace   = fleetPrefix + "system"
+	NamespaceNameFormat    = fleetPrefix + "member-%s"
+	RoleNameFormat         = fleetPrefix + "role-%s"
+	RoleBindingNameFormat  = fleetPrefix + "rolebinding-%s"
+	lessGroupsStringFormat = "groups: %v"
+	moreGroupsStringFormat = "groups: [%s, %s, %s,......]"
 )
 
 const (
@@ -277,4 +279,14 @@ func ShouldPropagateNamespace(namespace string, skippedNamespaces map[string]boo
 		return false
 	}
 	return true
+}
+
+func GenerateGroupString(groups []string) string {
+	var groupString string
+	if len(groups) > 10 {
+		groupString = fmt.Sprintf(moreGroupsStringFormat, groups[0], groups[1], groups[2])
+	} else {
+		groupString = fmt.Sprintf(lessGroupsStringFormat, groups)
+	}
+	return groupString
 }
