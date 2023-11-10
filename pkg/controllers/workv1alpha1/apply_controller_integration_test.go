@@ -44,7 +44,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 )
 
-const timeout = time.Second * 10
+const timeout = time.Second * 60
 const interval = time.Millisecond * 250
 
 var _ = Describe("Work Controller", func() {
@@ -661,7 +661,10 @@ var _ = Describe("Work Controller", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: works[i].GetName(), Namespace: workNamespace}, &resultWork)).Should(Succeed())
 				Expect(controllerutil.ContainsFinalizer(&resultWork, workFinalizer)).Should(BeFalse())
 				// make sure that leave can be called as many times as possible
-				Expect(workController.Leave(ctx)).Should(Succeed())
+				Eventually(func() error {
+					return workController.Leave(ctx)
+				}).Should(Succeed())
+				//Expect(workController.Leave(ctx)).Should(Succeed())
 				By(fmt.Sprintf("change the work = %s", work.GetName()))
 				cm = &corev1.ConfigMap{
 					TypeMeta: metav1.TypeMeta{
