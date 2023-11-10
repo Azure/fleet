@@ -21,7 +21,7 @@ selected member clusters along with this namespace.
   The following types of target cluster selection are supported:
     - **PickAll (Default)**: select any member clusters with matching cluster `Affinity` scheduling rules. If the `Affinity` 
 is not specified, it will select all joined and healthy member clusters.
-      - **PickFixed**: select a fixed list of member clusters defined in the `ClusterNames`.
+    - **PickFixed**: select a fixed list of member clusters defined in the `ClusterNames`.
     - **PickN**: select a `NumberOfClusters` of member clusters with optional matching cluster `Affinity` scheduling rules or topology spread constraints `TopologySpreadConstraints`.
 
 - **Rollout strategy**: how to propagate new changes to the selected member clusters.
