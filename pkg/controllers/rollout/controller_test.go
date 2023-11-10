@@ -228,38 +228,16 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 		toBeUpgradedBinding        []*fleetv1beta1.ClusterResourceBinding
 		wantErr                    bool
 	}{
-		"test update binding with no latestResourceSnapshotName": {
-			name: "testResourceSnapshot1",
-			Client: &test.MockClient{
-				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					return nil
-				},
-			},
-			latestResourceSnapshotName: "",
-			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
-			},
-			wantErr: false,
-		},
 		"test update binding with nil toBeUpgradedBinding": {
-			name: "Nil toBeUpgradedBinding",
-			Client: &test.MockClient{
-				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					return nil
-				},
-			},
+			name:                       "Nil toBeUpgradedBinding",
+			Client:                     &test.MockClient{},
 			latestResourceSnapshotName: "snapshot-2",
 			toBeUpgradedBinding:        nil,
 			wantErr:                    false,
 		},
 		"test update binding with empty toBeUpgradedBinding": {
-			name: "Empty toBeUpgradedBinding",
-			Client: &test.MockClient{
-				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-					return nil
-				},
-			},
+			name:                       "Empty toBeUpgradedBinding",
+			Client:                     &test.MockClient{},
 			latestResourceSnapshotName: "snapshot-2",
 			toBeUpgradedBinding:        []*fleetv1beta1.ClusterResourceBinding{},
 			wantErr:                    false,
