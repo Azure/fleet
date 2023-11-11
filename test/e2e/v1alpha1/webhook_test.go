@@ -1458,6 +1458,10 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 			Expect(HubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)).Should(Succeed())
 			By("internalServiceExport CRD created")
 
+			Eventually(func(g Gomega) error {
+				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "internalserviceexports.networking.fleet.azure.com"}, &internalServiceExportCRD)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+
 			ns = corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "fleet-member-test-internal-service-export",
