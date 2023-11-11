@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -50,9 +51,10 @@ const (
 
 	crdResourceName           = "customresourcedefinitions"
 	memberClusterResourceName = "memberclusters"
-	namespaceResouceName      = "namespaces"
+	namespaceResourceName     = "namespaces"
 	replicaSetResourceName    = "replicasets"
 	podResourceName           = "pods"
+	serviceImportResourceName = "serviceimports"
 )
 
 var (
@@ -312,6 +314,19 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				},
 			},
 			{
+				Name:                    "fleet.serviceimport.validating",
+				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
+				FailurePolicy:           &failPolicy,
+				SideEffects:             &sideEffortsNone,
+				AdmissionReviewVersions: admissionReviewVersions,
+				Rules: []admv1.RuleWithOperations{
+					{
+						Operations: cudOperations,
+						Rule:       createRule([]string{fleetnetworkingv1alpha1.GroupVersion.Group}, []string{fleetnetworkingv1alpha1.GroupVersion.Version}, []string{serviceImportResourceName, serviceImportResourceName + "/status"}, &namespacedScope),
+					},
+				},
+			},
+			{
 				Name:                    "fleet.fleetmembernamespacedresources.validating",
 				ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 				FailurePolicy:           &failPolicy,
@@ -347,7 +362,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: cudOperations,
-						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResouceName}, &clusterScope),
+						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResourceName}, &clusterScope),
 					},
 				},
 			},
