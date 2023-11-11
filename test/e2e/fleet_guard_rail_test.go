@@ -26,6 +26,7 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/webhook/validation"
 	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
 
@@ -35,11 +36,10 @@ const (
 )
 
 var (
-	mcGVK                = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	imcGVK               = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	workGVK              = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
-	resourceDeniedFormat = "user: %s in %s is not allowed to %s resource %+v/%s: %+v"
-	testGroups           = []string{"system:authenticated"}
+	mcGVK      = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
+	imcGVK     = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
+	workGVK    = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	testGroups = []string{"system:authenticated"}
 )
 
 var _ = Describe("fleet guard rail tests for deny MC CREATE operations", func() {
@@ -64,7 +64,7 @@ var _ = Describe("fleet guard rail tests for deny MC CREATE operations", func() 
 		err := impersonateHubClient.Create(ctx, mc)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
 	})
 })
 
@@ -96,7 +96,7 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -112,7 +112,7 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		err := impersonateHubClient.Delete(ctx, &mc)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &mcGVK, "", types.NamespacedName{Name: mc.Name})))
 	})
 
 	It("should allow update operation on member cluster CR labels for any user", func() {
@@ -201,7 +201,7 @@ var _ = Describe("fleet guard rail tests for deny IMC CREATE operations", func()
 		err := impersonateHubClient.Create(ctx, &imc)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 	})
 })
 
@@ -232,7 +232,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -245,7 +245,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 		err := impersonateHubClient.Delete(ctx, &imc)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR status for user not in MC identity in fleet member namespace", func() {
@@ -269,7 +269,7 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update internal member cluster status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, "test-user", utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "status", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString(testGroups), admissionv1.Update, &imcGVK, "status", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
 			return nil
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
@@ -396,7 +396,7 @@ var _ = Describe("fleet guard rail tests for deny Work CREATE operations", func(
 		err = impersonateHubClient.Create(ctx, &w)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create work call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
 	})
 })
 
@@ -439,7 +439,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update work status call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &workGVK, "status", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+			g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &workGVK, "status", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
@@ -451,7 +451,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 		err := impersonateHubClient.Delete(ctx, &w)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete work call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(resourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
 	})
 })
 
