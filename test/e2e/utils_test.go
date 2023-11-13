@@ -143,7 +143,7 @@ func markMemberClusterAsLeft(name string) {
 		return hubClient.Update(ctx, mcObj)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to mark member cluster as left")
 
-	Expect(client.IgnoreNotFound(hubClient.Delete(ctx, mcObj))).To(Succeed(), "Failed to delete member cluster")
+	Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to delete member cluster")
 }
 
 // setAllMemberClustersToJoin creates a MemberCluster object for each member cluster.

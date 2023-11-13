@@ -21,11 +21,11 @@ import (
 )
 
 const (
-	additionalClusterName1ForWatcherTests = "additional-cluster-1"
-	additionalClusterName2ForWatcherTests = "additional-cluster-2"
+	fakeClusterName1ForWatcherTests = "fake-cluster-1"
+	fakeClusterName2ForWatcherTests = "fake-cluster-2"
 
-	additionalLabelNameForWatcherTests  = "test-label"
-	additionalLabelValueForWatcherTests = "test-value"
+	labelNameForWatcherTests  = "test-label"
+	labelValueForWatcherTests = "test-value"
 )
 
 // Typically, the scheduler watchers watch for changes in the following objects:
@@ -78,29 +78,31 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick only healthy clusters in the system", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can add a new member cluster", func() {
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
-			targetClusterNames = append(targetClusterNames, additionalClusterName1ForWatcherTests)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -112,9 +114,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -135,7 +137,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 										{
 											LabelSelector: metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													additionalLabelNameForWatcherTests: additionalLabelValueForWatcherTests,
+													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
 											},
 										},
@@ -158,35 +160,37 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should not pick any cluster", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil)
 			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
 		})
 
 		It("can update the member cluster label", func() {
 			Eventually(func() error {
 				memberCluster := clusterv1beta1.MemberCluster{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: additionalClusterName1ForWatcherTests}, &memberCluster); err != nil {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: fakeClusterName1ForWatcherTests}, &memberCluster); err != nil {
 					return err
 				}
 
 				memberCluster.Labels = map[string]string{
-					additionalLabelNameForWatcherTests: additionalLabelValueForWatcherTests,
+					labelNameForWatcherTests: labelValueForWatcherTests,
 				}
 				return hubClient.Update(ctx, &memberCluster)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the member cluster with new label")
 		})
 
 		It("should propagate works for the updated cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -198,9 +202,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 			// Mark the newly created member cluster as unhealthy.
-			markMemberClusterAsUnhealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -231,26 +235,28 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		It("should pick only healthy clusters in the system", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can mark the cluster as healthy", func() {
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should propagate works for the cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
-			targetClusterNames = append(targetClusterNames, additionalClusterName1ForWatcherTests)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -263,11 +269,11 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 			// Create a new member cluster.
 			labels := map[string]string{
-				additionalLabelNameForWatcherTests: additionalLabelValueForWatcherTests,
+				labelNameForWatcherTests: labelValueForWatcherTests,
 			}
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, labels)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, labels)
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -288,7 +294,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 										{
 											LabelSelector: metav1.LabelSelector{
 												MatchLabels: map[string]string{
-													additionalLabelNameForWatcherTests: additionalLabelValueForWatcherTests,
+													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
 											},
 										},
@@ -309,19 +315,20 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the cluster", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can drop the label from the cluster", func() {
 			Eventually(func() error {
 				mcObj := &clusterv1beta1.MemberCluster{}
-				if err := hubClient.Get(ctx, types.NamespacedName{Name: additionalClusterName1ForWatcherTests}, mcObj); err != nil {
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: fakeClusterName1ForWatcherTests}, mcObj); err != nil {
 					return err
 				}
 
@@ -331,14 +338,15 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should keep the cluster in the scheduling decision (ignored during execution semantics)", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -351,11 +359,11 @@ var _ = Describe("responding to specific member cluster changes", func() {
 
 			// Create a new member cluster.
 			labels := map[string]string{
-				additionalLabelNameForWatcherTests: additionalLabelValueForWatcherTests,
+				labelNameForWatcherTests: labelValueForWatcherTests,
 			}
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, labels)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, labels)
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -382,30 +390,32 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should propgate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
-			targetClusterNames = append(targetClusterNames, additionalClusterName1ForWatcherTests)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can mark the new cluster as unhealthy", func() {
-			markMemberClusterAsUnhealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should keep the cluster in the scheduling decision", func() {
 			targetClusterNames := allMemberClusterNames
-			targetClusterNames = append(targetClusterNames, additionalClusterName1ForWatcherTests)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -417,9 +427,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -446,28 +456,30 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster, along with other healthy clusters", func() {
 			targetClusterNames := allMemberClusterNames
-			targetClusterNames = append(targetClusterNames, additionalClusterName1ForWatcherTests)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can mark the cluster as left", func() {
-			markMemberClusterAsLeft(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsLeft(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should remove the cluster from the scheduling decision", func() {
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -490,7 +502,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
-						ClusterNames:  []string{additionalClusterName1ForWatcherTests},
+						ClusterNames:  []string{fakeClusterName1ForWatcherTests},
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -504,30 +516,32 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should report in CRP status that the cluster is not available", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{additionalClusterName1ForWatcherTests})
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests})
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can add a new member cluster", func() {
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -539,9 +553,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 			// Mark the newly created member cluster as unhealthy.
-			markMemberClusterAsUnhealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -555,7 +569,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
-						ClusterNames:  []string{additionalClusterName1ForWatcherTests},
+						ClusterNames:  []string{fakeClusterName1ForWatcherTests},
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -569,27 +583,29 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should report in CRP status that the cluster is not available", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{additionalClusterName1ForWatcherTests})
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests})
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can mark the cluster as healthy", func() {
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -601,9 +617,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -617,7 +633,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
-						ClusterNames:  []string{additionalClusterName1ForWatcherTests},
+						ClusterNames:  []string{fakeClusterName1ForWatcherTests},
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -631,27 +647,29 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can mark the new cluster as left", func() {
-			markMemberClusterAsLeft(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsLeft(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should report in CRP status that the cluster becomes not available", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{additionalClusterName1ForWatcherTests})
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests})
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 
@@ -663,9 +681,9 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			createWorkResources()
 
 			// Create a new member cluster.
-			createMemberCluster(additionalClusterName1ForWatcherTests, hubClusterSAName, nil)
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
 			// Mark the newly created member cluster as healthy.
-			markMemberClusterAsHealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
 
 			// Create the CRP.
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -679,7 +697,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType: placementv1beta1.PickFixedPlacementType,
-						ClusterNames:  []string{additionalClusterName1ForWatcherTests},
+						ClusterNames:  []string{fakeClusterName1ForWatcherTests},
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
@@ -693,28 +711,30 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		})
 
 		It("should propagate works for the new cluster; can mark them as applied", func() {
-			verifyWorkPropagationAndMarkAsApplied(additionalClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
 		})
 
 		It("should pick the new cluster", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
 		It("can mark the new cluster as unhealthy", func() {
-			markMemberClusterAsUnhealthy(additionalClusterName1ForWatcherTests)
+			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
 		})
 
 		It("should keep the cluster as picked", func() {
-			targetClusterNames := []string{additionalClusterName1ForWatcherTests}
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
 			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil)
-			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should keep the cluster as picked")
 		})
 
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
-			ensureMemberClusterAndRelatedResourcesDeletion(additionalClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
 })
