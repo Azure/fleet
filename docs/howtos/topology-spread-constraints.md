@@ -42,6 +42,8 @@ groups.
     Fleet may still pick this cluster, as placing resources on it does not violate the
     associated topology spread constraint.
 
+    This is a required field.
+
 * `maxSkew` specifies how **unevenly** resource placments are spread in your fleet.
 
     The skew of a set of resource placements are defined as the different in count of
@@ -57,6 +59,8 @@ groups.
 
     The minimum value of `maxSkew` is 1. The less you set this value with, the more evenly
     resource placements are spread in your fleet.
+
+    This is a required field.
 
     > Note
     >
@@ -74,11 +78,12 @@ topology spread constraint; that is, picking any cluster in the fleet would lead
     will be enforced all time; scheduling may fail if there is simply no possible way to satisfy
     the topology spread constraint.
 
-        This is the default option.
-
     * `ScheduleAnyway`: with this option, Fleet would enforce the topology spread constraint
     in a best-effort manner; Fleet may, however, pick clusters that would violate the topology
     spread constraint if there is no better option.
+
+    This is an optional field; if you do not specify a value, Fleet will use `DoNotSchedule` by
+    default.
 
 Below is an example of topology spread constraint, which tells Fleet to pick clusters evenly
 from different groups, split based on the value of the label `system`:
