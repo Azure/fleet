@@ -28,7 +28,7 @@ var (
 	}
 )
 
-func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
+func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
 		crp              *fleetv1alpha1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -184,7 +184,7 @@ func Test_validateClusterResourcePlacementAlpha(t *testing.T) {
 	}
 }
 
-func Test_ValidateClusterResourcePlacement(t *testing.T) {
+func TestValidateClusterResourcePlacement(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -253,7 +253,7 @@ func Test_ValidateClusterResourcePlacement(t *testing.T) {
 	}
 }
 
-func Test_ValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
+func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -393,7 +393,7 @@ func Test_ValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 	}
 }
 
-func Test_ValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T) {
+func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -507,7 +507,7 @@ func Test_ValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T
 	}
 }
 
-func Test_ValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
+func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -664,7 +664,7 @@ func Test_ValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) 
 	}
 }
 
-func Test_ValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
+func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 	tests := map[string]struct {
 		crp              *placementv1beta1.ClusterResourcePlacement
 		resourceInformer informer.Manager
@@ -861,6 +861,177 @@ func Test_ValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			ResourceInformer = testCase.resourceInformer
 			if err := ValidateClusterResourcePlacement(testCase.crp); (err != nil) != testCase.wantErr {
 				t.Errorf("ValidateClusterResourcePlacement_PickNPlacementPolicy() error = %v, wantErr %v", err, testCase.wantErr)
+			}
+		})
+	}
+}
+
+func TestIsPlacementPolicyUpdateValid(t *testing.T) {
+	tests := map[string]struct {
+		oldPolicy     *placementv1beta1.PlacementPolicy
+		currentPolicy *placementv1beta1.PlacementPolicy
+		wantResult    bool
+	}{
+		"old policy is nil, current policy is nil": {
+			oldPolicy:     nil,
+			currentPolicy: nil,
+			wantResult:    false,
+		},
+		"old policy nil, current policy non nil, current placement type is PickAll": {
+			oldPolicy: nil,
+			currentPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantResult: false,
+		},
+		"old policy nil, current policy non nil, current placement type is PickN": {
+			oldPolicy: nil,
+			currentPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickNPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantResult: true,
+		},
+		"old policy is non nil, current policy is nil, old placement type is PickAll": {
+			oldPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			currentPolicy: nil,
+			wantResult:    false,
+		},
+		"old policy is non nil, current policy is nil, old placement type is PickFixed": {
+			oldPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			currentPolicy: nil,
+			wantResult:    true,
+		},
+		"old policy is non nil, current policy is non nil, placement type changed": {
+			oldPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickNPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			currentPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key2": "test-value2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantResult: true,
+		},
+		"old policy is not nil, current policy is non nil, placement type unchanged": {
+			oldPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickNPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			currentPolicy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickNPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key2": "test-value2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantResult: false,
+		},
+	}
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			if actualResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); actualResult != testCase.wantResult {
+				t.Errorf("IsPlacementPolicyUpdateValid() actualResult = %v, wantResult %v", actualResult, testCase.wantResult)
 			}
 		})
 	}
