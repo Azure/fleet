@@ -180,6 +180,8 @@ Each term features:
 cluster if it satisfies this term; and
 * a label selector.
 
+Both are required for this type of affinity terms to function.
+
 The label selector is of the same struct as the one used in
 `requiredDuringSchedulingIgnoredDuringExecution` type of affinity terms; see
 [the documentation above](#requiredduringschedulingignoredduringexecution-affinity-terms) for usage.
