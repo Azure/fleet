@@ -65,14 +65,12 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	setupLog.Info("Setup BeforeSuite")
-	fmt.Println("fmt print BeforeSuite")
-	By("Setup klog")
+	fmt.Println("Setup klog")
 	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(fs)
 	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
-	By("bootstrapping test environment")
+	fmt.Println("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("../../../", "config", "crd", "bases"),
@@ -92,21 +90,22 @@ var _ = BeforeSuite(func() {
 	opts := ctrl.Options{
 		Scheme: scheme.Scheme,
 	}
+	fmt.Println("create client")
 	k8sClient, err = client.New(cfg, client.Options{
 		Scheme: scheme.Scheme,
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	By("start controllers")
+	fmt.Println("start controllers")
 	var hubMgr manager.Manager
 	if hubMgr, workController, err = CreateControllers(ctx, cfg, cfg, setupLog, opts); err != nil {
-		setupLog.Error(err, "problem creating controllers")
+		fmt.Print(err, "problem creating controllers")
 		os.Exit(1)
 	}
 	go func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		if err = hubMgr.Start(ctx); err != nil {
-			setupLog.Error(err, "problem running controllers")
+			fmt.Print(err, "problem running controllers")
 			os.Exit(1)
 		}
 		Expect(err).ToNot(HaveOccurred())
