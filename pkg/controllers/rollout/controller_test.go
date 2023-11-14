@@ -8,15 +8,15 @@ package rollout
 import (
 	"context"
 	"errors"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
