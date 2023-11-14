@@ -24,7 +24,6 @@ package workv1alpha1
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,11 +56,11 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
-	fmt.Println("I am before fail registered")
+	setupLog.Info("I am before fail registered")
 	RegisterFailHandler(Fail)
-	fmt.Println("I am after fail registered")
+	setupLog.Info("I am after fail registered")
 	RunSpecs(t, "Work-API V1Alpha1 Controller Suite")
-	fmt.Println("I am after suite run")
+	setupLog.Info("I am after suite run")
 }
 
 var _ = BeforeSuite(func() {
