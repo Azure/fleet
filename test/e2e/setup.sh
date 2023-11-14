@@ -8,12 +8,21 @@ set -o pipefail
 # by the current kind release.
 KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.25.11}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+MEMBER_CLUSTER_COUNT=$1
 
 HUB_CLUSTER="hub"
 MEMBER_CLUSTER_1="cluster-1"
 MEMBER_CLUSTER_2="cluster-2"
 MEMBER_CLUSTER_3="cluster-3"
-declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
+
+if (( $MEMBER_CLUSTER_COUNT == 1 ))
+then
+  declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1)
+else
+  declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
+fi
+
+echo $MEMBER_CLUSTERS
 
 export REGISTRY="${REGISTRY:-ghcr.io}"
 export TAG="${TAG:-e2e}"
@@ -29,9 +38,10 @@ echo "Creating the kind clusters..."
 kind create cluster --name $HUB_CLUSTER --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
 
 # Create the member clusters
-kind create cluster --name $MEMBER_CLUSTER_1 --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
-kind create cluster --name $MEMBER_CLUSTER_2 --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
-kind create cluster --name $MEMBER_CLUSTER_3 --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
+for i in "${MEMBER_CLUSTERS[@]}"
+do
+  kind create cluster --name  "$i" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
+done
 
 # Build the Fleet agent images
 echo "Building and the Fleet agent images..."

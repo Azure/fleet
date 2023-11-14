@@ -201,8 +201,12 @@ install-helm:  load-hub-docker-image load-member-docker-image install-member-age
 e2e-tests-v1alpha1: create-kind-cluster run-e2e-v1alpha1
 
 .PHONY: e2e-tests
-e2e-tests:
-	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh && ginkgo -v -p .
+e2e-tests: setup-clusters
+	cd ./test/e2e && ginkgo -v -p .
+
+.PHONY: setup-clusters
+setup-clusters:
+	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh $(MEMBER_CLUSTER_COUNT)
 
 ## reviewable
 .PHONY: reviewable
@@ -326,4 +330,4 @@ clean-e2e-tests-v1alpha1:
 
 .PHONY: clean-e2e-tests
 clean-e2e-tests:
-	cd ./test/e2e && chmod +x ./stop.sh && ./stop.sh
+	cd ./test/e2e && chmod +x ./stop.sh && ./stop.sh $(MEMBER_CLUSTER_COUNT)
