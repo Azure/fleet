@@ -427,16 +427,18 @@ func TestPickBindingsToRoll(t *testing.T) {
 			tobeUpdatedBindings: []int{0, 1},
 			needRoll:            true,
 		},
-		"test with scheduled binding and no max unavailable allowed": {
-			// test should not roll when there is no max unavailable allowed
+		"test remove unscheduled bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
-				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
 			},
-			latestResourceSnapshotName: "snapshot-2",
-			crp:                        noMaxUnavailableCRP,
-			tobeUpdatedBindings:        []int{0, 1},
-			needRoll:                   false,
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 4)),
+			tobeUpdatedBindings: []int{0, 2},
+			needRoll:            true,
 		},
 	}
 	for name, tt := range tests {
