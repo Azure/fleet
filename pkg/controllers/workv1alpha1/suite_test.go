@@ -24,6 +24,7 @@ package workv1alpha1
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,6 +65,8 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	setupLog.Info("Setup BeforeSuite")
+	fmt.Println("fmt print BeforeSuite")
 	By("Setup klog")
 	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(fs)
