@@ -40,6 +40,77 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf("the labelSelector and name fields are mutually exclusive in selector %+v", selector[0])))
 	})
+
+	It("should deny create on CRP with invalid placement policy for PickFixed", func() {
+		Eventually(func(g Gomega) error {
+			var numOfClusters int32 = 1
+			crp := placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickFixedPlacementType,
+						NumberOfClusters: &numOfClusters,
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cluster names cannot be empty for policy type"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of clusters must be nil for policy type PickFixed"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should deny create on CRP with invalid placement policy for PickN", func() {
+		Eventually(func(g Gomega) error {
+			crp := placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickNPlacementType,
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: metav1.LabelSelector{
+												MatchExpressions: []metav1.LabelSelectorRequirement{
+													{
+														Key:      "test-key",
+														Operator: metav1.LabelSelectorOpIn,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+							{
+								TopologyKey:       "test-key",
+								WhenUnsatisfiable: "random-type",
+							},
+						},
+					},
+				},
+			}
+			err := hubClient.Create(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in preferred cluster selector %+v is invalid:", &crp.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].Preference.LabelSelector))))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("unknown when unsatisfiable type random-type"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of cluster cannot be nil for policy type PickN"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
 })
 
 var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
@@ -87,27 +158,6 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 
-	It("should deny update on CRP with invalid placement policy for PickFixed", func() {
-		Eventually(func(g Gomega) error {
-			var numOfClusters int32 = 1
-			var crp placementv1beta1.ClusterResourcePlacement
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
-			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
-				PlacementType:    placementv1beta1.PickFixedPlacementType,
-				NumberOfClusters: &numOfClusters,
-			}
-			err := hubClient.Update(ctx, &crp)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			var statusErr *k8sErrors.StatusError
-			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("cluster names cannot be empty for policy type"))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("number of clusters must be nil for policy type PickFixed"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
 	It("should deny update on CRP with invalid placement policy for PickAll", func() {
 		Eventually(func(g Gomega) error {
 			var crp placementv1beta1.ClusterResourcePlacement
@@ -150,36 +200,14 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 
-	It("should deny update on CRP with invalid placement policy for PickN", func() {
+	It("should deny update on CRP with placement policy type update", func() {
 		Eventually(func(g Gomega) error {
+			var numOfClusters int32 = 1
 			var crp placementv1beta1.ClusterResourcePlacement
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
 			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickNPlacementType,
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-							{
-								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
-										MatchExpressions: []metav1.LabelSelectorRequirement{
-											{
-												Key:      "test-key",
-												Operator: metav1.LabelSelectorOpIn,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
-					{
-						TopologyKey:       "test-key",
-						WhenUnsatisfiable: "random-type",
-					},
-				},
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
 			}
 			err := hubClient.Update(ctx, &crp)
 			if k8sErrors.IsConflict(err) {
@@ -187,8 +215,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("the labelSelector in preferred cluster selector %+v is invalid:", &crp.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].Preference.LabelSelector))))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("unknown when unsatisfiable type random-type"))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
