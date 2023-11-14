@@ -97,11 +97,111 @@ changes can occur without directly affecting the `ClusterResourceSnapshot` itsel
 The total amount of selected resources may exceed the 1MB limit for a single Kubernetes object. As a result, the controller 
 may produce more than one `ClusterResourceSnapshot`s for all the selected resources.
 
+`ClusterResourceSnapshot` sample:
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceSnapshot
+metadata:
+  annotations:
+    kubernetes-fleet.io/number-of-enveloped-object: "0"
+    kubernetes-fleet.io/number-of-resource-snapshots: "1"
+    kubernetes-fleet.io/resource-hash: e0927e7d75c7f52542a6d4299855995018f4a6de46edf0f814cfaa6e806543f3
+  creationTimestamp: "2023-11-10T08:23:38Z"
+  generation: 1
+  labels:
+    kubernetes-fleet.io/is-latest-snapshot: "true"
+    kubernetes-fleet.io/parent-CRP: crp-1
+    kubernetes-fleet.io/resource-index: "4"
+  name: crp-1-4-snapshot
+  ownerReferences:
+  - apiVersion: placement.kubernetes-fleet.io/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ClusterResourcePlacement
+    name: crp-1
+    uid: 757f2d2c-682f-433f-b85c-265b74c3090b
+  resourceVersion: "1641940"
+  uid: d6e2108b-882b-4f6c-bb5e-c5ec5491dd20
+spec:
+  selectedResources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      labels:
+        kubernetes.io/metadata.name: test
+      name: test
+    spec:
+      finalizers:
+      - kubernetes
+  - apiVersion: v1
+    data:
+      key1: value1
+      key2: value2
+      key3: value3
+    kind: ConfigMap
+    metadata:
+      name: test-1
+      namespace: test
+```
+
 ## Placement Policy
 
 `ClusterResourcePlacement` supports three types of policy as mentioned above. `ClusterSchedulingPolicySnapshot` will be
 generated whenever policy changes are made to the `ClusterResourcePlacement` that require a new scheduling. Similar to
 `ClusterResourceSnapshot`, its spec is immutable.
+
+`ClusterSchedulingPolicySnapshot` sample:
+```yaml
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterSchedulingPolicySnapshot
+metadata:
+  annotations:
+    kubernetes-fleet.io/CRP-generation: "5"
+    kubernetes-fleet.io/number-of-clusters: "2"
+  creationTimestamp: "2023-11-06T10:22:56Z"
+  generation: 1
+  labels:
+    kubernetes-fleet.io/is-latest-snapshot: "true"
+    kubernetes-fleet.io/parent-CRP: crp-1
+    kubernetes-fleet.io/policy-index: "1"
+  name: crp-1-1
+  ownerReferences:
+  - apiVersion: placement.kubernetes-fleet.io/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ClusterResourcePlacement
+    name: crp-1
+    uid: 757f2d2c-682f-433f-b85c-265b74c3090b
+  resourceVersion: "1639412"
+  uid: 768606f2-aa5a-481a-aa12-6e01e6adbea2
+spec:
+  policy:
+    placementType: PickN
+  policyHash: NDc5ZjQwNWViNzgwOGNmYzU4MzY2YjI2NDg2ODBhM2E4MTVlZjkxNGZlNjc1NmFlOGRmMGQ2Zjc0ODg1NDE2YQ==
+status:
+  conditions:
+  - lastTransitionTime: "2023-11-06T10:22:56Z"
+    message: found all the clusters needed as specified by the scheduling policy
+    observedGeneration: 1
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: Scheduled
+  observedCRPGeneration: 5
+  targetClusters:
+  - clusterName: aks-member-1
+    clusterScore:
+      affinityScore: 0
+      priorityScore: 0
+    reason: picked by scheduling policy
+    selected: true
+  - clusterName: aks-member-2
+    clusterScore:
+      affinityScore: 0
+      priorityScore: 0
+    reason: picked by scheduling policy
+    selected: true
+```
+
 
 ![](scheduling.jpg)
 
@@ -164,62 +264,62 @@ Spec:
   Revision History Limit:  10
 Status:
   Conditions:
-    Last Transition Time:  2023-11-06T10:22:56Z
+    Last Transition Time:  2023-11-10T08:14:52Z
     Message:               found all the clusters needed as specified by the scheduling policy
-    Observed Generation:   2
+    Observed Generation:   5
     Reason:                SchedulingPolicyFulfilled
     Status:                True
     Type:                  ClusterResourcePlacementScheduled
-    Last Transition Time:  2023-11-06T10:22:56Z
+    Last Transition Time:  2023-11-10T08:23:43Z
     Message:               All 2 cluster(s) are synchronized to the latest resources on the hub cluster
-    Observed Generation:   2
+    Observed Generation:   5
     Reason:                SynchronizeSucceeded
     Status:                True
     Type:                  ClusterResourcePlacementSynchronized
-    Last Transition Time:  2023-11-06T10:22:56Z
+    Last Transition Time:  2023-11-10T08:23:43Z
     Message:               Successfully applied resources to 2 member clusters
-    Observed Generation:   2
+    Observed Generation:   5
     Reason:                ApplySucceeded
     Status:                True
     Type:                  ClusterResourcePlacementApplied
   Placement Statuses:
     Cluster Name:  aks-member-1
     Conditions:
-      Last Transition Time:  2023-11-06T10:22:56Z
+      Last Transition Time:  2023-11-10T08:14:52Z
       Message:               Successfully scheduled resources for placement in aks-member-1 (affinity score: 0, topology spread score: 0): picked by scheduling policy
-      Observed Generation:   2
+      Observed Generation:   5
       Reason:                ScheduleSucceeded
       Status:                True
       Type:                  ResourceScheduled
-      Last Transition Time:  2023-11-06T10:22:56Z
+      Last Transition Time:  2023-11-10T08:23:43Z
       Message:               Successfully Synchronized work(s) for placement
-      Observed Generation:   2
+      Observed Generation:   5
       Reason:                WorkSynchronizeSucceeded
       Status:                True
       Type:                  WorkSynchronized
-      Last Transition Time:  2023-11-06T10:22:56Z
+      Last Transition Time:  2023-11-10T08:23:43Z
       Message:               Successfully applied resources
-      Observed Generation:   2
+      Observed Generation:   5
       Reason:                ApplySucceeded
       Status:                True
       Type:                  ResourceApplied
     Cluster Name:            aks-member-2
     Conditions:
-      Last Transition Time:  2023-11-06T10:22:56Z
+      Last Transition Time:  2023-11-10T08:14:52Z
       Message:               Successfully scheduled resources for placement in aks-member-2 (affinity score: 0, topology spread score: 0): picked by scheduling policy
-      Observed Generation:   2
+      Observed Generation:   5
       Reason:                ScheduleSucceeded
       Status:                True
       Type:                  ResourceScheduled
-      Last Transition Time:  2023-11-06T10:22:56Z
+      Last Transition Time:  2023-11-10T08:23:43Z
       Message:               Successfully Synchronized work(s) for placement
-      Observed Generation:   2
+      Observed Generation:   5
       Reason:                WorkSynchronizeSucceeded
       Status:                True
       Type:                  WorkSynchronized
-      Last Transition Time:  2023-11-06T10:22:56Z
+      Last Transition Time:  2023-11-10T08:23:43Z
       Message:               Successfully applied resources
-      Observed Generation:   2
+      Observed Generation:   5
       Reason:                ApplySucceeded
       Status:                True
       Type:                  ResourceApplied
@@ -231,5 +331,10 @@ Status:
     Name:       test-1
     Namespace:  test
     Version:    v1
-Events:         <none>
+Events:
+  Type    Reason                     Age                    From                                   Message
+  ----    ------                     ----                   ----                                   -------
+  Normal  PlacementScheduleSuccess   12m (x5 over 3d22h)    cluster-resource-placement-controller  Successfully scheduled the placement
+  Normal  PlacementSyncSuccess       3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Successfully synchronized the placement
+  Normal  PlacementRolloutCompleted  3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Resources have been applied to the selected clusters
 ```
