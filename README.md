@@ -13,8 +13,6 @@ Fleet provides the following capabilities
 
 ## Concepts
 
----
-
 **Fleet:** A multi cluster solution that users use to manage Kubernetes clusters.
 
 **Hub cluster:** An Kubernetes cluster that hosts the control plane of the fleet.
@@ -24,8 +22,6 @@ Fleet provides the following capabilities
 **Fleet-system Namespace:** A reserved namespace in all clusters for running Fleet networking controllers and putting internal resources.
 
 ## Quick Start
-
----
 
 This section provides a tutorial which explains how to setup and make use of the capabilities provided by fleet
 
@@ -45,7 +41,7 @@ export this variable which specifies the number of member clusters that will be 
 export MEMBER_CLUSTER_COUNT=1
 ```
 
-from the root directory of the repo run, by default a hub cluster gets created which is the control plane for fleet (The makefile uses kindest/node:v1.25.11)
+from the root directory of the repo run the following command, by default a hub cluster gets created which is the control plane for fleet (**The makefile uses kindest/node:v1.25.11**)
 
 ```shell
 make setup-clusters
@@ -57,7 +53,7 @@ then switch context to the hub cluster,
 kubectl config use-context kind-hub  
 ```
 
-create a member cluster CR on the hub cluster which allows the member cluster created to join the fleet,
+create a member cluster CR on the hub cluster which allows the member cluster created on the setup step to join the fleet,
 
 ```
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
@@ -78,7 +74,7 @@ get the membercluster to see if it has joined the fleet,
 kubectl get memberclusters -A      
 ```
 
-output is supposed to look like.
+output is supposed to look like,
 
 ```shell
 NAME             JOINED   AGE
@@ -89,17 +85,11 @@ Now we can go ahead and use the workload orchestration capabilities offered by f
 
 ## Code of Conduct
 
----
-
 This project has adopted the [Microsoft Open Source Code of Conduct][8]. For more information, see the [Code of Conduct FAQ][9] or contact [opencode@microsoft.com][19] with any additional questions or comments.
 
 ## Contributing
 
----
-
 ## Support
-
----
 
 Azure fleet is an open source project that is [**not** covered by the Microsoft Azure support policy][10]. [Please search open issues here][11], and if your issue isn't already represented please [open a new one][12]. The project maintainers will respond to the best of their abilities.
 
