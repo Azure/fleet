@@ -44,7 +44,7 @@ func setAllMemberClustersToJoin() {
 			},
 			Spec: clusterv1beta1.MemberClusterSpec{
 				Identity: rbacv1.Subject{
-					Name:      hubClusterSAName,
+					Name:      memberCluster.PresentingServiceAccountInHubClusterName,
 					Kind:      "ServiceAccount",
 					Namespace: fleetSystemNS,
 				},
