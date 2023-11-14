@@ -1,4 +1,4 @@
-# Use the `ClusterResourcePlacement` API to Place Resources
+# Using the `ClusterResourcePlacement` API to Place Resources
 
 This how-to guide discusses how to use the Fleet `ClusterResourcePlacement` API to place
 resources across the fleet as you see appropriate.
