@@ -288,5 +288,5 @@ spec:
 ```
 
 With these affinity terms, only clusters with the label `system` (any value would do) can be
-picked; and among them, those with the `region=west` will be priorized for resource placement
+picked; and among them, those with the `region=west` will be prioritized for resource placement
 as they receive an affinity score of 20.
