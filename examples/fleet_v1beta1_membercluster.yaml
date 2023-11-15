@@ -1,11 +1,10 @@
 apiVersion: cluster.kubernetes-fleet.io/v1beta1
 kind: MemberCluster
 metadata:
-  name: kind-member-testing-v1beta1
+  name: kind-cluster-1
 spec:
   identity:
-    name: member-agent-sa
+    name: hub-agent-sa
     kind: ServiceAccount
     namespace: fleet-system
     apiGroup: ""
-  heartbeatPeriodSeconds: 30
