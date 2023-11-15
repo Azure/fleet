@@ -1,13 +1,13 @@
 # Fleet How-To Guides
 
-The Fleet documentation provides a number of how-to guides that help you get familar with
+The Fleet documentation provides a number of how-to guides that help you get familiar with
 specific Fleet tasks, such as how to use `ClusterResourcePlacement`, a Fleet API, to place
 resources across different clusters.
 
 > Note
 >
 > If you are just getting started with Fleet, it is recommended that you refer to the
-> [Fleet Getting Started Tutorials](../getting-started/README.md) for an overview of Fleet
+> [Fleet Getting Started Guide](../../README.md) for how to create a fleet. an overview of Fleet
 > features and capabilities.
 
 Below is a walkthrough of all the how-to guides currently available, categorized by their
@@ -19,7 +19,7 @@ domains:
 
     This how-to guide explains the specifics of the `ClusterResourcePlacement` API, including its
     resource selectors, scheduling policy, rollout strategy, and more. `ClusterResourcePlacement`
-    is a core Fleet API that allows easy and flexibile distribution of resources to clusters. 
+    is a core Fleet API that allows easy and flexible distribution of resources to clusters. 
 
 * [Using Affinity to Pick Clusters](affinities.md)
 

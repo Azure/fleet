@@ -16,7 +16,7 @@ The API, generally speaking, consists of the following parts:
 * one or more resource selectors, which specify the set of resources to select for placement; and
 * a scheduling policy, which determines the set of clusters to place the resources at; and
 * a rollout strategy, which controls the behavior of resource placement when the resources
-themselves and/or the scheduling policy are updated, so as to minimize interruptions caused
+themselves and/or the scheduling policy are updated, to minimize interruptions caused
 by refreshes
 
 The sections below discusses the components in depth.
@@ -201,7 +201,7 @@ spec:
     placementType: PickAll
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
                 - labelSelector:
                     matchLabels:
@@ -234,7 +234,7 @@ of a label.
     * `requiredDuringSchedulingIgnoredDuringExecution` terms are requirements that a cluster
     must meet before it can be picked; and
     * `preferredDuringSchedulingIgnoredDuringExecution` terms are requirements that, if a 
-    cluster meets, will set Fleet to prioritze it in scheduling.
+    cluster meets, will set Fleet to prioritize it in scheduling.
 
 * A topology spread constraint can help you spread resources evenly across different groups
 of clusters. For example, you may want to have a database replica deployed in each region
@@ -255,19 +255,19 @@ spec:
   resourceSelectors:
     - ...
   policy:
-    placementType: PickAll
+    placementType: PickN
     numberOfClusters: 3
     affinity:
         clusterAffinity:
             preferredDuringSchedulingIgnoredDuringExecution:
                 weight: 20
-                perference:
+                preference:
                 - labelSelector:
                     matchLabels:
-                        critial-level: 1
+                        critical-level: 1
 ```
 
-The `ClusterResourcePlacement` object above will pick first clusters with the `critial-level=1`
+The `ClusterResourcePlacement` object above will pick first clusters with the `critical-level=1`
 on it; if only there are not enough (less than 3) such clusters, will Fleet pick clusters with no
 such label.
   
@@ -308,10 +308,10 @@ keep looking until all N clusters are found.
 Note that Fleet will stop looking once all N clusters are found, even if there appears a
 cluster that scores higher.
 
-#### Upscaling and downscaling
+#### Up-scaling and downscaling
 
 You can edit the `numberOfClusters` field in the scheduling policy to pick more or less clusters.
-When upscaling, Fleet will score all the clusters that have not been picked earlier, and find
+When up-scaling, Fleet will score all the clusters that have not been picked earlier, and find
 the most appropriate ones; for downscaling, Fleet will unpick the clusters that ranks lower
 first.
 

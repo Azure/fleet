@@ -6,7 +6,7 @@ for resource placement.
 Affinities terms are featured in the `ClusterResourcePlacement` API, specifically the scheduling
 policy section. Each affinity term is particular requirement that Fleet will check against clusters;
 and the fulfillment of this requirement (or the lack of) would have certain effect on whether
-Fleet would pick a cluster for ressource placement.
+Fleet would pick a cluster for resource placement.
 
 Fleet currently supports two types of affinity terms:
 
@@ -39,14 +39,14 @@ spec:
     placementType: PickAll
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
                 - labelSelector:
                     matchLabels:
                         system: critical
 ```
 
-The example above inlcudes a `requiredDuringSchedulingIgnoredDuringExecution` term which requires
+The example above includes a `requiredDuringSchedulingIgnoredDuringExecution` term which requires
 that the label `system=critical` must be present on a cluster before Fleet can pick it for the
 `ClusterResourcePlacement`.
 
@@ -151,7 +151,7 @@ spec:
     placementType: PickAll
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
                 - labelSelector:
                     matchLabels:
@@ -201,7 +201,7 @@ spec:
     numberOfClusters: 10
     affinity:
         clusterAffinity:
-            preferredDuringSchedulingIgnoredDuringExection:
+            preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 20
               preference:
                 labelSelector:
@@ -229,7 +229,7 @@ spec:
     numberOfClusters: 10
     affinity:
         clusterAffinity:
-            preferredDuringSchedulingIgnoredDuringExection:
+            preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 20
               preference:
                 labelSelector:
@@ -239,7 +239,7 @@ spec:
               preference:
                 labelSelector:
                   matchLabels:
-                    environent: prod
+                    environment: prod
 ```
 
 Cluster will be validated against each affinity term individually; the affinity scores it
@@ -273,13 +273,13 @@ spec:
     numberOfClusters: 10
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
               clusterSelectorTerms:
               - labelSelector:
                   matchExpressions:
                   - key: system
                   - operator: Exists
-            preferredDuringSchedulingIgnoredDuringExection:
+            preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 20
               preference:
                 labelSelector:

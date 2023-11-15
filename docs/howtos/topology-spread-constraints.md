@@ -12,7 +12,7 @@ You can use topology spread constraints to, for example:
 * achieve high-availability for your database backend by making sure that there is at least
 one database replica in each region; or
 * verify if your application can support clusters of different configurations; or
-* eliminate resource utilization hotspots in your infrastruction through spreading jobs
+* eliminate resource utilization hotspots in your infrastructure through spreading jobs
 evenly across sections.
 
 ## Specifying a topology spread constraint
@@ -44,7 +44,7 @@ groups.
 
     This is a required field.
 
-* `maxSkew` specifies how **unevenly** resource placments are spread in your fleet.
+* `maxSkew` specifies how **unevenly** resource placements are spread in your fleet.
 
     The skew of a set of resource placements are defined as the different in count of
     resource placements between the group with the most and the group with
