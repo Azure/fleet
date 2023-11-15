@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Using the `ClusterResourcePlacement` API to Place Resources
 
 This how-to guide discusses how to use the Fleet `ClusterResourcePlacement` API to place
@@ -512,3 +513,6 @@ The default value is 10.
 >
 > In this early stage, the history is kept for reference purposes only; in the future, Fleet
 > may add features to allow rolling back to a specific scheduling policy and/or resource version.
+=======
+TBA.
+>>>>>>> bfab929 (Minor fixes)
