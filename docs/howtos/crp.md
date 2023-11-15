@@ -430,16 +430,16 @@ this value.
   
         </details>
 
-* `unavailablePeriodSeconds` is introduced to allow users to let fleet know when the resources are considered "ready".
-     Default is 60 seconds.
+* `unavailablePeriodSeconds` is introduced to allow users to inform the fleet when the resources are deemed "ready".
+     The default value is 60 seconds.
     
-    - Fleet only considers a cluster as "ready" when `unavailablePeriodSeconds` seconds have passed **after** 
-       the resources are applied to that cluster **successfully**.
-    - The less value you set this parameter with, the quicker rollout will become. However, we **strongly** 
-       recommend that users set it to a value that all the initialization/preparation work are done within
-       that time frame, so that the resources are ready after the `unavailablePeriodSeconds` passed in most cases.
-    - We are in the process of designing a generic "ready gate" for resources applying on clusters.
-       Please raise issues or provide feedbacks if you have any thoughts on this.
+    - Fleet only considers newly applied resources on a cluster as "ready" once `unavailablePeriodSeconds` seconds 
+       have passed **after** the resources have been **successfully** applied to that cluster.
+    - The lower value you set for this parameter with, the faster rollout will occur. However, we **strongly** 
+       recommend that users set it to a value that all the initialization/preparation tasks can be completed within
+       that time frame. This ensures that the resources are typically ready after the `unavailablePeriodSeconds` have passed.
+    - We are currently designing a generic "ready gate" for resources being applied to clusters. Please feel free to raise 
+       issues or provide feedback if you have any thoughts on this.
 
 > Note
 >
