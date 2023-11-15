@@ -414,7 +414,7 @@ also be set as an absolute number or a percentage. Default is 25%, and you shoul
 this value.
 
     - The less value you set this parameter with, the less new resource placements Fleet will run
-    at the same time**; however, this would lead to slower rollouts.
+    at the same time; however, this would lead to slower rollouts.
 
     -  <details><summary>How Fleet interprets this value</summary>
         <p></p>
