@@ -8,9 +8,6 @@ set -o nounset
 set -o pipefail
 
 HUB_CLUSTER="hub"
-MEMBER_CLUSTER_1="cluster-1"
-MEMBER_CLUSTER_2="cluster-2"
-MEMBER_CLUSTER_3="cluster-3"
 MEMBER_CLUSTER_COUNT=$1
 declare -a ALL_CLUSTERS=(HUB_CLUSTER)
 

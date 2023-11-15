@@ -11,9 +11,6 @@ KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 MEMBER_CLUSTER_COUNT=$1
 
 HUB_CLUSTER="hub"
-MEMBER_CLUSTER_1="cluster-1"
-MEMBER_CLUSTER_2="cluster-2"
-MEMBER_CLUSTER_3="cluster-3"
 declare -a MEMBER_CLUSTERS=()
 
 for (( i=1;i<=MEMBER_CLUSTER_COUNT;i++ ))
