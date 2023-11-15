@@ -358,12 +358,12 @@ After a `ClusterResourcePlacement` is created, you may want to
 
 * Add, update, or remove the resources that have been selected by the
 `ClusterResourcePlacement` in the hub cluster
-* Add, update, or remove resource selectors in the `ClusterResourcePlacement`
-* Add or update the scheduling policy in the `ClusterResourcePlacement`
+* Update the resource selectors in the `ClusterResourcePlacement`
+* Update the scheduling policy in the `ClusterResourcePlacement`
 
 These changes may trigger the following outcomes:
 
-* New resources may need to placed on all picked clusters
+* New resources may need to be placed on all picked clusters
 * Resources already placed on a pick cluster may get updated or deleted
 * Some clusters picked previously are now unpicked, and resources must be removed from such clusters
 * Some clusters are newly picked, and resources must be added to them
@@ -375,66 +375,71 @@ if there are too many newly picked clusters and Fleet places resources on them a
 your backend may get overloaded. The exact pattern of interruption may vary, 
 depending on the set of resources you place using Fleet.
 
-To help minimize the interruption, Fleet provides rollout strategy configuration to help you
-transition between changes as smoothly as possible. Currently, Fleet supports only one rollout
-strategy, rolling update; with this strategy, Fleet will apply changes, including the addition or
-removal of picked clusters and resource refreshes, in an incremental manner with a number of phaes
-at a pace most appropriate for you. This is the default option and will apply to all
-changes you initiated.
+To help minimize the interruption, Fleet allows users to configure the rollout strategy, 
+similar to native Kubernetes deployment, to help transition between changes as smoothly as possible. 
+Currently, Fleet supports only one rollout strategy, rolling update. This strategy means changes, 
+including the addition or removal of picked clusters and resource refreshes, 
+will be applied in an incremental manner with a number of phases at a pace most appropriate for you.
+This is the default option and will apply to all changes you initiated.
 
 This rollout strategy can be configured with the following parameters:
 
 * `maxUnavailable` controls that, for the selected set of resources, how many clusters may become
 unavailable during a change. It can be set as an absolute number or a percentage. Default is 25%,
 and you should not use zero for this value.
+    
+    - The less value you set this parameter with, the less interruption you will experience during
+    a change; however, this would lead to slower rollouts.
 
-    **The less value you set this parameter with, the less interruption you will experience during
-    a change**; however, this would lead to slower rollouts.
-
-    Note that Fleet considers a cluster as unavailable if resources have not been successfully
+    - Note that Fleet considers a cluster as unavailable if resources have not been successfully
     applied to the cluster.
 
-    <details><summary>How Fleet interprets this value</summary>
-    <p></p>
-
-    Fleet, in actuality, makes sure that at any time, there are **at least** N - `maxUnavailable`
-    number of clusters available, where N is:
-
-    * for scheduling policies of the `PickN` placement type, the `numberOfClusters` value given;
-    * for scheduling policies of the `PickFixed` placement type, the number of cluster names given;
-    * for scheduling policies of the `PickAll` placement type, the number of clusters Fleet picks.
-
-    If you use a percentage for the `maxUnavailable` parameter, it is calculated against N as
-    well.
-
-    </details>
+    - <details><summary>How Fleet interprets this value</summary>
+      <p></p>
+  
+      Fleet, in actuality, makes sure that at any time, there are **at least** N - `maxUnavailable`
+      number of clusters available, where N is:
+  
+      * for scheduling policies of the `PickN` placement type, the `numberOfClusters` value given;
+      * for scheduling policies of the `PickFixed` placement type, the number of cluster names given;
+      * for scheduling policies of the `PickAll` placement type, the number of clusters Fleet picks.
+  
+      If you use a percentage for the `maxUnavailable` parameter, it is calculated against N as
+      well.
+  
+      </details>
 
 * `maxSurge` controls how many newly picked clusters will receive resource placements. It can
 also be set as an absolute number or a percentage. Default is 25%, and you should not use zero for
 this value.
 
-    **The less value you set this parameter with, the less new resource placements Fleet will run
+    - The less value you set this parameter with, the less new resource placements Fleet will run
     at the same time**; however, this would lead to slower rollouts.
 
-    <details><summary>How Fleet interprets this value</summary>
-    <p></p>
+    -  <details><summary>How Fleet interprets this value</summary>
+        <p></p>
+  
+        Fleet, in actuality, makes sure that at any time, there are **at most** N + `maxSurge`
+             number of clusters available, where N is:
 
-    Fleet, in actuality, makes sure that at any time, there are **at most** N + `maxSurge`
-    number of clusters available, where N is:
+        * for scheduling policies of the `PickN` placement type, the `numberOfClusters` value given;
+        * for scheduling policies of the `PickFixed` placement type, the number of cluster names given;
+        * for scheduling policies of the `PickAll` placement type, the number of clusters Fleet picks.
+  
+        If you use a percentage for the `maxUnavailable` parameter, it is calculated against N as well.
+  
+        </details>
 
-    * for scheduling policies of the `PickN` placement type, the `numberOfClusters` value given;
-    * for scheduling policies of the `PickFixed` placement type, the number of cluster names given;
-    * for scheduling policies of the `PickAll` placement type, the number of clusters Fleet picks.
-
-    If you use a percentage for the `maxUnavailable` parameter, it is calculated against N as
-    well.
-
-    </details>
-
-* `unavailablePeriodSeconds` controls the frequeny of rollout phases. Default is 60 seconds.
-
-    **The less value you set this parameter with, the quicker rollout will become**. However, using
-    a value that is too little may lead to unexpected service interruptions.
+* `unavailablePeriodSeconds` is introduced to allow users to let fleet know when the resources are considered "ready".
+     Default is 60 seconds.
+    
+    - Fleet only considers a cluster as "ready" when `unavailablePeriodSeconds` seconds have passed **after** 
+       the resources are applied to that cluster **successfully**.
+    - The less value you set this parameter with, the quicker rollout will become. However, we **strongly** 
+       recommend that users set it to a value that all the initialization/preparation work are done within
+       that time frame, so that the resources are ready after the `unavailablePeriodSeconds` passed in most cases.
+    - We are in the process of designing a generic "ready gate" for resources applying on clusters.
+       Please raise issues or provide feedbacks if you have any thoughts on this.
 
 > Note
 >
