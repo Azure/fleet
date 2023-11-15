@@ -1,25 +1,25 @@
-# Using the `ClusterResourcePlacement` API to Place Resources
+# How-to Guide: Using the Fleet `ClusterResourcePlacement` API
 
-This how-to guide discusses how to use the Fleet `ClusterResourcePlacement` API to place
-resources across the fleet as you see appropriate.
+This guide provides an overview of how to use the Fleet `ClusterResourcePlacement` (CRP) API to orchestrate workload distribution across your fleet.
 
-The `ClusterResourcePlacement` (CRP) API is a core Fleet API which allows workload orchestration.
-Specifically, the API helps distribute specific resources, kept in the hub cluster, to the
-member clusters joined in a fleet. The API features scheduling capabilities that allow you
-to pinpoint the exact group of clusters most appropriate for a set of resources using complex rule
-set, such as clusters in specific regions (north america, east asia, europe, etc.) and/or release
-stages (production, canary, etc.); you can even distribute resources in accordance with some
-topology spread constraints.
+## Overview
 
-The API, generally speaking, consists of the following parts:
+The CRP API is a core Fleet API that facilitates the distribution of specific resources from the hub cluster to 
+member clusters within a fleet. This API offers scheduling capabilities that allow you to target the most suitable 
+group of clusters for a set of resources using a complex rule set. For example, you can distribute resources to
+clusters in specific regions (North America, East Asia, Europe, etc.) and/or release stages (production, canary, etc.). 
+You can even distribute resources according to certain topology spread constraints.
 
-* one or more resource selectors, which specify the set of resources to select for placement; and
-* a scheduling policy, which determines the set of clusters to place the resources at; and
-* a rollout strategy, which controls the behavior of resource placement when the resources
-themselves and/or the scheduling policy are updated, to minimize interruptions caused
-by refreshes
+## API Components
 
-The sections below discusses the components in depth.
+The CRP API generally consists of the following components:
+
+- **Resource Selectors**: These specify the set of resources selected for placement.
+- **Scheduling Policy**: This determines the set of clusters where the resources will be placed.
+- **Rollout Strategy**: This controls the behavior of resource placement when the resources themselves and/or the 
+              scheduling policy are updated, minimizing interruptions caused by refreshes.
+
+The following sections discuss these components in depth.
 
 ## Resource selectors
 
