@@ -127,9 +127,15 @@ load-member-docker-image:
 .PHONY: test
 test: manifests generate fmt vet local-unit-test integration-test## Run tests.
 
+##
+## workaround to bypass the pkg/controllers/workv1alpha1 tests failure
+##
 .PHONY: local-unit-test
 local-unit-test: $(ENVTEST) ## Run tests.
-	CGO_ENABLED=1 KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./pkg/... ./cmd/... -race -coverprofile=ut-coverage.xml -covermode=atomic -v
+	export CGO_ENABLED=1 && \
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" && \
+	go test ./pkg/controllers/workv1alpha1 -race -coverprofile=ut-coverage.xml -covermode=atomic -v && \
+	go test `go list ./pkg/... ./cmd/... | grep -v pkg/controllers/workv1alpha1` -race -coverprofile=ut-coverage.xml -covermode=atomic -v
 
 .PHONY: integration-test
 integration-test: $(ENVTEST) ## Run tests.
