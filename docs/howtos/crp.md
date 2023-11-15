@@ -395,8 +395,6 @@ and you should not use zero for this value.
     applied to the cluster.
 
     - <details><summary>How Fleet interprets this value</summary>
-      <p></p>
-  
       Fleet, in actuality, makes sure that at any time, there are **at least** N - `maxUnavailable`
       number of clusters available, where N is:
   
@@ -417,8 +415,6 @@ this value.
     at the same time; however, this would lead to slower rollouts.
 
     -  <details><summary>How Fleet interprets this value</summary>
-        <p></p>
-  
         Fleet, in actuality, makes sure that at any time, there are **at most** N + `maxSurge`
              number of clusters available, where N is:
 
