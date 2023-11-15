@@ -14,15 +14,12 @@ HUB_CLUSTER="hub"
 MEMBER_CLUSTER_1="cluster-1"
 MEMBER_CLUSTER_2="cluster-2"
 MEMBER_CLUSTER_3="cluster-3"
+declare -a MEMBER_CLUSTERS=()
 
-if (( $MEMBER_CLUSTER_COUNT == 1 ))
-then
-  declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1)
-else
-  declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
-fi
-
-echo $MEMBER_CLUSTERS
+for (( i=1;i<=MEMBER_CLUSTER_COUNT;i++ ))
+do
+  MEMBER_CLUSTERS+=("cluster-$i")
+done
 
 export REGISTRY="${REGISTRY:-ghcr.io}"
 export TAG="${TAG:-e2e}"

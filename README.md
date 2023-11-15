@@ -8,8 +8,8 @@
 
 Fleet provides the following capabilities 
 
-* Join/Leave is a feature that allows a member cluster to join and leave a fleet(Hub cluster) in the fleet control plane.
-* Workload Orchestration where users can create resources on the hub cluster and then propagate these resources to all joined member clusters in the fleet.
+* Join/Leave is a feature that allows a member cluster to join and leave a fleet by registering a custom resource on the fleet's control plane (the hub cluster).
+* Workload Orchestration where users can create resources on the hub cluster and then selectively propagate these resources to desired member clusters in the fleet.
 
 ## Concepts
 

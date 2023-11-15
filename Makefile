@@ -16,6 +16,7 @@ HUB_SERVER_URL ?= https://172.19.0.2:6443
 
 HUB_KIND_CLUSTER_NAME = hub-testing
 MEMBER_KIND_CLUSTER_NAME = member-testing
+MEMBER_CLUSTER_COUNT ?= 3
 
 # Directories
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -144,9 +145,7 @@ integration-test: $(ENVTEST) ## Run tests.
 	ginkgo -v -p --race --cover --coverpkg=./pkg/scheduler/... ./test/scheduler && \
 	go test ./test/integration/... -coverpkg=./...  -race -coverprofile=it-coverage.xml -v
 
-## e2e tests
-
-# Note that these targets are only used for E2E tests of the v1alpha1 API.
+## local tests & e2e tests
 
 install-hub-agent-helm:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
