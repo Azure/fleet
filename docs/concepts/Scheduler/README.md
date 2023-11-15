@@ -99,7 +99,7 @@ controller updates the label of the existing `ClusterSchedulingPolicySnapshot` i
 the scheduler won't move any existing resources that are already scheduled and just fulfill the new requirement.
 
 2. The following cluster changes trigger scheduling:
-    * a cluster, originally ineligible for resource placement for some reasons, becomes eligible, such as:
+    * a cluster, originally ineligible for resource placement for some reason, becomes eligible, such as:
       * the cluster setting changes, specifically `MemberCluster` labels has changed
       * an unexpected deployment which originally leads the scheduler to discard the cluster (for example, agents not joining,
       networking issues, etc.) has been resolved
