@@ -57,11 +57,11 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
-	setupLog.Info("I am before fail registered")
+	fmt.Println("I am before fail registered")
 	RegisterFailHandler(Fail)
-	setupLog.Info("I am after fail registered")
+	fmt.Println("I am after fail registered")
 	RunSpecs(t, "Work-API V1Alpha1 Controller Suite")
-	setupLog.Info("I am after suite run")
+	fmt.Println("I am after suite run")
 }
 
 var _ = BeforeSuite(func() {
