@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crossplane/crossplane-runtime/pkg/test"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
@@ -225,7 +228,89 @@ func TestReconcilerUpdateBindings(t *testing.T) {
 		toBeUpgradedBinding        []*fleetv1beta1.ClusterResourceBinding
 		wantErr                    bool
 	}{
-		// TODO: Add negative test cases with fake client
+		"test update binding with nil toBeUpgradedBinding": {
+			name:                       "Nil toBeUpgradedBinding",
+			Client:                     &test.MockClient{},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding:        nil,
+			wantErr:                    false,
+		},
+		"test update binding with empty toBeUpgradedBinding": {
+			name:                       "Empty toBeUpgradedBinding",
+			Client:                     &test.MockClient{},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding:        []*fleetv1beta1.ClusterResourceBinding{},
+			wantErr:                    false,
+		},
+		"test update binding with failed binding": {
+			name: "Binding State with update error",
+			Client: &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					return errors.New("Failed to update binding")
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			},
+			wantErr: true,
+		},
+		"test update binding with error for scheduled state": {
+			name: "Scheduled state with update error",
+			Client: &test.MockClient{
+				MockUpdate: func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+					// Return an error for the scheduled state
+					if obj.(*fleetv1beta1.ClusterResourceBinding).Spec.State == fleetv1beta1.BindingStateBound {
+						return errors.New("Failed to mark binding")
+					}
+					return nil
+				},
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+			},
+			wantErr: true,
+		},
+		"test update binding with unscheduled state": {
+			name: "Delete unscheduled state",
+			Client: &test.MockClient{
+				MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+					return nil
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+			},
+			wantErr: false,
+		},
+		"test update binding with error for unscheduled state": {
+			name: "Delete unscheduled state with error",
+			Client: &test.MockClient{
+				MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+					return errors.New("Failed to delete unselected binding")
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+			},
+			wantErr: true,
+		},
+		"test update binding with IsNotFound error for unscheduled state": {
+			name: "Delete unscheduled state with IsNotFound error",
+			Client: &test.MockClient{
+				MockDelete: func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+					return apierrors.NewNotFound(schema.GroupResource{}, "invalid")
+				},
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			toBeUpgradedBinding: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster1),
+			},
+			wantErr: false,
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
