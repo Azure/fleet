@@ -58,7 +58,7 @@ func TestValidateUserForResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "test-user", "'groups: [random0, random1, random2,......]'", admissionv1.Create, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, "test-user", "groups: [random0, random1, random2,......]", admissionv1.Create, &roleGVK, "", types.NamespacedName{Name: "test-role", Namespace: "test-namespace"})),
 		},
 		"allow white listed user not in system:masters group": {
 			req: admission.Request{
