@@ -17,4 +17,4 @@ Understand how multi-cluster scheduling works.
 
 ## [Scheduling Framework](Scheduling-Framework/README.md)
 
-Lower-level detail relevant to multi-cluster scheduling.
+Lower-level multi-cluster scheduling system design.
