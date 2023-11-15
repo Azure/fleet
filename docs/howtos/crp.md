@@ -403,7 +403,7 @@ It can be set as an absolute number or a percentage. The default is 25%, and zer
 * `maxSurge` determines the number of additional clusters, beyond the required number, that will receive resource placements.
 It can also be set as an absolute number or a percentage. The default is 25%, and zero should not be used for this value.
 
-    - Setting this parameter to a lower value for this parameter will result in fewer resource placements on additional 
+    - Setting this parameter to a lower value will result in fewer resource placements on additional 
         clusters by Fleet, which may slow down the rollout process.
 
     -  <details><summary>How Fleet interprets this value</summary>
