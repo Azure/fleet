@@ -81,7 +81,8 @@ NAME             JOINED   AGE
 kind-cluster-1   True     25m
 ```
 
-Now we can go ahead and use the workload orchestration capabilities offered by fleet, please follow the link which details the various features offered https://github.com/Azure/fleet/tree/main/docs/howtos
+Now we can go ahead and use the workload orchestration capabilities offered by fleet, please start with the [concept](https://github.com/Azure/fleet/tree/main/docs/concepts/README.md) to 
+understand the details of various features offered by fleet.
 
 ## Code of Conduct
 
