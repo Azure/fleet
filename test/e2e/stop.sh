@@ -9,7 +9,7 @@ set -o pipefail
 
 HUB_CLUSTER="hub"
 MEMBER_CLUSTER_COUNT=$1
-declare -a ALL_CLUSTERS=(HUB_CLUSTER)
+declare -a ALL_CLUSTERS=($HUB_CLUSTER)
 
 for (( i=1;i<=MEMBER_CLUSTER_COUNT;i++ ))
 do
