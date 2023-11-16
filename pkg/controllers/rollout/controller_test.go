@@ -428,6 +428,12 @@ func TestPickBindingsToRoll(t *testing.T) {
 		Type:   intstr.Int,
 		IntVal: 0,
 	}
+	noMaxSurgeCRP := clusterResourcePlacementForTest("test",
+		createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5))
+	noMaxSurgeCRP.Spec.Strategy.RollingUpdate.MaxSurge = &intstr.IntOrString{
+		Type:   intstr.Int,
+		IntVal: 0,
+	}
 	tests := map[string]struct {
 		allBindings                []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName string
@@ -472,6 +478,51 @@ func TestPickBindingsToRoll(t *testing.T) {
 			crp:                        noMaxUnavailableCRP,
 			tobeUpdatedBindings:        []int{0, 1, 2},
 			needRoll:                   true,
+		},
+		"test no binding when there is no max unavailable allowed": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster4),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster5),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp:                        noMaxUnavailableCRP,
+			tobeUpdatedBindings:        []int{},
+			needRoll:                   true,
+		},
+		"test with no bindings": {
+			allBindings:                []*fleetv1beta1.ClusterResourceBinding{},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
+			tobeUpdatedBindings: []int{},
+			needRoll:            false,
+		},
+		"test with scheduled bindings": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster2),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 2)),
+			tobeUpdatedBindings: []int{0, 1},
+			needRoll:            true,
+		},
+		"test remove unscheduled bindings": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster1),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster2),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateScheduled, "snapshot-1", cluster3),
+				generateClusterResourceBinding(fleetv1beta1.BindingStateUnscheduled, "snapshot-1", cluster4),
+			},
+			latestResourceSnapshotName: "snapshot-1",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 4)),
+			tobeUpdatedBindings: []int{0, 2},
+			needRoll:            true,
 		},
 	}
 	for name, tt := range tests {
