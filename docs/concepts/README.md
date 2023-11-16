@@ -7,6 +7,9 @@ and helps you obtain a deeper understanding how Fleet works.
 
 The high level components concepts behind the fleet.
 
+## [MemberCluster](MemberCluster/README.md)
+Understand `MemberCluster` concept to join or leave the fleet.
+
 ## [ClusterResourcePlacement](ClusterResourcePlacement/README.md)
 
 Concepts and resources behind the `ClusterResourcePlacement`.

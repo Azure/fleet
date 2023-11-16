@@ -7,8 +7,8 @@ resources across different clusters.
 > Note
 >
 > If you are just getting started with Fleet, it is recommended that you refer to the
-> [Fleet Getting Started Guide](../../README.md) for how to create a fleet. an overview of Fleet
-> features and capabilities.
+> [Fleet Getting Started Guide](../../README.md) for how to create a fleet and [Fleet Concepts](../concepts/README.md) 
+> for an overview of Fleet features and capabilities.
 
 Below is a walkthrough of all the how-to guides currently available, categorized by their
 domains:
