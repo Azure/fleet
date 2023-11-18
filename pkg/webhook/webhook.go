@@ -23,7 +23,16 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +40,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -48,11 +58,41 @@ const (
 	FleetWebhookCfgName      = "fleet-validating-webhook-configuration"
 	FleetWebhookSvcName      = "fleetwebhook"
 
-	crdResourceName           = "customresourcedefinitions"
-	memberClusterResourceName = "memberclusters"
-	namespaceResouceName      = "namespaces"
-	replicaSetResourceName    = "replicasets"
-	podResourceName           = "pods"
+	crdResourceName                      = "customresourcedefinitions"
+	bindingResourceName                  = "bindings"
+	configMapResourceName                = "configmaps"
+	endPointResourceName                 = "endpoints"
+	eventResourceName                    = "events"
+	limitRangeResourceName               = "limitranges"
+	persistentVolumeClaimsName           = "persistentvolumeclaims"
+	podTemplateResourceName              = "podtemplates"
+	replicationControllerResourceName    = "replicationcontrollers"
+	resourceQuotaResourceName            = "resourcequotas"
+	secretResourceName                   = "secrets"
+	serviceAccountResourceName           = "serviceaccounts"
+	servicesResourceName                 = "services"
+	controllerRevisionResourceName       = "controllerrevisions"
+	daemonSetResourceName                = "daemonsets"
+	deploymentResourceName               = "deployments"
+	statefulSetResourceName              = "statefulsets"
+	localSubjectAccessReviewResourceName = "localsubjectaccessreviews"
+	horizontalPodAutoScalerResourceName  = "horizontalpodautoscalers"
+	cronJobResourceName                  = "cronjobs"
+	jobResourceName                      = "jobs"
+	workResourceName                     = "works"
+	leaseResourceName                    = "leases"
+	endPointSlicesResourceName           = "endpointslices"
+	ingressResourceName                  = "ingresses"
+	networkPolicyResourceName            = "networkpolicies"
+	podDisruptionBudgetsResourceName     = "poddisruptionbudgets"
+	roleResourceName                     = "roles"
+	roleBindingResourceName              = "rolebindings"
+	csiStorageCapacityResourceName       = "csistoragecapacities"
+	memberClusterResourceName            = "memberclusters"
+	internalMemberClusterResourceName    = "internalmemberclusters"
+	namespaceResourceName                = "namespaces"
+	replicaSetResourceName               = "replicasets"
+	podResourceName                      = "pods"
 )
 
 var (
@@ -269,7 +309,69 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 		namespacedResourcesRules := []admv1.RuleWithOperations{
 			{
 				Operations: cudOperations,
-				Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),
+				Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{bindingResourceName, bindingResourceName + "/status",
+					configMapResourceName, configMapResourceName + "/status", endPointResourceName, endPointResourceName + "/status", eventResourceName, eventResourceName + "/status",
+					limitRangeResourceName, limitRangeResourceName + "/status", persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podResourceName, podResourceName + "/status",
+					podTemplateResourceName, podTemplateResourceName + "/status", replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status",
+					secretResourceName, secretResourceName + "/status", serviceAccountResourceName, serviceAccountResourceName + "/status", servicesResourceName, servicesResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{controllerRevisionResourceName, controllerRevisionResourceName + "/status", daemonSetResourceName, daemonSetResourceName + "/status",
+					deploymentResourceName, deploymentResourceName + "/status", replicaSetResourceName, replicaSetResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{authorizationv1.SchemeGroupVersion.Group}, []string{authorizationv1.SchemeGroupVersion.Version}, []string{localSubjectAccessReviewResourceName, localSubjectAccessReviewResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{autoscalingv1.SchemeGroupVersion.Group}, []string{autoscalingv1.SchemeGroupVersion.Version}, []string{horizontalPodAutoScalerResourceName, horizontalPodAutoScalerResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{cronJobResourceName, cronJobResourceName + "/status", jobResourceName, jobResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
+			},
+			// we only monitor delete requests for the lease resource
+			{
+				Operations: []admv1.OperationType{admv1.Delete},
+				Rule:       createRule([]string{coordinationv1.SchemeGroupVersion.Group}, []string{coordinationv1.SchemeGroupVersion.Version}, []string{leaseResourceName, leaseResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{discoveryv1.SchemeGroupVersion.Group}, []string{discoveryv1.SchemeGroupVersion.Version}, []string{endPointResourceName, endPointSlicesResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{networkingv1.SchemeGroupVersion.Group}, []string{networkingv1.SchemeGroupVersion.Version}, []string{ingressResourceName, ingressResourceName + "/status", networkPolicyResourceName, networkPolicyResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{policyv1.SchemeGroupVersion.Group}, []string{policyv1.SchemeGroupVersion.Version}, []string{podDisruptionBudgetsResourceName, podDisruptionBudgetsResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleResourceName + "/status", roleBindingResourceName, roleBindingResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{storagev1.SchemeGroupVersion.Group}, []string{storagev1.SchemeGroupVersion.Version}, []string{csiStorageCapacityResourceName, csiStorageCapacityResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
+			},
+			{
+				Operations: cudOperations,
+				Rule:       createRule([]string{workv1alpha1.GroupVersion.Group}, []string{workv1alpha1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
 			},
 		}
 		guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
@@ -354,7 +456,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				Rules: []admv1.RuleWithOperations{
 					{
 						Operations: cudOperations,
-						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResouceName}, &clusterScope),
+						Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResourceName}, &clusterScope),
 					},
 				},
 				TimeoutSeconds: webhookTimeoutSeconds,
@@ -561,10 +663,10 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 }
 
 // createRule returns a admission rule using the arguments passed.
-func createRule(apiGroups, apiResources, resources []string, scopeType *admv1.ScopeType) admv1.Rule {
+func createRule(apiGroups, apiVersions, resources []string, scopeType *admv1.ScopeType) admv1.Rule {
 	return admv1.Rule{
 		APIGroups:   apiGroups,
-		APIVersions: apiResources,
+		APIVersions: apiVersions,
 		Resources:   resources,
 		Scope:       scopeType,
 	}
