@@ -347,7 +347,7 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 			},
 			{
 				Operations: cudOperations,
-				Rule:       createRule([]string{discoveryv1.SchemeGroupVersion.Group}, []string{discoveryv1.SchemeGroupVersion.Version}, []string{endPointResourceName, endPointSlicesResourceName + "/status"}, &namespacedScope),
+				Rule:       createRule([]string{discoveryv1.SchemeGroupVersion.Group}, []string{discoveryv1.SchemeGroupVersion.Version}, []string{endPointSlicesResourceName, endPointSlicesResourceName + "/status"}, &namespacedScope),
 			},
 			{
 				Operations: cudOperations,
