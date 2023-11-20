@@ -110,8 +110,8 @@ func main() {
 		LeaderElectionID:           opts.LeaderElection.ResourceName,
 		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
 		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
-		HealthProbeBindAddress:     opts.HealthProbeAddress,
-		MetricsBindAddress:         opts.MetricsBindAddress,
+		HealthProbeBindAddress:     "0",
+		MetricsBindAddress:         "0",
 		Port:                       FleetGuardRailPort,
 		CertDir:                    FleetGuardRailCertDir,
 	})
