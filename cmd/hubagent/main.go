@@ -46,8 +46,12 @@ var (
 )
 
 const (
-	FleetWebhookCertDir = "/tmp/k8s-webhook-server/serving-certs"
-	FleetWebhookPort    = 9443
+	FleetWebhookSvcName   = "fleetwebhook"
+	FleetGuardRailSvcName = "fleetguardrail"
+	FleetWebhookCertDir   = "/tmp/fleet-webhook-server/serving-certs"
+	FleetGuardRailCertDir = "/tmp/fleet-guard-rail-server/serving-certs"
+	FleetWebhookPort      = 9443
+	FleetGuardRailPort    = 9444
 )
 
 func init() {
@@ -99,6 +103,23 @@ func main() {
 		exitWithErrorFunc()
 	}
 
+	guardRailMgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:                     scheme,
+		SyncPeriod:                 &opts.ResyncPeriod.Duration,
+		LeaderElection:             opts.LeaderElection.LeaderElect,
+		LeaderElectionID:           opts.LeaderElection.ResourceName,
+		LeaderElectionNamespace:    opts.LeaderElection.ResourceNamespace,
+		LeaderElectionResourceLock: opts.LeaderElection.ResourceLock,
+		HealthProbeBindAddress:     opts.HealthProbeAddress,
+		MetricsBindAddress:         opts.MetricsBindAddress,
+		Port:                       FleetGuardRailPort,
+		CertDir:                    FleetGuardRailCertDir,
+	})
+	if err != nil {
+		klog.ErrorS(err, "unable to start guard rail controller manager")
+		exitWithErrorFunc()
+	}
+
 	klog.V(2).InfoS("starting hubagent")
 	if opts.EnableV1Alpha1APIs {
 		klog.Info("Setting up memberCluster v1alpha1 controller")
@@ -131,8 +152,15 @@ func main() {
 	}
 
 	if opts.EnableWebhook {
+		if err := SetupFleetWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType)); err != nil {
+			klog.ErrorS(err, "unable to set up webhook")
+			exitWithErrorFunc()
+		}
+	}
+
+	if opts.EnableGuardRail {
 		whiteListedUsers := strings.Split(opts.WhiteListedUsers, ",")
-		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType), whiteListedUsers, opts.EnableGuardRail); err != nil {
+		if err := SetupFleetGuardRailWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType), whiteListedUsers); err != nil {
 			klog.ErrorS(err, "unable to set up webhook")
 			exitWithErrorFunc()
 		}
@@ -146,7 +174,7 @@ func main() {
 
 	// +kubebuilder:scaffold:builder
 
-	wg.Add(1)
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
 
@@ -159,14 +187,25 @@ func main() {
 		klog.InfoS("The controller manager has exited")
 	}()
 
+	go func() {
+		defer wg.Done()
+
+		if err := guardRailMgr.Start(ctx); err != nil {
+			klog.ErrorS(err, "problem starting guard rail manager")
+			exitWithErrorFunc()
+		}
+
+		klog.InfoS("the fleet guard rail manager has exited")
+	}()
+
 	// Wait for the controller manager and the scheduler to exit.
 	wg.Wait()
 }
 
-// SetupWebhook generates the webhook cert and then set up the webhook configurator.
-func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType, whiteListedUsers []string, enableGuardRail bool) error {
+// SetupFleetWebhook generates the webhook cert and then set up the webhook configurator for fleet.
+func SetupFleetWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType) error {
 	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start.
-	w, err := webhook.NewWebhookConfig(mgr, FleetWebhookPort, &webhookClientConnectionType, FleetWebhookCertDir, enableGuardRail)
+	w, err := webhook.NewWebhookConfig(mgr, FleetWebhookPort, &webhookClientConnectionType, FleetWebhookSvcName, FleetWebhookCertDir)
 	if err != nil {
 		klog.ErrorS(err, "fail to generate WebhookConfig")
 		return err
@@ -175,7 +214,26 @@ func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.Webho
 		klog.ErrorS(err, "unable to add WebhookConfig")
 		return err
 	}
-	if err = webhook.AddToManager(mgr, whiteListedUsers); err != nil {
+	if err = webhook.AddToFleetManager(mgr); err != nil {
+		klog.ErrorS(err, "unable to register webhooks to the manager")
+		return err
+	}
+	return nil
+}
+
+// SetupFleetGuardRailWebhook generates the webhook cert and then set up the webhook configurator for the fleet guard rail.
+func SetupFleetGuardRailWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType, whiteListedUsers []string) error {
+	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start.
+	w, err := webhook.NewWebhookConfig(mgr, FleetWebhookPort, &webhookClientConnectionType, FleetGuardRailSvcName, FleetGuardRailCertDir)
+	if err != nil {
+		klog.ErrorS(err, "fail to generate WebhookConfig")
+		return err
+	}
+	if err = mgr.Add(w); err != nil {
+		klog.ErrorS(err, "unable to add WebhookConfig")
+		return err
+	}
+	if err = webhook.AddToFleetGuardRailManager(mgr, whiteListedUsers); err != nil {
 		klog.ErrorS(err, "unable to register webhooks to the manager")
 		return err
 	}

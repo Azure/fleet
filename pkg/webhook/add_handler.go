@@ -9,9 +9,10 @@ import (
 
 func init() {
 	// AddToManagerFuncs is a list of functions to create webhook and add them to a manager.
-	AddToManagerFuncs = append(AddToManagerFuncs, fleetresourcehandler.Add)
-	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddV1Alpha1)
-	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.Add)
-	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
-	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
+	AddToFleetManagerFuncs = append(AddToFleetManagerFuncs, clusterresourceplacement.AddV1Alpha1)
+	AddToFleetManagerFuncs = append(AddToFleetManagerFuncs, clusterresourceplacement.Add)
+	AddToFleetManagerFuncs = append(AddToFleetManagerFuncs, pod.Add)
+	AddToFleetManagerFuncs = append(AddToFleetManagerFuncs, replicaset.Add)
+
+	AddToFleetGuardRailManagerFuncs = append(AddToFleetGuardRailManagerFuncs, fleetresourcehandler.Add)
 }
