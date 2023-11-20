@@ -1,0 +1,21 @@
+# The webhook will normally use a service reference with a cluster assigned IP.
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    {{- include "hub-agent.labels" . | nindent 4 }}
+  name: fleetguardrail
+  namespace: {{ .Values.namespace }}
+spec:
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+    - name: client
+      port: 9444
+      protocol: TCP
+      targetPort: 9444
+  selector:
+    {{- include "hub-agent.selectorLabels" . | nindent 4 }}
+  sessionAffinity: None
+  type: ClusterIP
