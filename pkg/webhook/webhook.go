@@ -61,7 +61,6 @@ const (
 	bindingResourceName                  = "bindings"
 	configMapResourceName                = "configmaps"
 	endPointResourceName                 = "endpoints"
-	eventResourceName                    = "events"
 	limitRangeResourceName               = "limitranges"
 	persistentVolumeClaimsName           = "persistentvolumeclaims"
 	podTemplateResourceName              = "podtemplates"
@@ -304,67 +303,76 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 			admv1.Update,
 			admv1.Delete,
 		}
-		// we don't monitor lease to prevent the deadlock issue.
+		cuOperations := []admv1.OperationType{
+			admv1.Create,
+			admv1.Update,
+		}
+		// we don't monitor lease to prevent the deadlock issue, we also don't monitor events.
 		namespacedResourcesRules := []admv1.RuleWithOperations{
+			// we want to monitor delete operations on all namespaced resources.
 			{
-				Operations: cudOperations,
+				Operations: []admv1.OperationType{admv1.Delete},
+				Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),
+			},
+			{
+				Operations: cuOperations,
 				Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{bindingResourceName, configMapResourceName, endPointResourceName,
-					eventResourceName, limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podResourceName, podResourceName + "/status", podTemplateResourceName,
+					limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podResourceName, podResourceName + "/status", podTemplateResourceName,
 					replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
 					serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
 					deploymentResourceName, deploymentResourceName + "/status", replicaSetResourceName, replicaSetResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{authorizationv1.SchemeGroupVersion.Group}, []string{authorizationv1.SchemeGroupVersion.Version}, []string{localSubjectAccessReviewResourceName, localSubjectAccessReviewResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{autoscalingv1.SchemeGroupVersion.Group}, []string{autoscalingv1.SchemeGroupVersion.Version}, []string{horizontalPodAutoScalerResourceName, horizontalPodAutoScalerResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{batchv1.SchemeGroupVersion.Group}, []string{batchv1.SchemeGroupVersion.Version}, []string{cronJobResourceName, cronJobResourceName + "/status", jobResourceName, jobResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{discoveryv1.SchemeGroupVersion.Group}, []string{discoveryv1.SchemeGroupVersion.Version}, []string{endPointSlicesResourceName}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{networkingv1.SchemeGroupVersion.Group}, []string{networkingv1.SchemeGroupVersion.Version}, []string{ingressResourceName, ingressResourceName + "/status", networkPolicyResourceName, networkPolicyResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{policyv1.SchemeGroupVersion.Group}, []string{policyv1.SchemeGroupVersion.Version}, []string{podDisruptionBudgetsResourceName, podDisruptionBudgetsResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{rbacv1.SchemeGroupVersion.Group}, []string{rbacv1.SchemeGroupVersion.Version}, []string{roleResourceName, roleBindingResourceName}, &namespacedScope),
 			},
-			// fleet resources
+			// rules for fleet namespaced resources.
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{storagev1.SchemeGroupVersion.Group}, []string{storagev1.SchemeGroupVersion.Version}, []string{csiStorageCapacityResourceName}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{internalMemberClusterResourceName, internalMemberClusterResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
 			},
 			{
-				Operations: cudOperations,
+				Operations: cuOperations,
 				Rule:       createRule([]string{workv1alpha1.GroupVersion.Group}, []string{workv1alpha1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
 			},
 		}
