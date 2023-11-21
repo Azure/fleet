@@ -37,7 +37,6 @@ import (
 const (
 	testRole                    = "test-role"
 	testRoleBinding             = "test-role-binding"
-	testPod                     = "test-pod"
 	testDeployment              = "test-deployment"
 	testJob                     = "test-job"
 	testHorizontalPodAutoScaler = "test-horizontal-pod-auto-scaler"
@@ -282,109 +281,6 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 				By("expecting successful UPDATE of role binding")
 				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
 				return HubCluster.KubeClient.Update(ctx, &rb)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-		})
-	})
-
-	Context("fleet guard rail e2e for pod in core/v1 api group", func() {
-		var podName string
-		BeforeEach(func() {
-			podName = testPod + "-" + utils.RandStr()
-			pod := corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      podName,
-					Namespace: kubeSystemNS,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Image:           "busybox",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Name:            "busybox",
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyAlways,
-				},
-			}
-			Expect(HubCluster.KubeClient.Create(ctx, &pod)).Should(Succeed())
-		})
-		AfterEach(func() {
-			pod := corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      podName,
-					Namespace: kubeSystemNS,
-				},
-			}
-			Expect(HubCluster.KubeClient.Delete(ctx, &pod)).Should(Succeed())
-			Eventually(func() bool {
-				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, &pod))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
-		})
-
-		It("should deny CREATE pod operation for user not in system:masters group", func() {
-			pod := corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      testPod + "-" + utils.RandStr(),
-					Namespace: kubeSystemNS,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Image:           "busybox",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Name:            "busybox",
-						},
-					},
-					RestartPolicy: corev1.RestartPolicyAlways,
-				},
-			}
-
-			By("expecting denial of operation CREATE of pod")
-			err := HubCluster.ImpersonateKubeClient.Create(ctx, &pod)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create pod call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &podGVK, "", types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace})))
-		})
-
-		It("should deny UPDATE pod operation for user not in system:masters group", func() {
-			Eventually(func(g Gomega) error {
-				var pod corev1.Pod
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: kubeSystemNS}, &pod)).Should(Succeed())
-				pod.ObjectMeta.Labels = map[string]string{"test-key": "test-value"}
-				By("expecting denial of operation UPDATE of pod")
-				err := HubCluster.ImpersonateKubeClient.Update(ctx, &pod)
-				if k8sErrors.IsConflict(err) {
-					return err
-				}
-				var statusErr *k8sErrors.StatusError
-				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update pod call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &podGVK, "", types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace})))
-				return nil
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-		})
-
-		It("should deny DELETE pod operation for user not in system:masters group", func() {
-			var pod corev1.Pod
-			Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: kubeSystemNS}, &pod)).Should(Succeed())
-			By("expecting denial of operation DELETE of pod")
-			err := HubCluster.ImpersonateKubeClient.Delete(ctx, &pod)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Delete pod call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Delete, &podGVK, "", types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace})))
-		})
-
-		It("should allow update operation on pod for user in system:masters group", func() {
-			Eventually(func(g Gomega) error {
-				var pod corev1.Pod
-				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: kubeSystemNS}, &pod)).Should(Succeed())
-				By("update labels in pod")
-				labels := make(map[string]string)
-				labels[testKey] = testValue
-				pod.SetLabels(labels)
-
-				By("expecting successful UPDATE of pod")
-				// The user associated with KubeClient is kubernetes-admin in groups: [system:masters, system:authenticated]
-				return HubCluster.KubeClient.Update(ctx, &pod)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})

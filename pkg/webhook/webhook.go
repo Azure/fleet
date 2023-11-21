@@ -314,17 +314,18 @@ func (w *Config) buildValidatingWebHooks() []admv1.ValidatingWebhook {
 				Operations: []admv1.OperationType{admv1.Delete},
 				Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),
 			},
+			// TODO(ArvindThiru): not handling pods, replicasets as part of the fleet guard rail since they have validating webhooks, need to remove validating webhooks before adding these resources to fleet guard rail.
 			{
 				Operations: cuOperations,
 				Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{bindingResourceName, configMapResourceName, endPointResourceName,
-					limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podResourceName, podResourceName + "/status", podTemplateResourceName,
+					limitRangeResourceName, persistentVolumeClaimsName, persistentVolumeClaimsName + "/status", podTemplateResourceName,
 					replicationControllerResourceName, replicationControllerResourceName + "/status", resourceQuotaResourceName, resourceQuotaResourceName + "/status", secretResourceName,
 					serviceAccountResourceName, servicesResourceName, servicesResourceName + "/status"}, &namespacedScope),
 			},
 			{
 				Operations: cuOperations,
 				Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{controllerRevisionResourceName, daemonSetResourceName, daemonSetResourceName + "/status",
-					deploymentResourceName, deploymentResourceName + "/status", replicaSetResourceName, replicaSetResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}, &namespacedScope),
+					deploymentResourceName, deploymentResourceName + "/status", statefulSetResourceName, statefulSetResourceName + "/status"}, &namespacedScope),
 			},
 			{
 				Operations: cuOperations,
