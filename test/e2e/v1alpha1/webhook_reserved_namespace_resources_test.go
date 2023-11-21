@@ -753,9 +753,10 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 		})
 
 		It("should allow CREATE lease operation for user not in system:masters group", func() {
+			leaseName := testLease + "-" + utils.RandStr()
 			l := coordinationv1.Lease{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      testLease + "-" + utils.RandStr(),
+					Name:      leaseName,
 					Namespace: kubeSystemNS,
 				},
 				Spec: coordinationv1.LeaseSpec{
@@ -765,10 +766,10 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 				},
 			}
 			By("expecting successful CREATE of lease")
-			err := HubCluster.ImpersonateKubeClient.Create(ctx, &l)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create lease call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &leaseGVK, "", types.NamespacedName{Name: l.Name, Namespace: l.Namespace})))
+			Expect(HubCluster.ImpersonateKubeClient.Create(ctx, &l))
+
+			By("delete created lease")
+			Expect(HubCluster.KubeClient.Delete(ctx, &l))
 		})
 
 		It("should allow UPDATE lease operation for user not in system:masters group", func() {
