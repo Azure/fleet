@@ -50,7 +50,6 @@ const (
 var (
 	roleGVK        = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "Role"}
 	roleBindingGVK = metav1.GroupVersionKind{Group: rbacv1.SchemeGroupVersion.Group, Version: rbacv1.SchemeGroupVersion.Version, Kind: "RoleBinding"}
-	podGVK         = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Pod"}
 	deploymentGVK  = metav1.GroupVersionKind{Group: appsv1.SchemeGroupVersion.Group, Version: appsv1.SchemeGroupVersion.Version, Kind: "Deployment"}
 	jobGVK         = metav1.GroupVersionKind{Group: batchv1.SchemeGroupVersion.Group, Version: batchv1.SchemeGroupVersion.Version, Kind: "Job"}
 	hpaGVK         = metav1.GroupVersionKind{Group: autoscalingv2.SchemeGroupVersion.Group, Version: autoscalingv2.SchemeGroupVersion.Version, Kind: "HorizontalPodAutoscaler"}
