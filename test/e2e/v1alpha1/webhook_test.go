@@ -53,7 +53,6 @@ const (
 	testKey           = "test-key"
 	testValue         = "test-value"
 	testWork          = "test-work"
-	testEvent         = "test-event"
 	fleetSystemNS     = "fleet-system"
 	kubeSystemNS      = "kube-system"
 	testMemberCluster = "test-mc"
