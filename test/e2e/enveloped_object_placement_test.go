@@ -261,7 +261,7 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 		// check the placement status has a failed placement
 		applyFailed := false
 		for _, placementStatus := range crp.Status.PlacementStatuses {
-			if len(placementStatus.FailedResourcePlacements) != 0 {
+			if len(placementStatus.FailedPlacements) != 0 {
 				applyFailed = true
 			}
 		}
@@ -270,12 +270,12 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 		}
 		for _, placementStatus := range crp.Status.PlacementStatuses {
 			// this is the cluster that got the new enveloped resource that was malformed
-			if len(placementStatus.FailedResourcePlacements) != 0 {
-				if diff := cmp.Diff(placementStatus.FailedResourcePlacements, failedResourcePlacement, crpStatusCmpOptions...); diff != "" {
+			if len(placementStatus.FailedPlacements) != 0 {
+				if diff := cmp.Diff(placementStatus.FailedPlacements, failedResourcePlacement, crpStatusCmpOptions...); diff != "" {
 					return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
 				}
 				// check that the applied error message is correct
-				if !strings.Contains(placementStatus.FailedResourcePlacements[0].Condition.Message, "field is immutable") {
+				if !strings.Contains(placementStatus.FailedPlacements[0].Condition.Message, "field is immutable") {
 					return fmt.Errorf("CRP failed resource placement does not have unsupported scope message")
 				}
 				if diff := cmp.Diff(placementStatus.Conditions, resourcePlacementApplyFailedConditions(crp.Generation), crpStatusCmpOptions...); diff != "" {

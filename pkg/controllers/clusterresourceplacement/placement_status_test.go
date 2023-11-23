@@ -537,8 +537,8 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:              "member-1",
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      "member-1",
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -564,8 +564,8 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
-						ClusterName:              "member-2",
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      "member-2",
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -591,8 +591,8 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
-						ClusterName:              "member-3",
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      "member-3",
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -849,7 +849,7 @@ func TestSetPlacementStatus(t *testing.T) {
 								LastTransitionTime: metav1.NewTime(currentTime),
 							},
 						},
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 					},
 					{
 						Conditions: []metav1.Condition{
@@ -1491,8 +1491,8 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:              cluster1Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster1Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
@@ -1518,8 +1518,8 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
-						ClusterName:              cluster2Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster2Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
@@ -1575,8 +1575,8 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:              cluster1Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster1Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
@@ -1602,8 +1602,8 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
-						ClusterName:              cluster2Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster2Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -1757,8 +1757,8 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:              cluster1Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster1Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -1784,8 +1784,8 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
-						ClusterName:              cluster2Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster2Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -1841,8 +1841,8 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:              cluster1Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster1Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionTrue,
@@ -1868,8 +1868,8 @@ func TestSetPlacementStatus(t *testing.T) {
 						},
 					},
 					{
-						ClusterName:              cluster2Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster2Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -2133,8 +2133,8 @@ func TestSetPlacementStatus(t *testing.T) {
 				},
 				PlacementStatuses: []fleetv1beta1.ResourcePlacementStatus{
 					{
-						ClusterName:              cluster1Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{},
+						ClusterName:      cluster1Name,
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{},
 						Conditions: []metav1.Condition{
 							{
 								Status:             metav1.ConditionUnknown,
@@ -2161,7 +2161,7 @@ func TestSetPlacementStatus(t *testing.T) {
 					},
 					{
 						ClusterName: cluster2Name,
-						FailedResourcePlacements: []fleetv1beta1.FailedResourcePlacement{
+						FailedPlacements: []fleetv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
 									Version:   "v1",

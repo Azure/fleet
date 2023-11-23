@@ -815,7 +815,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
 						ClusterName: memberCluster1EastProdName,
-						FailedResourcePlacements: []placementv1beta1.FailedResourcePlacement{
+						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
 									Kind:    "Namespace",
