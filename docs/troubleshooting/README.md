@@ -14,7 +14,7 @@ Internal Objects to keep in mind when troubleshooting CRP related errors on the 
 
 please read the API reference for more details about ech object https://github.com/Azure/fleet/blob/main/docs/api-references.md
 
-### How can I debug when my CRP status is ClusterResourcePlacementScheduled "Failed" or false?
+### How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to "False"?
 
 We need to take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
 
@@ -26,7 +26,7 @@ We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPNam
 kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
-### How can I debug when my CRP status is synchronized "Failed"?
+### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
 
@@ -42,9 +42,7 @@ We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPNam
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
-example,
-
-In this case we have ClusterResourcePlacement called test-crp,
+example, In this case we have ClusterResourcePlacement called test-crp,
 
 ```
 kubectl get crp test-crp
@@ -52,7 +50,7 @@ NAME       GEN   SCHEDULED   SCHEDULEDGEN   APPLIED   APPLIEDGEN   AGE
 test-crp   1     True        1              True      1            15s
 ```
 
-the placementstatuses of the CRP above looks like, it has propagated resources to two member clusters and hence has two ClusterResourceBindings
+the placementstatuses of the CRP above looks like, it has propagated resources to two member clusters and hence has two ClusterResourceBindings,
 
 ```
 status:
@@ -72,7 +70,7 @@ status:
       type: ResourceApplied
 ```
 
-from the placementstatuses we can focus on which cluster we want to consider and note the clusterName
+from the placementstatuses we can focus on which cluster we want to consider and note the clusterName,
 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
@@ -81,20 +79,20 @@ test-crp-kind-cluster-1-be990c3e   True          True               33s
 test-crp-kind-cluster-2-ec4d953c   True          True               33s
 ```
 
-The ClusterResourceBinding's name follow this format **{CRPName}-{targetClusterName}-{suffix}**, so once we have all ClusterResourceBindings listed find the ClusterResourceBinding for the target cluster you are looking for based on the cluster name.
+The ClusterResourceBinding's name follow this format **{CRPName}-{clusterName}-{suffix}**, so once we have all ClusterResourceBindings listed find the ClusterResourceBinding for the target cluster you are looking for based on the clusterName.
 
-### How can I debug when my CRP status is applied "Failed"?
+### How can I debug when my CRP ClusterResourcePlacementApplied condition is set to "False"?
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has ResourceApplied status set to false.
 
-From the **placementStatuses** we can get the **clusterName** and then use it to find the work object associated with the member cluster in the fleet-member-{ClusterName} namespace in the hub cluster and check its status to figure out what's wrong.
+From the **placementStatuses** we can get the **clusterName** and then use it to find the work object associated with the member cluster in the **fleet-member-{ClusterName}** namespace in the hub cluster and check its status to figure out what's wrong.
 
 ### How and where to find the correct Work resource?
 
 We need to have the member cluster's namespace **fleet-member-{clusterName}**, ClusterResourceBinding's name **{CRBName}** and ClusterResourcePlacement's name **{CRPName}**.
 
 ```
- kubectl get work -n fleet-member-{targetClusterName} -l kubernetes-fleet.io/parent-CRP={CRPName},kubernetes-fleet.io/parent-resource-binding={CRBName} -o YAML
+ kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName},kubernetes-fleet.io/parent-resource-binding={CRBName} -o YAML
 ```
 
 ### How can I debug when some clusters are not selected as expected?
@@ -107,7 +105,7 @@ We need to take a look at the **placementStatuses** section in CRP status for th
 
 ### How to find the latest ClusterResourceSnapshot resource?
 
-Replace {CRPName} in the command below with name of CRP
+Replace **{CRPName}** in the command below with name of CRP
 
 ```
 kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
