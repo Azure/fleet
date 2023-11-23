@@ -164,75 +164,50 @@ func (w *Config) Start(ctx context.Context) error {
 
 // createFleetWebhookConfiguration creates the ValidatingWebhookConfiguration object for the webhook.
 func (w *Config) createFleetWebhookConfiguration(ctx context.Context) error {
-	vWhCfg := admv1.ValidatingWebhookConfiguration{
+	if err := w.createValidatingWebhookConfiguration(ctx, w.buildFleetValidatingWebhooks(), fleetValidatingWebhookCfgName); err != nil {
+		return err
+	}
+	if w.enableGuardRail {
+		if err := w.createValidatingWebhookConfiguration(ctx, w.buildFleetGuardRailValidatingWebhooks(), fleetGuardRailWebhookCfgName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *Config) createValidatingWebhookConfiguration(ctx context.Context, webhooks []admv1.ValidatingWebhook, configName string) error {
+	validatingWebhookConfig := admv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fleetValidatingWebhookCfgName,
+			Name: configName,
 			Labels: map[string]string{
 				"admissions.enforcer/disabled": "true",
 			},
 		},
-		Webhooks: w.buildFleetValidatingWebhooks(),
+		Webhooks: webhooks,
 	}
 
 	// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
 	// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
-	if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &vWhCfg); err != nil {
+	if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &validatingWebhookConfig); err != nil {
 		return err
 	}
 
-	if err := w.mgr.GetClient().Create(ctx, &vWhCfg); err != nil {
+	if err := w.mgr.GetClient().Create(ctx, &validatingWebhookConfig); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return err
 		}
-		klog.V(2).InfoS("validating webhook configuration exists, need to update", "name", fleetValidatingWebhookCfgName)
+		klog.V(2).InfoS("validating webhook configuration exists, need to overwrite", "name", configName)
 		// Here we simply use delete/create pattern to implement full overwrite
-		err := w.mgr.GetClient().Delete(ctx, &vWhCfg)
-		if err != nil {
+		if err := w.mgr.GetClient().Delete(ctx, &validatingWebhookConfig); err != nil {
 			return err
 		}
-		err = w.mgr.GetClient().Create(ctx, &vWhCfg)
-		if err != nil {
+		if err = w.mgr.GetClient().Create(ctx, &validatingWebhookConfig); err != nil {
 			return err
 		}
+		klog.V(2).InfoS("successfully overwritten validating webhook configuration", "name", configName)
 		return nil
 	}
-	klog.V(2).InfoS("successfully created validating webhook configuration", "name", fleetValidatingWebhookCfgName)
-
-	if w.enableGuardRail {
-		fgWhCfg := admv1.ValidatingWebhookConfiguration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fleetGuardRailWebhookCfgName,
-				Labels: map[string]string{
-					"admissions.enforcer/disabled": "true",
-				},
-			},
-			Webhooks: w.buildFleetGuardRailValidatingWebhooks(),
-		}
-
-		// We need to ensure this webhook configuration is garbage collected if Fleet is uninstalled from the cluster.
-		// Since the fleet-system namespace is a prerequisite for core Fleet components, we bind to this namespace.
-		if err := bindWebhookConfigToFleetSystem(ctx, w.mgr.GetClient(), &fgWhCfg); err != nil {
-			return err
-		}
-
-		if err := w.mgr.GetClient().Create(ctx, &fgWhCfg); err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				return err
-			}
-			klog.V(2).InfoS("validating webhook configuration exists, need to update", "name", fleetGuardRailWebhookCfgName)
-			// Here we simply use delete/create pattern to implement full overwrite
-			err := w.mgr.GetClient().Delete(ctx, &fgWhCfg)
-			if err != nil {
-				return err
-			}
-			err = w.mgr.GetClient().Create(ctx, &fgWhCfg)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-		klog.V(2).InfoS("successfully created validating webhook configuration", "name", fleetGuardRailWebhookCfgName)
-	}
+	klog.V(2).InfoS("successfully created validating webhook configuration", "name", configName)
 	return nil
 }
 
