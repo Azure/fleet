@@ -8,12 +8,6 @@ This how-to guide discusses how to manage clusters in a fleet, specifically:
 
 ## Joining a cluster into a fleet
 
-> Important
->
-> If you are using Azure Fleet Manager, the operations below **does not apply** to your fleet.
-> Refer to the [Azure documentation](https://azure.microsoft.com/en-us/products/kubernetes-fleet-manager)
-> for membership management instructions.
-
 A cluster can join in a fleet if:
 
 * it runs a supported Kubernetes version; it is recommended that you use Kubernetes 1.24 or later
@@ -219,12 +213,6 @@ Fleet connection:
 </details>
 
 ## Setting a cluster to leave a fleet
-
-> Important
->
-> If you are using Azure Fleet Manager, the operations below **does not apply** to your fleet.
-> Refer to the [Azure documentation](https://azure.microsoft.com/en-us/products/kubernetes-fleet-manager)
-> for membership management instructions.
 
 Fleet uses the `MemberCluster` API to manage cluster memberships. To remove a member cluster
 from a fleet, simply delete its corresponding `MemberCluster` object from your hub cluster:
