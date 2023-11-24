@@ -433,11 +433,11 @@ type ResourcePlacementStatus struct {
 
 	// +kubebuilder:validation:MaxItems=100
 
-	// FailedResourcePlacements is a list of all the resources failed to be placed to the given cluster.
+	// FailedPlacements is a list of all the resources failed to be placed to the given cluster.
 	// Note that we only include 100 failed resource placements even if there are more than 100.
 	// This field is only meaningful if the `ClusterName` is not empty.
 	// +optional
-	FailedResourcePlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
+	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
 
 	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
 	// +optional
