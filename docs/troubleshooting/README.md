@@ -16,7 +16,116 @@ please read the API reference for more details about ech object https://github.c
 
 ### How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to "False"?
 
-We need to take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
+Some scenarios where we might see this condition,
+- When we specify the placement policy to **PickFixed** but specify cluster names which don't match any joined member cluster name in the fleet.
+- When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet.
+
+The output below is for a CRP with PickN Placement policy trying to propagate resources to clusters with label env:prod, 
+
+**CRP status:**
+
+```
+status:
+  conditions:
+  - lastTransitionTime: "2023-11-27T20:25:19Z"
+    message: could not find all the clusters needed as specified by the scheduling
+      policy
+    observedGeneration: 2
+    reason: SchedulingPolicyUnfulfilled
+    status: "False"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2023-11-27T20:25:24Z"
+    message: All 1 cluster(s) are synchronized to the latest resources on the hub
+      cluster
+    observedGeneration: 2
+    reason: SynchronizeSucceeded
+    status: "True"
+    type: ClusterResourcePlacementSynchronized
+  - lastTransitionTime: "2023-11-27T20:25:24Z"
+    message: Successfully applied resources to 1 member clusters
+    observedGeneration: 2
+    reason: ApplySucceeded
+    status: "True"
+    type: ClusterResourcePlacementApplied
+  placementStatuses:
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2023-11-27T20:25:19Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-27T20:25:24Z"
+      message: Successfully Synchronized work(s) for placement
+      observedGeneration: 2
+      reason: WorkSynchronizeSucceeded
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-27T20:25:24Z"
+      message: Successfully applied resources
+      observedGeneration: 2
+      reason: ApplySucceeded
+      status: "True"
+      type: ResourceApplied
+  - conditions:
+    - lastTransitionTime: "2023-11-27T20:25:40Z"
+      message: 'kind-cluster-2 is not selected: ClusterUnschedulable, none of the
+        nonempty required cluster affinity term (total number: 1) is matched'
+      observedGeneration: 2
+      reason: ScheduleFailed
+      status: "False"
+      type: ResourceScheduled
+  selectedResources:
+  - group: apps
+    kind: Deployment
+    name: test-nginx
+    namespace: test-ns
+    version: v1
+  - kind: Namespace
+    name: test-ns
+    version: v1
+```
+
+We can also take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
+
+The corresponding **ClusterSchedulingPolicySnapshot's** spec and status gives us even more information why scheduling failed,
+
+```
+spec:
+  policy:
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+          - labelSelector:
+              matchLabels:
+                env: prod
+    placementType: PickN
+  policyHash: ZjE0Yjk4YjYyMTVjY2U3NzQ1MTZkNWRhZjRiNjQ1NzQ4NjllNTUyMzZkODBkYzkyYmRkMGU3OTI3MWEwOTkyNQ==
+status:
+  conditions:
+  - lastTransitionTime: "2023-11-27T20:25:19Z"
+    message: could not find all the clusters needed as specified by the scheduling
+      policy
+    observedGeneration: 1
+    reason: SchedulingPolicyUnfulfilled
+    status: "False"
+    type: Scheduled
+  observedCRPGeneration: 2
+  targetClusters:
+  - clusterName: kind-cluster-1
+    clusterScore:
+      affinityScore: 0
+      priorityScore: 0
+    reason: picked by scheduling policy
+    selected: true
+  - clusterName: kind-cluster-2
+    reason: 'ClusterUnschedulable, none of the nonempty required cluster affinity
+      term (total number: 1) is matched'
+    selected: false
+```
 
 ### How to find the latest ClusterSchedulingSnapshot resource?
 
