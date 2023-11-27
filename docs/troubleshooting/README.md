@@ -19,8 +19,29 @@ please read the API reference for more details about ech object https://github.c
 Some scenarios where we might see this condition,
 - When we specify the placement policy to **PickFixed** but specify cluster names which don't match any joined member cluster name in the fleet.
 - When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet.
+- When we specify the placement policy to **PickAll** and the specified Affinity and Topology constraints doesn't allow the scheduler to pick any cluster that has joined the fleet.
 
-The output below is for a CRP with PickN Placement policy trying to propagate resources to clusters with label env:prod, 
+The output below is for a CRP with PickN Placement policy trying to propagate resources to two clusters with label env:prod,
+
+**CRP spec:**
+```
+spec:
+  policy:
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          clusterSelectorTerms:
+          - labelSelector:
+              matchLabels:
+                env: prod
+    numberOfClusters: 2
+    placementType: PickN
+  resourceSelectors:
+  ...
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+```
 
 **CRP status:**
 
@@ -78,14 +99,7 @@ status:
       status: "False"
       type: ResourceScheduled
   selectedResources:
-  - group: apps
-    kind: Deployment
-    name: test-nginx
-    namespace: test-ns
-    version: v1
-  - kind: Namespace
-    name: test-ns
-    version: v1
+  ...
 ```
 
 We can also take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
@@ -93,6 +107,28 @@ We can also take a look at the **ClusterSchedulingPolicySnapshot** status to fig
 The corresponding **ClusterSchedulingPolicySnapshot's** spec and status gives us even more information why scheduling failed,
 
 ```
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterSchedulingPolicySnapshot
+metadata:
+  annotations:
+    kubernetes-fleet.io/CRP-generation: "2"
+    kubernetes-fleet.io/number-of-clusters: "2"
+  creationTimestamp: "2023-11-27T21:33:01Z"
+  generation: 1
+  labels:
+    kubernetes-fleet.io/is-latest-snapshot: "true"
+    kubernetes-fleet.io/parent-CRP: crp-4
+    kubernetes-fleet.io/policy-index: "0"
+  name: ...
+  ownerReferences:
+  - apiVersion: placement.kubernetes-fleet.io/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ClusterResourcePlacement
+    name: ...
+    uid: 37e83327-26e0-4c48-8276-e62cc6aa067f
+  resourceVersion: "10085"
+  uid: f2a3d0ea-c9fa-455d-be09-51b5d090e5d6
 spec:
   policy:
     affinity:
@@ -106,7 +142,7 @@ spec:
   policyHash: ZjE0Yjk4YjYyMTVjY2U3NzQ1MTZkNWRhZjRiNjQ1NzQ4NjllNTUyMzZkODBkYzkyYmRkMGU3OTI3MWEwOTkyNQ==
 status:
   conditions:
-  - lastTransitionTime: "2023-11-27T20:25:19Z"
+  - lastTransitionTime: "2023-11-27T21:33:01Z"
     message: could not find all the clusters needed as specified by the scheduling
       policy
     observedGeneration: 1
@@ -127,13 +163,16 @@ status:
     selected: false
 ```
 
-### How to find the latest ClusterSchedulingSnapshot resource?
+### How to verify the latest ClusterSchedulingPolicySnapshot for a CRP?
 
-We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below,
+- We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below,
 
 ```
-$ kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
+kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
+
+- Compare ClusterSchedulingPolicySnapshot with the CRP's policy to ensure they match (excluding numberOfClusters field from CRP's spec)
+- The ClusterSchedulingPolicySnapshot has a label called **number-of-clusters** check to see if it matches the number of clusters requested in CRP's **PickN** placement policy.
 
 ### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
@@ -148,13 +187,13 @@ We need to find the corresponding ClusterResourceBinding for our ClusterResource
 We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below. The command below lists all ClusterResourceBindings associated with ClusterResourcePlacement
 
 ```
-$ kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP={CRPName}
+kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
 example, In this case we have ClusterResourcePlacement called test-crp,
 
 ```
-$ kubectl get crp test-crp
+kubectl get crp test-crp
 NAME       GEN   SCHEDULED   SCHEDULEDGEN   APPLIED   APPLIEDGEN   AGE
 test-crp   1     True        1              True      1            15s
 ```
@@ -182,7 +221,7 @@ status:
 from the placementstatuses we can focus on which cluster we want to consider and note the clusterName,
 
 ```
-$ kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
+kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
 NAME                               WORKCREATED   RESOURCESAPPLIED   AGE
 test-crp-kind-cluster-1-be990c3e   True          True               33s
 test-crp-kind-cluster-2-ec4d953c   True          True               33s
@@ -201,7 +240,7 @@ From the **placementStatuses** we can get the **clusterName** and then use it to
 We need to have the member cluster's namespace **fleet-member-{clusterName}**, ClusterResourceBinding's name **{CRBName}** and ClusterResourcePlacement's name **{CRPName}**.
 
 ```
-$ kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName},kubernetes-fleet.io/parent-resource-binding={CRBName} -o YAML
+kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName},kubernetes-fleet.io/parent-resource-binding={CRBName} -o YAML
 ```
 
 ### How can I debug when some clusters are not selected as expected?
@@ -217,7 +256,7 @@ We need to take a look at the **placementStatuses** section in CRP status for th
 Replace **{CRPName}** in the command below with name of CRP
 
 ```
-$ kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
+kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
 ```
 
 ### How can I debug when my CRP doesn't pick up the latest change?
