@@ -176,6 +176,9 @@ kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-sna
 
 ### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
+ClusterResourcePlacementSynchronized condition status is set to "False" if the following occurs,
+- The work is not created/updated for a new ClusterResourceSnapshot, ClusterResourceBinding for a given cluster.
+
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
 
 From the **placementStatus** we can get the **clusterName** and then check the fleet-member-{clusterName} namespace to see if a work objects exists/updated in this case it won't as WorkSynchronized has failed.
@@ -229,6 +232,14 @@ test-crp-kind-cluster-2-ec4d953c   True          True               33s
 
 The ClusterResourceBinding's name follow this format **{CRPName}-{clusterName}-{suffix}**, so once we have all ClusterResourceBindings listed find the ClusterResourceBinding for the target cluster you are looking for based on the clusterName.
 
+### How to find the latest ClusterResourceSnapshot resource?
+
+Replace **{CRPName}** in the command below with name of CRP,
+
+```
+kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
+```
+
 ### How can I debug when my CRP ClusterResourcePlacementApplied condition is set to "False"?
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has ResourceApplied status set to false.
@@ -249,14 +260,17 @@ Check the status of the **ClusterSchedulingPolicySnapshot** to determine which c
 
 ### How can I debug when a selected cluster does not have the expected resources on it?
 
-We need to take a look at the **placementStatuses** section in CRP status for that particular cluster in ClusterResourcePlacement's status. In **placementStatuses** we would find **failedPlacements** which should have the reason
+Possible reasons as to selected cluster does not have expected resources,
+- The latest ClusterResourceSnapshot resource doesn't exist
+- The work objects for the selected resources are still being created/updated on the hub cluster in the target cluster's namespace, meaning the **placementStatus** section in CRP status has **WorkSynchronized** condition set to **false** which in turn means **ClusterResourcePlacementSynchronized** condition in CRP's status is also set to **false** (In this case the user has to wait for work to be created/updated on the target member cluster namespace)
+- The selected resources are being applied by the work objects on the target cluster, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **Unknown** which in turn means **ClusterResourcePlacementApplied** condition in CRPs status is also set to **Unknown** (In this case, the user has to wait for the condition to either turn true/false)
+- The selected resources have failed to be applied on the target cluster by the work objects, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **False** which in turn means **ClusterResourcePlacementApplied** conditions in CRPs status is also set to **False** (Take a look at the work object's status to figure out what went wrong on the apply)
 
-### How to find the latest ClusterResourceSnapshot resource?
-
-Replace **{CRPName}** in the command below with name of CRP
-
-```
-kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
-```
+We need to take a look at the **placementStatuses** section in CRP status for that particular cluster in ClusterResourcePlacement's status. In **placementStatuses** we would find **failedPlacements** which should have the reason.
 
 ### How can I debug when my CRP doesn't pick up the latest change?
+
+Possible reason as to why CRP doesn't pick up the latest change,
+- The latest ClusterResourceSnapshot has not been created
+- The latest ClusterSchedulingPolicySnapshot has not been created
+- The scheduler has not created/updated the cluster resource binding
