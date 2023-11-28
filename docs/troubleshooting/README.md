@@ -181,7 +181,7 @@ ClusterResourcePlacementSynchronized condition status is set to "False" if the f
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
 
-From the **placementStatus** we can get the **clusterName** and then check the fleet-member-{clusterName} namespace to see if a work objects exists/updated in this case it won't as WorkSynchronized has failed.
+From the **placementStatus** we can get the **clusterName** and then check the **fleet-member-{clusterName}** namespace to see if a work objects exists/updated in this case it won't as WorkSynchronized has failed.
 
 We need to find the corresponding ClusterResourceBinding for our ClusterResourcePlacement which should have the status of **work** create/update. 
 
@@ -246,6 +246,161 @@ In the **ClusterResourcePlacement** status section check to see which **placemen
 
 From the **placementStatuses** we can get the **clusterName** and then use it to find the work object associated with the member cluster in the **fleet-member-{ClusterName}** namespace in the hub cluster and check its status to figure out what's wrong.
 
+example, in this case the CRP is trying to propagate a namespace which contains a deployment to two member clusters, but the namespace already exists on one member cluster called kind-cluster-1
+
+**CRP spec:**
+
+```
+  policy:
+    clusterNames:
+    - kind-cluster-1
+    - kind-cluster-2
+    placementType: PickFixed
+  resourceSelectors:
+  - group: ""
+    kind: Namespace
+    name: test-ns
+    version: v1
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+```
+
+**CRP status:**
+
+```
+ conditions:
+  - lastTransitionTime: "2023-11-28T20:56:15Z"
+    message: found all the clusters needed as specified by the scheduling policy
+    observedGeneration: 2
+    reason: SchedulingPolicyFulfilled
+    status: "True"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2023-11-28T20:56:21Z"
+    message: All 2 cluster(s) are synchronized to the latest resources on the hub
+      cluster
+    observedGeneration: 2
+    reason: SynchronizeSucceeded
+    status: "True"
+    type: ClusterResourcePlacementSynchronized
+  - lastTransitionTime: "2023-11-28T20:56:21Z"
+    message: Failed to apply manifests to 1 clusters, please check the `failedResourcePlacements`
+      status
+    observedGeneration: 2
+    reason: ApplyFailed
+    status: "False"
+    type: ClusterResourcePlacementApplied
+  placementStatuses:
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2023-11-28T20:56:15Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1:
+        picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-28T20:56:21Z"
+      message: Successfully Synchronized work(s) for placement
+      observedGeneration: 2
+      reason: WorkSynchronizeSucceeded
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-28T20:56:21Z"
+      message: Failed to apply manifests, please check the `failedResourcePlacements`
+        status
+      observedGeneration: 2
+      reason: ApplyFailed
+      status: "False"
+      type: ResourceApplied
+    failedPlacements:
+    - condition:
+        lastTransitionTime: "2023-11-28T20:56:16Z"
+        message: 'Failed to apply manifest: resource is not managed by the work controller'
+        reason: AppliedManifestFailedReason
+        status: "False"
+        type: Applied
+      kind: Namespace
+      name: test-ns
+      version: v1
+  - clusterName: kind-cluster-2
+    conditions:
+    - lastTransitionTime: "2023-11-28T20:56:15Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-2:
+        picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-28T20:56:15Z"
+      message: Successfully Synchronized work(s) for placement
+      observedGeneration: 2
+      reason: WorkSynchronizeSucceeded
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-28T20:56:21Z"
+      message: Successfully applied resources
+      observedGeneration: 2
+      reason: ApplySucceeded
+      status: "True"
+      type: ResourceApplied
+  selectedResources:
+  - group: apps
+    kind: Deployment
+    name: test-nginx
+    namespace: test-ns
+    version: v1
+  - kind: Namespace
+    name: test-ns
+    version: v1
+```
+
+in the **placementStatuses** section of the **CRP status** for kind-cluster-1 in **failedPlacements** we get a clear message as to why the resource failed to apply on the member cluster.
+
+At times we might need more information in that case please take a look at the work object
+
+**work status:**
+```
+ status:
+    conditions:
+    - lastTransitionTime: "2023-11-28T21:07:15Z"
+      message: Failed to apply work
+      observedGeneration: 1
+      reason: AppliedWorkFailed
+      status: "False"
+      type: Applied
+    manifestConditions:
+    - conditions:
+      - lastTransitionTime: "2023-11-28T20:56:16Z"
+        message: ManifestNoChange
+        observedGeneration: 1
+        reason: ManifestNoChange
+        status: "True"
+        type: Applied
+      identifier:
+        group: apps
+        kind: Deployment
+        name: test-nginx
+        namespace: test-ns
+        ordinal: 0
+        resource: deployments
+        version: v1
+    - conditions:
+      - lastTransitionTime: "2023-11-28T20:56:16Z"
+        message: 'Failed to apply manifest: resource is not managed by the work controller'
+        reason: AppliedManifestFailedReason
+        status: "False"
+        type: Applied
+      identifier:
+        kind: Namespace
+        name: test-ns
+        ordinal: 1
+        resource: namespaces
+        version: v1
+```
+
+from looking at the **work status** and specifically the **manifestConditions** section we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster correctly.
+
 ### How and where to find the correct Work resource?
 
 We need to have the member cluster's namespace **fleet-member-{clusterName}**, ClusterResourceBinding's name **{CRBName}** and ClusterResourcePlacement's name **{CRPName}**.
@@ -266,11 +421,11 @@ Possible reasons as to selected cluster does not have expected resources,
 - The selected resources are being applied by the work objects on the target cluster, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **Unknown** which in turn means **ClusterResourcePlacementApplied** condition in CRPs status is also set to **Unknown** (In this case, the user has to wait for the condition to either turn true/false)
 - The selected resources have failed to be applied on the target cluster by the work objects, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **False** which in turn means **ClusterResourcePlacementApplied** conditions in CRPs status is also set to **False** (Take a look at the work object's status to figure out what went wrong on the apply)
 
-We need to take a look at the **placementStatuses** section in CRP status for that particular cluster in ClusterResourcePlacement's status. In **placementStatuses** we would find **failedPlacements** which should have the reason.
+We need to take a look at the **placementStatuses** section in CRP status for that particular cluster in **ClusterResourcePlacement's** status. In **placementStatuses** we would find **failedPlacements** which should have the reason.
 
 ### How can I debug when my CRP doesn't pick up the latest change?
 
 Possible reason as to why CRP doesn't pick up the latest change,
-- The latest ClusterResourceSnapshot has not been created
-- The latest ClusterSchedulingPolicySnapshot has not been created
-- The scheduler has not created/updated the cluster resource binding
+- The latest **ClusterResourceSnapshot** has not been created
+- The latest **ClusterSchedulingPolicySnapshot** has not been created
+- The scheduler has not created/updated the **ClusterResourceBinding**
