@@ -176,24 +176,205 @@ kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-sna
 
 ### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
-ClusterResourcePlacementSynchronized condition status is set to "False" if the following occurs,
-- The work is not created/updated for a new ClusterResourceSnapshot, ClusterResourceBinding for a given cluster.
+**ClusterResourcePlacementSynchronized** condition status is set to "False" if the following occurs, the work is not created/updated for a new **ClusterResourceSnapshot**, **ClusterResourceBinding** for a given cluster.
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
 
-From the **placementStatus** we can get the **clusterName** and then check the **fleet-member-{clusterName}** namespace to see if a work objects exists/updated in this case it won't as WorkSynchronized has failed.
+From the **placementStatus** we can get the **clusterName** and then check the **fleet-member-{clusterName}** namespace to see if a work objects exists/updated in this case it won't as **WorkSynchronized** has failed.
 
-We need to find the corresponding ClusterResourceBinding for our ClusterResourcePlacement which should have the status of **work** create/update. 
+We need to find the corresponding **ClusterResourceBinding** for our **ClusterResourcePlacement** which should have the status of **work** create/update.
+
+A common case where this could happen is user configuration for the **rollingUpdate** config it too strict for rollout strategy type rolling update.
+
+In the example below we try to propagate a namespace to 3 member clusters but initially when the **CRP** is created the namespace doesn't exist on the hub cluster. 
+The fleet currently has two member clusters called **kind-cluster-1, kind-cluster-2** joined.
+
+**CRP spec:**
+
+```
+spec:
+  policy:
+    numberOfClusters: 3
+    placementType: PickN
+  resourceSelectors:
+  - group: ""
+    kind: Namespace
+    name: test-ns
+    version: v1
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+```
+
+**CRP status:**
+```
+status:
+  conditions:
+  - lastTransitionTime: "2023-11-29T21:36:49Z"
+    message: could not find all the clusters needed as specified by the scheduling
+      policy
+    observedGeneration: 2
+    reason: SchedulingPolicyUnfulfilled
+    status: "False"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2023-11-29T21:36:54Z"
+    message: All 2 cluster(s) are synchronized to the latest resources on the hub
+      cluster
+    observedGeneration: 2
+    reason: SynchronizeSucceeded
+    status: "True"
+    type: ClusterResourcePlacementSynchronized
+  - lastTransitionTime: "2023-11-29T21:36:54Z"
+    message: Successfully applied resources to 2 member clusters
+    observedGeneration: 2
+    reason: ApplySucceeded
+    status: "True"
+    type: ClusterResourcePlacementApplied
+  placementStatuses:
+  - clusterName: kind-cluster-2
+    conditions:
+    - lastTransitionTime: "2023-11-29T21:36:49Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-29T21:36:49Z"
+      message: Successfully Synchronized work(s) for placement
+      observedGeneration: 2
+      reason: WorkSynchronizeSucceeded
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-29T21:36:54Z"
+      message: Successfully applied resources
+      observedGeneration: 2
+      reason: ApplySucceeded
+      status: "True"
+      type: ResourceApplied
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2023-11-29T21:36:49Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-29T21:36:54Z"
+      message: Successfully Synchronized work(s) for placement
+      observedGeneration: 2
+      reason: WorkSynchronizeSucceeded
+      status: "True"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-29T21:36:54Z"
+      message: Successfully applied resources
+      observedGeneration: 2
+      reason: ApplySucceeded
+      status: "True"
+      type: ResourceApplied
+```
+
+Since the resource test-ns namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to true but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
+
+Now we will go ahead a create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
+
+**CRP status after namespace test-ns is created on the hub cluster:**
+```
+status:
+  conditions:
+  - lastTransitionTime: "2023-11-29T21:36:49Z"
+    message: could not find all the clusters needed as specified by the scheduling
+      policy
+    observedGeneration: 2
+    reason: SchedulingPolicyUnfulfilled
+    status: "False"
+    type: ClusterResourcePlacementScheduled
+  - lastTransitionTime: "2023-11-29T21:49:43Z"
+    message: There are still 2 cluster(s) pending to be sychronized on the hub cluster
+    observedGeneration: 2
+    reason: SynchronizePending
+    status: "False"
+    type: ClusterResourcePlacementSynchronized
+  - lastTransitionTime: "2023-11-29T21:49:43Z"
+    message: 'Works need to be synchronized on the hub cluster or there are still
+      manifests pending to be processed by the 2 member clusters '
+    observedGeneration: 2
+    reason: ApplyPending
+    status: Unknown
+    type: ClusterResourcePlacementApplied
+  placementStatuses:
+  - clusterName: kind-cluster-2
+    conditions:
+    - lastTransitionTime: "2023-11-29T21:36:49Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-2 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-29T21:49:43Z"
+      message: 'In the process of synchronizing or operation is blocked by the rollout
+        strategy '
+      observedGeneration: 2
+      reason: WorkSynchronizePending
+      status: "False"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-29T21:49:43Z"
+      message: Works need to be synchronized on the hub cluster or there are still
+        manifests pending to be processed by the member cluster
+      observedGeneration: 2
+      reason: ApplyPending
+      status: Unknown
+      type: ResourceApplied
+  - clusterName: kind-cluster-1
+    conditions:
+    - lastTransitionTime: "2023-11-29T21:36:49Z"
+      message: 'Successfully scheduled resources for placement in kind-cluster-1 (affinity
+        score: 0, topology spread score: 0): picked by scheduling policy'
+      observedGeneration: 2
+      reason: ScheduleSucceeded
+      status: "True"
+      type: ResourceScheduled
+    - lastTransitionTime: "2023-11-29T21:49:43Z"
+      message: 'In the process of synchronizing or operation is blocked by the rollout
+        strategy '
+      observedGeneration: 2
+      reason: WorkSynchronizePending
+      status: "False"
+      type: WorkSynchronized
+    - lastTransitionTime: "2023-11-29T21:49:43Z"
+      message: Works need to be synchronized on the hub cluster or there are still
+        manifests pending to be processed by the member cluster
+      observedGeneration: 2
+      reason: ApplyPending
+      status: Unknown
+      type: ResourceApplied
+  selectedResources:
+  - kind: Namespace
+    name: test-ns
+    version: v1
+```
+
+we see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. We have this situation cause **rollingUpdate** config was not specified by the user and hence by default,
+
+**maxUnavailable** is set to 1 and **maxSurge** is set to 1.
+
+Meaning after the CRP was created first two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we did not have to create work and **ClusterResourcePlacementSynchronized** was set to **true**.
+
+But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if we try to rollout the updated **ClusterResourceBindings** and even if one of them fails to apply we break the rules of the **rollout config** since **maxUnavailable** is set 1.
+
+The solution to this particular case is to manually set maxUnavailable to a higher value than 1 to avoid this scenario.
 
 ### How to find the latest ClusterResourceBinding resource?
 
-We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below. The command below lists all ClusterResourceBindings associated with ClusterResourcePlacement
+We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below. The command below lists all **ClusterResourceBindings** associated with **ClusterResourcePlacement**
 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
-example, In this case we have ClusterResourcePlacement called test-crp,
+example, In this case we have **CRP** called test-crp,
 
 ```
 kubectl get crp test-crp
