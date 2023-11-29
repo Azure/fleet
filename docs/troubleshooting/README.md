@@ -21,7 +21,7 @@ Some scenarios where we might see this condition,
 - When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet.
 - When we specify the placement policy to **PickAll** and the specified Affinity and Topology constraints doesn't allow the scheduler to pick any cluster that has joined the fleet.
 
-The output below is for a CRP with PickN Placement policy trying to propagate resources to two clusters with label env:prod,
+The output below is for a CRP with PickN Placement policy trying to propagate resources to two clusters with label env:prod, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** with one member cluster **kind-cluster-1** has label **env:prod**
 
 **CRP spec:**
 ```
@@ -102,6 +102,8 @@ status:
   ...
 ```
 
+**ClusterResourcePlacementScheduled** is set to **false** because we want to pick two clusters with label **env:prod** but only one member cluster has the correct label mentioned in **clusterAffinity**
+
 We can also take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
 
 The corresponding **ClusterSchedulingPolicySnapshot's** spec and status gives us even more information why scheduling failed,
@@ -162,6 +164,8 @@ status:
       term (total number: 1) is matched'
     selected: false
 ```
+
+The solution here is to add the **env:prod** label to the member cluster resource for **kind-cluster-2** so that the scheduler can pick the cluster to propagate clusters.
 
 ### How to verify the latest ClusterSchedulingPolicySnapshot for a CRP?
 
@@ -580,7 +584,7 @@ At times we might need more information in that case please take a look at the w
         version: v1
 ```
 
-from looking at the **work status** and specifically the **manifestConditions** section we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster correctly.
+from looking at the **work status** and specifically the **manifestConditions** section we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster correctly. In this case to solve this issue maybe delete the existing namespace on the member cluster but that's upto the user to decide since the namespace could already contain resources within it.
 
 ### How and where to find the correct Work resource?
 
@@ -592,12 +596,12 @@ kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP
 
 ### How can I debug when some clusters are not selected as expected?
 
-Check the status of the **ClusterSchedulingPolicySnapshot** to determine which clusters were selected along with the reason
+Check the status of the **ClusterSchedulingPolicySnapshot** to determine which clusters were selected along with the reason.
 
 ### How can I debug when a selected cluster does not have the expected resources on it?
 
 Possible reasons as to selected cluster does not have expected resources,
-- The latest ClusterResourceSnapshot resource doesn't exist
+- The latest ClusterResourceSnapshot resource doesn't exist (In this case the user can take a look at pod logs and since this is not expected behavior user can go ahead a open a github issue)
 - The work objects for the selected resources are still being created/updated on the hub cluster in the target cluster's namespace, meaning the **placementStatus** section in CRP status has **WorkSynchronized** condition set to **false** which in turn means **ClusterResourcePlacementSynchronized** condition in CRP's status is also set to **false** (In this case the user has to wait for work to be created/updated on the target member cluster namespace)
 - The selected resources are being applied by the work objects on the target cluster, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **Unknown** which in turn means **ClusterResourcePlacementApplied** condition in CRPs status is also set to **Unknown** (In this case, the user has to wait for the condition to either turn true/false)
 - The selected resources have failed to be applied on the target cluster by the work objects, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **False** which in turn means **ClusterResourcePlacementApplied** conditions in CRPs status is also set to **False** (Take a look at the work object's status to figure out what went wrong on the apply)
