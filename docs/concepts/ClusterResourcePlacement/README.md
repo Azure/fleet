@@ -338,3 +338,21 @@ Events:
   Normal  PlacementSyncSuccess       3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Successfully synchronized the placement
   Normal  PlacementRolloutCompleted  3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Resources have been applied to the selected clusters
 ```
+
+## Envelope Object
+
+`ClusterResourcePlacement` uses the fleet hub cluster as a staging environment where customer resources are expected to be created and then propagated to the member clusters that have joined fleet based on the ClusterResourcePlacement's spec. 
+To achieve this many native kubernetes controllers are blocked from reconciling native kubernetes resources since the plan is not apply the resources on the hub cluster but to propagate the resources to other member clusters in the fleet.
+
+There are some resources which cause **unintended side effects** when created/applied on the hub cluster.
+- Validating Webhook Configurations
+- Cluster Role Bindings
+- Resource Quotas 
+- Storage Classes
+- Flow Schemas
+- Priority Classes
+- Ingress Classes
+- Ingresses
+- Network policies
+
+So we introduced `Envelope Objects` which allows users to embed resources that may have side effects on the hub cluster within it. We only `configmaps` as an envelope object at the moment.
