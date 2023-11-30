@@ -21,7 +21,7 @@ Some scenarios where we might see this condition,
 - When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet.
 - When we specify the placement policy to **PickAll** and the specified Affinity and Topology constraints doesn't allow the scheduler to pick any cluster that has joined the fleet.
 
-The output below is for a **CRP** with **PickN** Placement policy trying to propagate resources to two clusters with label **env:prod**, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** with one member cluster **kind-cluster-1** has label **env:prod**
+The output below is for a **CRP** with **PickN** Placement policy trying to propagate resources to two clusters with label **env:prod**, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** where one member cluster **kind-cluster-1** has label **env:prod** on it.
 
 **CRP spec:**
 ```
@@ -165,7 +165,7 @@ status:
     selected: false
 ```
 
-The solution here is to add the **env:prod** label to the member cluster resource for **kind-cluster-2** so that the scheduler can pick the cluster to propagate clusters.
+The solution here is to add the **env:prod** label to the member cluster resource for **kind-cluster-2** as well so that the scheduler can pick the cluster to propagate resources.
 
 ### How to verify the latest ClusterSchedulingPolicySnapshot for a CRP?
 
@@ -188,10 +188,9 @@ From the **placementStatus** we can get the **clusterName** and then check the *
 
 We need to find the corresponding **ClusterResourceBinding** for our **ClusterResourcePlacement** which should have the status of **work** create/update.
 
-A common case where this could happen is user configuration for the **rollingUpdate** config it too strict for rollout strategy type rolling update.
+A common case where this could happen is user input for the **rollingUpdate** config it too strict for rolling update strategy.
 
-In the example below we try to propagate a namespace to 3 member clusters but initially when the **CRP** is created the namespace doesn't exist on the hub cluster. 
-The fleet currently has two member clusters called **kind-cluster-1, kind-cluster-2** joined.
+In the example below we try to propagate a namespace to 3 member clusters but initially when the **CRP** is created the namespace doesn't exist on the hub cluster and the fleet currently has two member clusters called **kind-cluster-1, kind-cluster-2** joined.
 
 **CRP spec:**
 
@@ -279,7 +278,7 @@ status:
       type: ResourceApplied
 ```
 
-Since the resource test-ns namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to true but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
+Since the resource **test-ns** namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to true but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
 
 Now we will go ahead a create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
 
@@ -360,15 +359,15 @@ status:
     version: v1
 ```
 
-we see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. We have this situation cause **rollingUpdate** config was not specified by the user and hence by default,
+we see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. We have this situation cause **rollingUpdate** input was not specified by the user and hence by default,
 
 **maxUnavailable** is set to 1 and **maxSurge** is set to 1.
 
 Meaning after the CRP was created first two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we did not have to create work and **ClusterResourcePlacementSynchronized** was set to **true**.
 
-But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if we try to rollout the updated **ClusterResourceBindings** and even if one of them fails to apply we break the rules of the **rollout config** since **maxUnavailable** is set 1.
+But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if when the rollout controller tries to roll out the updated **ClusterResourceBindings** and even if one of them fails to apply we break the criteria of the **rollout config** since **maxUnavailable** is set 1.
 
-The solution to this particular case is to manually set maxUnavailable to a higher value than 1 to avoid this scenario.
+The solution to this particular case is to manually set maxUnavailable to a higher value than 2 to avoid this scenario.
 
 ### How to find the latest ClusterResourceBinding resource?
 
@@ -598,7 +597,7 @@ kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP
 
 Check the status of the **ClusterSchedulingPolicySnapshot** to determine which clusters were selected along with the reason.
 
-### How can I debug when a selected cluster does not have the expected resources on it?
+### How can I debug when a selected cluster does not have the expected resources on it/ if CRP doesn't pick up the latest changes?
 
 Please check the following cases,
 - check to see if **ClusterResourcePlacementSynchronized** condition in CRP status is set to **true** or **false**
