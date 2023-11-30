@@ -21,7 +21,7 @@ Some scenarios where we might see this condition,
 - When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet.
 - When we specify the placement policy to **PickAll** and the specified Affinity and Topology constraints doesn't allow the scheduler to pick any cluster that has joined the fleet.
 
-The output below is for a CRP with PickN Placement policy trying to propagate resources to two clusters with label env:prod, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** with one member cluster **kind-cluster-1** has label **env:prod**
+The output below is for a **CRP** with **PickN** Placement policy trying to propagate resources to two clusters with label **env:prod**, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** with one member cluster **kind-cluster-1** has label **env:prod**
 
 **CRP spec:**
 ```
@@ -386,7 +386,7 @@ NAME       GEN   SCHEDULED   SCHEDULEDGEN   APPLIED   APPLIEDGEN   AGE
 test-crp   1     True        1              True      1            15s
 ```
 
-the placementstatuses of the CRP above looks like, it has propagated resources to two member clusters and hence has two ClusterResourceBindings,
+the **placementstatuses** of the **CRP** above looks like, it has propagated resources to two member clusters and hence has two **ClusterResourceBindings**,
 
 ```
 status:
@@ -406,7 +406,7 @@ status:
       type: ResourceApplied
 ```
 
-from the placementstatuses we can focus on which cluster we want to consider and note the clusterName,
+from the **placementstatuses** we can focus on which cluster we want to consider and note the **clusterName**,
 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
@@ -419,7 +419,7 @@ The ClusterResourceBinding's name follow this format **{CRPName}-{clusterName}-{
 
 ### How to find the latest ClusterResourceSnapshot resource?
 
-Replace **{CRPName}** in the command below with name of CRP,
+Replace **{CRPName}** in the command below with name of **CRP**,
 
 ```
 kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
@@ -431,7 +431,7 @@ In the **ClusterResourcePlacement** status section check to see which **placemen
 
 From the **placementStatuses** we can get the **clusterName** and then use it to find the work object associated with the member cluster in the **fleet-member-{ClusterName}** namespace in the hub cluster and check its status to figure out what's wrong.
 
-example, in this case the CRP is trying to propagate a namespace which contains a deployment to two member clusters, but the namespace already exists on one member cluster called kind-cluster-1
+example, in this case the **CRP** is trying to propagate a namespace which contains a deployment to two member clusters, but the namespace already exists on one member cluster called **kind-cluster-1**
 
 **CRP spec:**
 
@@ -600,17 +600,13 @@ Check the status of the **ClusterSchedulingPolicySnapshot** to determine which c
 
 ### How can I debug when a selected cluster does not have the expected resources on it?
 
-Possible reasons as to selected cluster does not have expected resources,
-- The latest ClusterResourceSnapshot resource doesn't exist (In this case the user can take a look at pod logs and since this is not expected behavior user can go ahead a open a github issue)
-- The work objects for the selected resources are still being created/updated on the hub cluster in the target cluster's namespace, meaning the **placementStatus** section in CRP status has **WorkSynchronized** condition set to **false** which in turn means **ClusterResourcePlacementSynchronized** condition in CRP's status is also set to **false** (In this case the user has to wait for work to be created/updated on the target member cluster namespace)
-- The selected resources are being applied by the work objects on the target cluster, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **Unknown** which in turn means **ClusterResourcePlacementApplied** condition in CRPs status is also set to **Unknown** (In this case, the user has to wait for the condition to either turn true/false)
-- The selected resources have failed to be applied on the target cluster by the work objects, meaning the **placementStatus** section in CRP status has **ResourceApplied** condition set to **False** which in turn means **ClusterResourcePlacementApplied** conditions in CRPs status is also set to **False** (Take a look at the work object's status to figure out what went wrong on the apply)
+Please check the following cases,
+- check to see if **ClusterResourcePlacementSynchronized** condition in CRP status is set to **true** or **false**
+- If it's set to **false** check the question above '**_How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"_**'
+- If it's set to **true**,
+  - check to see if **ClusterResourcePlacementApplied** condition is set to **unknown**, **false** or **true**
+  - if it's set to **unknown** please wait as the resources are still being applied to the member clusters (if it's stuck in unknown state please raise a github issue as it's an unexpected behavior)
+  - if it's set to **false** check the question above '**_How can I debug when my CRP ClusterResourcePlacementApplied condition is set to "False"_**'
+  - if it's set to **true** check to see if the resource exists on the hub cluster, the ClusterResourcePlacementApplied condition is set to true if the resource doesn't exist on the hub
 
-We need to take a look at the **placementStatuses** section in CRP status for that particular cluster in **ClusterResourcePlacement's** status. In **placementStatuses** we would find **failedPlacements** which should have the reason.
-
-### How can I debug when my CRP doesn't pick up the latest change?
-
-Possible reason as to why CRP doesn't pick up the latest change,
-- The latest **ClusterResourceSnapshot** has not been created
-- The latest **ClusterSchedulingPolicySnapshot** has not been created
-- The scheduler has not created/updated the **ClusterResourceBinding**
+We can also take a look at the **placementStatuses** section in CRP status for that particular cluster in **ClusterResourcePlacement's** status. In **placementStatuses** we would find **failedPlacements** which should have the reasons as to why they failed to apply.
