@@ -180,7 +180,7 @@ kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-sna
 
 ### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
-**ClusterResourcePlacementSynchronized** condition status is set to "False" if the following occurs, the work is not created/updated for a new **ClusterResourceSnapshot**, **ClusterResourceBinding** for a given cluster.
+**ClusterResourcePlacementSynchronized** condition status is set to **"False"** if the following occurs, the work is not created/updated for a new **ClusterResourceSnapshot**, **ClusterResourceBinding** for a given cluster.
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
 
@@ -278,7 +278,7 @@ status:
       type: ResourceApplied
 ```
 
-Since the resource **test-ns** namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to true but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
+Since the resource **test-ns** namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to True but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
 
 Now we will go ahead and create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
 
@@ -363,7 +363,7 @@ we see that **ClusterResourcePlacementSynchronized** is set to false and the mes
 
 **maxUnavailable** is set to 1 and **maxSurge** is set to 1.
 
-Meaning after the CRP was created first two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we did not have to create work and **ClusterResourcePlacementSynchronized** was set to **true**.
+Meaning after the CRP was created first two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we did not have to create work and **ClusterResourcePlacementSynchronized** was set to **True**.
 
 But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if when the rollout controller tries to roll out the updated **ClusterResourceBindings** and even if one of them fails to apply we break the criteria of the **rollout config** since **maxUnavailable** is set 1.
 
@@ -600,12 +600,12 @@ Check the status of the **ClusterSchedulingPolicySnapshot** to determine which c
 ### How can I debug when a selected cluster does not have the expected resources on it/ if CRP doesn't pick up the latest changes?
 
 Please check the following cases,
-- check to see if **ClusterResourcePlacementSynchronized** condition in CRP status is set to **true** or **false**
-- If it's set to **false** check the question above '**_How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"_**'
-- If it's set to **true**,
-  - check to see if **ClusterResourcePlacementApplied** condition is set to **unknown**, **false** or **true**
-  - if it's set to **unknown** please wait as the resources are still being applied to the member clusters (if it's stuck in unknown state please raise a github issue as it's an unexpected behavior)
-  - if it's set to **false** check the question above '**_How can I debug when my CRP ClusterResourcePlacementApplied condition is set to "False"_**'
-  - if it's set to **true** check to see if the resource exists on the hub cluster, the ClusterResourcePlacementApplied condition is set to true if the resource doesn't exist on the hub
+- check to see if **ClusterResourcePlacementSynchronized** condition in CRP status is set to **True** or **False**
+- If it's set to **false** check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to--false--)
+- If it's set to **True**,
+  - check to see if **ClusterResourcePlacementApplied** condition is set to **Unknown**, **False** or **True**
+  - if it's set to **Unknown** please wait as the resources are still being applied to the member clusters (if it's stuck in unknown state please raise a github issue as it's an unexpected behavior)
+  - if it's set to **False** check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to--false--)
+  - if it's set to **True** check to see if the resource exists on the hub cluster, the **ClusterResourcePlacementApplied** condition is set to **True** if the resource doesn't exist on the hub
 
 We can also take a look at the **placementStatuses** section in CRP status for that particular cluster in **ClusterResourcePlacement's** status. In **placementStatuses** we would find **failedPlacements** which should have the reasons as to why they failed to apply.
