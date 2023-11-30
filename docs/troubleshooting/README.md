@@ -175,8 +175,8 @@ The solution here is to add the **env:prod** label to the member cluster resourc
 kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
-- Compare ClusterSchedulingPolicySnapshot with the CRP's policy to ensure they match (excluding numberOfClusters field from CRP's spec)
-- The ClusterSchedulingPolicySnapshot has a label called **number-of-clusters** check to see if it matches the number of clusters requested in CRP's **PickN** placement policy.
+- Compare ClusterSchedulingPolicySnapshot with the **CRP's** policy to ensure they match (excluding numberOfClusters field from **CRP's** spec)
+- The ClusterSchedulingPolicySnapshot has a label called **number-of-clusters** check to see if it matches the number of clusters requested in **CRP's** **PickN** placement policy.
 
 ### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
@@ -280,7 +280,7 @@ status:
 
 Since the resource **test-ns** namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to true but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
 
-Now we will go ahead a create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
+Now we will go ahead and create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
 
 **CRP status after namespace test-ns is created on the hub cluster:**
 ```
@@ -385,7 +385,7 @@ NAME       GEN   SCHEDULED   SCHEDULEDGEN   APPLIED   APPLIEDGEN   AGE
 test-crp   1     True        1              True      1            15s
 ```
 
-the **placementstatuses** of the **CRP** above looks like, it has propagated resources to two member clusters and hence has two **ClusterResourceBindings**,
+the **placementStatuses** of the **CRP** above looks like, it has propagated resources to two member clusters and hence has two **ClusterResourceBindings**,
 
 ```
 status:
@@ -405,7 +405,7 @@ status:
       type: ResourceApplied
 ```
 
-from the **placementstatuses** we can focus on which cluster we want to consider and note the **clusterName**,
+from the **placementStatuses** we can focus on which cluster we want to consider and note the **clusterName**,
 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
@@ -541,7 +541,7 @@ example, in this case the **CRP** is trying to propagate a namespace which conta
 
 in the **placementStatuses** section of the **CRP status** for kind-cluster-1 in **failedPlacements** we get a clear message as to why the resource failed to apply on the member cluster.
 
-At times we might need more information in that case please take a look at the work object
+At times, we might need more information in that case please take a look at the work object
 
 **work status:**
 ```
