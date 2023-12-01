@@ -17,9 +17,10 @@ please read the API reference for more details about ech object https://github.c
 ### How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to "False"?
 
 Some scenarios where we might see this condition,
-- When we specify the placement policy to **PickFixed** but specify cluster names which don't match any joined member cluster name in the fleet.
-- When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet.
-- When we specify the placement policy to **PickAll** and the specified Affinity and Topology constraints doesn't allow the scheduler to pick any cluster that has joined the fleet.
+- When we specify the placement policy to **PickFixed** but specify cluster names which don't match any joined member cluster name in the fleet or the cluster is not eligible, for example, no longer connected to the fleet.
+- When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet, or less N clusters that satisfies placement policy.
+
+**Note:** When we specify the placement policy to **PickAll** and the specified Affinity doesn't allow the scheduler to pick any cluster that has joined the fleet the **ClusterResourcePlacementScheduled** is set to **True**.
 
 The output below is for a **CRP** with **PickN** Placement policy trying to propagate resources to two clusters with label **env:prod**, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** where one member cluster **kind-cluster-1** has label **env:prod** on it.
 
@@ -102,11 +103,11 @@ status:
   ...
 ```
 
-**ClusterResourcePlacementScheduled** is set to **false** because we want to pick two clusters with label **env:prod** but only one member cluster has the correct label mentioned in **clusterAffinity**
+**ClusterResourcePlacementScheduled** is set to **false** because we want to pick two clusters with label **env:prod** but only one member cluster has the correct label mentioned in **clusterAffinity**.
 
 We can also take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
 
-The corresponding **ClusterSchedulingPolicySnapshot's** spec and status gives us even more information why scheduling failed,
+The corresponding **ClusterSchedulingPolicySnapshot's** spec and status gives us even more information why scheduling failed, refer to this [section](#how-to-find--verify-the-latest-clusterschedulingpolicysnapshot-for-a-crp),
 
 ```
 apiVersion: placement.kubernetes-fleet.io/v1beta1
@@ -167,7 +168,7 @@ status:
 
 The solution here is to add the **env:prod** label to the member cluster resource for **kind-cluster-2** as well so that the scheduler can pick the cluster to propagate resources.
 
-### How to verify the latest ClusterSchedulingPolicySnapshot for a CRP?
+### How to find & verify the latest ClusterSchedulingPolicySnapshot for a CRP?
 
 - We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below,
 
@@ -188,7 +189,7 @@ From the **placementStatus** we can get the **clusterName** and then check the *
 
 We need to find the corresponding **ClusterResourceBinding** for our **ClusterResourcePlacement** which should have the status of **work** create/update.
 
-A common case where this could happen is user input for the **rollingUpdate** config it too strict for rolling update strategy.
+A common case where this could happen is user input for the **rollingUpdate** config it too strict for rolling update strategy. Please check the **rollingUpdate** strategy to make sure the maxUnavailable and maxSurge meets your expectations.
 
 In the example below we try to propagate a namespace to 3 member clusters but initially when the **CRP** is created the namespace doesn't exist on the hub cluster and the fleet currently has two member clusters called **kind-cluster-1, kind-cluster-2** joined.
 
@@ -361,13 +362,13 @@ status:
 
 we see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. We have this situation cause **rollingUpdate** input was not specified by the user and hence by default,
 
-**maxUnavailable** is set to 1 and **maxSurge** is set to 1.
+**maxUnavailable** is set to 25% * 3 (desired number) and rounded to 1 and **maxSurge** is set to 25% * 3 (desired number) and rounded to 1.
 
 Meaning after the CRP was created first two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we did not have to create work and **ClusterResourcePlacementSynchronized** was set to **True**.
 
 But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if when the rollout controller tries to roll out the updated **ClusterResourceBindings** and even if one of them fails to apply we break the criteria of the **rollout config** since **maxUnavailable** is set 1.
 
-The solution to this particular case is to manually set maxUnavailable to a higher value than 2 to avoid this scenario.
+The solution to this particular case is to manually set maxUnavailable to a higher value than 2 to loose the rolling update configuration or join the third member cluster.
 
 ### How to find the latest ClusterResourceBinding resource?
 
@@ -430,7 +431,7 @@ In the **ClusterResourcePlacement** status section check to see which **placemen
 
 From the **placementStatuses** we can get the **clusterName** and then use it to find the work object associated with the member cluster in the **fleet-member-{ClusterName}** namespace in the hub cluster and check its status to figure out what's wrong.
 
-example, in this case the **CRP** is trying to propagate a namespace which contains a deployment to two member clusters, but the namespace already exists on one member cluster called **kind-cluster-1**
+For example, in this case the **CRP** is trying to propagate a namespace which contains a deployment to two member clusters, but the namespace already exists on one member cluster called **kind-cluster-1**.
 
 **CRP spec:**
 
@@ -583,7 +584,7 @@ At times, we might need more information in that case please take a look at the 
         version: v1
 ```
 
-from looking at the **work status** and specifically the **manifestConditions** section we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster correctly. In this case to solve this issue maybe delete the existing namespace on the member cluster but that's upto the user to decide since the namespace could already contain resources within it.
+From looking at the **work status** and specifically the **manifestConditions** section we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster correctly. In this case to solve this issue maybe delete the existing namespace on the member cluster but that's upto the user to decide since the namespace could already contain resources within it.
 
 ### How and where to find the correct Work resource?
 
@@ -604,7 +605,7 @@ Please check the following cases,
 - If it's set to **false** check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to--false--)
 - If it's set to **True**,
   - check to see if **ClusterResourcePlacementApplied** condition is set to **Unknown**, **False** or **True**
-  - if it's set to **Unknown** please wait as the resources are still being applied to the member clusters (if it's stuck in unknown state please raise a github issue as it's an unexpected behavior)
+  - if it's set to **Unknown** please wait as the resources are still being applied to the member clusters (if it's stuck in unknown state for a while, please raise a github issue as it's an unexpected behavior)
   - if it's set to **False** check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to--false--)
   - if it's set to **True** check to see if the resource exists on the hub cluster, the **ClusterResourcePlacementApplied** condition is set to **True** if the resource doesn't exist on the hub
 
