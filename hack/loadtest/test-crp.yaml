@@ -1,0 +1,12 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 15%
+      maxSurge: 35%
+      unavailablePeriodSeconds: 45
+    revisionHistoryLimit: 15

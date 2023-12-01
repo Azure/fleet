@@ -1,0 +1,16 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp
+spec:
+  resourceSelectors:
+    - group: ""
+      kind: Namespace
+      version: v1
+      name: load-test-ns-testing
+  policy:
+    placementType: PickFixed
+    clusterNames:
+      - cluster-1
+      - cluster-2
+      - cluster-3

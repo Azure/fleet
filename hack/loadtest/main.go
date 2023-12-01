@@ -22,42 +22,41 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/hack/loadtest/util"
 )
 
 var (
-	scheme = runtime.NewScheme()
+	scheme  = runtime.NewScheme()
+	crpFile = "test-crp.yaml"
 )
 
 var (
-	placementDeadline   = flag.Int("placement-deadline-second", 300, "The deadline for a placement to be applied (in seconds)")
+	placementDeadline   = flag.Int("placement-deadline-second", 600, "The deadline for a placement to be applied (in seconds)")
 	pollInterval        = flag.Int("poll-interval-millisecond", 250, "The poll interval for verification (in milli-second)")
 	maxCurrentPlacement = flag.Int("max-current-placement", 10, "The number of current placement load.")
-	loadTestLength      = flag.Int("load-test-length-minute", 15, "The length of the load test in miniutes.")
-	clusterNames        util.ClusterNames
+	loadTestLength      = flag.Int("load-test-length-minute", 20, "The length of the load test in minutes.")
+	clusterNames        util.ClusterNames //will be used for PickFixed scenario, otherwise will apply to all clusters
 )
 
 func init() {
 	klog.InitFlags(nil)
+	flag.StringVar(&crpFile, "crp-file", "test-crp.yaml", "The CRP yaml file.")
 	utilrand.Seed(time.Now().UnixNano())
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(fleetv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1beta1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
 func main() {
-	flag.Var(&clusterNames, "cluster", "The name of a member cluster")
 	flag.Parse()
 	defer klog.Flush()
 
-	klog.InfoS("start to run placement load test", "pollInterval", *pollInterval, "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "clusterNames", clusterNames)
+	klog.InfoS("start to run placement load test", "crFile", crpFile, "pollInterval", *pollInterval, "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "clusterNames", clusterNames)
 	config := config.GetConfigOrDie()
-	config.QPS, config.Burst = float32(100), 500
+	config.QPS, config.Burst = float32(100), 500 //queries per second, max # of queries queued at once
 	hubClient, err := client.New(config, client.Options{
 		Scheme: scheme,
 	})
@@ -75,7 +74,7 @@ func main() {
 	// setup prometheus server
 	http.Handle("/metrics", promhttp.Handler())
 	/* #nosec */
-	if err = http.ListenAndServe(":4848", http.TimeoutHandler(nil, 10*time.Second, "request time out")); err != nil {
+	if err = http.ListenAndServe(":4848", nil); err != nil {
 		panic(err)
 	}
 }
@@ -101,7 +100,7 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 				case <-ctx.Done():
 					return
 				default:
-					if err = util.MeasureOnePlacement(ctx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames); err != nil {
+					if err = util.MeasureOnePlacement(ctx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames, crpFile); err != nil {
 						klog.ErrorS(err, "placement load test failed")
 					}
 				}
