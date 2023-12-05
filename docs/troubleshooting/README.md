@@ -174,8 +174,6 @@ The solution here is to add the **env:prod** label to the member cluster resourc
 
 In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
 
-From the **placementStatus** we can get the **clusterName** and then check the **fleet-member-{clusterName}** namespace to see if a work objects exists/updated in this case it won't as **WorkSynchronized** has failed.
-
 We need to find the corresponding **ClusterResourceBinding** for our **ClusterResourcePlacement** which should have the status of **work** create/update.
 
 A common case where this could happen is user input for the **rollingUpdate** config it too strict for rolling update strategy. Please check the **rollingUpdate** strategy to make sure the maxUnavailable and maxSurge meets your expectations.
@@ -270,6 +268,85 @@ status:
 
 Since the resource **test-ns** namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to True but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
 
+Let's check the latest **ClusterResourceSnapshot**, please check this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) for more details,
+
+**Latest ClusterResourceSnapshot:**
+```
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceSnapshot
+metadata:
+  annotations:
+    kubernetes-fleet.io/number-of-enveloped-object: "0"
+    kubernetes-fleet.io/number-of-resource-snapshots: "1"
+    kubernetes-fleet.io/resource-hash: 83ff749c5d8eb5a0b62d714175bcbaef1409b371fc5a229a002db6fcc1f144e1
+  creationTimestamp: "2023-12-05T04:17:49Z"
+  generation: 1
+  labels:
+    kubernetes-fleet.io/is-latest-snapshot: "true"
+    kubernetes-fleet.io/parent-CRP: test-crp
+    kubernetes-fleet.io/resource-index: "0"
+  name: test-crp-0-snapshot
+  ownerReferences:
+  - apiVersion: placement.kubernetes-fleet.io/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ClusterResourcePlacement
+    name: test-crp
+    uid: 1c474983-cda0-49cb-bf60-3d2a42f122ba
+  resourceVersion: "2548"
+  uid: dde6ec98-af99-4c4f-aabc-329a2862709a
+spec:
+  selectedResources: []
+```
+
+We notice that the **selectedResources** in the **spec** is empty because the namespace **test-ns** doesn't exist on the hub cluster.
+
+Let's check the **ClusterResourceBinding** for **kind-cluster-1**, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) for more details,
+
+**kind-cluster-1's ClusterResourceBinding:**
+```
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceBinding
+metadata:
+  creationTimestamp: "2023-12-05T04:17:49Z"
+  finalizers:
+  - kubernetes-fleet.io/work-cleanup
+  generation: 2
+  labels:
+    kubernetes-fleet.io/parent-CRP: test-crp
+  name: test-crp-kind-cluster-1-4e5c873b
+  resourceVersion: "2572"
+  uid: 8ae9741d-e95c-44f8-b36a-29d73f6b833c
+spec:
+  clusterDecision:
+    clusterName: kind-cluster-1
+    clusterScore:
+      affinityScore: 0
+      priorityScore: 0
+    reason: picked by scheduling policy
+    selected: true
+  resourceSnapshotName: test-crp-0-snapshot
+  schedulingPolicySnapshotName: test-crp-0
+  state: Bound
+  targetCluster: kind-cluster-1
+status:
+  conditions:
+  - lastTransitionTime: "2023-12-05T04:17:50Z"
+    message: ""
+    observedGeneration: 2
+    reason: AllWorkSynced
+    status: "True"
+    type: Bound
+  - lastTransitionTime: "2023-12-05T04:17:50Z"
+    message: ""
+    observedGeneration: 2
+    reason: AllWorkHasBeenApplied
+    status: "True"
+    type: Applied
+```
+
+In the **ClusterResourceBinding's** spec we see that **resourceSnapshotName** matches the latest **ClusterResourceSnapshot's** name and both **Bound** and **Applied** conditions are set to True.
+
 Now we will go ahead and create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
 
 **CRP status after namespace test-ns is created on the hub cluster:**
@@ -349,11 +426,100 @@ status:
     version: v1
 ```
 
-we see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. We have this situation cause **rollingUpdate** input was not specified by the user and hence by default,
+We see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. 
+
+Let's check the latest ClusterResourceSnapshot, please check this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) for more details,
+
+**Latest ClusterResourceSnapshot:**
+
+```
+metadata:
+  annotations:
+    kubernetes-fleet.io/number-of-enveloped-object: "0"
+    kubernetes-fleet.io/number-of-resource-snapshots: "1"
+    kubernetes-fleet.io/resource-hash: 72344be6e268bc7af29d75b7f0aad588d341c228801aab50d6f9f5fc33dd9c7c
+  creationTimestamp: "2023-12-05T04:36:24Z"
+  generation: 1
+  labels:
+    kubernetes-fleet.io/is-latest-snapshot: "true"
+    kubernetes-fleet.io/parent-CRP: test-crp
+    kubernetes-fleet.io/resource-index: "1"
+  name: test-crp-1-snapshot
+  ownerReferences:
+  - apiVersion: placement.kubernetes-fleet.io/v1beta1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ClusterResourcePlacement
+    name: test-crp
+    uid: 1c474983-cda0-49cb-bf60-3d2a42f122ba
+  resourceVersion: "4489"
+  uid: a520f775-14cc-4bf5-b8cd-c4efc0e2be34
+spec:
+  selectedResources:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      labels:
+        kubernetes.io/metadata.name: test-ns
+      name: test-ns
+    spec:
+      finalizers:
+      - kubernetes
+```
+
+We see that the **selectedResources** section in spec, now has the **namespace** test-ns.
+
+Let's check the **kind-cluster-1's** **ClusterResourceBinding** to see if it got **updated** after the **namespace** test-ns was created, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource)
+
+**kind-cluster-1's ClusterResourceBinding:**
+```
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourceBinding
+metadata:
+  creationTimestamp: "2023-12-05T04:17:49Z"
+  finalizers:
+  - kubernetes-fleet.io/work-cleanup
+  generation: 2
+  labels:
+    kubernetes-fleet.io/parent-CRP: test-crp
+  name: test-crp-kind-cluster-1-4e5c873b
+  resourceVersion: "2572"
+  uid: 8ae9741d-e95c-44f8-b36a-29d73f6b833c
+spec:
+  clusterDecision:
+    clusterName: kind-cluster-1
+    clusterScore:
+      affinityScore: 0
+      priorityScore: 0
+    reason: picked by scheduling policy
+    selected: true
+  resourceSnapshotName: test-crp-0-snapshot
+  schedulingPolicySnapshotName: test-crp-0
+  state: Bound
+  targetCluster: kind-cluster-1
+status:
+  conditions:
+  - lastTransitionTime: "2023-12-05T04:17:50Z"
+    message: ""
+    observedGeneration: 2
+    reason: AllWorkSynced
+    status: "True"
+    type: Bound
+  - lastTransitionTime: "2023-12-05T04:17:50Z"
+    message: ""
+    observedGeneration: 2
+    reason: AllWorkHasBeenApplied
+    status: "True"
+    type: Applied
+```
+
+We notice that object remains the **same**, and we also see that in the spec, **resourceSnapshotName** is still has the **old ClusterResourceSnapshot's** name.
+
+We have this situation cause **rollingUpdate** input was not specified by the user and hence by default,
 
 **maxUnavailable** is set to 25% * 3 (desired number) and rounded to 1 and **maxSurge** is set to 25% * 3 (desired number) and rounded to 1.
 
-Meaning after the CRP was created first two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we did not have to create work and **ClusterResourcePlacementSynchronized** was set to **True**.
+**To summarize**, when the CRP was initially created two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we created the work object with an empty list of manifests and **ClusterResourcePlacementSynchronized** was set to **True**.
 
 But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if when the rollout controller tries to roll out the updated **ClusterResourceBindings** and even if one of them fails to apply we break the criteria of the **rollout config** since **maxUnavailable** is set 1.
 
