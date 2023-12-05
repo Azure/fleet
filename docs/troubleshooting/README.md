@@ -7,24 +7,29 @@ This TSG is meant to help you troubleshoot issues with the Fleet APIs.
 ## Cluster Resource Placement:
 
 Internal Objects to keep in mind when troubleshooting CRP related errors on the hub cluster:
- - **ClusterResourceSnapshot**
- - **ClusterSchedulingPolicySnapshot**
- - **ClusterResourceBinding**
- - **Work** 
+ - `ClusterResourceSnapshot`
+ - `ClusterSchedulingPolicySnapshot`
+ - `ClusterResourceBinding`
+ - `Work`
 
-please read the API reference for more details about ech object https://github.com/Azure/fleet/blob/main/docs/api-references.md
+please read the API reference for more details about each object https://github.com/Azure/fleet/blob/main/docs/api-references.md
 
 ### How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to "False"?
 
-Some scenarios where we might see this condition,
-- When we specify the placement policy to **PickFixed** but specify cluster names which don't match any joined member cluster name in the fleet or the cluster is not eligible, for example, no longer connected to the fleet.
-- When we specify the placement policy to **PickN** and specify N clusters, but we have less than N clusters that have joined the fleet, or less N clusters that satisfies placement policy.
+#### Common scenarios:
 
-**Note:** When we specify the placement policy to **PickAll** and the specified Affinity doesn't allow the scheduler to pick any cluster that has joined the fleet the **ClusterResourcePlacementScheduled** is set to **True**.
+Instances where this condition may arise:
 
-The output below is for a **CRP** with **PickN** Placement policy trying to propagate resources to two clusters with label **env:prod**, In this case two clusters are joined to the fleet called **kind-cluster-1**, **kind-cluster-2** where one member cluster **kind-cluster-1** has label **env:prod** on it.
+- When the placement policy is set to `PickFixed`, but the specified cluster names do not match any joined member cluster name in the fleet, or the specified cluster is no longer connected to the fleet.
+- When the placement policy is set to `PickN`, and N clusters are specified, but there are fewer than N clusters that have joined the fleet or satisfy the placement policy.
 
-**CRP spec:**
+Note: When the placement policy is set to `PickAll`, and the specified Affinity does not allow the scheduler to pick any cluster that has joined the fleet, the `ClusterResourcePlacementScheduled` is set to `true`.
+
+#### Example Scenario:
+
+The example output below demonstrates a `ClusterResourcePlacement` with a `PickN` placement policy attempting to propagate resources to two clusters labeled `env:prod`. In this instance, two clusters, namely `kind-cluster-1` and `kind-cluster-2`, are joined to the fleet, with only one member cluster, `kind-cluster-1`, having the label `env:prod`.
+
+#### CRP spec:
 ```
 spec:
   policy:
@@ -44,8 +49,7 @@ spec:
     type: RollingUpdate
 ```
 
-**CRP status:**
-
+#### CRP status:
 ```
 status:
   conditions:
@@ -103,12 +107,13 @@ status:
   ...
 ```
 
-**ClusterResourcePlacementScheduled** is set to **false** because we want to pick two clusters with label **env:prod** but only one member cluster has the correct label mentioned in **clusterAffinity**.
+The `ClusterResourcePlacementScheduled` condition is set to `false` due to a specific scenario: the goal is to select two clusters with the label `env:prod`, but only one member cluster possesses the correct label as specified in `clusterAffinity`.
 
-We can also take a look at the **ClusterSchedulingPolicySnapshot** status to figure out why the scheduler could not schedule the resource for the placement policy specified.
+We can also take a look at the `ClusterSchedulingPolicySnapshot` status to figure out why the scheduler could not schedule the resource for the placement policy specified.
 
-The corresponding **ClusterSchedulingPolicySnapshot's** spec and status gives us even more information why scheduling failed, refer to this [section](#how-to-find--verify-the-latest-clusterschedulingpolicysnapshot-for-a-crp),
+The corresponding `ClusterSchedulingPolicySnapshot` spec and status gives us even more information on why scheduling failed, refer to this [section](#how-to-find--verify-the-latest-clusterschedulingpolicysnapshot-for-a-crp),
 
+#### Latest ClusterSchedulingPolicySnapshot:
 ```
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterSchedulingPolicySnapshot
@@ -166,22 +171,24 @@ status:
     selected: false
 ```
 
-The solution here is to add the **env:prod** label to the member cluster resource for **kind-cluster-2** as well so that the scheduler can pick the cluster to propagate resources.
+#### Resolution:
+The solution here is to add the `env:prod` label to the member cluster resource for `kind-cluster-2` as well, so that the scheduler can select the cluster to propagate resources.
 
 ### How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "False"?
 
-**ClusterResourcePlacementSynchronized** condition status is set to **"False"** if the following occurs, the work is not created/updated for a new **ClusterResourceSnapshot**, **ClusterResourceBinding** for a given cluster.
+The **ClusterResourcePlacementSynchronized** condition status is set to **"False"** under the following circumstances: when the work is not created or updated for a new **ClusterResourceSnapshot**.
 
-In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has WorkSynchronized status set to **false**.
+#### **Investigation Steps:**
 
-We need to find the corresponding **ClusterResourceBinding** for our **ClusterResourcePlacement** which should have the status of **work** create/update.
+- In the **ClusterResourcePlacement** status section, examine the **placementStatuses** to identify those with the WorkSynchronized status set to **"False"**.
+- Locate the corresponding **ClusterResourceBinding** for the identified **ClusterResourcePlacement**. This resource should indicate the status of the work, whether it was created or updated.
+- A common scenario leading to this issue is the user input for the **rollingUpdate** configuration being too strict, especially concerning the rolling update strategy. Verify the values for maxUnavailable and maxSurge to ensure they align with your expectations.
 
-A common case where this could happen is user input for the **rollingUpdate** config it too strict for rolling update strategy. Please check the **rollingUpdate** strategy to make sure the maxUnavailable and maxSurge meets your expectations.
+#### **Example Scenario:**
 
-In the example below we try to propagate a namespace to 3 member clusters but initially when the **CRP** is created the namespace doesn't exist on the hub cluster and the fleet currently has two member clusters called **kind-cluster-1, kind-cluster-2** joined.
+In the following example, an attempt is made to propagate a namespace to three member clusters. However, during the initial creation of the **CRP**, the namespace doesn't exist on the hub cluster, and the fleet currently comprises two member clusters named **kind-cluster-1** and **kind-cluster-2**.
 
-**CRP spec:**
-
+#### CRP spec:
 ```
 spec:
   policy:
@@ -197,7 +204,7 @@ spec:
     type: RollingUpdate
 ```
 
-**CRP status:**
+#### CRP status:
 ```
 status:
   conditions:
@@ -266,11 +273,13 @@ status:
       type: ResourceApplied
 ```
 
-Since the resource **test-ns** namespace never existed on the hub cluster **ClusterResourcePlacementApplied** is set to True but **ClusterResourcePlacementScheduled** is set to false since the spec wants to pick 3 clusters but the **scheduler** can only schedule to two available joined clusters.
+Given that the resource **test-ns** namespace never existed on the hub cluster, the status reflects the following:
+- `ClusterResourcePlacementApplied` is set to `true`
+- `ClusterResourcePlacementScheduled` is set to False, as the specified policy aims to pick three clusters, but the scheduler can only accommodate placement in two currently available and joined clusters.
 
-Let's check the latest **ClusterResourceSnapshot**, please check this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) for more details,
+Let's check the latest `ClusterResourceSnapshot`, please check this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) for more details,
 
-**Latest ClusterResourceSnapshot:**
+#### Latest ClusterResourceSnapshot:
 ```
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourceSnapshot
@@ -299,11 +308,11 @@ spec:
   selectedResources: []
 ```
 
-We notice that the **selectedResources** in the **spec** is empty because the namespace **test-ns** doesn't exist on the hub cluster.
+We observe that the `selectedResources` field in the spec is empty because the namespace `test-ns` doesn't exist on the hub cluster.
 
-Let's check the **ClusterResourceBinding** for **kind-cluster-1**, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) for more details,
+Let's check the `ClusterResourceBinding` for `kind-cluster-1`, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) for more details,
 
-**kind-cluster-1's ClusterResourceBinding:**
+#### ClusterResourceBinding for kind-cluster-1:
 ```
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourceBinding
@@ -345,11 +354,11 @@ status:
     type: Applied
 ```
 
-In the **ClusterResourceBinding's** spec we see that **resourceSnapshotName** matches the latest **ClusterResourceSnapshot's** name and both **Bound** and **Applied** conditions are set to True.
+Upon inspecting the `ClusterResourceBinding` spec, we observe that the `resourceSnapshotName` matches the latest `ClusterResourceSnapshot` name. Additionally, both the `Bound` and `Applied` conditions are set to True.
 
-Now we will go ahead and create the namespace **test-ns** on the hub cluster, ideally we expect the namespace to be propagated,
+Subsequently, we proceed to create the `test-ns` namespace on the hub cluster. We anticipate the seamless propagation of the namespace across the relevant clusters.
 
-**CRP status after namespace test-ns is created on the hub cluster:**
+#### CRP status after namespace test-ns is created on the hub cluster:
 ```
 status:
   conditions:
@@ -426,12 +435,11 @@ status:
     version: v1
 ```
 
-We see that **ClusterResourcePlacementSynchronized** is set to false and the message reads **"Works need to be synchronized on the hub cluster or there are still manifests pending to be processed by the 2 member clusters"**. 
+Upon examination, the `ClusterResourcePlacementSynchronized` status is found to be `false`, accompanied by a message indicating that "**Works need to be synchronized on the hub cluster, or there are still manifests pending to be processed by the 2 member clusters.**"
 
-Let's check the latest ClusterResourceSnapshot, please check this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) for more details,
+Let's check the latest `ClusterResourceSnapshot`, please check this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) for more details,
 
-**Latest ClusterResourceSnapshot:**
-
+#### Latest ClusterResourceSnapshot:
 ```
 metadata:
   annotations:
@@ -467,11 +475,11 @@ spec:
       - kubernetes
 ```
 
-We see that the **selectedResources** section in spec, now has the **namespace** test-ns.
+Upon inspecting `ClusterResourceSnapshot` spec, we observe that the `selectedResources` section now has the namespace `test-ns`.
 
-Let's check the **kind-cluster-1's** **ClusterResourceBinding** to see if it got **updated** after the **namespace** test-ns was created, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource)
+Let's check the `ClusterResourceBinding` for `kind-cluster-1` to see if it got updated after the namespace `test-ns` was created, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) for more details,
 
-**kind-cluster-1's ClusterResourceBinding:**
+#### ClusterResourceBinding for kind-cluster-1:
 ```
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourceBinding
@@ -513,28 +521,33 @@ status:
     type: Applied
 ```
 
-We notice that object remains the **same**, and we also see that in the spec, **resourceSnapshotName** is still has the **old ClusterResourceSnapshot's** name.
+Upon inspection, it is observed that the `ClusterResourceBinding` remains unchanged. Notably, in the spec, the `resourceSnapshotName` still references the old `ClusterResourceSnapshot` name.
 
-We have this situation cause **rollingUpdate** input was not specified by the user and hence by default,
+This scenario arises due to the absence of explicit `rollingUpdate` input from the user. Consequently, the default values are applied:
 
-**maxUnavailable** is set to 25% * 3 (desired number) and rounded to 1 and **maxSurge** is set to 25% * 3 (desired number) and rounded to 1.
+- `maxUnavailable` is configured to **25% * 3 (desired number), rounded to 1**
+- `maxSurge` is configured to **25% * 3 (desired number), rounded to 1**
 
-**To summarize**, when the CRP was initially created two **ClusterResourceBindings** were created and since the namespace didn't exist on the hub cluster we created the work object with an empty list of manifests and **ClusterResourcePlacementSynchronized** was set to **True**.
+#### Summary of Events:
+1. Initially, when the CRP was created, two `ClusterResourceBindings` were generated. However, since the `test-ns` namespace did not exist on the hub cluster, the work object was created with an empty list of manifests, and `ClusterResourcePlacementSynchronized` was set to `true`.
+2. Upon creating the `test-ns` namespace on the hub, the rollout controller attempted to update the two existing `ClusterResourceBindings`. However, the `rollingUpdate` configuration posed a challenge: `maxUnavailable` was set to 1, which was already the case due to a missing member cluster. If, during the update, even one of the bindings failed to apply, it would violate the `rollingUpdate` configuration since `maxUnavailable` was set to 1.
 
-But once we create the **test-ns** namespace on the hub the rollout controller tries to pick the two **ClusterResourceBindings** to update, but we have **maxUnavailable** set to 1 which is already the case since we have one missing member cluster now if when the rollout controller tries to roll out the updated **ClusterResourceBindings** and even if one of them fails to apply we break the criteria of the **rollout config** since **maxUnavailable** is set 1.
-
-The solution to this particular case is to manually set maxUnavailable to a higher value than 2 to loose the rolling update configuration or join the third member cluster.
+#### Resolution:
+- To address this specific issue, consider manually setting `maxUnavailable` to a value greater than 2 to relax the `rollingUpdate` configuration.
+- Alternatively, you can also join the third member cluster.
 
 ### How can I debug when my CRP ClusterResourcePlacementApplied condition is set to "False"?
 
-In the **ClusterResourcePlacement** status section check to see which **placementStatuses** also has ResourceApplied status set to false.
+#### **Investigation steps:
 
-From the **placementStatuses** we can get the **clusterName** and then use it to find the work object associated with the member cluster in the **fleet-member-{ClusterName}** namespace in the hub cluster and check its status to figure out what's wrong.
+1. Check `placementStatuses`, in the `ClusterResourcePlacement` status section, inspect the `placementStatuses` to identify which clusters have the `ResourceApplied` condition set to `false` and note down their `clusterName`.
+2. Locate `work` Object in Hub Cluster, use the identified `clusterName` to locate the `work` object associated with the member cluster. please check this [section](#how-and-where-to-find-the-correct-work-resource) to get the latest work object.
+3. Check `work` object status, inspect the status of the `work` object to understand the specific issues preventing successful resource application.
 
-For example, in this case the **CRP** is trying to propagate a namespace which contains a deployment to two member clusters, but the namespace already exists on one member cluster called **kind-cluster-1**.
+#### Example Scenario:
+In the presented case, the `ClusterResourcePlacement` is attempting to propagate a namespace containing a deployment to two member clusters. However, the namespace already exists on one member cluster, specifically named `kind-cluster-1`.
 
-**CRP spec:**
-
+#### CRP spec:
 ```
   policy:
     clusterNames:
@@ -551,8 +564,7 @@ For example, in this case the **CRP** is trying to propagate a namespace which c
     type: RollingUpdate
 ```
 
-**CRP status:**
-
+#### CRP status:
 ```
  conditions:
   - lastTransitionTime: "2023-11-28T20:56:15Z"
@@ -640,11 +652,11 @@ For example, in this case the **CRP** is trying to propagate a namespace which c
     version: v1
 ```
 
-in the **placementStatuses** section of the **CRP status** for kind-cluster-1 in **failedPlacements** we get a clear message as to why the resource failed to apply on the member cluster.
+In the `ClusterResourcePlacement` status, `placementStatuses` for `kind-cluster-1` in the `failedPlacements` section, we get a clear message as to why the resource failed to apply on the member cluster.
 
-At times, we might need more information in that case please take a look at the work object, please check this [section](#how-and-where-to-find-the-correct-work-resource) to get the latest work object 
+To gain more insights also take a look at the `work` object, please check this [section](#how-and-where-to-find-the-correct-work-resource) for more details,
 
-**work status:**
+#### Work status:
 ```
  status:
     conditions:
@@ -684,45 +696,50 @@ At times, we might need more information in that case please take a look at the 
         version: v1
 ```
 
-From looking at the **work status** and specifically the **manifestConditions** section we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster correctly. In this case to solve this issue maybe delete the existing namespace on the member cluster but that's upto the user to decide since the namespace could already contain resources within it.
+From looking at the `Work` status and specifically the `manifestConditions` section, we could see that the namespace could not be applied but the deployment within the namespace got propagated from hub to the member cluster.
+
+#### Resolution:
+In this scenario, a potential solution is to delete the existing namespace on the member cluster. However, it's essential to note that this decision rests with the user, as the namespace might already contain resources.
 
 ### How can I debug when some clusters are not selected as expected?
 
-Check the status of the **ClusterSchedulingPolicySnapshot** to determine which clusters were selected along with the reason.
+Check the status of the `ClusterSchedulingPolicySnapshot` to determine which clusters were selected along with the reason.
 
 ### How can I debug when a selected cluster does not have the expected resources on it or if CRP doesn't pick up the latest changes?
 
 Please check the following cases,
-- check to see if **ClusterResourcePlacementSynchronized** condition in CRP status is set to **True** or **False**
-- If it's set to **false** check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to--false--)
-- If it's set to **True**,
-  - check to see if **ClusterResourcePlacementApplied** condition is set to **Unknown**, **False** or **True**
-  - if it's set to **Unknown** please wait as the resources are still being applied to the member clusters (if it's stuck in unknown state for a while, please raise a github issue as it's an unexpected behavior)
-  - if it's set to **False** check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to--false--)
-  - if it's set to **True** check to see if the resource exists on the hub cluster, the **ClusterResourcePlacementApplied** condition is set to **True** if the resource doesn't exist on the hub
+- check to see if `ClusterResourcePlacementSynchronized` condition in CRP status is set to `true` or `false`.
+- If it's set to `false` check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to--false--).
+- If it's set to `true`,
+  - check to see if `ClusterResourcePlacementApplied` condition is set to `unknown`, `false` or `true`.
+  - if it's set to `unknown`, please wait as the resources are still being applied to the member cluster (if it's stuck in unknown state for a while, please raise a github issue as it's an unexpected behavior).
+  - if it's set to `false`, check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to--false--).
+  - if it's set to `true`, check to see if the resource exists on the hub cluster. The `ClusterResourcePlacementApplied` condition is set to `true` if the resource doesn't exist on the hub.
 
-We can also take a look at the **placementStatuses** section in CRP status for that particular cluster in **ClusterResourcePlacement's** status. In **placementStatuses** we would find **failedPlacements** which should have the reasons as to why they failed to apply.
+We can also take a look at the `placementStatuses` section in `ClusterResourcePlacement` status for that particular cluster. In `placementStatuses` we would find `failedPlacements` section which should have the reasons as to why resources failed to apply.
 
 ### How to find & verify the latest ClusterSchedulingPolicySnapshot for a CRP?
 
-- We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below,
+We need to have `ClusterResourcePlacement` name `{CRPName}`, replace `{CRPName}` in the command below,
 
 ```
 kubectl get clusterschedulingpolicysnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
-- Compare ClusterSchedulingPolicySnapshot with the **CRP's** policy to ensure they match (excluding numberOfClusters field from **CRP's** spec)
-- The ClusterSchedulingPolicySnapshot has a label called **number-of-clusters** check to see if it matches the number of clusters requested in **CRP's** **PickN** placement policy.
+- Compare `ClusterSchedulingPolicySnapshot` with the `ClusterResourcePlacement` policy to ensure they match (excluding `numberOfClusters` field from `ClusterResourcePlacement` spec).
+- If placement type is PickN, check if the number of clusters requested in `ClusterResourcePlacment` placement policy matches the value for the label called `number-of-clusters`.
 
 ### How to find the latest ClusterResourceBinding resource?
 
-We need to have ClusterResourcePlacement's name **{CRPName}**, replace **{CRPName}** in the command below. The command below lists all **ClusterResourceBindings** associated with **ClusterResourcePlacement**
+We need to have `ClusterResourcePlacement` name `{CRPName}`, replace `{CRPName} `in the command below. The command below lists all `ClusterResourceBindings` associated with `ClusterResourcePlacement`,
 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
-example, In this case we have **CRP** called test-crp,
+#### Example:
+
+In this case we have `ClusterResourcePlacement` called test-crp,
 
 ```
 kubectl get crp test-crp
@@ -730,7 +747,7 @@ NAME       GEN   SCHEDULED   SCHEDULEDGEN   APPLIED   APPLIEDGEN   AGE
 test-crp   1     True        1              True      1            15s
 ```
 
-the **placementStatuses** of the **CRP** above looks like, it has propagated resources to two member clusters and hence has two **ClusterResourceBindings**,
+From the `placementStatuses` section of the `test-crp` status, we can observe that it has propagated resources to two member clusters and hence has two `ClusterResourceBindings`,
 
 ```
 status:
@@ -750,7 +767,7 @@ status:
       type: ResourceApplied
 ```
 
-from the **placementStatuses** we can focus on which cluster we want to consider and note the **clusterName**,
+Output we receive after running the command listed above to get the `ClusterResourceBindings`,
 
 ```
 kubectl get clusterresourcebinding -l kubernetes-fleet.io/parent-CRP=test-crp 
@@ -759,11 +776,11 @@ test-crp-kind-cluster-1-be990c3e   True          True               33s
 test-crp-kind-cluster-2-ec4d953c   True          True               33s
 ```
 
-The ClusterResourceBinding's name follow this format **{CRPName}-{clusterName}-{suffix}**, so once we have all ClusterResourceBindings listed find the ClusterResourceBinding for the target cluster you are looking for based on the clusterName.
+The ClusterResourceBinding's name follow this format `{CRPName}-{clusterName}-{suffix}`, so once we have all ClusterResourceBindings listed find the ClusterResourceBinding for the target cluster you are looking for based on the `clusterName`.
 
 ### How to find the latest ClusterResourceSnapshot resource?
 
-Replace **{CRPName}** in the command below with name of **CRP**,
+Replace `{CRPName}` in the command below with name of ClusterResourcePlacement,
 
 ```
 kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
@@ -771,7 +788,7 @@ kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=tr
 
 ### How and where to find the correct Work resource?
 
-We need to have the member cluster's namespace **fleet-member-{clusterName}**, ClusterResourceBinding's name **{CRBName}** and ClusterResourcePlacement's name **{CRPName}**.
+We need to have the member cluster's namespace which follow this format `fleet-member-{clusterName}`, ClusterResourceBinding's name `{CRBName}` and ClusterResourcePlacement's name `{CRPName}`.
 
 ```
 kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName},kubernetes-fleet.io/parent-resource-binding={CRBName} -o YAML
