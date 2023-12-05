@@ -1,8 +1,8 @@
-# How-to Guide: To propagate envelope objects using ClusterResourcePlacement API
+# How-to Guide: To propagate resources using ClusterResourcePlacement API without unintended side effects on the hub clusters
 
 This guide discusses how to propagate a set of resources from the hub cluster to joined member clusters within an envelope object.
 
-Currently, we allow `configmaps` to act as an envelope object, and since `ClusterResourcePlacement` can be used to propagate a normal configmap and a confimap which acts as an envelope object we needed a way to differentiate so that the `ClusterResourcePlacement` controller knows how to handle the envelope object appropriately. 
+Currently, we allow `ConfigMap` to act as an envelope object by using a fleet reserved annotation.
 
 So any configmap that is an envelope object must have this annotation on it `kubernetes-fleet.io/envelope-configmap` which would be set to **true**
 
@@ -64,7 +64,7 @@ data:
 
 ## Propagating a envelope configmap from hub cluster to member cluster:
 
-We will now apply the example envelope object above on our hub cluster, the envelope object belongs to a namespace called app hence make sure the namespace app exists on the hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`
+We will now apply the example envelope object above on our hub cluster, the envelope object belongs to a namespace called app hence make sure the namespace app exists on the hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
 
 ### CRP spec:
 ```

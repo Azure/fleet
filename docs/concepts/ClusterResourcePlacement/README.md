@@ -342,10 +342,10 @@ Events:
 ## Envelope Object
 
 `ClusterResourcePlacement` uses the fleet hub cluster as a staging environment where customer resources are expected to be created and then propagated to the member clusters that have joined fleet based on the ClusterResourcePlacement's spec. 
-To achieve this many native kubernetes controllers are blocked from reconciling native kubernetes resources since the plan is not apply the resources on the hub cluster but to propagate the resources to other member clusters in the fleet.
+In essence, the plan is not apply/create the resources on the hub cluster to be used on the hub cluster but to propagate the resources to other member clusters in the fleet.
 
 There are some resources which cause **unintended side effects** when created/applied on the hub cluster.
-- Validating Webhook Configurations
+- Validating/Mutating Webhook Configurations
 - Cluster Role Bindings
 - Resource Quotas 
 - Storage Classes
@@ -355,4 +355,4 @@ There are some resources which cause **unintended side effects** when created/ap
 - Ingresses
 - Network policies
 
-So we introduced `Envelope Objects` which allows users to embed resources that may have side effects on the hub cluster within it. We only `configmaps` as an envelope object at the moment.
+So we support using `ConfigMap` with a fleet reserved annotation to allow users to embed resources that may have side effects on the hub cluster within it. For more details please refer to this [document](https://github.com/Azure/fleet/tree/main/docs/howtos/envelope-object.md).
