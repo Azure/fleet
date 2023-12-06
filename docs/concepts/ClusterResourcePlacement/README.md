@@ -341,7 +341,7 @@ Events:
 
 ## Envelope Object
 
-The `ClusterResourcePlacement` leverages the fleet hub cluster as a staging environment from where customer resources. These resources are then propagated to member clusters that are part of the fleet, based on the specifications defined in the `ClusterResourcePlacement`'s spec.
+The `ClusterResourcePlacement` leverages the fleet hub cluster as a staging environment for customer resources. These resources are then propagated to member clusters that are part of the fleet, based on the `ClusterResourcePlacement` spec.
 
 In essence, the objective is not to apply or create resources on the hub cluster for local use but to propagate these resources to other member clusters within the fleet.
 
