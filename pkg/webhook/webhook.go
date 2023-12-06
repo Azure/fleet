@@ -118,10 +118,7 @@ func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1AP
 			return err
 		}
 	}
-	if err := AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API); err != nil {
-		return err
-	}
-	return nil
+	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API)
 }
 
 type Config struct {
