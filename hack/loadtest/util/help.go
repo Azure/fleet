@@ -291,8 +291,6 @@ func applyCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, nsName stri
 	if err := executeStrategy(crp, obj); err != nil {
 		return err
 	}
-	if err := executeRevisionHistoryLimit(crp, obj); err != nil {
-		return err
-	}
-	return nil
+	
+	return executeRevisionHistoryLimit(crp, obj)
 }
