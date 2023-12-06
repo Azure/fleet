@@ -559,7 +559,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		})
 	})
 
-	Context("deny request to modify network resources in fleet member namespaces, for user in member cluster identity", func() {
+	Context("allow request to modify network resources in fleet member namespaces, for user in member cluster identity", func() {
 		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 		iseName := fmt.Sprintf(iseNameTemplate, GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
