@@ -200,12 +200,16 @@ install-helm:  load-hub-docker-image load-member-docker-image install-member-age
 e2e-tests-v1alpha1: create-kind-cluster run-e2e-v1alpha1
 
 .PHONY: e2e-tests
-e2e-tests: setup-clusters
+e2e-tests: setup-clusters download-networking-crd
 	cd ./test/e2e && ginkgo -v -p .
 
 .PHONY: setup-clusters
 setup-clusters:
 	cd ./test/e2e && chmod +x ./setup.sh && ./setup.sh $(MEMBER_CLUSTER_COUNT)
+
+.PHONY: download-networking-crd
+download-networking-crd:
+	curl "https://github.com/Azure/fleet-networking/blob/main/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml" | jq -r '.payload.blob.rawLines' | jq -r '.[]' > ./test/e2e/internalserviceexport-crd.yaml
 
 ## reviewable
 .PHONY: reviewable

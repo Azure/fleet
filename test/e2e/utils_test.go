@@ -8,6 +8,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -326,10 +327,14 @@ func createResourcesForFleetGuardRail() {
 	Eventually(func() error {
 		return hubClient.Create(ctx, &crb)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "failed to create cluster role binding %s for fleet guard rail E2E", crb.Name)
+
+	setupNetworkingCRD()
 }
 
 // deleteResourcesForFleetGuardRail deletes resources created for guard rail E2Es.
 func deleteResourcesForFleetGuardRail() {
+	cleanupNetworkingCRD()
+
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-cluster-role-binding",
@@ -462,9 +467,9 @@ func checkMemberClusterNamespaceIsDeleted(name string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
-func setupNetworkingCRDs() {
+func setupNetworkingCRD() {
 	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
-	Expect(utils.GetObjectFromManifest("./manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(Succeed())
+	Expect(utils.GetObjectFromManifest("./internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(Succeed())
 	Expect(hubClient.Create(ctx, &internalServiceExportCRD)).Should(Succeed())
 	By("Networking CRDs are created")
 
@@ -477,14 +482,8 @@ func setupNetworkingCRDs() {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
-func cleanupNetworkingCRDs() {
-	internalServiceExportCRD := apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "internalserviceexports.networking.fleet.azure.com",
-		},
-	}
-	Expect(hubClient.Delete(ctx, &internalServiceExportCRD)).Should(Succeed())
-	By("Networking CRDs are deleted")
+func cleanupNetworkingCRD() {
+	Expect(os.Remove("./internalserviceexport-crd.yaml")).Should(Succeed())
 }
 
 func createInternalServiceExport(name, namespace string) {

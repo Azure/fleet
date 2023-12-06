@@ -229,6 +229,5 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	deleteResourcesForFleetGuardRail()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
-
 	cleanupInvalidClusters()
 })
