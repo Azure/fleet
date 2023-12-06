@@ -140,12 +140,13 @@ status:
     version: v1
 ```
 
-**Note:**
-In the `selectedResources` section within the `placementStatus` for `kind-cluster-1` we only show that the envelope object got propagated, we don't include all the resources within the envelope object in the status.
+**Note:**In the `selectedResources` section within the `placementStatus` for `kind-cluster-1` we only show that the envelope object got propagated, we don't include all the resources within the envelope object in the status.
 
 From the `selectedResources` section within the `placementStatus` for `kind-cluster-1` we see that the namespace `app` along with the configmap `envelope-configmap` got propagated. And the user can also verify with resources mentioned within in the `envelope-configmap` object are also propagated in this case a `ResourceQuota` object and `MutatingWebhookConfigurations` object.
 
 ## Example of using an Envelope object where resource failed to apply:
+
+To try this scenario, ensure the CRP created in the section above are deleted on the hub cluster.
 
 In this example we will make a small change to the envelope object we used above by changing the namespace to `test-ns`, so we ensure that we have namespace `test-ns` exists on the hub cluster.
 
@@ -218,7 +219,7 @@ spec:
   resourceSelectors:
   - group: ""
     kind: Namespace
-    name: app
+    name: test-ns
     version: v1
   revisionHistoryLimit: 10
   strategy:
@@ -323,11 +324,11 @@ status:
     version: v1
 ```
 
-In `ClusterResourcePlacement` status, `placementStatuses` section for `kind-cluster-1` in the `failedPlacements` section we see that the ResourceQuota object had failed to apply with the following error message "**Failed to apply manifest: namespaces "app" not found**".
+In `ClusterResourcePlacement` status, `placementStatuses` section for `kind-cluster-1` in the `failedPlacements` section we see that the ResourceQuota object had failed to apply with the following error message "**Failed to apply manifest: namespaces "app" not found**", we also see the envelope object `envelope-configmap` which tried to propagate this resource.
 
-We see this message because we try to propagate the namespace `test-ns` which contains the envelope object. But the envelope object contains resources belonging to a namespace called `app` which doesn't exist on the member cluster.
+We see this message because we tried to propagate the namespace `test-ns` which contains the envelope object. But the envelope object contains resources belonging to another namespace called `app` which doesn't exist on the member cluster.
 
 ### Resolution:
 - Create the namespace `app` on the member cluster.
-- Propagate the namespace called `app` using another `ClusterResourcePlacement` before we apply the current `ClusterResourcePlacement`, doing this we ensure that namespace app exists before we propagate resources to it.
-- Propagate a namespace called `app` along with namespace `test-ns` in our `ClusterResourcePlacement` object, doing can lead to `ClusterResourcePlacementApplied` showing up as false for some time because we cannot **guarantee the order in which namespace are applied** which can lead intermittent failed `ClusterResourcePlacement` status but will eventually get resolved once the `ClusterResourcePlacement` is reconciled again.
+- Propagate the namespace called `app` using another `ClusterResourcePlacement` before we apply the current `ClusterResourcePlacement` from the example, doing this ensures that namespace app exists on the member cluster before we propagate resources to it.
+- Propagate a namespace called `app` along with namespace `test-ns` in the same `ClusterResourcePlacement` object, doing this can lead to `ClusterResourcePlacementApplied` condition showing up as false for some time because we cannot **guarantee the order in which the namespaces are propagated** which can lead intermittent failed `ClusterResourcePlacementApplied` condition but will eventually get resolved once the `ClusterResourcePlacement` object is reconciled again.
