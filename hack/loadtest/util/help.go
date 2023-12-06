@@ -97,7 +97,6 @@ func applyTestManifests(ctx context.Context, hubClient client.Client, namespaceN
 	if err := hubClient.Create(ctx, ns); err != nil {
 		return err
 	}
-
 	if err := applyObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test_pdb.yaml"); err != nil {
 		return err
 	}
@@ -127,27 +126,21 @@ func deleteTestManifests(ctx context.Context, hubClient client.Client, namespace
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test_pdb.yaml"); err != nil {
 		return err
 	}
-
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-configmap.yaml"); err != nil {
 		return err
 	}
-
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-secret.yaml"); err != nil {
 		return err
 	}
-
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-service.yaml"); err != nil {
 		return err
 	}
-
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-cloneset.yaml"); err != nil {
 		return err
 	}
-
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-configmap-2.yaml"); err != nil {
 		return err
 	}
-
 	if err := deleteObjectFromManifest(ctx, hubClient, namespaceName, "hack/loadtest/manifests/test-role.yaml"); err != nil {
 		return err
 	}
@@ -192,47 +185,49 @@ func CleanupAll(hubClient client.Client) error {
 }
 
 func executeStrategy(crp *v1beta1.ClusterResourcePlacement, obj *unstructured.Unstructured) error {
-	strategy, foundType, err := unstructured.NestedMap(obj.Object, "spec", "strategy")
-	if !foundType && err == nil {
-		return nil
-	} else if err != nil {
+	strategy, foundType, err := unstructured.NestedString(obj.Object, "spec", "strategy", "type")
+	if err != nil {
 		klog.ErrorS(err, "Failed to get strategy.")
 		return err
 	}
-	crp.Spec.Strategy.Type = v1beta1.RolloutStrategyType(strategy["type"].(string))
+	if !foundType {
+		return nil
+	}
+	crp.Spec.Strategy.Type = v1beta1.RolloutStrategyType(strategy)
 
 	rollingUpdate, found, err := unstructured.NestedMap(obj.Object, "spec", "strategy", "rollingUpdate")
-	if !found && err == nil {
-		klog.Info("RollingUpdate not found in file.")
-		return nil
-	} else if err != nil {
+	if err != nil {
 		klog.ErrorS(err, "Failed to get RollingUpdate.")
 		return err
 	}
+	if !found {
+		klog.Info("RollingUpdate not found in file.")
+		return nil
+	}
 	crp.Spec.Strategy.RollingUpdate = &v1beta1.RollingUpdateConfig{}
 
-	for k, v := range rollingUpdate {
-		if k == "maxUnavailable" {
-			maxUnvailable := intstr.FromString(v.(string))
-			crp.Spec.Strategy.RollingUpdate.MaxUnavailable = &maxUnvailable
-		} else if k == "maxSurge" {
-			maxSurge := intstr.FromString(v.(string))
-			crp.Spec.Strategy.RollingUpdate.MaxSurge = &maxSurge
-		} else if k == "unavailablePeriodSeconds" {
-			intVal := int(v.(int64))
-			crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = pointer.Int(intVal)
-		}
+	if maxUnavailable, found := rollingUpdate["maxUnavailable"].(string); found {
+		maxUnvailable := intstr.FromString(maxUnavailable)
+		crp.Spec.Strategy.RollingUpdate.MaxUnavailable = &maxUnvailable
+	}
+	if maxSurge, found := rollingUpdate["maxSurge"].(string); found {
+		maxSurge := intstr.FromString(maxSurge)
+		crp.Spec.Strategy.RollingUpdate.MaxSurge = &maxSurge
+	}
+	if unavailablePeriodSeconds, found := rollingUpdate["unavailablePeriodSeconds"].(int64); found {
+		crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = pointer.Int(int(unavailablePeriodSeconds))
 	}
 	return nil
 }
 
 func executeRevisionHistoryLimit(crp *v1beta1.ClusterResourcePlacement, obj *unstructured.Unstructured) error {
 	revisionLimit, found, err := unstructured.NestedInt64(obj.Object, "spec", "revisionHistoryLimit")
-	if !found {
-		return nil
-	} else if err != nil {
+	if err != nil {
 		klog.ErrorS(err, "Failed to get RevisionHistoryLimit.")
 		return err
+	}
+	if !found {
+		return nil
 	}
 	crp.Spec.RevisionHistoryLimit = pointer.Int32(int32(revisionLimit))
 	return nil
@@ -240,18 +235,17 @@ func executeRevisionHistoryLimit(crp *v1beta1.ClusterResourcePlacement, obj *uns
 
 func executePickFixedPolicy(crp *v1beta1.ClusterResourcePlacement, obj *unstructured.Unstructured, clusterNames ClusterNames) (ClusterNames, error) {
 	names, found, err := unstructured.NestedStringSlice(obj.Object, "spec", "policy", "clusterNames")
-	if !found && err == nil {
-		klog.Infof("Cluster Names not found in file.")
-		return clusterNames, nil
-	} else if err != nil {
+	if err != nil {
 		klog.ErrorS(err, "Failed to get cluster names.")
 		return clusterNames, err
 	}
+	if !found {
+		klog.Infof("Cluster Names not found in file.")
+		return clusterNames, nil
+	}
 
 	for _, name := range names {
-		err := clusterNames.Set(name)
-		if err != nil {
-			// Handle the error here, for example by logging it or returning it to the caller
+		if err := clusterNames.Set(name); err != nil {
 			klog.ErrorS(err, "Error setting cluster name: %v")
 			return clusterNames, err
 		}
@@ -272,11 +266,12 @@ func applyCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, nsName stri
 	}
 
 	placementType, found, err := unstructured.NestedString(obj.Object, "spec", "policy", "placementType")
-	if !found && err == nil {
-		placementType = "default"
-	} else if err != nil {
+	if err != nil {
 		klog.ErrorS(err, "Failed to get placement type.")
 		return err
+	}
+	if !found {
+		placementType = "default"
 	}
 
 	switch placementType {
@@ -285,34 +280,19 @@ func applyCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, nsName stri
 			return err
 		}
 	default:
-		err := clusterNames.Set("cluster-1")
-		if err != nil {
-			// Handle the error here, for example by logging it or returning it to the caller
-			klog.ErrorS(err, "Error setting cluster name: %v")
-			return err
-		}
-		err = clusterNames.Set("cluster-2")
-		if err != nil {
-			// Handle the error here, for example by logging it or returning it to the caller
-			klog.ErrorS(err, "Error setting cluster name: %v")
-			return err
-		}
-		err = clusterNames.Set("cluster-3")
-		if err != nil {
-			// Handle the error here, for example by logging it or returning it to the caller
-			klog.ErrorS(err, "Error setting cluster name: %v")
-			return err
-		}
-		err = clusterNames.Set("cluster-4")
-		if err != nil {
-			// Handle the error here, for example by logging it or returning it to the caller
-			klog.ErrorS(err, "Error setting cluster name: %v")
-			return err
+		for i := 1; i <= 4; i++ {
+			if err := clusterNames.Set(fmt.Sprintf("cluster-%d", i)); err != nil {
+				klog.ErrorS(err, "Error setting cluster name: %v")
+				return err
+			}
 		}
 	}
 
 	if err := executeStrategy(crp, obj); err != nil {
 		return err
 	}
-	return executeRevisionHistoryLimit(crp, obj)
+	if err := executeRevisionHistoryLimit(crp, obj); err != nil {
+		return err
+	}
+	return nil
 }

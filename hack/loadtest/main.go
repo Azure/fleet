@@ -33,10 +33,10 @@ var (
 )
 
 var (
-	placementDeadline   = flag.Int("placement-deadline-second", 600, "The deadline for a placement to be applied (in seconds)")
+	placementDeadline   = flag.Int("placement-deadline-second", 300, "The deadline for a placement to be applied (in seconds)")
 	pollInterval        = flag.Int("poll-interval-millisecond", 250, "The poll interval for verification (in milli-second)")
 	maxCurrentPlacement = flag.Int("max-current-placement", 10, "The number of current placement load.")
-	loadTestLength      = flag.Int("load-test-length-minute", 20, "The length of the load test in minutes.")
+	loadTestLength      = flag.Int("load-test-length-minute", 15, "The length of the load test in minutes.")
 	clusterNames        util.ClusterNames //will be used for PickFixed scenario, otherwise will apply to all clusters
 )
 
@@ -54,7 +54,7 @@ func main() {
 	flag.Parse()
 	defer klog.Flush()
 
-	klog.InfoS("start to run placement load test", "crFile", crpFile, "pollInterval", *pollInterval, "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "clusterNames", clusterNames)
+	klog.InfoS("start to run placement load test", "crpFile", crpFile, "pollInterval", *pollInterval, "placementDeadline", *placementDeadline, "maxCurrentPlacement", *maxCurrentPlacement, "clusterNames", clusterNames)
 	config := config.GetConfigOrDie()
 	config.QPS, config.Burst = float32(100), 500 //queries per second, max # of queries queued at once
 	hubClient, err := client.New(config, client.Options{
