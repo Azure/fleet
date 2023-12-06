@@ -357,4 +357,4 @@ Certain resources, when created or applied on the hub cluster, may lead to unint
 - Ingresses
 - Network Policies
 
-To address this, we support the use of `ConfigMap` with a fleet-reserved annotation. This allows users to encapsulate resources that might have side effects on the hub cluster within the `ConfigMap`. For detailed instructions, please refer to the [document on envelope objects](../../howtos/envelope-object.md).
+To address this, we support the use of `ConfigMap` with a fleet-reserved annotation. This allows users to encapsulate resources that might have side effects on the hub cluster within the `ConfigMap`. For detailed instructions, please refer to this [document](../../howtos/envelope-object.md).
