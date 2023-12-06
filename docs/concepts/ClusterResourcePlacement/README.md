@@ -355,4 +355,4 @@ There are some resources which cause **unintended side effects** when created/ap
 - Ingresses
 - Network policies
 
-So we support using `ConfigMap` with a fleet reserved annotation to allow users to embed resources that may have side effects on the hub cluster within it. For more details please refer to this [document](https://github.com/Azure/fleet/tree/main/docs/howtos/envelope-object.md).
+So we support using `ConfigMap` with a fleet reserved annotation to allow users to embed resources that may have side effects on the hub cluster within it. For more details please refer to this [document](../../howtos/envelope-object.md).
