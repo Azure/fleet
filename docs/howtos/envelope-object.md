@@ -1,10 +1,20 @@
 # How-to Guide: To propagate resources using ClusterResourcePlacement API without unintended side effects on the hub clusters
 
-This guide discusses how to propagate a set of resources from the hub cluster to joined member clusters within an envelope object.
+# Propagating Resources with Envelope Objects
 
-Currently, we allow `ConfigMap` to act as an envelope object by using a fleet reserved annotation.
+This guide provides instructions on propagating a set of resources from the hub cluster to joined member clusters within an envelope object.
 
-So any configmap that is an envelope object must have this annotation on it `kubernetes-fleet.io/envelope-configmap` which would be set to **true**
+## Envelope Object with ConfigMap
+
+Currently, we support using a `ConfigMap` as an envelope object by leveraging a fleet-reserved annotation.
+
+To designate a `ConfigMap` as an envelope object, ensure that it contains the following annotation:
+
+```yaml
+metadata:
+  annotations:
+    kubernetes-fleet.io/envelope-configmap: "true"
+```
 
 ## Example:
 
@@ -65,7 +75,7 @@ data:
 
 ## Propagating an envelope configmap from hub cluster to member cluster:
 
-We will now apply the example envelope object above on our hub cluster, the envelope object belongs to a namespace called app hence make sure the namespace app exists on the hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
+We will now apply the example envelope object above on our hub cluster, the envelope object belongs to a namespace called `app` hence make sure the namespace `app` exists on the hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
 
 ### CRP spec:
 ```
@@ -140,9 +150,10 @@ status:
     version: v1
 ```
 
-**Note:**In the `selectedResources` section within the `placementStatus` for `kind-cluster-1` we only show that the envelope object got propagated, we don't include all the resources within the envelope object in the status.
+# Note:
+In the `selectedResources` section within the `placementStatus` for `kind-cluster-1`, we specifically display the propagation of the envelope object. Please note that we do not individually list all the resources contained within the envelope object in this status.
 
-From the `selectedResources` section within the `placementStatus` for `kind-cluster-1` we see that the namespace `app` along with the configmap `envelope-configmap` got propagated. And the user can also verify with resources mentioned within in the `envelope-configmap` object are also propagated in this case a `ResourceQuota` object and `MutatingWebhookConfigurations` object.
+Upon inspection of the `selectedResources` section for `kind-cluster-1`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
 
 ## Example of using an Envelope object where resource failed to apply:
 
@@ -324,7 +335,7 @@ status:
     version: v1
 ```
 
-In `ClusterResourcePlacement` status, `placementStatuses` section for `kind-cluster-1` in the `failedPlacements` section we see that the ResourceQuota object had failed to apply with the following error message "**Failed to apply manifest: namespaces "app" not found**", we also see the envelope object `envelope-configmap` which tried to propagate this resource.
+In `ClusterResourcePlacement` status, `placementStatuses` section for `kind-cluster-1` in the `failedPlacements` section we see that the ResourceQuota object had failed to apply with the following error message "**Failed to apply manifest: namespaces "app" not found**", we also see the envelope object `envelope-configmap` which tried to propagate this resource mentioned in the `failedPlacements` section.
 
 We see this message because we tried to propagate the namespace `test-ns` which contains the envelope object. But the envelope object contains resources belonging to another namespace called `app` which doesn't exist on the member cluster.
 

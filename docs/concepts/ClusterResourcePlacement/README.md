@@ -341,18 +341,20 @@ Events:
 
 ## Envelope Object
 
-`ClusterResourcePlacement` uses the fleet hub cluster as a staging environment where customer resources are expected to be created and then propagated to the member clusters that have joined fleet based on the ClusterResourcePlacement's spec. 
-In essence, the plan is not apply/create the resources on the hub cluster to be used on the hub cluster but to propagate the resources to other member clusters in the fleet.
+The `ClusterResourcePlacement` leverages the fleet hub cluster as a staging environment from where customer resources. These resources are then propagated to member clusters that are part of the fleet, based on the specifications defined in the `ClusterResourcePlacement`'s spec.
 
-There are some resources which cause **unintended side effects** when created/applied on the hub cluster.
+In essence, the objective is not to apply or create resources on the hub cluster for local use but to propagate these resources to other member clusters within the fleet.
+
+Certain resources, when created or applied on the hub cluster, may lead to unintended side effects. These include:
+
 - Validating/Mutating Webhook Configurations
 - Cluster Role Bindings
-- Resource Quotas 
+- Resource Quotas
 - Storage Classes
 - Flow Schemas
 - Priority Classes
 - Ingress Classes
 - Ingresses
-- Network policies
+- Network Policies
 
-So we support using `ConfigMap` with a fleet reserved annotation to allow users to embed resources that may have side effects on the hub cluster within it. For more details please refer to this [document](../../howtos/envelope-object.md).
+To address this, we support the use of `ConfigMap` with a fleet-reserved annotation. This allows users to encapsulate resources that might have side effects on the hub cluster within the `ConfigMap`. For detailed instructions, please refer to the [document on envelope objects](../../howtos/envelope-object.md).
