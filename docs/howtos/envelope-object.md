@@ -73,7 +73,7 @@ data:
 
 ## Propagating an Envelope ConfigMap from Hub cluster to Member cluster:
 
-We will now apply the example envelope object above on our hub cluster, which belongs to a namespace called `app` . Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
+We will now apply the example envelope object above on our hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
 
 ### CRP spec:
 ```
