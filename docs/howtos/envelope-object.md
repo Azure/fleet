@@ -254,4 +254,4 @@ status:
     version: v1
 ```
 
-In the example above, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on resources that failed to apply. Additionally, this section includes information about the `envelope object` which contained the failed resource.
+In the example above, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on resource that failed to apply along with information about the `envelope object` which contained the resource.
