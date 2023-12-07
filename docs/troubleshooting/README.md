@@ -181,7 +181,7 @@ The `ClusterResourcePlacementSynchronized` condition status is set to `false` un
 ### Investigation Steps:
 
 - In the `ClusterResourcePlacement` status section, examine the `placementStatuses` to identify clusters with the `WorkSynchronized` status set to `false`.
-- Locate the corresponding `ClusterResourceBinding` for the identified cluster. This resource should indicate the status of the `Work`, whether it was created or updated.
+- Locate the corresponding `ClusterResourceBinding` for the identified cluster. Please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) to learn how to get the latest `ClusterResourceBinding`. This resource should indicate the status of the `Work` whether it was created or updated.
 - A common scenario leading to this issue is the user input for the `rollingUpdate` configuration being too strict. Verify the values for `maxUnavailable` and `maxSurge` to ensure they align with your expectations.
 
 ### Example Scenario:
@@ -357,7 +357,7 @@ status:
     version: v1
 ```
 
-Upon examination, the `ClusterResourcePlacementSynchronized` status is found to be `false`, accompanied by a message indicating that `Works need to be synchronized on the hub cluster, or there are still manifests pending to be processed by the 2 member clusters`
+Upon examination, the `ClusterResourcePlacementSynchronized` status is found to be `false`, and in the `placementStatus` section for `WorkSynchronized` condition we see a message indicating that `Works need to be synchronized on the hub cluster, or there are still manifests pending to be processed by the 2 member clusters`
 
 Let's check the latest `ClusterResourceSnapshot`. Please refer to this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) to learn how to get the latest `ClusterResourceSnapshot`.
 
