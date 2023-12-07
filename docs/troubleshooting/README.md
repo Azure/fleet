@@ -705,7 +705,7 @@ The `ClusterResourceBinding` name follows this format `{CRPName}-{clusterName}-{
 Replace `{CRPName}` in the command below with name of `ClusterResourcePlacement`,
 
 ```
-kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
+kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=true,kubernetes-fleet.io/parent-CRP={CRPName}
 ```
 
 ## How and where to find the correct Work resource?
@@ -713,5 +713,5 @@ kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=tr
 We need to have the member cluster's namespace which follow this format `fleet-member-{clusterName}` and `ClusterResourcePlacement` name `{CRPName}`.
 
 ```
-kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
+kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName}
 ```
