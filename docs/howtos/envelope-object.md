@@ -16,9 +16,7 @@ metadata:
     kubernetes-fleet.io/envelope-configmap: "true"
 ```
 
-## Example:
-
-### Configmap Envelope Object:
+### Example ConfigMap Envelope Object:
 ```
 apiVersion: v1
 kind: ConfigMap
@@ -73,7 +71,7 @@ data:
       sideEffects: None
 ```
 
-## Propagating an envelope configmap from hub cluster to member cluster:
+## Propagating an Envelope ConfigMap from Hub cluster to Member cluster:
 
 We will now apply the example envelope object above on our hub cluster, which belongs to a namespace called `app` . Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
 
@@ -154,37 +152,13 @@ status:
 
 Upon inspection of the `selectedResources`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
 
-## Example ClusterResourcePlacement status where resource within an envelope object failed to apply :
+## Example CRP status where resource within an envelope object failed to apply :
 
 ### CRP status:
+
+In the example below, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on resource that failed to apply along with information about the `envelope object` which contained the resource.
+
 ```
-apiVersion: placement.kubernetes-fleet.io/v1beta1
-kind: ClusterResourcePlacement
-metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"placement.kubernetes-fleet.io/v1beta1","kind":"ClusterResourcePlacement","metadata":{"annotations":{},"name":"test-crp"},"spec":{"policy":{"clusterNames":["kind-cluster-1"],"placementType":"PickFixed"},"resourceSelectors":[{"group":"","kind":"Namespace","name":"test-ns","version":"v1"}]}}
-  creationTimestamp: "2023-12-06T00:09:53Z"
-  finalizers:
-  - kubernetes-fleet.io/crp-cleanup
-  - kubernetes-fleet.io/scheduler-cleanup
-  generation: 2
-  name: test-crp
-  resourceVersion: "2610"
-  uid: 33421ee0-9b69-4c2e-835f-31e086999940
-spec:
-  policy:
-    clusterNames:
-    - kind-cluster-1
-    placementType: PickFixed
-  resourceSelectors:
-  - group: ""
-    kind: Namespace
-    name: test-ns
-    version: v1
-  revisionHistoryLimit: 10
-  strategy:
-    type: RollingUpdate
 status:
   conditions:
   - lastTransitionTime: "2023-12-06T00:09:53Z"
@@ -253,5 +227,3 @@ status:
     namespace: test-ns
     version: v1
 ```
-
-In the example above, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on resource that failed to apply along with information about the `envelope object` which contained the resource.
