@@ -15,7 +15,7 @@ Fleet provides the following capabilities
 
 **Fleet:** A multi cluster solution that users use to manage Kubernetes clusters.
 
-**Hub cluster:** An Kubernetes cluster that hosts the control plane of the fleet.
+**Hub cluster:** A Kubernetes cluster that hosts the control plane of the fleet.
 
 **Member cluster:** A Kubernetes cluster that is part of the fleet.
 

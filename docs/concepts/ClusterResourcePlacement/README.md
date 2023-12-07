@@ -205,8 +205,7 @@ status:
 
 ![](scheduling.jpg)
 
-Compared with the Kubernetes' original scheduler framework, the multi-cluster scheduling selects a cluster for the placement 
-in a 5-step operations:
+In contrast to the original scheduler framework in Kubernetes, the multi-cluster scheduling process involves selecting a cluster for placement through a structured 5-step operation:
 1. Batch & PostBatch
 2. Filter 
 3. Score
