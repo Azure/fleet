@@ -23,7 +23,7 @@ Instances where this condition may arise:
 - When the placement policy is set to `PickFixed`, but the specified cluster names do not match any joined member cluster name in the fleet, or the specified cluster is no longer connected to the fleet.
 - When the placement policy is set to `PickN`, and N clusters are specified, but there are fewer than N clusters that have joined the fleet or satisfy the placement policy.
 
-Note: When the placement policy is set to `PickAll`, and the specified Affinity does not allow the scheduler to pick any cluster that has joined the fleet, the `ClusterResourcePlacementScheduled` is set to `true`.
+>>Note: When the placement policy is set to `PickAll`, the `ClusterResourcePlacementScheduled` condition is always set to `true`.
 
 #### Example Scenario:
 
@@ -277,85 +277,6 @@ Given that the resource `test-ns` namespace never existed on the hub cluster, th
 - `ClusterResourcePlacementScheduled` is set to `false`, as the specified policy aims to pick three clusters, but the scheduler can only accommodate placement in two currently available and joined clusters.
 - `ClusterResourcePlacementSynchronized` is set to `true`.
 - `ClusterResourcePlacementApplied` is set to `true`.
-
-Let's check the latest `ClusterResourceSnapshot`. Please refer to this [section](#how-to-find-the-latest-clusterresourcesnapshot-resource) to learn how to get the latest `ClusterResourceSnapshot`.
-
-#### Latest ClusterResourceSnapshot:
-```
-apiVersion: placement.kubernetes-fleet.io/v1beta1
-kind: ClusterResourceSnapshot
-metadata:
-  annotations:
-    kubernetes-fleet.io/number-of-enveloped-object: "0"
-    kubernetes-fleet.io/number-of-resource-snapshots: "1"
-    kubernetes-fleet.io/resource-hash: 83ff749c5d8eb5a0b62d714175bcbaef1409b371fc5a229a002db6fcc1f144e1
-  creationTimestamp: "2023-12-05T04:17:49Z"
-  generation: 1
-  labels:
-    kubernetes-fleet.io/is-latest-snapshot: "true"
-    kubernetes-fleet.io/parent-CRP: test-crp
-    kubernetes-fleet.io/resource-index: "0"
-  name: test-crp-0-snapshot
-  ownerReferences:
-  - apiVersion: placement.kubernetes-fleet.io/v1beta1
-    blockOwnerDeletion: true
-    controller: true
-    kind: ClusterResourcePlacement
-    name: test-crp
-    uid: 1c474983-cda0-49cb-bf60-3d2a42f122ba
-  resourceVersion: "2548"
-  uid: dde6ec98-af99-4c4f-aabc-329a2862709a
-spec:
-  selectedResources: []
-```
-
-We observe that the `selectedResources` field in the spec is empty because the namespace `test-ns` doesn't exist on the hub cluster.
-
-Let's check the `ClusterResourceBinding` for `kind-cluster-1`, please check this [section](#how-to-find-the-latest-clusterresourcebinding-resource) for more details,
-
-#### ClusterResourceBinding for kind-cluster-1:
-```
-apiVersion: placement.kubernetes-fleet.io/v1beta1
-kind: ClusterResourceBinding
-metadata:
-  creationTimestamp: "2023-12-05T04:17:49Z"
-  finalizers:
-  - kubernetes-fleet.io/work-cleanup
-  generation: 2
-  labels:
-    kubernetes-fleet.io/parent-CRP: test-crp
-  name: test-crp-kind-cluster-1-4e5c873b
-  resourceVersion: "2572"
-  uid: 8ae9741d-e95c-44f8-b36a-29d73f6b833c
-spec:
-  clusterDecision:
-    clusterName: kind-cluster-1
-    clusterScore:
-      affinityScore: 0
-      priorityScore: 0
-    reason: picked by scheduling policy
-    selected: true
-  resourceSnapshotName: test-crp-0-snapshot
-  schedulingPolicySnapshotName: test-crp-0
-  state: Bound
-  targetCluster: kind-cluster-1
-status:
-  conditions:
-  - lastTransitionTime: "2023-12-05T04:17:50Z"
-    message: ""
-    observedGeneration: 2
-    reason: AllWorkSynced
-    status: "True"
-    type: Bound
-  - lastTransitionTime: "2023-12-05T04:17:50Z"
-    message: ""
-    observedGeneration: 2
-    reason: AllWorkHasBeenApplied
-    status: "True"
-    type: Applied
-```
-
-Upon inspecting the `ClusterResourceBinding` spec, we observe that the `resourceSnapshotName` matches the latest `ClusterResourceSnapshot` name. Additionally, both the `Bound` and `Applied` conditions are set to True.
 
 Subsequently, we proceed to create the `test-ns` namespace on the hub cluster. We anticipate the seamless propagation of the namespace across the relevant clusters.
 
