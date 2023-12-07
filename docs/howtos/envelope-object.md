@@ -152,7 +152,7 @@ status:
 
 Upon inspection of the `selectedResources`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
 
-## Example CRP status where resource within an envelope object failed to apply :
+## Example CRP status where resource within an envelope object failed to apply:
 
 ### CRP status:
 
