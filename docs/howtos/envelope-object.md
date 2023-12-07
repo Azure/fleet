@@ -150,91 +150,11 @@ status:
     version: v1
 ```
 
-**Note:** In the `selectedResources` section within the `placementStatus` for `kind-cluster-1`, we specifically display the propagation of the envelope object. Please note that we do not individually list all the resources contained within the envelope object in this status.
+>>Note: In the `selectedResources` section, we specifically display the propagated envelope object. Please note that we do not individually list all the resources contained within the envelope object in the status.
 
-Upon inspection of the `selectedResources` section for `kind-cluster-1`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
+Upon inspection of the `selectedResources`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
 
-## Example of using an Envelope object where resource failed to apply:
-
-To try this scenario, ensure the CRP created in the section above are deleted on the hub cluster.
-
-In this example we will make a small change to the envelope object we used above by changing the namespace to `test-ns`.
-
-### Configmap Envelope Object:
-```
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: envelop-configmap
-  namespace: test-ns
-  annotations:
-    kubernetes-fleet.io/envelope-configmap: "true"
-data:
-  resourceQuota.yaml: |
-    apiVersion: v1
-    kind: ResourceQuota
-    metadata:
-      name: mem-cpu-demo
-      namespace: app
-    spec:
-      hard:
-        requests.cpu: "1"
-        requests.memory: 1Gi
-        limits.cpu: "2"
-        limits.memory: 2Gi
-  webhook.yaml: |
-    apiVersion: admissionregistration.k8s.io/v1
-    kind: MutatingWebhookConfiguration
-    metadata:
-      creationTimestamp: null
-      labels:
-        azure-workload-identity.io/system: "true"
-      name: azure-wi-webhook-mutating-webhook-configuration
-    webhooks:
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: azure-wi-webhook-webhook-service
-          namespace: app
-          path: /mutate-v1-pod
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: mutation.azure-workload-identity.io
-      rules:
-      - apiGroups:
-        - ""
-        apiVersions:
-        - v1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - pods
-      sideEffects: None
-```
-
-### Propagate configmap envelope object from hub cluster to member cluster:
-
-We use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
-
-### CRP spec:
-```
-spec:
-  policy:
-    clusterNames:
-    - kind-cluster-1
-    placementType: PickFixed
-  resourceSelectors:
-  - group: ""
-    kind: Namespace
-    name: test-ns
-    version: v1
-  revisionHistoryLimit: 10
-  strategy:
-    type: RollingUpdate
-```
+## Example ClusterResourcePlacement status where resource within an envelope object failed to apply :
 
 ### CRP status:
 ```
@@ -334,11 +254,4 @@ status:
     version: v1
 ```
 
-In `ClusterResourcePlacement` status, `placementStatuses` section for `kind-cluster-1` in the `failedPlacements` section we see that the ResourceQuota object had failed to apply with the following error message "**Failed to apply manifest: namespaces "app" not found**", we also see the envelope object `envelope-configmap` which tried to propagate this resource mentioned in the `failedPlacements` section.
-
-We see this message because we tried to propagate the namespace `test-ns` which contains the envelope object. But the envelope object contains resources belonging to another namespace called `app` which doesn't exist on the member cluster.
-
-### Resolution:
-- Create the namespace `app` on the member cluster.
-- Propagate the namespace called `app` using another `ClusterResourcePlacement` before we apply the current `ClusterResourcePlacement` from the example, doing this ensures that namespace app exists on the member cluster before we propagate resources to it.
-- Propagate a namespace called `app` along with namespace `test-ns` in the same `ClusterResourcePlacement` object, doing this can lead to `ClusterResourcePlacementApplied` condition showing up as false for some time because we cannot **guarantee the order in which the namespaces are propagated** this eventually gets resolved once the `ClusterResourcePlacement` object is reconciled again.
+In the example above, within the `placementStatus` section for `kind-cluster-1`, the `failedPlacements` section provides details on resources that failed to apply. Additionally, this section includes information about the `envelope object` which contained the failed resource.
