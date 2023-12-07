@@ -710,8 +710,8 @@ kubectl get clusterresourcesnapshot -l kubernetes-fleet.io/is-latest-snapshot=tr
 
 ## How and where to find the correct Work resource?
 
-We need to have the member cluster's namespace which follow this format `fleet-member-{clusterName}`, `ClusterResourceBinding` name `{CRBName}` and `ClusterResourcePlacement` name `{CRPName}`.
+We need to have the member cluster's namespace which follow this format `fleet-member-{clusterName}` and `ClusterResourcePlacement` name `{CRPName}`.
 
 ```
-kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName},kubernetes-fleet.io/parent-resource-binding={CRBName} -o YAML
+kubectl get work -n fleet-member-{clusterName} -l kubernetes-fleet.io/parent-CRP={CRPName} -o YAML
 ```
