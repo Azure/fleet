@@ -14,7 +14,7 @@ Internal Objects to keep in mind when troubleshooting CRP related errors on the 
 
 Please read the API reference for more details about each object https://github.com/Azure/fleet/blob/main/docs/api-references.md.
 
-## How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to "false"?
+## How can I debug when my CRP status is ClusterResourcePlacementScheduled condition status is set to false?
 
 ### Common scenarios:
 
@@ -174,7 +174,7 @@ status:
 ### Resolution:
 The solution here is to add the `env:prod` label to the member cluster resource for `kind-cluster-2` as well, so that the scheduler can select the cluster to propagate resources.
 
-## How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to "false"?
+## How can I debug when my CRP status is ClusterResourcePlacementSynchronized condition status is set to false?
 
 The `ClusterResourcePlacementSynchronized` condition status is set to `false` under the following circumstances: when the `Work` is not created or updated for a new `ClusterResourceSnapshot`.
 
@@ -458,7 +458,7 @@ This scenario arises due to the absence of explicit `rollingUpdate` input from t
 - To address this specific issue, consider manually setting `maxUnavailable` to a value greater than 2 to relax the `rollingUpdate` configuration.
 - Alternatively, you can also join a third member cluster.
 
-## How can I debug when my CRP ClusterResourcePlacementApplied condition is set to "False"?
+## How can I debug when my CRP ClusterResourcePlacementApplied condition is set to false?
 
 ### Investigation steps:
 
@@ -631,11 +631,11 @@ Check the status of the `ClusterSchedulingPolicySnapshot` to determine which clu
 
 Please check the following cases,
 - Check to see if `ClusterResourcePlacementSynchronized` condition in CRP status is set to `true` or `false`.
-- If it's set to `false` check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to--false--).
+- If it's set to `false` check this [question](#how-can-i-debug-when-my-crp-status-is-clusterresourceplacementsynchronized-condition-status-is-set-to-false).
 - If it's set to `true`,
   - Check to see if `ClusterResourcePlacementApplied` condition is set to `unknown`, `false` or `true`.
   - If it's set to `unknown`, please wait as the resources are still being applied to the member cluster (if it's stuck in unknown state for a while, please raise a github issue as it's an unexpected behavior).
-  - If it's set to `false`, check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to--false--).
+  - If it's set to `false`, check this [question](#how-can-i-debug-when-my-crp-clusterresourceplacementapplied-condition-is-set-to-false).
   - If it's set to `true`, check to see if the resource exists on the hub cluster.
 
 We can also take a look at the `placementStatuses` section in `ClusterResourcePlacement` status for that particular cluster. In `placementStatuses` we would find `failedPlacements` section which should have the reasons as to why resources failed to apply.
