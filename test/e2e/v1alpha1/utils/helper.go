@@ -9,6 +9,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"os"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
@@ -234,10 +235,31 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 	gomega.Eventually(func() error {
 		return hubCluster.KubeClient.Create(ctx, &crb)
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s for webhook E2E", crb.Name)
+
+	// Setup networking CRD.
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("working directory: " + dir)
+	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
+	gomega.Expect(utils.GetObjectFromManifest("./test/e2e/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(gomega.Succeed())
+	gomega.Expect(hubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)).Should(gomega.Succeed())
+
+	gomega.Eventually(func(g gomega.Gomega) error {
+		err := hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "internalserviceexports.networking.fleet.azure.com"}, &internalServiceExportCRD)
+		if errors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}, PollTimeout, PollInterval).Should(gomega.Succeed())
 }
 
-// DeleteResourcesForWebHookE2E deletes resources created for Webhook E2E.
-func DeleteResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+// CleanupResourcesForWebHookE2E deletes resources created for Webhook E2E.
+func CleanupResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
+	// Delete Networking CRD yaml file.
+	gomega.Expect(os.Remove("./test/e2e/internalserviceexport-crd.yaml")).Should(gomega.Succeed())
+
 	gomega.Eventually(func() bool {
 		var imc fleetv1alpha1.InternalMemberCluster
 		return errors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc))

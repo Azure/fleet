@@ -1211,22 +1211,6 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Ordered, func() {
-	BeforeAll(func() {
-		By("Create internalServiceExport CRD")
-		testutils.CreateInternalServiceExportCRD(ctx, HubCluster)
-		By("internalServiceExport CRD created")
-	})
-
-	AfterAll(func() {
-		internalServiceExportCRD := apiextensionsv1.CustomResourceDefinition{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "internalserviceexports.networking.fleet.azure.com",
-			},
-		}
-		Expect(HubCluster.KubeClient.Delete(ctx, &internalServiceExportCRD)).Should(Succeed())
-		By(fmt.Sprintf("crd %s is deleted", internalServiceExportCRD.Name))
-	})
-
 	Context("allow requests to modify fleet networking resources", Ordered, func() {
 		var ns corev1.Namespace
 		BeforeEach(func() {

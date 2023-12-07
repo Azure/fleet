@@ -235,8 +235,8 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	By("delete resources created for webhook e2e")
-	testutils.DeleteResourcesForWebHookE2E(ctx, HubCluster)
+	By("clean up resources created for webhook e2e")
+	testutils.CleanupResourcesForWebHookE2E(ctx, HubCluster)
 
 	By("update member cluster in the hub cluster")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)
