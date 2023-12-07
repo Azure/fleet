@@ -44,4 +44,4 @@ domains:
 
   This how-to guide explains in depth the concept, usage and examples of enveloped objects with 
  `ClusterResourcePlacement`API objects, which you can leverage to propagate resources without 
-  unintended side effects on the hub clusters.
+  unintended side effects on the hub cluster.

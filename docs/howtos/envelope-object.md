@@ -1,6 +1,6 @@
-# How-to Guide: To propagate resources using ClusterResourcePlacement API without unintended side effects on the hub clusters
+# How-to Guide: To propagate resources using ClusterResourcePlacement API without unintended side effects on the hub cluster
 
-# Propagating Resources with Envelope Objects
+## Propagating Resources with Envelope Objects
 
 This guide provides instructions on propagating a set of resources from the hub cluster to joined member clusters within an envelope object.
 
@@ -75,7 +75,7 @@ data:
 
 ## Propagating an envelope configmap from hub cluster to member cluster:
 
-We will now apply the example envelope object above on our hub cluster, the envelope object belongs to a namespace called `app` hence make sure the namespace `app` exists on the hub cluster. Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
+We will now apply the example envelope object above on our hub cluster, which belongs to a namespace called `app` . Then we use a `ClusterResourcePlacement` object to propagate the resource from hub to a member cluster named `kind-cluster-1`.
 
 ### CRP spec:
 ```
@@ -150,8 +150,7 @@ status:
     version: v1
 ```
 
-# Note:
-In the `selectedResources` section within the `placementStatus` for `kind-cluster-1`, we specifically display the propagation of the envelope object. Please note that we do not individually list all the resources contained within the envelope object in this status.
+**Note:** In the `selectedResources` section within the `placementStatus` for `kind-cluster-1`, we specifically display the propagation of the envelope object. Please note that we do not individually list all the resources contained within the envelope object in this status.
 
 Upon inspection of the `selectedResources` section for `kind-cluster-1`, it indicates that the namespace `app` and the configmap `envelope-configmap` have been successfully propagated. Users can further verify the successful propagation of resources mentioned within the `envelope-configmap` object by ensuring that the `failedPlacements` section in the `placementStatus` for `kind-cluster-1` does not appear in the status.
 
@@ -159,7 +158,7 @@ Upon inspection of the `selectedResources` section for `kind-cluster-1`, it indi
 
 To try this scenario, ensure the CRP created in the section above are deleted on the hub cluster.
 
-In this example we will make a small change to the envelope object we used above by changing the namespace to `test-ns`, so we ensure that we have namespace `test-ns` exists on the hub cluster.
+In this example we will make a small change to the envelope object we used above by changing the namespace to `test-ns`.
 
 ### Configmap Envelope Object:
 ```
