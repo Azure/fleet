@@ -209,7 +209,7 @@ setup-clusters:
 
 .PHONY: download-networking-crd
 download-networking-crd:
-	curl "https://github.com/Azure/fleet-networking/blob/main/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml" | jq -r '.payload.blob.rawLines' | jq -r '.[]' > ./test/e2e/internalserviceexport-crd.yaml
+	curl "https://github.com/Azure/fleet-networking/blob/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml" | jq -r '.payload.blob.rawLines' | jq -r '.[]' > ./test/e2e/internalserviceexport-crd.yaml
 
 ## reviewable
 .PHONY: reviewable
