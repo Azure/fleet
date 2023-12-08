@@ -134,8 +134,8 @@ use to access the hub cluster.
     You may have noticed that at this moment, no access control has been set on the service
     account; Fleet will set things up when the member cluster joins. The service account will be
     given the minimally viable set of permissions for the Fleet member cluster to connect to the
-    hub cluster; its access will restricted to one namespace, specifically reserved for the
-    member cluster, per best security practices.
+    hub cluster; its access will be restricted to one namespace, specifically reserved for the
+    member cluster, as per security best practices.
 
 4. Register the member cluster with the hub cluster; Fleet manages cluster membership using the
 `MemberCluster` API:
@@ -222,7 +222,7 @@ Fleet connection:
 
 > Important
 >
-> If you are using Azure Fleet Manager, the operations below **does not apply** to your fleet.
+> If you are using Azure Fleet Manager, the operations below **do not apply** to your fleet.
 > Refer to the [Azure documentation](https://azure.microsoft.com/en-us/products/kubernetes-fleet-manager)
 > for membership management instructions.
 
