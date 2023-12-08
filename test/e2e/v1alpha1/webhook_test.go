@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -49,6 +48,7 @@ var (
 
 const (
 	testUser          = "test-user"
+	randomUser        = "random-user"
 	testKey           = "test-key"
 	testValue         = "test-value"
 	testWork          = "test-work"
@@ -619,7 +619,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
 			mcName = testMemberCluster + "-" + utils.RandStr()
 			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, "random-user")
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
@@ -755,7 +755,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
 			mcName = testMemberCluster + "-" + utils.RandStr()
 			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, "random-user")
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
@@ -904,7 +904,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			mcName = testMemberCluster + "-" + utils.RandStr()
 			workName = testWork + "-" + utils.RandStr()
 			testMemberClusterNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, "random-user")
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, testMemberClusterNamespace)
 			deploymentBytes, err := json.Marshal(deployment)
 			Expect(err).Should(Succeed())
@@ -1225,26 +1225,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 		})
 
 		It("should deny CREATE operation on Internal service export resource in fleet-member namespace for user not in system:masters group", func() {
-			ise := fleetnetworkingv1alpha1.InternalServiceExport{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-internal-service-export",
-					Namespace: ns.Name,
-				},
-				Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
-					Ports: []fleetnetworkingv1alpha1.ServicePort{
-						{
-							Protocol: corev1.ProtocolTCP,
-							Port:     4848,
-						},
-					},
-					ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
-						NamespacedName:  "test-svc",
-						ResourceVersion: "test-resource-version",
-						ClusterID:       "member-1",
-						ExportedSince:   metav1.NewTime(time.Now().Round(time.Second)),
-					},
-				},
-			}
+			ise := testutils.InternalServiceExport("test-internal-service-export", ns.Name)
 			By("expecting denial of operation CREATE of Internal Service Export")
 			err := HubCluster.ImpersonateKubeClient.Create(ctx, &ise)
 			var statusErr *k8sErrors.StatusError
@@ -1265,46 +1246,27 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
 			mcName = testMemberCluster + "-" + utils.RandStr()
 			nsName = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, "random-user")
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, nsName)
 
-			ise := &fleetnetworkingv1alpha1.InternalServiceExport{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-internal-service-export",
-					Namespace: nsName,
-				},
-				Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
-					Ports: []fleetnetworkingv1alpha1.ServicePort{
-						{
-							Protocol: corev1.ProtocolTCP,
-							Port:     4848,
-						},
-					},
-					ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
-						NamespacedName:  "test-svc",
-						ResourceVersion: "test-resource-version",
-						ClusterID:       "member-1",
-						ExportedSince:   metav1.NewTime(time.Now().Round(time.Second)),
-					},
-				},
-			}
+			ise := testutils.InternalServiceExport("test-internal-service-export", nsName)
 			Eventually(func() error {
-				return HubCluster.KubeClient.Create(ctx, ise)
+				return HubCluster.KubeClient.Create(ctx, &ise)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 
 		AfterEach(func() {
-			ise := &fleetnetworkingv1alpha1.InternalServiceExport{
+			ise := fleetnetworkingv1alpha1.InternalServiceExport{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-internal-service-export",
 					Namespace: nsName,
 				},
 			}
-			Expect(HubCluster.KubeClient.Delete(ctx, ise))
+			Expect(HubCluster.KubeClient.Delete(ctx, &ise))
 			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
-		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in system:masters group", func() {
+		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in member cluster identity", func() {
 			Eventually(func(g Gomega) error {
 				var ise fleetnetworkingv1alpha1.InternalServiceExport
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-internal-service-export", Namespace: nsName}, &ise)).Should(Succeed())
@@ -1318,6 +1280,44 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
 				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
+
+	Context("allow request to modify network resources in fleet member namespaces, for user in member cluster identity", Ordered, func() {
+		var nsName, mcName string
+		BeforeEach(func() {
+			// Creating this MC for Internal Service Export E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
+			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
+			mcName = testMemberCluster + "-" + utils.RandStr()
+			nsName = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, testUser)
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, nsName)
+
+			ise := testutils.InternalServiceExport("test-internal-service-export", nsName)
+			Eventually(func() error {
+				return HubCluster.KubeClient.Create(ctx, &ise)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			ise := fleetnetworkingv1alpha1.InternalServiceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-internal-service-export",
+					Namespace: nsName,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &ise))
+			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+		})
+
+		It("should allow update operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-internal-service-export", Namespace: nsName}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				return HubCluster.ImpersonateKubeClient.Update(ctx, &ise)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})

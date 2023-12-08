@@ -609,7 +609,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 			checkMemberClusterNamespaceIsDeleted(imcNamespace)
 		})
 
-		It("should allow update operation on Internal service export resource in fleet-member namespace for user in MC identity", func() {
+		It("should allow update operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
 			Eventually(func(g Gomega) error {
 				var ise fleetnetworkingv1alpha1.InternalServiceExport
 				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: iseName, Namespace: imcNamespace}, &ise)).Should(Succeed())
