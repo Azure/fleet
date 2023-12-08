@@ -25,7 +25,6 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
@@ -518,7 +517,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 			ns = corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "fleet-member-test-internal-service-export",
-					Labels: map[string]string{fleetv1beta1.FleetResourceLabelKey: "true"},
+					Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
 				},
 			}
 			Expect(hubClient.Create(ctx, &ns)).Should(Succeed())
