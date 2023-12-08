@@ -238,11 +238,6 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 	}, PollTimeout, PollInterval).Should(gomega.Succeed(), "failed to create cluster role binding %s for webhook E2E", crb.Name)
 
 	// Setup networking CRD.
-	dir, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("working directory: " + dir)
 	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
 	gomega.Expect(utils.GetObjectFromManifest("./test/e2e/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(gomega.Succeed())
 	gomega.Expect(hubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)).Should(gomega.Succeed())
