@@ -36,7 +36,7 @@ var (
 	placementDeadline   = flag.Int("placement-deadline-second", 300, "The deadline for a placement to be applied (in seconds)")
 	pollInterval        = flag.Int("poll-interval-millisecond", 250, "The poll interval for verification (in milli-second)")
 	maxCurrentPlacement = flag.Int("max-current-placement", 10, "The number of current placement load.")
-	loadTestLength      = flag.Int("load-test-length-minute", 3, "The length of the load test in minutes.")
+	loadTestLength      = flag.Int("load-test-length-minute", 20, "The length of the load test in minutes.")
 	clusterNames        util.ClusterNames //will be used for PickFixed scenario, otherwise will apply to all clusters
 )
 

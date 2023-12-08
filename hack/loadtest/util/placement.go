@@ -94,7 +94,6 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 
 	klog.Infof("create the cluster resource placement `%s` in the hub cluster", crpName)
 	crp := &v1beta1.ClusterResourcePlacement{}
-
 	if err := createCRP(crp, crpFile, crpName, nsName); err != nil {
 		klog.ErrorS(err, "failed to create crp", "namespace", nsName, "crp", crpName)
 		return err
@@ -108,7 +107,7 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	crpCount.Inc()
 
 	klog.Infof("verify that the cluster resource placement `%s` is applied", crpName)
-	fleetSize = collectApplyMetrics(ctx, hubClient, deadline, interval, crpName, currency, fleetSize, clusterNames)
+	fleetSize, clusterNames = collectApplyMetrics(ctx, hubClient, deadline, interval, crpName, currency, fleetSize, clusterNames)
 
 	klog.Infof("remove the namespaced resources applied by the placement `%s`", crpName)
 	deletionStartTime := time.Now()
@@ -120,13 +119,12 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 
 	// wait for the status of the CRP and make sure all conditions are all true
 	klog.Infof("verify cluster resource placement `%s` is updated", crpName)
-	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
-
+	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, clusterNames, crpName, currency, fleetSize)
 	return hubClient.Delete(ctx, crp)
 }
 
 // collect the crp apply metrics
-func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, currency string, fleetSize string, clusterNames ClusterNames) string {
+func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, currency string, fleetSize string, clusterNames ClusterNames) (string, ClusterNames) {
 	startTime := time.Now()
 	applyDeadline := startTime.Add(deadline)
 	var crp v1beta1.ClusterResourcePlacement
@@ -136,7 +134,7 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 	for {
 		select {
 		case <-ctx.Done():
-			return "0"
+			return fleetSize, clusterNames
 		case <-ticker.C:
 			if err = hubClient.Get(ctx, types.NamespacedName{Name: crpName, Namespace: ""}, &crp); err != nil {
 				klog.ErrorS(err, "failed to get crp", "crp", crpName)
@@ -145,7 +143,7 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 					klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
 					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
 					applyTimeoutCount.Inc()
-					return "0"
+					return fleetSize, clusterNames
 				}
 				continue
 			}
@@ -157,16 +155,14 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 				// succeeded
 				klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
 				endTime := time.Since(startTime)
-				var newClusterNames []string
-				if fleetSize, newClusterNames, err = getFleetSize(crp, clusterNames); err != nil {
+				if fleetSize, clusterNames, err = getFleetSize(crp, clusterNames); err != nil {
 					klog.ErrorS(err, "Failed to get fleet size.")
-					return "0"
+					return fleetSize, nil
 				}
-				clusterNames = newClusterNames
 				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
 				applySuccessCount.Inc()
 				LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(endTime.Seconds())
-				return fleetSize
+				return fleetSize, clusterNames
 			}
 			if time.Now().After(applyDeadline) {
 				if cond != nil && cond.Status == metav1.ConditionFalse {
@@ -180,7 +176,7 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
 					applyTimeoutCount.Inc()
 				}
-				return "0"
+				return fleetSize, clusterNames
 			}
 		}
 	}
@@ -249,7 +245,7 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 }
 
 // check crp updated/completed before deletion
-func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, crpName string, currency string, fleetSize string) {
+func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, clusterNames ClusterNames, crpName string, currency string, fleetSize string) {
 	startTime := time.Now()
 	applyDeadline := startTime.Add(deadline)
 	var crp v1beta1.ClusterResourcePlacement
