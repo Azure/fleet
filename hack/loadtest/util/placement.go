@@ -119,7 +119,7 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 
 	// wait for the status of the CRP and make sure all conditions are all true
 	klog.Infof("verify cluster resource placement `%s` is updated", crpName)
-	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, clusterNames, crpName, currency, fleetSize)
+	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
 	return hubClient.Delete(ctx, crp)
 }
 
@@ -245,7 +245,7 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 }
 
 // check crp updated/completed before deletion
-func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, clusterNames ClusterNames, crpName string, currency string, fleetSize string) {
+func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, crpName string, currency string, fleetSize string) {
 	startTime := time.Now()
 	applyDeadline := startTime.Add(deadline)
 	var crp v1beta1.ClusterResourcePlacement
