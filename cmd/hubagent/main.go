@@ -50,7 +50,6 @@ var (
 const (
 	FleetWebhookCertDir = "/tmp/k8s-webhook-server/serving-certs"
 	FleetWebhookPort    = 9443
-	v1Beta1MCCRDName    = "memberclusters.cluster.kubernetes-fleet.io"
 )
 
 func init() {
@@ -135,7 +134,6 @@ func main() {
 		exitWithErrorFunc()
 	}
 
-	ctx := ctrl.SetupSignalHandler()
 	if opts.EnableWebhook {
 		whiteListedUsers := strings.Split(opts.WhiteListedUsers, ",")
 		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType), whiteListedUsers, opts.EnableGuardRail, opts.EnableV1Beta1APIs); err != nil {
@@ -144,6 +142,7 @@ func main() {
 		}
 	}
 
+	ctx := ctrl.SetupSignalHandler()
 	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
 		klog.ErrorS(err, "unable to set up ready check")
 		exitWithErrorFunc()

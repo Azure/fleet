@@ -189,7 +189,6 @@ func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
 // parseMemberClusterNameFromNamespace returns member cluster name from fleet member cluster namespace.
 // returns empty string if namespace is not a fleet member cluster namespace.
 func parseMemberClusterNameFromNamespace(namespace string) string {
-	// getting MC name from work namespace since work namespace name is of fleet-member-{member cluster name} format.
 	var mcName string
 	startIndex := len(utils.NamespaceNameFormat) - 2
 	if len(namespace) > startIndex {
