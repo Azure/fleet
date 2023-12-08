@@ -157,10 +157,12 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 				// succeeded
 				klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
 				endTime := time.Since(startTime)
-				if fleetSize, clusterNames, err = getFleetSize(crp, clusterNames); err != nil {
+				var newClusterNames []string
+				if fleetSize, newClusterNames, err = getFleetSize(crp, clusterNames); err != nil {
 					klog.ErrorS(err, "Failed to get fleet size.")
 					return "0"
 				}
+				clusterNames = newClusterNames
 				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
 				applySuccessCount.Inc()
 				LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(endTime.Seconds())
