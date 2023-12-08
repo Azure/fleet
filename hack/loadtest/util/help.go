@@ -4,16 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"go.goms.io/fleet/apis/placement/v1beta1"
@@ -183,114 +185,43 @@ func CleanupAll(hubClient client.Client) error {
 	}
 	return nil
 }
-
-func executeStrategy(crp *v1beta1.ClusterResourcePlacement, obj *unstructured.Unstructured) error {
-	strategy, foundType, err := unstructured.NestedString(obj.Object, "spec", "strategy", "type")
-	if err != nil {
-		klog.ErrorS(err, "Failed to get strategy.")
-		return err
-	}
-	if !foundType {
-		return nil
-	}
-	crp.Spec.Strategy.Type = v1beta1.RolloutStrategyType(strategy)
-
-	rollingUpdate, found, err := unstructured.NestedMap(obj.Object, "spec", "strategy", "rollingUpdate")
-	if err != nil {
-		klog.ErrorS(err, "Failed to get RollingUpdate.")
-		return err
-	}
-	if !found {
-		klog.Info("RollingUpdate not found in file.")
-		return nil
-	}
-	crp.Spec.Strategy.RollingUpdate = &v1beta1.RollingUpdateConfig{}
-
-	if maxUnavailable, found := rollingUpdate["maxUnavailable"].(string); found {
-		maxUnvailable := intstr.FromString(maxUnavailable)
-		crp.Spec.Strategy.RollingUpdate.MaxUnavailable = &maxUnvailable
-	}
-	if maxSurge, found := rollingUpdate["maxSurge"].(string); found {
-		maxSurge := intstr.FromString(maxSurge)
-		crp.Spec.Strategy.RollingUpdate.MaxSurge = &maxSurge
-	}
-	if unavailablePeriodSeconds, found := rollingUpdate["unavailablePeriodSeconds"].(int64); found {
-		crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds = pointer.Int(int(unavailablePeriodSeconds))
-	}
-	return nil
-}
-
-func executeRevisionHistoryLimit(crp *v1beta1.ClusterResourcePlacement, obj *unstructured.Unstructured) error {
-	revisionLimit, found, err := unstructured.NestedInt64(obj.Object, "spec", "revisionHistoryLimit")
-	if err != nil {
-		klog.ErrorS(err, "Failed to get RevisionHistoryLimit.")
-		return err
-	}
-	if !found {
-		return nil
-	}
-	crp.Spec.RevisionHistoryLimit = pointer.Int32(int32(revisionLimit))
-	return nil
-}
-
-func executePickFixedPolicy(crp *v1beta1.ClusterResourcePlacement, obj *unstructured.Unstructured, clusterNames ClusterNames) (ClusterNames, error) {
-	names, found, err := unstructured.NestedStringSlice(obj.Object, "spec", "policy", "clusterNames")
-	if err != nil {
-		klog.ErrorS(err, "Failed to get cluster names.")
-		return clusterNames, err
-	}
-	if !found {
-		klog.Infof("Cluster Names not found in file.")
-		return clusterNames, nil
-	}
-
-	for _, name := range names {
-		if err := clusterNames.Set(name); err != nil {
-			klog.ErrorS(err, "Error setting cluster name: %v")
-			return clusterNames, err
+func getFleetSize(crp v1beta1.ClusterResourcePlacement, clusterNames ClusterNames) (string, ClusterNames, error) {
+	for _, status := range crp.Status.PlacementStatuses {
+		if err := clusterNames.Set(status.ClusterName); err != nil {
+			klog.ErrorS(err, "Failed to set clusterNames.")
+			return "", nil, err
 		}
 	}
-
-	crp.Spec.Policy = &v1beta1.PlacementPolicy{
-		PlacementType: v1beta1.PickFixedPlacementType,
-		ClusterNames:  names,
-	}
-	return clusterNames, nil
+	return strconv.Itoa(len(clusterNames)), clusterNames, nil
 }
-
-func applyCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, nsName string, clusterNames ClusterNames) error {
+func createCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, crpName string, nsName string) error {
 	obj, err := readObjFromFile(fmt.Sprintf("hack/loadtest/%s", crpFile), nsName)
 	if err != nil {
 		klog.ErrorS(err, "Failed to read object from file.")
 		return err
 	}
 
-	placementType, found, err := unstructured.NestedString(obj.Object, "spec", "policy", "placementType")
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, crp)
 	if err != nil {
-		klog.ErrorS(err, "Failed to get placement type.")
 		return err
 	}
-	if !found {
-		placementType = "default"
-	}
 
-	switch placementType {
-	case "PickFixed":
-		if clusterNames, err = executePickFixedPolicy(crp, obj, clusterNames); err != nil {
-			return err
-		}
-	default:
-		for i := 1; i <= 4; i++ {
-			if err := clusterNames.Set(fmt.Sprintf("cluster-%d", i)); err != nil {
-				klog.ErrorS(err, "Error setting cluster name: %v")
-				return err
-			}
-		}
+	crp.Name = crpName
+	crp.Spec.ResourceSelectors = []v1beta1.ClusterResourceSelector{
+		{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Namespace",
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{labelKey: nsName},
+			},
+		},
+		{
+			Group:   apiextensionsv1.GroupName,
+			Version: "v1",
+			Kind:    "CustomResourceDefinition",
+			Name:    "clonesets.apps.kruise.io",
+		},
 	}
-
-	if err := executeStrategy(crp, obj); err != nil {
-		return err
-	}
-	
-	return executeRevisionHistoryLimit(crp, obj)
+	return nil
 }

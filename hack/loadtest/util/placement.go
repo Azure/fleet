@@ -7,14 +7,14 @@ package util
 import (
 	"context"
 	"fmt"
-	"go.goms.io/fleet/pkg/utils/condition"
 	"strconv"
 	"time"
+
+	"go.goms.io/fleet/pkg/utils/condition"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/atomic"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
@@ -82,7 +82,7 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	crpName := crpPrefix + utilrand.String(10)
 	nsName := nsPrefix + utilrand.String(10)
 	currency := strconv.Itoa(maxCurrentPlacement)
-	var fleetSize string
+	fleetSize := "0"
 	defer klog.Flush()
 	defer deleteNamespace(context.Background(), hubClient, nsName) //nolint
 
@@ -93,35 +93,13 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	}
 
 	klog.Infof("create the cluster resource placement `%s` in the hub cluster", crpName)
-	crp := &v1beta1.ClusterResourcePlacement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: crpName,
-		},
-		Spec: v1beta1.ClusterResourcePlacementSpec{
-			ResourceSelectors: []v1beta1.ClusterResourceSelector{
-				{
-					Group:   "",
-					Version: "v1",
-					Kind:    "Namespace",
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{labelKey: nsName},
-					},
-				},
-				{
-					Group:   apiextensionsv1.GroupName,
-					Version: "v1",
-					Kind:    "CustomResourceDefinition",
-					Name:    "clonesets.apps.kruise.io",
-				},
-			},
-		},
-	}
+	crp := &v1beta1.ClusterResourcePlacement{}
 
-	if err := applyCRP(crp, crpFile, nsName, clusterNames); err != nil {
+	if err := createCRP(crp, crpFile, crpName, nsName); err != nil {
 		klog.ErrorS(err, "failed to create crp", "namespace", nsName, "crp", crpName)
 		return err
 	}
-	fleetSize = strconv.Itoa(len(clusterNames))
+
 	defer hubClient.Delete(context.Background(), crp) //nolint
 	if err := hubClient.Create(ctx, crp); err != nil {
 		klog.ErrorS(err, "failed to apply crp", "namespace", nsName, "crp", crpName)
@@ -130,9 +108,9 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	crpCount.Inc()
 
 	klog.Infof("verify that the cluster resource placement `%s` is applied", crpName)
-	collectApplyMetrics(ctx, hubClient, deadline, interval, crpName, currency, fleetSize)
+	fleetSize = collectApplyMetrics(ctx, hubClient, deadline, interval, crpName, currency, fleetSize, clusterNames)
 
-	klog.Infof("remove the namespaced resources referred by the placement `%s`", crpName)
+	klog.Infof("remove the namespaced resources applied by the placement `%s`", crpName)
 	deletionStartTime := time.Now()
 	if err := deleteTestManifests(ctx, hubClient, nsName); err != nil {
 		klog.ErrorS(err, "failed to delete test manifests", "namespace", nsName, "crp", crpName)
@@ -143,52 +121,65 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	// wait for the status of the CRP and make sure all conditions are all true
 	klog.Infof("verify cluster resource placement `%s` is updated", crpName)
 	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
+
 	return hubClient.Delete(ctx, crp)
 }
 
 // collect the crp apply metrics
-func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, currency string, fleetSize string) {
+func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, currency string, fleetSize string, clusterNames ClusterNames) string {
 	startTime := time.Now()
 	applyDeadline := startTime.Add(deadline)
 	var crp v1beta1.ClusterResourcePlacement
 	var err error
-	for ; ctx.Err() == nil; time.Sleep(pollInterval) {
-		if err = hubClient.Get(ctx, types.NamespacedName{Name: crpName, Namespace: ""}, &crp); err != nil {
-			klog.ErrorS(err, "failed to get crp", "crp", crpName)
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return "0"
+		case <-ticker.C:
+			if err = hubClient.Get(ctx, types.NamespacedName{Name: crpName, Namespace: ""}, &crp); err != nil {
+				klog.ErrorS(err, "failed to get crp", "crp", crpName)
+				if time.Now().After(applyDeadline) {
+					// timeout
+					klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
+					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+					applyTimeoutCount.Inc()
+					return "0"
+				}
+				continue
+			}
+			// check if the condition is true
+			cond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementAppliedConditionType))
+			if cond == nil || cond.Status == metav1.ConditionUnknown {
+				klog.V(5).Infof("the cluster resource placement `%s` is pending", crpName)
+			} else if cond != nil && cond.Status == metav1.ConditionTrue {
+				// succeeded
+				klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
+				endTime := time.Since(startTime)
+				if fleetSize, clusterNames, err = getFleetSize(crp, clusterNames); err != nil {
+					klog.ErrorS(err, "Failed to get fleet size.")
+					return "0"
+				}
+				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
+				applySuccessCount.Inc()
+				LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(endTime.Seconds())
+				return fleetSize
+			}
 			if time.Now().After(applyDeadline) {
-				// timeout
-				klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
-				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
-				applyTimeoutCount.Inc()
-				break
+				if cond != nil && cond.Status == metav1.ConditionFalse {
+					// failed
+					klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
+					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+					applyFailCount.Inc()
+				} else {
+					// timeout
+					klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
+					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+					applyTimeoutCount.Inc()
+				}
+				return "0"
 			}
-			continue
-		}
-		// check if the condition is true
-		cond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementAppliedConditionType))
-		if cond == nil || cond.Status == metav1.ConditionUnknown {
-			klog.V(5).Infof("the cluster resource placement `%s` is pending", crpName)
-		} else if cond != nil && cond.Status == metav1.ConditionTrue {
-			// succeeded
-			klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
-			LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
-			applySuccessCount.Inc()
-			LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
-			break
-		}
-		if time.Now().After(applyDeadline) {
-			if cond != nil && cond.Status == metav1.ConditionFalse {
-				// failed
-				klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
-				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-				applyFailCount.Inc()
-			} else {
-				// timeout
-				klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
-				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
-				applyTimeoutCount.Inc()
-			}
-			break
 		}
 	}
 }
