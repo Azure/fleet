@@ -1211,7 +1211,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Ordered, func() {
-	Context("allow requests to modify fleet networking resources", Ordered, func() {
+	Context("deny requests to modify fleet networking resources, for user not in system:masters group", Ordered, func() {
 		var ns corev1.Namespace
 		BeforeEach(func() {
 			ns = corev1.Namespace{

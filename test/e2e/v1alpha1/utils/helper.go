@@ -337,12 +337,3 @@ func CleanUpMemberClusterResources(ctx context.Context, hubCluster *framework.Cl
 		return apierrors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue())
 }
-
-func CreateInternalServiceExportCRD(ctx context.Context, hubCluster *framework.Cluster) {
-	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
-	gomega.Expect(utils.GetObjectFromManifest("./test/e2e/manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(gomega.Succeed())
-
-	gomega.Eventually(func(g gomega.Gomega) error {
-		return hubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)
-	}, PollTimeout, PollInterval).Should(gomega.Succeed())
-}

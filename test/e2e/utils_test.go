@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
@@ -484,33 +483,6 @@ func setupNetworkingCRD() {
 
 func cleanupNetworkingCRD() {
 	Expect(os.Remove("./internalserviceexport-crd.yaml")).Should(Succeed())
-}
-
-func createInternalServiceExport(name, namespace string) {
-	ise := fleetnetworkingv1alpha1.InternalServiceExport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
-			Ports: []fleetnetworkingv1alpha1.ServicePort{
-				{
-					Protocol: corev1.ProtocolTCP,
-					Port:     4848,
-				},
-			},
-			ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
-				NamespacedName:  "test-svc",
-				ResourceVersion: "test-resource-version",
-				ClusterID:       "member-1",
-				ExportedSince:   metav1.NewTime(time.Now().Round(time.Second)),
-			},
-		},
-	}
-	// can return no kind match error.
-	Eventually(func(g Gomega) error {
-		return hubClient.Create(ctx, &ise)
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
 func createWorkResource(name, namespace string) {
