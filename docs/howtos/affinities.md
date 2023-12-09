@@ -118,14 +118,14 @@ spec:
     placementType: PickAll
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
                 - labelSelector:
                     matchLabels:
                       region: east
                     matchExpressions:
                     - key: system
-                    - operator: Exists
+                      operator: Exists
 
 ```
 
@@ -159,7 +159,7 @@ spec:
                 - labelSelector:
                     matchExpressions:
                     - key: system
-                    - operator: DoesNotExist
+                      operator: DoesNotExist
 ```
 
 With these two affinity terms, any cluster picked must:
@@ -275,10 +275,10 @@ spec:
         clusterAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
               clusterSelectorTerms:
-              - labelSelector:
-                  matchExpressions:
-                  - key: system
-                  - operator: Exists
+                - labelSelector:
+                    matchExpressions:
+                    - key: system
+                      operator: Exists
             preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 20
               preference:
