@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -51,7 +50,7 @@ func createMemberCluster(name, svcAccountName string, labels map[string]string) 
 			HeartbeatPeriodSeconds: 60,
 		},
 	}
-	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member clsuter object %s", name)
+	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object %s", name)
 }
 
 // markMemberClusterAsHealthy marks the specified member cluster as healthy.
@@ -347,50 +346,6 @@ func deleteResourcesForFleetGuardRail() {
 		},
 	}
 	Expect(hubClient.Delete(ctx, &cr)).Should(Succeed())
-}
-
-func createMemberClusterResource(name, user string) {
-	// Create the MC.
-	mc := &clusterv1beta1.MemberCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Spec: clusterv1beta1.MemberClusterSpec{
-			Identity: rbacv1.Subject{
-				Name:      user,
-				Kind:      "ServiceAccount",
-				Namespace: utils.FleetSystemNamespace,
-			},
-			HeartbeatPeriodSeconds: 60,
-		},
-	}
-	Expect(hubClient.Create(ctx, mc)).To(Succeed(), "Failed to create MC %s", mc)
-}
-
-func deleteMemberClusterResource(name string) {
-	Eventually(func(g Gomega) error {
-		var mc clusterv1beta1.MemberCluster
-		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc)
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		g.Expect(err).Should(Succeed(), "Failed to get MC %s", name)
-		controllerutil.RemoveFinalizer(&mc, placementv1beta1.MemberClusterFinalizer)
-		err = hubClient.Update(ctx, &mc)
-		if apierrors.IsConflict(err) {
-			return err
-		}
-		g.Expect(hubClient.Delete(ctx, &mc)).Should(Succeed())
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-
-	Eventually(func(g Gomega) error {
-		var mc clusterv1beta1.MemberCluster
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &mc); !apierrors.IsNotFound(err) {
-			return fmt.Errorf("MC still exists or an unexpected error occurred: %w", err)
-		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
 // cleanupMemberCluster removes finalizers (if any) from the member cluster, and

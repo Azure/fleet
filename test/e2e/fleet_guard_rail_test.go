@@ -545,7 +545,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
-			createMemberClusterResource(mcName, "random-user")
+			createMemberCluster(mcName, "random-user", nil)
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 			ise := internalServiceExport(iseName, imcNamespace)
 			// can return no kind match error.
@@ -561,7 +561,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				},
 			}
 			Expect(hubClient.Delete(ctx, &ise))
-			deleteMemberClusterResource(mcName)
+			cleanupMemberCluster(mcName)
 			checkMemberClusterNamespaceIsDeleted(imcNamespace)
 		})
 
@@ -589,7 +589,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
-			createMemberClusterResource(mcName, testUser)
+			createMemberCluster(mcName, testUser, nil)
 			checkInternalMemberClusterExists(mcName, imcNamespace)
 			ise := internalServiceExport(iseName, imcNamespace)
 			// can return no kind match error.
@@ -605,7 +605,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				},
 			}
 			Expect(hubClient.Delete(ctx, &ise))
-			deleteMemberClusterResource(mcName)
+			cleanupMemberCluster(mcName)
 			checkMemberClusterNamespaceIsDeleted(imcNamespace)
 		})
 
