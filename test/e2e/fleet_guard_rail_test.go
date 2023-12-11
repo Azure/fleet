@@ -561,8 +561,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				},
 			}
 			Expect(hubClient.Delete(ctx, &ise))
-			cleanupMemberCluster(mcName)
-			checkMemberClusterNamespaceIsDeleted(imcNamespace)
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 		})
 
 		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in member cluster identity", func() {
@@ -605,8 +604,7 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				},
 			}
 			Expect(hubClient.Delete(ctx, &ise))
-			cleanupMemberCluster(mcName)
-			checkMemberClusterNamespaceIsDeleted(imcNamespace)
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 		})
 
 		It("should allow update operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
