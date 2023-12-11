@@ -276,6 +276,7 @@ func CleanupResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cl
 	gomega.Expect(hubCluster.KubeClient.Delete(ctx, &cr)).Should(gomega.Succeed())
 }
 
+// CreateMemberClusterResource creates member cluster custom resource.
 func CreateMemberClusterResource(ctx context.Context, hubCluster *framework.Cluster, name, user string) {
 	// Create the MC.
 	mc := &fleetv1alpha1.MemberCluster{
@@ -295,6 +296,7 @@ func CreateMemberClusterResource(ctx context.Context, hubCluster *framework.Clus
 	gomega.Expect(hubCluster.KubeClient.Create(ctx, mc)).To(gomega.Succeed(), "Failed to create MC %s", mc)
 }
 
+// CheckInternalMemberClusterExists verifies whether member cluster exists on the hub cluster.
 func CheckInternalMemberClusterExists(ctx context.Context, hubCluster *framework.Cluster, name, namespace string) {
 	imc := &fleetv1alpha1.InternalMemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -307,7 +309,8 @@ func CheckInternalMemberClusterExists(ctx context.Context, hubCluster *framework
 	}, PollTimeout, PollInterval).Should(gomega.Succeed())
 }
 
-func CleanUpMemberClusterResources(ctx context.Context, hubCluster *framework.Cluster, name string) {
+// CleanupMemberClusterResources is used to delete member cluster resource and ensure member cluster & internal member cluster resources are deleted.
+func CleanupMemberClusterResources(ctx context.Context, hubCluster *framework.Cluster, name string) {
 	mc := fleetv1alpha1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -334,6 +337,7 @@ func CleanUpMemberClusterResources(ctx context.Context, hubCluster *framework.Cl
 	}, PollTimeout, PollInterval).Should(gomega.BeTrue())
 }
 
+// InternalServiceExport return an internal service export object.
 func InternalServiceExport(name, namespace string) fleetnetworkingv1alpha1.InternalServiceExport {
 	return fleetnetworkingv1alpha1.InternalServiceExport{
 		ObjectMeta: metav1.ObjectMeta{

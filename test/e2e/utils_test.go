@@ -331,7 +331,8 @@ func createResourcesForFleetGuardRail() {
 
 // deleteResourcesForFleetGuardRail deletes resources created for guard rail E2Es.
 func deleteResourcesForFleetGuardRail() {
-	cleanupNetworkingCRD()
+	// clean up networking CRD.
+	Expect(os.Remove("./internalserviceexport-crd.yaml")).Should(Succeed())
 
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -434,10 +435,6 @@ func setupNetworkingCRD() {
 		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-}
-
-func cleanupNetworkingCRD() {
-	Expect(os.Remove("./internalserviceexport-crd.yaml")).Should(Succeed())
 }
 
 func createWorkResource(name, namespace string) {

@@ -623,7 +623,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
@@ -759,7 +759,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -852,7 +852,7 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should allow UPDATE operation on internal member cluster CR status for user in MC identity", func() {
@@ -940,7 +940,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: w.Name, Namespace: w.Namespace}, &w))
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny CREATE operation on work CR for user not in MC identity", func() {
@@ -1050,7 +1050,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			Eventually(func() bool {
 				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: w.Name, Namespace: w.Namespace}, &w))
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should allow UPDATE operation on work CR for user in MC identity", func() {
@@ -1263,7 +1263,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 				},
 			}
 			Expect(HubCluster.KubeClient.Delete(ctx, &ise))
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in member cluster identity", func() {
@@ -1308,7 +1308,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 				},
 			}
 			Expect(HubCluster.KubeClient.Delete(ctx, &ise))
-			testutils.CleanUpMemberClusterResources(ctx, HubCluster, mcName)
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should allow update operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
