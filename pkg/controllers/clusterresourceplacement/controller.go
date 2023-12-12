@@ -826,6 +826,8 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 		crp.Status.PlacementStatuses = []fleetv1beta1.ResourcePlacementStatus{}
 		return false, nil
 	}
+	// set ObservedResourceIndex from the latest resource snapshot's resource index label.
+	crp.Status.ObservedResourceIndex = latestResourceSnapshot.GetLabels()[fleetv1beta1.ResourceIndexLabel]
 
 	return r.setResourcePlacementStatusAndResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
 }
