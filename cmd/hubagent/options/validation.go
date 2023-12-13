@@ -18,10 +18,20 @@ func (o *Options) Validate() field.ErrorList {
 	errs := field.ErrorList{}
 	newPath := field.NewPath("Options")
 
-	disabledResourceConfig := utils.NewDisabledResourceConfig()
+	if o.AllowedPropagatingAPIs != "" && o.SkippedPropagatingAPIs != "" {
+		errs = append(errs, field.Invalid(newPath.Child("AllowedPropagatingAPIs"), o.AllowedPropagatingAPIs, "AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive"))
+	}
+
+	disabledResourceConfig := utils.NewResourceConfig(true)
 	if err := disabledResourceConfig.Parse(o.SkippedPropagatingAPIs); err != nil {
 		errs = append(errs, field.Invalid(newPath.Child("SkippedPropagatingAPIs"), o.SkippedPropagatingAPIs, "Invalid API string"))
 	}
+
+	allowedResourceConfig := utils.NewResourceConfig(false)
+	if err := allowedResourceConfig.Parse(o.AllowedPropagatingAPIs); err != nil {
+		errs = append(errs, field.Invalid(newPath.Child("AllowedPropagatingAPIs"), o.AllowedPropagatingAPIs, "Invalid API string"))
+	}
+
 	if o.ClusterUnhealthyThreshold.Duration <= 0 {
 		errs = append(errs, field.Invalid(newPath.Child("ClusterUnhealthyThreshold"), o.ClusterUnhealthyThreshold, "Must be greater than 0"))
 	}

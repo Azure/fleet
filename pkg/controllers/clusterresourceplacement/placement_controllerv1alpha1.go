@@ -50,7 +50,11 @@ type Reconciler struct {
 	UncachedReader client.Reader
 
 	// DisabledResourceConfig contains all the api resources that we won't select.
-	DisabledResourceConfig *utils.DisabledResourceConfig
+	DisabledResourceConfig *utils.ResourceConfig
+
+	// AllowedResourceConfig contains all the api resources that are selected for
+	// propagation. This is mutually exclusive with DisabledResourceConfig
+	AllowedResourceConfig *utils.ResourceConfig
 
 	// SkippedNamespaces contains the namespaces that we should not propagate.
 	SkippedNamespaces map[string]bool

@@ -44,41 +44,54 @@ var (
 	apiGroupSepToken = ";"
 )
 
-// DisabledResourceConfig represents the configuration that identifies the API resources should not be selected.
-type DisabledResourceConfig struct {
-	// groups holds a collection of API group, all resources under this group will be avoided.
+// ResourceConfig represents the configuration that identifies the API resources that are parsed from the
+// user input to either allow or disable propagating them.
+type ResourceConfig struct {
+	// groups holds a collection of API group, all resources under this group will be considered.
 	groups map[string]struct{}
-	// groupVersions holds a collection of API GroupVersion, all resource under this GroupVersion will be avoided.
+	// groupVersions holds a collection of API GroupVersion, all resource under this GroupVersion will be considered.
 	groupVersions map[schema.GroupVersion]struct{}
-	// groupVersionKinds holds a collection of resource that should be avoided.
+	// groupVersionKinds holds a collection of resource that should be considered.
 	groupVersionKinds map[schema.GroupVersionKind]struct{}
 }
 
-// NewDisabledResourceConfig to create DisabledResourceConfig
-func NewDisabledResourceConfig() *DisabledResourceConfig {
-	r := &DisabledResourceConfig{
+// NewResourceConfig creates an empty ResourceConfig with an optional
+// flag to add default resources that we would like to consider.
+// In case of DisableResourceConfig, we add fleet and built-in resources to the config.
+func NewResourceConfig(addDefaultResources bool) *ResourceConfig {
+	r := &ResourceConfig{
 		groups:            map[string]struct{}{},
 		groupVersions:     map[schema.GroupVersion]struct{}{},
 		groupVersionKinds: map[schema.GroupVersionKind]struct{}{},
 	}
-	// disable fleet related resource by default
-	r.DisableGroup(fleetv1alpha1.GroupVersion.Group)
-	r.DisableGroup(placementv1beta1.GroupVersion.Group)
-	r.DisableGroup(clusterv1beta1.GroupVersion.Group)
-	r.DisableGroupVersionKind(WorkGVK)
-
-	// disable the below built-in resources
-	r.DisableGroup(eventsv1.GroupName)
-	r.DisableGroup(coordv1.GroupName)
-	r.DisableGroup(metricsV1beta1.GroupName)
-	r.DisableGroupVersionKind(corev1PodGVK)
-	r.DisableGroupVersionKind(corev1NodeGVK)
-	r.DisableGroupVersionKind(serviceImportGVK)
+	if addDefaultResources {
+		r.AddFleetRelatedResources()
+		r.AddBuiltInResources()
+	}
 	return r
 }
 
-// Parse parses the --avoid-selecting-apis input.
-func (r *DisabledResourceConfig) Parse(c string) error {
+// AddFleetRelatedResources configures the ResourceConfig with fleet related resource.
+func (r *ResourceConfig) AddFleetRelatedResources() {
+	r.AddGroup(fleetv1alpha1.GroupVersion.Group)
+	r.AddGroup(placementv1beta1.GroupVersion.Group)
+	r.AddGroup(clusterv1beta1.GroupVersion.Group)
+	r.AddGroupVersionKind(WorkGVK)
+}
+
+// AddBuiltInResources configures the ResourceConfig with a set of built-in resources
+// such as events, coordination, metrics, corev1/pod, corev1/node, etc.
+func (r *ResourceConfig) AddBuiltInResources() {
+	r.AddGroup(eventsv1.GroupName)
+	r.AddGroup(coordv1.GroupName)
+	r.AddGroup(metricsV1beta1.GroupName)
+	r.AddGroupVersionKind(corev1PodGVK)
+	r.AddGroupVersionKind(corev1NodeGVK)
+	r.AddGroupVersionKind(serviceImportGVK)
+}
+
+// Parse parses the user inputs that provides apis as GVK, GV or Group.
+func (r *ResourceConfig) Parse(c string) error {
 	// default(empty) input
 	if c == "" {
 		return nil
@@ -95,7 +108,7 @@ func (r *DisabledResourceConfig) Parse(c string) error {
 }
 
 // TODO: reduce cyclo
-func (r *DisabledResourceConfig) parseSingle(token string) error {
+func (r *ResourceConfig) parseSingle(token string) error {
 	switch strings.Count(token, "/") {
 	// Assume user don't want to skip the 'core'(no group name) group.
 	// So, it should be the case "<group>".
@@ -162,9 +175,9 @@ func (r *DisabledResourceConfig) parseSingle(token string) error {
 	return nil
 }
 
-// IsResourceDisabled returns whether a given GroupVersionKind is disabled.
-// a gkv is disabled if its group or group version is disabled
-func (r *DisabledResourceConfig) IsResourceDisabled(gvk schema.GroupVersionKind) bool {
+// IsResourceConfigured returns whether a given GroupVersionKind is found in the ResourceConfig.
+// a gvk is configured if its group or group version is configured
+func (r *ResourceConfig) IsResourceConfigured(gvk schema.GroupVersionKind) bool {
 	if _, ok := r.groups[gvk.Group]; ok {
 		return true
 	}
@@ -180,17 +193,22 @@ func (r *DisabledResourceConfig) IsResourceDisabled(gvk schema.GroupVersionKind)
 	return false
 }
 
-// DisableGroup to disable group.
-func (r *DisabledResourceConfig) DisableGroup(g string) {
+// AddGroup adds a Group to ResourceConfig.
+func (r *ResourceConfig) AddGroup(g string) {
 	r.groups[g] = struct{}{}
 }
 
-// DisableGroupVersion to disable group version.
-func (r *DisabledResourceConfig) DisableGroupVersion(gv schema.GroupVersion) {
+// AddGroupVersion adds a GroupVersion to ResourceConfig
+func (r *ResourceConfig) AddGroupVersion(gv schema.GroupVersion) {
 	r.groupVersions[gv] = struct{}{}
 }
 
-// DisableGroupVersionKind to disable GroupVersionKind.
-func (r *DisabledResourceConfig) DisableGroupVersionKind(gvk schema.GroupVersionKind) {
+// AddGroupVersionKind adds a GroupVersionKind to ResourceConfig
+func (r *ResourceConfig) AddGroupVersionKind(gvk schema.GroupVersionKind) {
 	r.groupVersionKinds[gvk] = struct{}{}
+}
+
+// IsEmpty returns whether the ResourceConfig is empty.
+func (r *ResourceConfig) IsEmpty() bool {
+	return len(r.groups) == 0 && len(r.groupVersions) == 0 && len(r.groupVersionKinds) == 0
 }

@@ -79,7 +79,7 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 			Kind:    selector.Kind,
 		}
 
-		if r.DisabledResourceConfig.IsResourceDisabled(gvk) {
+		if r.DisabledResourceConfig.IsResourceConfigured(gvk) {
 			klog.V(2).InfoS("Skip select resource", "group version kind", gvk.String())
 			continue
 		}
@@ -287,18 +287,29 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 	return resources, nil
 }
 
-// shouldSelectResource returns whether a resource should be propagated
+// shouldSelectResource returns whether a resource should be selected for propagation
 func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool {
-	if r.DisabledResourceConfig == nil {
-		return true
-	}
 	gvks, err := r.RestMapper.KindsFor(gvr)
 	if err != nil {
 		klog.ErrorS(err, "gvr(%s) transform failed: %v", gvr.String(), err)
 		return false
 	}
+
+	if !r.AllowedResourceConfig.IsEmpty() {
+		for _, gvk := range gvks {
+			if !r.AllowedResourceConfig.IsResourceConfigured(gvk) {
+				return false
+			}
+			klog.V(2).InfoS("Selecting Allowed Resource", "GVK", gvk.String())
+		}
+	}
+
+	if r.DisabledResourceConfig.IsEmpty() {
+		return true
+	}
+
 	for _, gvk := range gvks {
-		if r.DisabledResourceConfig.IsResourceDisabled(gvk) {
+		if r.DisabledResourceConfig.IsResourceConfigured(gvk) {
 			klog.V(2).InfoS("Skip watch resource", "group version kind", gvk.String())
 			return false
 		}

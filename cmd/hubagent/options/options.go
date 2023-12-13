@@ -48,8 +48,11 @@ type Options struct {
 	// WorkPendingGracePeriod represents the grace period after a work is created/updated.
 	// We consider a work failed if a work's last applied condition doesn't change after period.
 	WorkPendingGracePeriod metav1.Duration
-	// SkippedPropagatingAPIs indicates comma separated resources that should be skipped for propagating.
+	// SkippedPropagatingAPIs indicates semicolon separated resources that should be skipped for propagating.
 	SkippedPropagatingAPIs string
+	// AllowedPropagatingAPIs indicates semicolon separated resources that should be allowed for propagating.
+	// This is mutually exclusive with SkippedPropagatingAPIs.
+	AllowedPropagatingAPIs string
 	// SkippedPropagatingNamespaces is a list of namespaces that will be skipped for propagating.
 	SkippedPropagatingNamespaces string
 	// HubQPS is the QPS to use while talking with hub-apiserver. Default is 20.0.
@@ -107,6 +110,10 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ClusterUnhealthyThreshold.Duration, "cluster-unhealthy-threshold", 60*time.Second, "The duration for a member cluster to be in a degraded state before considered unhealthy.")
 	flags.DurationVar(&o.WorkPendingGracePeriod.Duration, "work-pending-grace-period", 15*time.Second,
 		"Specifies the grace period of allowing a manifest to be pending before marking it as failed.")
+	flags.StringVar(&o.AllowedPropagatingAPIs, "allowed-propagating-apis", "", "Semicolon separated resources that should be allowed for propagation. Supported formats are:\n"+
+		"<group> for allowing resources with a specific API group(e.g. networking.k8s.io),\n"+
+		"<group>/<version> for allowing resources with a specific API version(e.g. networking.k8s.io/v1beta1),\n"+
+		"<group>/<version>/<kind>,<kind> for allowing one or more specific resources (e.g. networking.k8s.io/v1beta1/Ingress,IngressClass) where the Kinds are case-insensitive.")
 	flags.StringVar(&o.SkippedPropagatingAPIs, "skipped-propagating-apis", "", "Semicolon separated resources that should be skipped from propagating in addition to the default skip list(cluster.fleet.io;policy.fleet.io;work.fleet.io). Supported formats are:\n"+
 		"<group> for skip resources with a specific API group(e.g. networking.k8s.io),\n"+
 		"<group>/<version> for skip resources with a specific API version(e.g. networking.k8s.io/v1beta1),\n"+
