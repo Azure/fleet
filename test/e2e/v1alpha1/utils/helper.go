@@ -9,7 +9,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"os"
 	"time"
 
 	// Lint check prohibits non "_test" ending files to have dot imports for ginkgo / gomega.
@@ -239,7 +238,7 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 
 	// Setup networking CRD.
 	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
-	gomega.Expect(utils.GetObjectFromManifest("./test/e2e/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(gomega.Succeed())
+	gomega.Expect(utils.GetObjectFromManifest("./test/e2e/v1alpha1/manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(gomega.Succeed())
 	gomega.Expect(hubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)).Should(gomega.Succeed())
 
 	gomega.Eventually(func(g gomega.Gomega) error {
@@ -253,9 +252,6 @@ func CreateResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Clu
 
 // CleanupResourcesForWebHookE2E deletes resources created for Webhook E2E.
 func CleanupResourcesForWebHookE2E(ctx context.Context, hubCluster *framework.Cluster) {
-	// Delete Networking CRD yaml file.
-	gomega.Expect(os.Remove("./test/e2e/internalserviceexport-crd.yaml")).Should(gomega.Succeed())
-
 	gomega.Eventually(func() bool {
 		var imc fleetv1alpha1.InternalMemberCluster
 		return apierrors.IsNotFound(hubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"}, &imc))
