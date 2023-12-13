@@ -23,7 +23,7 @@
     - `ServiceExport` (Member Cluster, user-facing resource)
     - `ServiceImport` (Hub Cluster, internal resource)
 
-Most of these resources are protected by a set of validating webhooks, preventing users from modifying them.
+Most of these resources are protected by a set of validating webhooks, preventing users from modifying them. For more information about fleet networking resource please refer to this link [here](https://github.com/Azure/fleet-networking).
 
 ## List of Resources Allowed to be Propagated from Hub to Member Cluster; Can We Control This List of Resources?
 
