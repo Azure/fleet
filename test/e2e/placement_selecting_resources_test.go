@@ -386,9 +386,8 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 
 	It("should update the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
-	// should this ObservedResourceIndex be 2 ?
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2")
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
