@@ -89,7 +89,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -131,7 +131,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as success again", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "2")
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
