@@ -150,7 +150,7 @@ func markMemberClusterAsLeft(name string) {
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-		createMemberCluster(memberCluster.ClusterName, hubClusterSAName, labelsByClusterName[memberCluster.ClusterName])
+		createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName])
 	}
 }
 

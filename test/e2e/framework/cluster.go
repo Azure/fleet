@@ -24,19 +24,21 @@ var (
 
 // Cluster object defines the required clients based on the kubeconfig of the test cluster.
 type Cluster struct {
-	Scheme                *runtime.Scheme
-	KubeClient            client.Client
-	ImpersonateKubeClient client.Client
-	DynamicClient         dynamic.Interface
-	ClusterName           string
-	HubURL                string
-	RestMapper            meta.RESTMapper
+	Scheme                                   *runtime.Scheme
+	KubeClient                               client.Client
+	ImpersonateKubeClient                    client.Client
+	DynamicClient                            dynamic.Interface
+	ClusterName                              string
+	PresentingServiceAccountInHubClusterName string
+	HubURL                                   string
+	RestMapper                               meta.RESTMapper
 }
 
-func NewCluster(name string, scheme *runtime.Scheme) *Cluster {
+func NewCluster(name, svcAccountName string, scheme *runtime.Scheme) *Cluster {
 	return &Cluster{
-		Scheme:      scheme,
-		ClusterName: name,
+		Scheme:                                   scheme,
+		ClusterName:                              name,
+		PresentingServiceAccountInHubClusterName: svcAccountName,
 	}
 }
 
