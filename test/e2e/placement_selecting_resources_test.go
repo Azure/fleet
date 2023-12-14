@@ -301,12 +301,12 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 		Expect(hubClient.Update(ctx, ns)).Should(Succeed(), "Failed to update namespace %s", workNamespaceName)
 	})
 
+	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil)
+		crpStatusUpdatedActual := crpStatusUpdatedActual([]placementv1beta1.ResourceIdentifier{}, allMemberClusterNames, nil)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
-
-	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("can delete the CRP", func() {
 		// Delete the CRP.
@@ -815,7 +815,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 				PlacementStatuses: []placementv1beta1.ResourcePlacementStatus{
 					{
 						ClusterName: memberCluster1EastProdName,
-						FailedResourcePlacements: []placementv1beta1.FailedResourcePlacement{
+						FailedPlacements: []placementv1beta1.FailedResourcePlacement{
 							{
 								ResourceIdentifier: placementv1beta1.ResourceIdentifier{
 									Kind:    "Namespace",
