@@ -104,3 +104,6 @@ do
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
 done
+
+# Download CRD from Fleet networking repo
+curl "https://github.com/Azure/fleet-networking/blob/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml" | jq -r '.payload.blob.rawLines' | jq -r '.[]' > ./internalserviceexport-crd.yaml
