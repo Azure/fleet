@@ -174,7 +174,7 @@ func CleanupAll(hubClient client.Client) error {
 		applyTimeoutCount.Inc()
 	}
 
-	for index, _ := range crps.Items {
+	for index := range crps.Items {
 		if err := hubClient.Delete(context.Background(), &crps.Items[index]); err != nil {
 			klog.ErrorS(err, "failed to delete crp", "crp", crps.Items[index].Name)
 		}
@@ -185,7 +185,7 @@ func CleanupAll(hubClient client.Client) error {
 		klog.ErrorS(err, "failed to list namespace")
 		return err
 	}
-	for index, _ := range namespaces.Items {
+	for index := range namespaces.Items {
 		if strings.HasPrefix(namespaces.Items[index].Name, nsPrefix) {
 			if err := hubClient.Delete(context.Background(), &namespaces.Items[index]); err != nil {
 				klog.ErrorS(err, "failed to delete namespace", "namespace", namespaces.Items[index].Name)

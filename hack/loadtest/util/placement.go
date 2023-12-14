@@ -108,7 +108,9 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 
 	klog.Infof("verify that the cluster resource placement `%s` is applied", crpName)
 	fleetSize, clusterNames = collectApplyMetrics(ctx, hubClient, deadline, interval, crpName, currency, fleetSize, clusterNames)
-
+	if fleetSize == "0" {
+		return nil
+	}
 	klog.Infof("remove the namespaced resources applied by the placement `%s`", crpName)
 	deletionStartTime := time.Now()
 	if err := deleteTestManifests(ctx, hubClient, nsName); err != nil {

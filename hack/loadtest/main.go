@@ -101,7 +101,7 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 					return
 				default:
 					if err = util.MeasureOnePlacement(ctx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames, crpFile); err != nil {
-						klog.ErrorS(err, "placement load test failed")
+						klog.ErrorS(err, "placement load test finished")
 					}
 				}
 			}
