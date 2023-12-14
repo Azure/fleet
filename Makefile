@@ -161,6 +161,7 @@ install-hub-agent-helm:
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret
 e2e-v1alpha1-hub-kubeconfig-secret:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kubectl apply -f test/e2e/v1alpha1/hub-agent-sa-secret.yaml
 	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
 	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\
