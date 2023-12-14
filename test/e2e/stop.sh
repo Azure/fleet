@@ -7,6 +7,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+rm -f ./test/e2e/internalserviceexport-crd.yaml
+
 HUB_CLUSTER="hub"
 MEMBER_CLUSTER_COUNT=$1
 declare -a ALL_CLUSTERS=($HUB_CLUSTER)

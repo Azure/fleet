@@ -8,7 +8,6 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -331,9 +330,6 @@ func createResourcesForFleetGuardRail() {
 
 // deleteResourcesForFleetGuardRail deletes resources created for guard rail E2Es.
 func deleteResourcesForFleetGuardRail() {
-	// clean up networking CRD.
-	Expect(os.Remove("./internalserviceexport-crd.yaml")).Should(Succeed())
-
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-cluster-role-binding",
