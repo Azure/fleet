@@ -43,10 +43,10 @@ spec:
       - scale-test-westus-92-mc-fm
       - scale-test-westus-94-mc-fm
       - scale-test-westus-96-mc-fm
-    strategy:
+  strategy:
       type: RollingUpdate
       rollingUpdate:
         maxUnavailable: 100%
         maxSurge: 25%
-        unavailablePeriodSeconds: 30
-    revisionHistoryLimit: 15
+        unavailablePeriodSeconds: 60
+  revisionHistoryLimit: 15

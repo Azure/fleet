@@ -15,3 +15,10 @@ spec:
       - maxSkew: 2
         topologyKey: env
         whenUnsatisfiable: DoNotSchedule
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+      maxSurge: 25%
+      unavailablePeriodSeconds: 60
+  revisionHistoryLimit: 15

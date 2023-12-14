@@ -3,6 +3,10 @@ package util
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -11,10 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"strings"
 
 	"go.goms.io/fleet/apis/placement/v1beta1"
 )

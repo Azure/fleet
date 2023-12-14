@@ -172,19 +172,11 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 				return fleetSize, clusterNames
 			} else if cond == nil || cond.Status == metav1.ConditionUnknown {
 				klog.V(5).Infof("the cluster resource placement `%s` is pending", crpName)
-			}
-			if time.Now().After(applyDeadline) {
-				if cond != nil && cond.Status == metav1.ConditionFalse {
-					// failed
-					klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
-					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-					applyFailCount.Inc()
-				} else {
-					// timeout
-					klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
-					LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
-					applyTimeoutCount.Inc()
-				}
+			} else if cond != nil && condition.IsConditionStatusFalse(cond, 1) {
+				// failed
+				klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
+				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+				applyFailCount.Inc()
 				return fleetSize, clusterNames
 			}
 		}
@@ -195,7 +187,6 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, crpName string, clusterNames ClusterNames, currency string, fleetSize string) {
 	var crp v1beta1.ClusterResourcePlacement
 	startTime := time.Now()
-	deleteDeadline := startTime.Add(deadline)
 	klog.Infof("verify that the applied resources on cluster resource placement `%s` are deleted", crpName)
 
 	// Create a timer and a ticker
@@ -229,7 +220,7 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 			allRemoved := true
 			for _, clusterName := range clusterNames {
 				err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("%s-work", crpName), Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterName)}, &clusterWork)
-				if err != nil || (len(clusterWork.Status.ManifestConditions) != 2) {
+				if err != nil || len(clusterWork.Status.ManifestConditions) != 2 {
 					klog.V(4).Infof("the resources `%s` in cluster namespace `%s` is not removed by the member agent yet", crpName, clusterName)
 					allRemoved = false
 					break
@@ -243,24 +234,14 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 				LoadTestDeleteLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(startTime).Seconds())
 				return
 			}
-			if time.Now().After(deleteDeadline) {
-				// timeout
-				klog.V(3).Infof("the applied resources on cluster resource placement `%s` delete timeout", crpName)
-				LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
-				deleteTimeoutCount.Inc()
-				return
-			}
 		}
 	}
 }
 
 // check crp updated/completed before deletion
 func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline, pollInterval time.Duration, deletionStartTime time.Time, crpName string, currency string, fleetSize string) {
-	startTime := time.Now()
-	applyDeadline := startTime.Add(deadline)
 	var crp v1beta1.ClusterResourcePlacement
 	var err error
-
 	timer := time.NewTimer(deadline)
 	ticker := time.NewTicker(pollInterval)
 
@@ -295,23 +276,13 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 				updateSuccessCount.Inc()
 				LoadTestUpdateLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(deletionStartTime).Seconds())
 				return
-			}
-			if time.Now().After(applyDeadline) {
-				if condition.IsConditionStatusFalse(appliedCond, 1) && condition.IsConditionStatusFalse(synchronizedCond, 1) && condition.IsConditionStatusFalse(scheduledCond, 1) {
-					// failed
-					klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
-					LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-					updateFailCount.Inc()
-				} else {
-					// timeout
-					klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
-					LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
-					updateTimeoutCount.Inc()
-				}
+			} else if condition.IsConditionStatusFalse(appliedCond, 1) && condition.IsConditionStatusFalse(synchronizedCond, 1) && condition.IsConditionStatusFalse(scheduledCond, 1) {
+				// failed
+				klog.V(2).Infof("the cluster resource placement `%s` failed", crpName)
+				LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+				updateFailCount.Inc()
 				return
 			}
-			timer.Stop()
-			ticker.Stop()
 		}
 	}
 }
