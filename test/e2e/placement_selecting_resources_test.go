@@ -367,13 +367,23 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 
 	It("should place the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
-	It("updating the resources on the hub", func() {
+	It("updating the namespace on the hub", func() {
 		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 		ns := &corev1.Namespace{}
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns)).Should(Succeed(), "Failed to get the namespace %s", workNamespaceName)
 		ns.Labels["foo"] = "bar"
 		Expect(hubClient.Update(ctx, ns)).Should(Succeed(), "Failed to update namespace %s", workNamespaceName)
+	})
 
+	It("should update the selected resources on member clusters", checkIfPlacedNamespaceResourceOnAllMemberClusters)
+
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "1")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("updating the configmap on the hub", func() {
+		workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 		appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
 		configMap := &corev1.ConfigMap{}
 		Expect(hubClient.Get(ctx, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName}, configMap)).Should(Succeed(), "Failed to get the config map %s", appConfigMapName)
@@ -384,7 +394,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 		Expect(hubClient.Update(ctx, configMap)).Should(Succeed(), "Failed to update config map %s", appConfigMapName)
 	})
 
-	It("should update the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+	It("should update the selected resources on member clusters", checkIfPlacedConfigMapResourceOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2")

@@ -82,6 +82,23 @@ func workNamespaceAndConfigMapPlacedOnClusterActual(cluster *framework.Cluster) 
 	}
 }
 
+func workNamespacePlacedOnClusterActual(cluster *framework.Cluster) func() error {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+	return func() error {
+		return validateWorkNamespaceOnCluster(cluster, types.NamespacedName{Name: workNamespaceName})
+	}
+}
+
+func workConfigMapPlacedOnClusterActual(cluster *framework.Cluster) func() error {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	appConfigMapName := fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess())
+
+	return func() error {
+		return validateConfigMapOnCluster(cluster, types.NamespacedName{Namespace: workNamespaceName, Name: appConfigMapName})
+	}
+}
+
 func crpSyncFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{
