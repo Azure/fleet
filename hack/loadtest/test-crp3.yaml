@@ -16,10 +16,11 @@ spec:
           clusterSelectorTerms:
             - labelSelector:
                 matchLabels:
-                  region: east
-                matchExpressions:
-                  - key: system
-                    operator: In
-                    values:
-                      - critical
-                      - standard
+                  fleet.azure.com/location: westus
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+      maxSurge: 100%
+      unavailablePeriodSeconds: 60
+  revisionHistoryLimit: 15

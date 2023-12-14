@@ -3,20 +3,18 @@ package util
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
+	"strings"
 
 	"go.goms.io/fleet/apis/placement/v1beta1"
 )
@@ -165,9 +163,19 @@ func CleanupAll(hubClient client.Client) error {
 		klog.ErrorS(err, "failed to list namespace")
 		return err
 	}
-	for index, crp := range crps.Items {
+	for i := 0; i < len(crps.Items); i++ {
+		deleteTimeoutCount.Inc()
+		updateTimeoutCount.Inc()
+	}
+
+	diffCount := crpCount.Load() - applySuccessCount.Load()
+	for j := 0; j < int(diffCount); j++ {
+		applyTimeoutCount.Inc()
+	}
+
+	for index, _ := range crps.Items {
 		if err := hubClient.Delete(context.Background(), &crps.Items[index]); err != nil {
-			klog.ErrorS(err, "failed to delete crp", "crp", crp.Name)
+			klog.ErrorS(err, "failed to delete crp", "crp", crps.Items[index].Name)
 		}
 	}
 
@@ -176,10 +184,10 @@ func CleanupAll(hubClient client.Client) error {
 		klog.ErrorS(err, "failed to list namespace")
 		return err
 	}
-	for index, ns := range namespaces.Items {
-		if strings.HasPrefix(ns.Name, nsPrefix) {
+	for index, _ := range namespaces.Items {
+		if strings.HasPrefix(namespaces.Items[index].Name, nsPrefix) {
 			if err := hubClient.Delete(context.Background(), &namespaces.Items[index]); err != nil {
-				klog.ErrorS(err, "failed to delete namespace", "namespace", ns.Name)
+				klog.ErrorS(err, "failed to delete namespace", "namespace", namespaces.Items[index].Name)
 			}
 		}
 	}

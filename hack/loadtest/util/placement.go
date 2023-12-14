@@ -130,10 +130,19 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 	var crp v1beta1.ClusterResourcePlacement
 	var err error
 	ticker := time.NewTicker(pollInterval)
+	timer := time.NewTimer(deadline)
 	defer ticker.Stop()
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
+			return fleetSize, clusterNames
+		case <-timer.C:
+			// timeout
+			klog.V(2).Infof("the cluster resource placement `%s` timeout", crpName)
+			LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
+			applyTimeoutCount.Inc()
 			return fleetSize, clusterNames
 		case <-ticker.C:
 			if err = hubClient.Get(ctx, types.NamespacedName{Name: crpName, Namespace: ""}, &crp); err != nil {
@@ -149,9 +158,7 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 			}
 			// check if the condition is true
 			cond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementAppliedConditionType))
-			if cond == nil || cond.Status == metav1.ConditionUnknown {
-				klog.V(5).Infof("the cluster resource placement `%s` is pending", crpName)
-			} else if cond != nil && cond.Status == metav1.ConditionTrue {
+			if condition.IsConditionStatusTrue(cond, 1) {
 				// succeeded
 				klog.V(3).Infof("the cluster resource placement `%s` succeeded", crpName)
 				endTime := time.Since(startTime)
@@ -163,6 +170,8 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 				applySuccessCount.Inc()
 				LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(endTime.Seconds())
 				return fleetSize, clusterNames
+			} else if cond == nil || cond.Status == metav1.ConditionUnknown {
+				klog.V(5).Infof("the cluster resource placement `%s` is pending", crpName)
 			}
 			if time.Now().After(applyDeadline) {
 				if cond != nil && cond.Status == metav1.ConditionFalse {
@@ -193,6 +202,7 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 	timer := time.NewTimer(deadline)
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
+	defer timer.Stop()
 
 	for {
 		select {
@@ -219,7 +229,7 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 			allRemoved := true
 			for _, clusterName := range clusterNames {
 				err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("%s-work", crpName), Namespace: fmt.Sprintf(utils.NamespaceNameFormat, clusterName)}, &clusterWork)
-				if err != nil || (err == nil && len(clusterWork.Status.ManifestConditions) != 2) {
+				if err != nil || (len(clusterWork.Status.ManifestConditions) != 2) {
 					klog.V(4).Infof("the resources `%s` in cluster namespace `%s` is not removed by the member agent yet", crpName, clusterName)
 					allRemoved = false
 					break
@@ -251,11 +261,11 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 	var crp v1beta1.ClusterResourcePlacement
 	var err error
 
-	// Create a timer that will fire when the deadline is reached
 	timer := time.NewTimer(deadline)
-
-	// Create a ticker that will fire at the specified poll interval
 	ticker := time.NewTicker(pollInterval)
+
+	defer ticker.Stop()
+	defer timer.Stop()
 
 	for {
 		select {
@@ -284,8 +294,6 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 				LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "succeed").Inc()
 				updateSuccessCount.Inc()
 				LoadTestUpdateLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(deletionStartTime).Seconds())
-				timer.Stop()
-				ticker.Stop()
 				return
 			}
 			if time.Now().After(applyDeadline) {
@@ -300,10 +308,10 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 					LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "timeout").Inc()
 					updateTimeoutCount.Inc()
 				}
-				timer.Stop()
-				ticker.Stop()
 				return
 			}
+			timer.Stop()
+			ticker.Stop()
 		}
 	}
 }
