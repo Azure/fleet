@@ -351,7 +351,7 @@ func TestDefaultDisabledResourceConfigGroupVersionKindParse(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		r := NewResourceConfig(false)
+		r := NewResourceConfig(true)
 		if err := r.Parse(""); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
