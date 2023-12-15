@@ -394,7 +394,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 		Expect(hubClient.Update(ctx, configMap)).Should(Succeed(), "Failed to update config map %s", appConfigMapName)
 	})
 
-	It("should update the selected resources on member clusters", checkIfPlacedConfigMapResourceOnAllMemberClusters)
+	It("should update the selected resources on member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	It("should update CRP status as expected", func() {
 		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "2")

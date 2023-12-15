@@ -542,15 +542,6 @@ func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	}
 }
 
-func checkIfPlacedConfigMapResourceOnAllMemberClusters() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
-
-		configMapResourcePlacedActual := workConfigMapPlacedOnClusterActual(memberCluster)
-		Eventually(configMapResourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work config map on member cluster %s", memberCluster.ClusterName)
-	}
-}
-
 func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
