@@ -2,28 +2,45 @@
 
 ## ## What are fleet-owned resources on the hub and member clusters? Can these fleet-owned resources be modified by the user?
 
-- **Namespaces:**
-    - `fleet-system` (Hub Cluster)
-    - `fleet-member-{clusterName}` (Hub Cluster)
-- **Custom Resource Definitions**
-- **Custom Resources:**
-    - `MemberCluster` (Hub Cluster, user-facing resource)
-    - `InternalMemberCluster` (Hub Cluster, internal resource)
-    - `Work` (Hub Cluster, internal resource)
-    - `AppliedWork` (Member Cluster, internal resource)
-    - `ClusterResourcePlacement` (Hub Cluster, user-facing resource)
-    - `ClusterResourceSnapshot` (Hub Cluster, internal resource)
-    - `ClusterSchedulingPolicySnapshot` (Hub Cluster, internal resource)
-    - `ClusterResourceBinding` (Hub Cluster, internal resource)
-    - `EndpointSliceExport` (Hub Cluster, internal resource)
-    - `EndpointSliceImport` (Hub Cluster, internal resource)
-    - `InternalServiceExport` (Hub Cluster, internal resource)
-    - `InternalServiceImport` (Hub Cluster, internal resource)
-    - `MultiClusterService` (Member Cluster, user-facing resource)
-    - `ServiceExport` (Member Cluster, user-facing resource)
-    - `ServiceImport` (Hub Cluster, internal resource)
+> Reserved namespaces used by fleet: `fleet-system`, `fleet-member-{clusterName}` where clusterName is the name of each member cluster that has joined the fleet.
 
-Most of these resources are protected by a set of validating webhooks, preventing users from modifying them. For more information about fleet networking resource please refer to this link [here](https://github.com/Azure/fleet-networking).
+### Fleet hub cluster resources:
+| Resource                          | Resource Type        |
+|-----------------------------------|----------------------|
+| `MemberCluster`                   | user-facing resource |
+| `InternalMemberCluster`           | internal resource    |
+| `Work`                            | interna resource     |
+| `ClusterResourcePlacement`        | user-facing resource |
+| `ClusterResourceSnapshot`         | internal resource    |
+| `ClusterSchedulingPolicySnapshot` | internal resource    |
+| `ClusterResourceBinding`          | internal resource    |
+
+### Fleet member cluster resource:
+| Resource                | Resource Type     |
+|-------------------------|-------------------|
+| `InternalMemberCluster` | internal resource |
+| `AppliedWork`           | internal resource |
+
+**Fleet APIs** are defined [here](https://github.com/Azure/fleet/tree/main/apis), **Fleet CRDs** are defined [here](https://github.com/Azure/fleet/tree/main/config/crd/bases).
+
+### Fleet Networking hub cluster resources:
+| Resource                | Resource Type     |
+|-------------------------|-------------------|
+| `EndpointSliceExport`   | internal resource |
+| `EndpointSliceImport`   | internal resource |
+| `InternalServiceExport` | internal resource |
+| `InternalServiceImport` | internal resource |
+| `ServiceImport`         | internal resource |
+
+### Fleet Networking member cluster resources:
+| Resource              | Resource Type        |
+|-----------------------|----------------------|
+| `MultiClusterService` | user-facing resource |
+| `ServiceExport`       | user-facing resource |
+
+**Fleet Networking APIs** are defined [here](https://github.com/Azure/fleet-networking/tree/main/api/v1alpha1), **Fleet Networking CRDs** are defined [here](https://github.com/Azure/fleet-networking/tree/main/config/crd/bases).
+
+`CRUD` operations are permitted for all the  `user-facing` resources, while `CRUD` operations are restricted for `internal` resources.  A majority of these `internal` resources are safeguarded by a series of validating webhooks, serving as a preventive measure to restrict users from making modifications to them
 
 ## ## What kind of the resources are allowed to be propagated from the hub cluster to the member clusters? How can I control the list?
 
@@ -45,6 +62,6 @@ If there is a conflict because a particular resource already exists on the membe
 
 Possible scenarios:
 
-- If the user updates the resource on the hub cluster, the update is propagated to all member clusters where the resource exists.
-- If the user deletes the resource on the hub cluster, the resource is deleted on all clusters to which it was propagated.
-- If the user modifies the resource on the member cluster, no automatic action occurs as it's a user-made modification.
+- If the user `updates` the resource on the hub cluster, the update is propagated to all member clusters where the resource exists.
+- If the user `deletes` the resource on the hub cluster, the resource is deleted on all clusters to which it was propagated.
+- If the user `modifies` the resource on the member cluster, no automatic action occurs as it's a user-made modification.
