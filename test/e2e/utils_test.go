@@ -533,6 +533,15 @@ func checkIfPlacedWorkResourcesOnAllMemberClusters() {
 	}
 }
 
+func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+
+		namespaceResourcePlacedActual := workNamespacePlacedOnClusterActual(memberCluster)
+		Eventually(namespaceResourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work namespace on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
 func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
