@@ -4,7 +4,7 @@
 
 Majority of the `internal` resources and fleet reserved namespaces described below are safeguarded by a series of validating webhooks, serving as a preventive measure to restrict users from making modifications to them.
 
-> The fleet reserved namespace are `fleet-system` and `fleet-member-{clusterName}` where clusterName is the name of each member cluster that has joined the fleet.
+The fleet reserved namespace are `fleet-system` and `fleet-member-{clusterName}` where clusterName is the name of each member cluster that has joined the fleet.
 
 ### Fleet hub cluster internal resources:
 | Resource                           |
