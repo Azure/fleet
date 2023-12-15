@@ -17,7 +17,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -324,8 +323,6 @@ func createResourcesForFleetGuardRail() {
 	Eventually(func() error {
 		return hubClient.Create(ctx, &crb)
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "failed to create cluster role binding %s for fleet guard rail E2E", crb.Name)
-
-	setupNetworkingCRD()
 }
 
 // deleteResourcesForFleetGuardRail deletes resources created for guard rail E2Es.
@@ -413,21 +410,6 @@ func checkMemberClusterNamespaceIsDeleted(name string) {
 		var ns corev1.Namespace
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &ns); !apierrors.IsNotFound(err) {
 			return fmt.Errorf("member cluster namespace %s still exists or an unexpected error occurred: %w", name, err)
-		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-}
-
-func setupNetworkingCRD() {
-	var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
-	Expect(utils.GetObjectFromManifest("./internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(Succeed())
-	Expect(hubClient.Create(ctx, &internalServiceExportCRD)).Should(Succeed())
-	By("Networking CRDs are created")
-
-	Eventually(func(g Gomega) error {
-		err := hubClient.Get(ctx, types.NamespacedName{Name: "internalserviceexports.networking.fleet.azure.com"}, &internalServiceExportCRD)
-		if apierrors.IsNotFound(err) {
-			return err
 		}
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
