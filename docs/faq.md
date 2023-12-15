@@ -48,7 +48,7 @@ You can use `skipped-propagating-apis` and `skipped-propagating-namespaces` flag
 
 ## What happens to existing resources in member clusters when their definitions conflict with the desired resources in the hub cluster?
 
-If there is a conflict because a particular resource already exists on the member cluster, the apply fails when attempting to propagate such a resource from the hub cluster.
+In case of a conflict, where a resource already exists on the member cluster, the apply operation fails when trying to propagate the same resource from the hub cluster.
 
 ## What happens if modifies resources that were placed from hub to member clusters?
 
