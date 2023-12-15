@@ -2,35 +2,35 @@
 
 ## What are fleet-owned resources on the hub and member clusters? Can these fleet-owned resources be modified by the user?
 
-Majority of the `internal` resources described below are safeguarded by a series of validating webhooks, serving as a preventive measure to restrict users from making modifications to them.
+Majority of the `internal` resources and fleet reserved namespaces described below are safeguarded by a series of validating webhooks, serving as a preventive measure to restrict users from making modifications to them.
 
-> Reserved namespace resources used by fleet: `fleet-system`, `fleet-member-{clusterName}` where clusterName is the name of each member cluster that has joined the fleet.
+> The fleet reserved namespace are `fleet-system`, `fleet-member-{clusterName}` where clusterName is the name of each member cluster that has joined the fleet.
 
-### Fleet hub cluster resources:
-| Resource                          | Resource Type     |
-|-----------------------------------|-------------------|
-| `InternalMemberCluster`           | internal resource |
-| `Work`                            | internal resource |
-| `ClusterResourceSnapshot`         | internal resource |
-| `ClusterSchedulingPolicySnapshot` | internal resource |
-| `ClusterResourceBinding`          | internal resource |
+### Fleet hub cluster internal resources:
+| Resource                           |
+|------------------------------------|
+| `InternalMemberCluster`            |
+| `Work`                             |
+| `ClusterResourceSnapshot`          |
+| `ClusterSchedulingPolicySnapshot`  |
+| `ClusterResourceBinding`           |
 
-### Fleet member cluster resource:
-| Resource                | Resource Type     |
-|-------------------------|-------------------|
-| `InternalMemberCluster` | internal resource |
-| `AppliedWork`           | internal resource |
+### Fleet member cluster internal resources:
+| Resource                |
+|-------------------------|
+| `InternalMemberCluster` |
+| `AppliedWork`           |
 
 **Fleet APIs** are defined [here](https://github.com/Azure/fleet/tree/main/apis), **Fleet CRDs** are defined [here](https://github.com/Azure/fleet/tree/main/config/crd/bases).
 
-### Fleet Networking hub cluster resources:
-| Resource                | Resource Type     |
-|-------------------------|-------------------|
-| `EndpointSliceExport`   | internal resource |
-| `EndpointSliceImport`   | internal resource |
-| `InternalServiceExport` | internal resource |
-| `InternalServiceImport` | internal resource |
-| `ServiceImport`         | internal resource |
+### Fleet Networking hub cluster internal resources:
+| Resource                |
+|-------------------------|
+| `EndpointSliceExport`   |
+| `EndpointSliceImport`   |
+| `InternalServiceExport` |
+| `InternalServiceImport` |
+| `ServiceImport`         |
 
 **Fleet Networking APIs** are defined [here](https://github.com/Azure/fleet-networking/tree/main/api/v1alpha1), **Fleet Networking CRDs** are defined [here](https://github.com/Azure/fleet-networking/tree/main/config/crd/bases).
 
