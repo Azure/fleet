@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-## What are Fleet-owned Resources on the Hub and Member Clusters, and Can These Fleet-owned Resources be Modified by the User?
+## ## What are fleet-owned resources on the hub and member clusters? Can these fleet-owned resources be modified by the user?
 
 - **Namespaces:**
     - `fleet-system` (Hub Cluster)
@@ -25,23 +25,23 @@
 
 Most of these resources are protected by a set of validating webhooks, preventing users from modifying them. For more information about fleet networking resource please refer to this link [here](https://github.com/Azure/fleet-networking).
 
-## List of Resources Allowed to be Propagated from Hub to Member Cluster; Can We Control This List of Resources?
+## ## What kind of the resources are allowed to be propagated from the hub cluster to the member clusters? How can I control the list?
 
-There is an exclusion list in the options when the Hub agent is installed, allowing users to skip resources from being propagated by specifying their group/group-version/group-version-kind.
-
-Additionally, `ClusterResourcePlacement` excludes certain groups/resources by default. They are defined [here](https://github.com/Azure/fleet/blob/main/pkg/utils/apiresources.go).
-
+`ClusterResourcePlacement` excludes certain groups/resources when propagating the resources by default. They are defined [here](https://github.com/Azure/fleet/blob/main/pkg/utils/apiresources.go).
 - `k8s.io/api/events/v1` (group)
 - `k8s.io/api/coordination/v1` (group)
 - `k8s.io/metrics/pkg/apis/metrics/v1beta1` (group)
 - `k8s.io/api/core/v1` (pod, node)
 - `networking.fleet.azure.com` (service import resource)
+- any resources in the "default" namespace
 
-## What Happens to Existing Resources in Member Clusters When Their Definitions Conflict with the Desired Resources in the Hub Cluster?
+You can use `skipped-propagating-apis` and `skipped-propagating-namespaces` flag when installing the hub-agent to skip resources from being propagated by specifying their group/group-version/group-version-kind and namespaces.
+
+## What happens to existing resources in member clusters when their definitions conflict with the desired resources in the hub cluster?
 
 If there is a conflict because a particular resource already exists on the member cluster, the apply fails when attempting to propagate such a resource from the hub cluster.
 
-## What Happens If Users Change/Delete Resources That Were Placed from Hub to Member Clusters?
+## What happens if modifies resources that were placed from hub to member clusters?
 
 Possible scenarios:
 
