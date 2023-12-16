@@ -64,8 +64,8 @@ type ChangeDetector struct {
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager
 
-	// DisabledResourceConfig contains all the api resources that we won't select
-	DisabledResourceConfig *utils.ResourceConfig
+	// ResourceConfig contains all the api resources that we won't select based on the allowed or skipped propagating apis option.
+	ResourceConfig *utils.ResourceConfig
 
 	// SkippedNamespaces contains all the namespaces that we won't select
 	SkippedNamespaces map[string]bool
@@ -186,7 +186,7 @@ func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.Res
 
 // gvrDisabled returns whether GroupVersionResource is disabled.
 func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bool {
-	if d.DisabledResourceConfig.IsEmpty() {
+	if d.ResourceConfig.IsEmpty() {
 		return true
 	}
 
@@ -196,7 +196,7 @@ func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bo
 		return false
 	}
 	for _, gvk := range gvks {
-		if d.DisabledResourceConfig.IsResourceDisabled(gvk) {
+		if d.ResourceConfig.IsResourceDisabled(gvk) {
 			klog.V(4).InfoS("Skip watch resource", "group version kind", gvk.String())
 			return false
 		}
