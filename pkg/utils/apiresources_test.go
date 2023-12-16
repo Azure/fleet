@@ -305,6 +305,24 @@ func TestDisabledResourceConfigMixedParse(t *testing.T) {
 			}
 		}
 	}
+	for _, test := range tests {
+		// test allow list
+		r := NewResourceConfig(true)
+		if err := r.Parse(test.input); err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		// Since we are testing allow list, the result is reversed
+		for i, o := range test.disabled {
+			if ok := r.IsResourceDisabled(o); ok {
+				t.Errorf("%d: expected resource to be enabled : %v", i, o)
+			}
+		}
+		for i, o := range test.enabled {
+			if ok := r.IsResourceDisabled(o); !ok {
+				t.Errorf("%d: expected resource to be disabled : %v", i, o)
+			}
+		}
+	}
 }
 
 func TestDefaultDisabledResourceConfigGroupVersionKindParse(t *testing.T) {

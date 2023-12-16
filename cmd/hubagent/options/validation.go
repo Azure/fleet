@@ -22,13 +22,11 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("AllowedPropagatingAPIs"), o.AllowedPropagatingAPIs, "AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive"))
 	}
 
-	disabledResourceConfig := utils.NewResourceConfig(true)
-	if err := disabledResourceConfig.Parse(o.SkippedPropagatingAPIs); err != nil {
+	resourceConfig := utils.NewResourceConfig(false)
+	if err := resourceConfig.Parse(o.SkippedPropagatingAPIs); err != nil {
 		errs = append(errs, field.Invalid(newPath.Child("SkippedPropagatingAPIs"), o.SkippedPropagatingAPIs, "Invalid API string"))
 	}
-
-	allowedResourceConfig := utils.NewResourceConfig(false)
-	if err := allowedResourceConfig.Parse(o.AllowedPropagatingAPIs); err != nil {
+	if err := resourceConfig.Parse(o.AllowedPropagatingAPIs); err != nil {
 		errs = append(errs, field.Invalid(newPath.Child("AllowedPropagatingAPIs"), o.AllowedPropagatingAPIs, "Invalid API string"))
 	}
 
