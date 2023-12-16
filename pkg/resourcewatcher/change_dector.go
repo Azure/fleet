@@ -67,9 +67,6 @@ type ChangeDetector struct {
 	// DisabledResourceConfig contains all the api resources that we won't select
 	DisabledResourceConfig *utils.ResourceConfig
 
-	// AllowedResourceConfig contains all the api resources that are watched for changes
-	AllowedResourceConfig *utils.ResourceConfig
-
 	// SkippedNamespaces contains all the namespaces that we won't select
 	SkippedNamespaces map[string]bool
 
@@ -187,31 +184,19 @@ func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.Res
 	d.InformerManager.Start()
 }
 
-// shouldWatchResource returns whether GroupVersionResource should be watched
-// If the resource is not in the AllowedResourceConfig, it will be skipped.
-// If the resource is in the DisabledResourceConfig, it will be skipped.
+// gvrDisabled returns whether GroupVersionResource is disabled.
 func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bool {
+	if d.DisabledResourceConfig.IsEmpty() {
+		return true
+	}
+
 	gvks, err := d.RESTMapper.KindsFor(gvr)
 	if err != nil {
 		klog.ErrorS(err, "gvr transform failed", "gvr", gvr.String())
 		return false
 	}
-
-	if !d.AllowedResourceConfig.IsEmpty() {
-		for _, gvk := range gvks {
-			if !d.AllowedResourceConfig.IsResourceConfigured(gvk) {
-				return false
-			}
-			klog.InfoS("Watching Allowed Resource", "GVK", gvk.String())
-		}
-	}
-
-	if d.DisabledResourceConfig.IsEmpty() {
-		return true
-	}
-
 	for _, gvk := range gvks {
-		if d.DisabledResourceConfig.IsResourceConfigured(gvk) {
+		if d.DisabledResourceConfig.IsResourceDisabled(gvk) {
 			klog.V(4).InfoS("Skip watch resource", "group version kind", gvk.String())
 			return false
 		}

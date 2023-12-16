@@ -105,14 +105,12 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}
 	}
 
-	disabledResourceConfig := utils.NewResourceConfig(true)
-	if err := disabledResourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
-		// The program will never go here because the parameters have been checked
+	disabledResourceConfig := utils.NewResourceConfig(opts.AllowedPropagatingAPIs != "")
+	if err := disabledResourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
 		return err
 	}
-
-	allowedResourceConfig := utils.NewResourceConfig(false)
-	if err := allowedResourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
+	if err := disabledResourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
+		// The program will never go here because the parameters have been checked
 		return err
 	}
 
@@ -138,7 +136,6 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		RestMapper:             mgr.GetRESTMapper(),
 		InformerManager:        dynamicInformerManager,
 		DisabledResourceConfig: disabledResourceConfig,
-		AllowedResourceConfig:  allowedResourceConfig,
 		SkippedNamespaces:      skippedNamespaces,
 		Scheme:                 mgr.GetScheme(),
 		UncachedReader:         mgr.GetAPIReader(),
@@ -276,7 +273,6 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		MemberClusterPlacementController:           memberClusterPlacementController,
 		InformerManager:                            dynamicInformerManager,
 		DisabledResourceConfig:                     disabledResourceConfig,
-		AllowedResourceConfig:                      allowedResourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
 		ConcurrentClusterPlacementWorker:           opts.ConcurrentClusterPlacementSyncs,
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,

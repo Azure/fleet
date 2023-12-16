@@ -76,13 +76,13 @@ func TestResourceConfigGVKParse(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		for i, o := range test.disabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
 		for i, o := range test.enabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
@@ -145,13 +145,13 @@ func TestResourceConfigGVParse(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		for i, o := range test.disabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
 		for i, o := range test.enabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
@@ -214,13 +214,13 @@ func TestResourceConfigGroupParse(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		for i, o := range test.disabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
 		for i, o := range test.enabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
@@ -228,7 +228,7 @@ func TestResourceConfigGroupParse(t *testing.T) {
 	}
 }
 
-func TestResourceConfigMixedParse(t *testing.T) {
+func TestDisabledResourceConfigMixedParse(t *testing.T) {
 	tests := []struct {
 		input    string
 		disabled []schema.GroupVersionKind
@@ -293,13 +293,13 @@ func TestResourceConfigMixedParse(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		for i, o := range test.disabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
 		for i, o := range test.enabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
@@ -351,18 +351,18 @@ func TestDefaultDisabledResourceConfigGroupVersionKindParse(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		r := NewResourceConfig(true)
+		r := NewResourceConfig(false)
 		if err := r.Parse(""); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		for i, o := range test.disabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if !ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
 		}
 		for i, o := range test.enabled {
-			ok := r.IsResourceConfigured(o)
+			ok := r.IsResourceDisabled(o)
 			if ok {
 				t.Errorf("%d: unexpected error: %v", i, o)
 			}
@@ -385,7 +385,7 @@ func TestResourceConfigIsEmpty(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		r := NewResourceConfig(false)
+		r := NewResourceConfig(true)
 		if err := r.Parse(test.input); err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}

@@ -53,41 +53,37 @@ type ResourceConfig struct {
 	groupVersions map[schema.GroupVersion]struct{}
 	// groupVersionKinds holds a collection of resource that should be considered.
 	groupVersionKinds map[schema.GroupVersionKind]struct{}
+	// isAllowList indicates whether the ResourceConfig is an allow list or not.
+	isAllowList bool
 }
 
-// NewResourceConfig creates an empty ResourceConfig with an optional
-// flag to add default resources that we would like to consider.
-// In case of DisableResourceConfig, we add fleet and built-in resources to the config.
-func NewResourceConfig(addDefaultResources bool) *ResourceConfig {
+// NewResourceConfig creates an empty ResourceConfig with an allow list flag.
+// if the resourceConfig is not an allowlist, we add fleet related resources
+// and default built-in resources to the config.
+func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r := &ResourceConfig{
 		groups:            map[string]struct{}{},
 		groupVersions:     map[schema.GroupVersion]struct{}{},
 		groupVersionKinds: map[schema.GroupVersionKind]struct{}{},
 	}
-	if addDefaultResources {
-		r.AddFleetRelatedResources()
-		r.AddBuiltInResources()
+	r.isAllowList = isAllowList
+	if r.isAllowList {
+		return r
 	}
+	// disable fleet related resource by default
+	r.DisableGroup(fleetv1alpha1.GroupVersion.Group)
+	r.DisableGroup(placementv1beta1.GroupVersion.Group)
+	r.DisableGroup(clusterv1beta1.GroupVersion.Group)
+	r.DisableGroupVersionKind(WorkGVK)
+
+	// disable the below built-in resources
+	r.DisableGroup(eventsv1.GroupName)
+	r.DisableGroup(coordv1.GroupName)
+	r.DisableGroup(metricsV1beta1.GroupName)
+	r.DisableGroupVersionKind(corev1PodGVK)
+	r.DisableGroupVersionKind(corev1NodeGVK)
+	r.DisableGroupVersionKind(serviceImportGVK)
 	return r
-}
-
-// AddFleetRelatedResources configures the ResourceConfig with fleet related resource.
-func (r *ResourceConfig) AddFleetRelatedResources() {
-	r.AddGroup(fleetv1alpha1.GroupVersion.Group)
-	r.AddGroup(placementv1beta1.GroupVersion.Group)
-	r.AddGroup(clusterv1beta1.GroupVersion.Group)
-	r.AddGroupVersionKind(WorkGVK)
-}
-
-// AddBuiltInResources configures the ResourceConfig with a set of built-in resources
-// such as events, coordination, metrics, corev1/pod, corev1/node, etc.
-func (r *ResourceConfig) AddBuiltInResources() {
-	r.AddGroup(eventsv1.GroupName)
-	r.AddGroup(coordv1.GroupName)
-	r.AddGroup(metricsV1beta1.GroupName)
-	r.AddGroupVersionKind(corev1PodGVK)
-	r.AddGroupVersionKind(corev1NodeGVK)
-	r.AddGroupVersionKind(serviceImportGVK)
 }
 
 // Parse parses the user inputs that provides apis as GVK, GV or Group.
@@ -175,9 +171,19 @@ func (r *ResourceConfig) parseSingle(token string) error {
 	return nil
 }
 
-// IsResourceConfigured returns whether a given GroupVersionKind is found in the ResourceConfig.
+// IsResourceDisabled returns whether a given GroupVersionKind is disabled.
+// a gkv is disabled if its group or group version is disabled
+func (r *ResourceConfig) IsResourceDisabled(gvk schema.GroupVersionKind) bool {
+	isConfigured := r.isResourceConfigured(gvk)
+	if r.isAllowList {
+		return !isConfigured
+	}
+	return isConfigured
+}
+
+// isResourceConfigured returns whether a given GroupVersionKind is found in the ResourceConfig.
 // a gvk is configured if its group or group version is configured
-func (r *ResourceConfig) IsResourceConfigured(gvk schema.GroupVersionKind) bool {
+func (r *ResourceConfig) isResourceConfigured(gvk schema.GroupVersionKind) bool {
 	if _, ok := r.groups[gvk.Group]; ok {
 		return true
 	}
@@ -193,18 +199,18 @@ func (r *ResourceConfig) IsResourceConfigured(gvk schema.GroupVersionKind) bool 
 	return false
 }
 
-// AddGroup adds a Group to ResourceConfig.
-func (r *ResourceConfig) AddGroup(g string) {
+// DisableGroup to disable group.
+func (r *ResourceConfig) DisableGroup(g string) {
 	r.groups[g] = struct{}{}
 }
 
-// AddGroupVersion adds a GroupVersion to ResourceConfig
-func (r *ResourceConfig) AddGroupVersion(gv schema.GroupVersion) {
+// DisableGroupVersion to disable group version.
+func (r *ResourceConfig) DisableGroupVersion(gv schema.GroupVersion) {
 	r.groupVersions[gv] = struct{}{}
 }
 
-// AddGroupVersionKind adds a GroupVersionKind to ResourceConfig
-func (r *ResourceConfig) AddGroupVersionKind(gvk schema.GroupVersionKind) {
+// DisableGroupVersionKind to disable GroupVersionKind.
+func (r *ResourceConfig) DisableGroupVersionKind(gvk schema.GroupVersionKind) {
 	r.groupVersionKinds[gvk] = struct{}{}
 }
 

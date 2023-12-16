@@ -102,8 +102,7 @@ var _ = BeforeSuite(func() {
 		Recorder:               mgr.GetEventRecorderFor(controllerName),
 		RestMapper:             mgr.GetRESTMapper(),
 		InformerManager:        informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
-		DisabledResourceConfig: utils.NewResourceConfig(true),
-		AllowedResourceConfig:  utils.NewResourceConfig(false),
+		DisabledResourceConfig: utils.NewResourceConfig(false),
 		SkippedNamespaces: map[string]bool{
 			"default": true,
 		},
