@@ -8,41 +8,35 @@ spec:
       kind:     CustomResourceDefinition
       name:     clonesets.apps.kruise.io
       version:  v1
+    - group: ""
+      kind: Namespace
+      name: testing
+      version: v1
   policy:
     placementType: PickFixed
     clusterNames:
-      - scale-test-eastus-21-mc-fm
-      - scale-test-eastus-53-mc-fm
-      - scale-test-eastus-67-mc-fm
-      - scale-test-eastus-79-mc-fm
-      - scale-test-westus-10-mc-fm
-      - scale-test-westus-16-mc-fm
+      - scale-test-westus-0-mc-fm
+      - scale-test-eastus-1-mc-fm
       - scale-test-westus-2-mc-fm
+      - scale-test-westus-4-mc-fm
+      - scale-test-westus-6-mc-fm
+      - scale-test-westus-8-mc-fm
+      - scale-test-westus-10-mc-fm
+      - scale-test-westus-12-mc-fm
+      - scale-test-eastus-13-mc-fm
+      - scale-test-westus-14-mc-fm
+      - scale-test-westus-16-mc-fm
+      - scale-test-eastus-17-mc-fm
+      - scale-test-westus-18-mc-fm
+      - scale-test-westus-20-mc-fm
       - scale-test-westus-22-mc-fm
+      - scale-test-eastus-23-mc-fm
+      - scale-test-westus-24-mc-fm
       - scale-test-westus-26-mc-fm
       - scale-test-westus-28-mc-fm
+      - scale-test-eastus-29-mc-fm
       - scale-test-westus-30-mc-fm
-      - scale-test-westus-36-mc-fm
-      - scale-test-westus-4-mc-fm
-      - scale-test-westus-40-mc-fm
-      - scale-test-westus-44-mc-fm
-      - scale-test-westus-48-mc-fm
-      - scale-test-westus-52-mc-fm
-      - scale-test-westus-54-mc-fm
-      - scale-test-westus-56-mc-fm
-      - scale-test-westus-58-mc-fm
-      - scale-test-westus-6-mc-fm
-      - scale-test-westus-64-mc-fm
-      - scale-test-westus-70-mc-fm
-      - scale-test-westus-74-mc-fm
-      - scale-test-westus-78-mc-fm
-      - scale-test-westus-80-mc-fm
-      - scale-test-westus-82-mc-fm
-      - scale-test-westus-86-mc-fm
-      - scale-test-westus-90-mc-fm
-      - scale-test-westus-92-mc-fm
-      - scale-test-westus-94-mc-fm
-      - scale-test-westus-96-mc-fm
+      - scale-test-westus-32-mc-fm
   strategy:
       type: RollingUpdate
       rollingUpdate:
