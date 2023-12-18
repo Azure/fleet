@@ -141,7 +141,6 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 		}
 		cond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementAppliedConditionType))
 		select {
-
 		case <-ctx.Done():
 			// Context has been cancelled, exit the loop
 			// timeout
@@ -163,13 +162,12 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 				applySuccessCount.Inc()
 				LoadTestApplyLatencyMetric.WithLabelValues(currency, fleetSize).Observe(endTime.Seconds())
 				return fleetSize, clusterNames
-			} else {
-				// failed
-				klog.Infof("the cluster resource placement `%s` failed", crpName)
-				LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-				applyFailCount.Inc()
-				return fleetSize, clusterNames
 			}
+			// failed
+			klog.Infof("the cluster resource placement `%s` failed", crpName)
+			LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+			applyFailCount.Inc()
+			return fleetSize, clusterNames
 		case <-ticker.C:
 			// Interval for CRP status check
 			if condition.IsConditionStatusTrue(cond, 1) {
@@ -288,13 +286,13 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 				updateSuccessCount.Inc()
 				LoadTestUpdateLatencyMetric.WithLabelValues(currency, fleetSize).Observe(time.Since(deletionStartTime).Seconds())
 				return
-			} else {
-				// failed
-				klog.V(3).Infof("the cluster resource placement `%s` failed", crpName)
-				LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
-				updateFailCount.Inc()
-				return
 			}
+			// failed
+			klog.V(3).Infof("the cluster resource placement `%s` failed", crpName)
+			LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+			updateFailCount.Inc()
+			return
+
 		case <-ticker.C:
 			// Interval for CRP status check
 			if condition.IsConditionStatusTrue(appliedCond, 1) && condition.IsConditionStatusTrue(synchronizedCond, 1) && condition.IsConditionStatusTrue(scheduledCond, 1) {
