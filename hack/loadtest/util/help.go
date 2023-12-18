@@ -164,15 +164,6 @@ func CleanupAll(hubClient client.Client) error {
 		klog.ErrorS(err, "failed to list namespace")
 		return err
 	}
-	for i := 0; i < len(crps.Items); i++ {
-		deleteTimeoutCount.Inc()
-		updateTimeoutCount.Inc()
-	}
-
-	diffCount := crpCount.Load() - applySuccessCount.Load()
-	for j := 0; j < int(diffCount); j++ {
-		applyTimeoutCount.Inc()
-	}
 
 	for index := range crps.Items {
 		if err := hubClient.Delete(context.Background(), &crps.Items[index]); err != nil {
