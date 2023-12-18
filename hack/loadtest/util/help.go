@@ -2,18 +2,22 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 type ClusterNames []string
@@ -155,27 +159,69 @@ func deleteNamespace(ctx context.Context, hubClient client.Client, namespaceName
 }
 
 func CleanupAll(hubClient client.Client) error {
+	var crps v1beta1.ClusterResourcePlacementList
+	if err := hubClient.List(context.Background(), &crps); err != nil {
+		klog.ErrorS(err, "failed to list namespace")
+		return err
+	}
+
+	for index := range crps.Items {
+		if err := hubClient.Delete(context.Background(), &crps.Items[index]); err != nil {
+			klog.ErrorS(err, "failed to delete crp", "crp", crps.Items[index].Name)
+		}
+	}
+
 	var namespaces corev1.NamespaceList
 	if err := hubClient.List(context.Background(), &namespaces); err != nil {
 		klog.ErrorS(err, "failed to list namespace")
 		return err
 	}
-	for index, ns := range namespaces.Items {
-		if strings.HasPrefix(ns.Name, nsPrefix) {
+	for index := range namespaces.Items {
+		if strings.HasPrefix(namespaces.Items[index].Name, nsPrefix) {
 			if err := hubClient.Delete(context.Background(), &namespaces.Items[index]); err != nil {
-				klog.ErrorS(err, "failed to delete namespace", "namespace", ns.Name)
+				klog.ErrorS(err, "failed to delete namespace", "namespace", namespaces.Items[index].Name)
 			}
 		}
 	}
-	var crps v1alpha1.ClusterResourcePlacementList
-	if err := hubClient.List(context.Background(), &crps); err != nil {
-		klog.ErrorS(err, "failed to list namespace")
+	return nil
+}
+func getFleetSize(crp v1beta1.ClusterResourcePlacement, clusterNames ClusterNames) (string, ClusterNames, error) {
+	for _, status := range crp.Status.PlacementStatuses {
+		if err := clusterNames.Set(status.ClusterName); err != nil {
+			klog.ErrorS(err, "Failed to set clusterNames.")
+			return "", nil, err
+		}
+	}
+	return strconv.Itoa(len(clusterNames)), clusterNames, nil
+}
+func createCRP(crp *v1beta1.ClusterResourcePlacement, crpFile string, crpName string, nsName string) error {
+	obj, err := readObjFromFile(fmt.Sprintf("hack/loadtest/%s", crpFile), nsName)
+	if err != nil {
+		klog.ErrorS(err, "Failed to read object from file.")
 		return err
 	}
-	for index, crp := range crps.Items {
-		if err := hubClient.Delete(context.Background(), &crps.Items[index]); err != nil {
-			klog.ErrorS(err, "failed to delete crp", "crp", crp.Name)
-		}
+
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, crp)
+	if err != nil {
+		return err
+	}
+
+	crp.Name = crpName
+	crp.Spec.ResourceSelectors = []v1beta1.ClusterResourceSelector{
+		{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Namespace",
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{labelKey: nsName},
+			},
+		},
+		{
+			Group:   apiextensionsv1.GroupName,
+			Version: "v1",
+			Kind:    "CustomResourceDefinition",
+			Name:    "clonesets.apps.kruise.io",
+		},
 	}
 	return nil
 }
