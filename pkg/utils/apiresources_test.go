@@ -323,7 +323,6 @@ func TestResourceConfigMixedParse(t *testing.T) {
 }
 
 func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
-
 	resourcesInDefaultDisabledList := []schema.GroupVersionKind{
 		corev1PodGVK, corev1NodeGVK,
 		{
