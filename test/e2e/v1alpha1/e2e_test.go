@@ -36,8 +36,8 @@ import (
 var (
 	hubClusterName    = "kind-hub-testing"
 	memberClusterName = "kind-member-testing"
-	HubCluster        = framework.NewCluster(hubClusterName, scheme)
-	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
+	HubCluster        = framework.NewCluster(hubClusterName, "", scheme)
+	MemberCluster     = framework.NewCluster(memberClusterName, "", scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
 	mc                *v1alpha1.MemberCluster

@@ -205,8 +205,7 @@ status:
 
 ![](scheduling.jpg)
 
-Compared with the Kubernetes' original scheduler framework, the multi-cluster scheduling selects a cluster for the placement 
-in a 5-step operations:
+In contrast to the original scheduler framework in Kubernetes, the multi-cluster scheduling process involves selecting a cluster for placement through a structured 5-step operation:
 1. Batch & PostBatch
 2. Filter 
 3. Score
@@ -338,3 +337,23 @@ Events:
   Normal  PlacementSyncSuccess       3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Successfully synchronized the placement
   Normal  PlacementRolloutCompleted  3m28s (x7 over 3d22h)  cluster-resource-placement-controller  Resources have been applied to the selected clusters
 ```
+
+## Envelope Object
+
+The `ClusterResourcePlacement` leverages the fleet hub cluster as a staging environment for customer resources. These resources are then propagated to member clusters that are part of the fleet, based on the `ClusterResourcePlacement` spec.
+
+In essence, the objective is not to apply or create resources on the hub cluster for local use but to propagate these resources to other member clusters within the fleet.
+
+Certain resources, when created or applied on the hub cluster, may lead to unintended side effects. These include:
+
+- Validating/Mutating Webhook Configurations
+- Cluster Role Bindings
+- Resource Quotas
+- Storage Classes
+- Flow Schemas
+- Priority Classes
+- Ingress Classes
+- Ingresses
+- Network Policies
+
+To address this, we support the use of `ConfigMap` with a fleet-reserved annotation. This allows users to encapsulate resources that might have side effects on the hub cluster within the `ConfigMap`. For detailed instructions, please refer to this [document](../../howtos/envelope-object.md).

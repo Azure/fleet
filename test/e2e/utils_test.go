@@ -150,7 +150,7 @@ func markMemberClusterAsLeft(name string) {
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-		createMemberCluster(memberCluster.ClusterName, hubClusterSAName, labelsByClusterName[memberCluster.ClusterName])
+		createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName])
 	}
 }
 
@@ -530,6 +530,15 @@ func checkIfPlacedWorkResourcesOnAllMemberClusters() {
 
 		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
 		Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+
+		namespaceResourcePlacedActual := workNamespacePlacedOnClusterActual(memberCluster)
+		Eventually(namespaceResourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work namespace on member cluster %s", memberCluster.ClusterName)
 	}
 }
 

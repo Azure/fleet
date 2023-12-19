@@ -39,3 +39,9 @@ domains:
     This how-to guide explains in depth the status Fleet reports in `ClusterResourcePlacement`
     API objects, which you can read about to track which clusters Fleet has picked for a
     resource placement and whether a placement has been successfully completed.
+
+* [Using Enveloped Objects to propagate resources using `ClusterResourcePlacement` API](envelope-object.md)
+
+  This how-to guide explains in depth the concept, usage and examples of enveloped objects with 
+ `ClusterResourcePlacement` API objects, which you can leverage to propagate resources without 
+  unintended side effects on the hub cluster.

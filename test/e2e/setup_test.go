@@ -45,7 +45,14 @@ const (
 	memberCluster5LeftName        = "kind-left-cluster"
 	memberCluster6NonExistentName = "kind-non-existent-cluster"
 
-	hubClusterSAName = "hub-agent-sa"
+	// The names of the service accounts used by specific member clusters.
+	//
+	// Note that these names must also match those in `setup.sh`.
+	memberCluster1EastProdSAName   = "fleet-member-agent-cluster-1"
+	memberCluster2EastCanarySAName = "fleet-member-agent-cluster-2"
+	memberCluster3WestProdSAName   = "fleet-member-agent-cluster-3"
+
+	hubClusterSAName = "fleet-hub-agent"
 	fleetSystemNS    = "fleet-system"
 
 	kubeConfigPathEnvVarName = "KUBECONFIG"
@@ -174,7 +181,7 @@ func beforeSuiteForAllProcesses() {
 	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable KUBECONFIG is not set")
 
 	// Initialize the cluster objects and their clients.
-	hubCluster = framework.NewCluster(hubClusterName, scheme)
+	hubCluster = framework.NewCluster(hubClusterName, "", scheme)
 	Expect(hubCluster).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(hubCluster)
 	hubClient = hubCluster.KubeClient
@@ -182,19 +189,19 @@ func beforeSuiteForAllProcesses() {
 	impersonateHubClient = hubCluster.ImpersonateKubeClient
 	Expect(impersonateHubClient).NotTo(BeNil(), "Failed to initialize impersonate client for accessing Kubernetes cluster")
 
-	memberCluster1EastProd = framework.NewCluster(memberCluster1EastProdName, scheme)
+	memberCluster1EastProd = framework.NewCluster(memberCluster1EastProdName, memberCluster1EastProdSAName, scheme)
 	Expect(memberCluster1EastProd).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(memberCluster1EastProd)
 	memberCluster1EastProdClient = memberCluster1EastProd.KubeClient
 	Expect(memberCluster1EastProdClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
-	memberCluster2EastCanary = framework.NewCluster(memberCluster2EastCanaryName, scheme)
+	memberCluster2EastCanary = framework.NewCluster(memberCluster2EastCanaryName, memberCluster2EastCanarySAName, scheme)
 	Expect(memberCluster2EastCanary).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(memberCluster2EastCanary)
 	memberCluster2EastCanaryClient = memberCluster2EastCanary.KubeClient
 	Expect(memberCluster2EastCanaryClient).NotTo(BeNil(), "Failed to initialize client for accessing Kubernetes cluster")
 
-	memberCluster3WestProd = framework.NewCluster(memberCluster3WestProdName, scheme)
+	memberCluster3WestProd = framework.NewCluster(memberCluster3WestProdName, memberCluster3WestProdSAName, scheme)
 	Expect(memberCluster3WestProd).NotTo(BeNil(), "Failed to initialize cluster object")
 	framework.GetClusterClient(memberCluster3WestProd)
 	memberCluster3WestProdClient = memberCluster3WestProd.KubeClient
