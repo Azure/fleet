@@ -105,8 +105,11 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}
 	}
 
+	// AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive.
+    // If none of them are set, the resourceConfig by default stores a list of skipped propagation APIs.
 	resourceConfig := utils.NewResourceConfig(opts.AllowedPropagatingAPIs != "")
 	if err := resourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
+		// The program will never go here because the parameters have been checked.
 		return err
 	}
 	if err := resourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {

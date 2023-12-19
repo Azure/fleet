@@ -48,6 +48,8 @@ type Options struct {
 	// WorkPendingGracePeriod represents the grace period after a work is created/updated.
 	// We consider a work failed if a work's last applied condition doesn't change after period.
 	WorkPendingGracePeriod metav1.Duration
+	// SkippedPropagatingAPIs and AllowedPropagatingAPIs options are used to control the propagation of resources.
+	// If none of them are set, the default skippedPropagatingAPIs list will be used.
 	// SkippedPropagatingAPIs indicates semicolon separated resources that should be skipped for propagating.
 	SkippedPropagatingAPIs string
 	// AllowedPropagatingAPIs indicates semicolon separated resources that should be allowed for propagating.

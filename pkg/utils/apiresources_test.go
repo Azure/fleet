@@ -228,7 +228,7 @@ func TestResourceConfigGroupParse(t *testing.T) {
 	}
 }
 
-func TestDisabledResourceConfigMixedParse(t *testing.T) {
+func TestResourceConfigMixedParse(t *testing.T) {
 	tests := []struct {
 		input    string
 		disabled []schema.GroupVersionKind
@@ -309,7 +309,7 @@ func TestDisabledResourceConfigMixedParse(t *testing.T) {
 		// test allow list
 		r := NewResourceConfig(true)
 		if err := r.Parse(test.input); err != nil {
-			t.Fatalf("Unexpected error: %v", err)
+			t.Fatalf("Parse() returned error: %v", err)
 		}
 		// Since we are testing allow list, the result is reversed
 		for i, o := range test.disabled {
