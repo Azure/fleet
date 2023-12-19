@@ -71,7 +71,11 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set enableV1Alpha1APIs=false \
     --set enableV1Beta1APIs=true
 
-# Instal the member agent and related components to the member clusters
+# Download CRD from Fleet networking repo
+export NETWORKING_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml
+curl $NETWORKING_CRD_URL | kubectl apply -f -
+
+# Install the member agent and related components to the member clusters
 
 # Set up a service account for each member in the hub cluster.
 #
@@ -123,3 +127,4 @@ do
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
 done
+

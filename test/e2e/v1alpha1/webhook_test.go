@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,7 +30,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
@@ -50,6 +48,7 @@ var (
 
 const (
 	testUser          = "test-user"
+	randomUser        = "random-user"
 	testKey           = "test-key"
 	testValue         = "test-value"
 	testWork          = "test-work"
@@ -64,6 +63,25 @@ var (
 	imcGVK       = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	namespaceGVK = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
 	workGVK      = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
+	iseGVK       = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
+
+	deployment = appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "Deployment",
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: utilrand.String(10),
+					Kind:       utilrand.String(10),
+					Name:       utilrand.String(10),
+					UID:        types.UID(utilrand.String(10)),
+				},
+			},
+		},
+	}
 )
 
 var _ = Describe("Fleet's Hub cluster webhook tests", func() {
@@ -595,57 +613,17 @@ var _ = Describe("Fleet's CRD Resource Handler webhook tests", func() {
 
 var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 	Context("fleet guard rail tests for MC", func() {
-		var mcName string
+		var mcName, imcNamespace string
 		BeforeEach(func() {
 			// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
 			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
 			mcName = testMemberCluster + "-" + utils.RandStr()
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					Identity: rbacv1.Subject{
-						Name:      "random-user",
-						Kind:      "ServiceAccount",
-						Namespace: utils.FleetSystemNamespace,
-					},
-					State:                  fleetv1alpha1.ClusterStateJoin,
-					HeartbeatPeriodSeconds: 60,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Create(ctx, mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: imcNamespace,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-			}
-			Expect(HubCluster.KubeClient.Delete(ctx, mc))
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: imcNamespace,
-				},
-			}
-			Eventually(func() bool {
-				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny CREATE operation on member cluster CR for user not in system:masters group", func() {
@@ -771,57 +749,17 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 	})
 
 	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with user not in MC identity", func() {
-		var mcName string
+		var mcName, imcNamespace string
 		BeforeEach(func() {
 			// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
 			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
 			mcName = testMemberCluster + "-" + utils.RandStr()
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					Identity: rbacv1.Subject{
-						Name:      "random-user",
-						Kind:      "ServiceAccount",
-						Namespace: utils.FleetSystemNamespace,
-					},
-					State:                  fleetv1alpha1.ClusterStateJoin,
-					HeartbeatPeriodSeconds: 60,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Create(ctx, mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: imcNamespace,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-			}
-			Expect(HubCluster.KubeClient.Delete(ctx, mc))
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: imcNamespace,
-				},
-			}
-			Eventually(func() bool {
-				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -904,63 +842,22 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 	})
 
 	Context("fleet guard rail tests for IMC, in fleet-member prefixed namespace with user in MC identity, system:master group users", func() {
-		var mcName string
+		var mcName, imcNamespace string
 		BeforeEach(func() {
 			// Creating this MC for IMC E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
 			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
 			mcName = testMemberCluster + "-" + utils.RandStr()
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					Identity: rbacv1.Subject{
-						Name:      "test-user",
-						Kind:      "ServiceAccount",
-						Namespace: utils.FleetSystemNamespace,
-					},
-					State:                  fleetv1alpha1.ClusterStateJoin,
-					HeartbeatPeriodSeconds: 60,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Create(ctx, mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: imcNamespace,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			imcNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, "test-user")
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, imcNamespace)
 		})
 		AfterEach(func() {
-			imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-			}
-			Expect(HubCluster.KubeClient.Delete(ctx, mc))
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: imcNamespace,
-				},
-			}
-			Eventually(func() bool {
-				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should allow UPDATE operation on internal member cluster CR status for user in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Status = fleetv1alpha1.InternalMemberClusterStatus{
 					ResourceUsage: fleetv1alpha1.ResourceUsage{
@@ -980,7 +877,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should allow UPDATE operation on internal member cluster CR for user in MC identity", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Labels = map[string]string{"test-key": "test-value"}
 				By("expecting successful UPDATE of Internal Member Cluster Status")
@@ -991,7 +887,6 @@ var _ = Describe("Fleet's Custom Resource Handler webhook tests", func() {
 		It("should allow UPDATE operation on internal member cluster CR spec for user in system:masters group", func() {
 			Eventually(func(g Gomega) error {
 				var imc fleetv1alpha1.InternalMemberCluster
-				imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: imcNamespace}, &imc)).Should(Succeed())
 				imc.Spec.HeartbeatPeriodSeconds = 25
 
@@ -1009,52 +904,9 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			mcName = testMemberCluster + "-" + utils.RandStr()
 			workName = testWork + "-" + utils.RandStr()
 			testMemberClusterNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					Identity: rbacv1.Subject{
-						Name:      "random-user",
-						Kind:      "ServiceAccount",
-						Namespace: utils.FleetSystemNamespace,
-					},
-					State:                  fleetv1alpha1.ClusterStateJoin,
-					HeartbeatPeriodSeconds: 60,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Create(ctx, mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: testMemberClusterNamespace,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			testDeployment := appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Deployment",
-					APIVersion: "apps/v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "Deployment",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: utilrand.String(10),
-							Kind:       utilrand.String(10),
-							Name:       utilrand.String(10),
-							UID:        types.UID(utilrand.String(10)),
-						},
-					},
-				},
-			}
-			deploymentBytes, err := json.Marshal(testDeployment)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, testMemberClusterNamespace)
+			deploymentBytes, err := json.Marshal(deployment)
 			Expect(err).Should(Succeed())
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1088,42 +940,11 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: w.Name, Namespace: w.Namespace}, &w))
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
 
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-			}
-			Expect(HubCluster.KubeClient.Delete(ctx, mc))
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: testMemberClusterNamespace,
-				},
-			}
-			Eventually(func() bool {
-				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should deny CREATE operation on work CR for user not in MC identity", func() {
-			testDeployment := appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Deployment",
-					APIVersion: "apps/v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "Deployment",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: utilrand.String(10),
-							Kind:       utilrand.String(10),
-							Name:       utilrand.String(10),
-							UID:        types.UID(utilrand.String(10)),
-						},
-					},
-				},
-			}
-			deploymentBytes, err := json.Marshal(testDeployment)
+			deploymentBytes, err := json.Marshal(deployment)
 			Expect(err).Should(Succeed())
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1193,52 +1014,10 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			mcName = testMemberCluster + "-" + utils.RandStr()
 			workName = testWork + "-" + utils.RandStr()
 			testMemberClusterNamespace = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-				Spec: fleetv1alpha1.MemberClusterSpec{
-					Identity: rbacv1.Subject{
-						Name:      "test-user",
-						Kind:      "ServiceAccount",
-						Namespace: utils.FleetSystemNamespace,
-					},
-					State:                  fleetv1alpha1.ClusterStateJoin,
-					HeartbeatPeriodSeconds: 60,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Create(ctx, mc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, "test-user")
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, testMemberClusterNamespace)
 
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: testMemberClusterNamespace,
-				},
-			}
-			Eventually(func() error {
-				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
-			testDeployment := appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Deployment",
-					APIVersion: "apps/v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "Deployment",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: utilrand.String(10),
-							Kind:       utilrand.String(10),
-							Name:       utilrand.String(10),
-							UID:        types.UID(utilrand.String(10)),
-						},
-					},
-				},
-			}
-			deploymentBytes, err := json.Marshal(testDeployment)
+			deploymentBytes, err := json.Marshal(deployment)
 			Expect(err).Should(Succeed())
 			w := workv1alpha1.Work{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1271,22 +1050,7 @@ var _ = Describe("Fleet's Work Resource Handler webhook tests", func() {
 			Eventually(func() bool {
 				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: w.Name, Namespace: w.Namespace}, &w))
 			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
-
-			mc := &fleetv1alpha1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: mcName,
-				},
-			}
-			Expect(HubCluster.KubeClient.Delete(ctx, mc))
-			imc := &fleetv1alpha1.InternalMemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      mcName,
-					Namespace: testMemberClusterNamespace,
-				},
-			}
-			Eventually(func() bool {
-				return k8sErrors.IsNotFound(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc))
-			}, testutils.PollTimeout, testutils.PollInterval).Should(BeTrue())
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
 		It("should allow UPDATE operation on work CR for user in MC identity", func() {
@@ -1447,20 +1211,9 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Ordered, func() {
-	Context("allow requests to modify fleet networking resources", Ordered, func() {
-		var internalServiceExportCRD apiextensionsv1.CustomResourceDefinition
+	Context("deny requests to modify fleet networking resources, for user not in system:masters group", Ordered, func() {
 		var ns corev1.Namespace
-
-		BeforeAll(func() {
-			By("Create internalServiceExport CRD")
-			Expect(utils.GetObjectFromManifest("./test/e2e/v1alpha1/manifests/internalserviceexport-crd.yaml", &internalServiceExportCRD)).Should(Succeed())
-			Expect(HubCluster.KubeClient.Create(ctx, &internalServiceExportCRD)).Should(Succeed())
-			By("internalServiceExport CRD created")
-
-			Eventually(func(g Gomega) error {
-				return HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "internalserviceexports.networking.fleet.azure.com"}, &internalServiceExportCRD)
-			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-
+		BeforeEach(func() {
 			ns = corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "fleet-member-test-internal-service-export",
@@ -1471,40 +1224,101 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 			By(fmt.Sprintf("namespace `%s` is created", ns.Name))
 		})
 
-		It("should allow CREATE operation on Internal service export resource in fleet-member namespace for user not in system:masters group", func() {
+		It("should deny CREATE operation on Internal service export resource in fleet-member namespace for user not in system:masters group", func() {
+			ise := testutils.InternalServiceExport("test-internal-service-export", ns.Name)
+			By("expecting denial of operation CREATE of Internal Service Export")
+			err := HubCluster.ImpersonateKubeClient.Create(ctx, &ise)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
+		})
+
+		AfterEach(func() {
+			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
+			By(fmt.Sprintf("namespace %s is deleted", ns.Name))
+		})
+	})
+
+	Context("deny request to modify network resources in fleet member namespaces, for user not in member cluster identity", Ordered, func() {
+		var nsName, mcName string
+		BeforeEach(func() {
+			// Creating this MC for Internal Service Export E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
+			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
+			mcName = testMemberCluster + "-" + utils.RandStr()
+			nsName = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, randomUser)
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, nsName)
+
+			ise := testutils.InternalServiceExport("test-internal-service-export", nsName)
+			Eventually(func() error {
+				return HubCluster.KubeClient.Create(ctx, &ise)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
 			ise := fleetnetworkingv1alpha1.InternalServiceExport{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-internal-service-export",
-					Namespace: ns.Name,
-				},
-				Spec: fleetnetworkingv1alpha1.InternalServiceExportSpec{
-					Ports: []fleetnetworkingv1alpha1.ServicePort{
-						{
-							Protocol: corev1.ProtocolTCP,
-							Port:     4848,
-						},
-					},
-					ServiceReference: fleetnetworkingv1alpha1.ExportedObjectReference{
-						NamespacedName:  "test-svc",
-						ResourceVersion: "test-resource-version",
-						ClusterID:       "member-1",
-						ExportedSince:   metav1.NewTime(time.Now().Round(time.Second)),
-					},
+					Namespace: nsName,
 				},
 			}
-			By("expecting successful CREATE of Internal Service Export")
-			Expect(HubCluster.ImpersonateKubeClient.Create(ctx, &ise)).Should(Succeed())
-			By("expecting successful DELETE of namespace")
-			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
+			Expect(HubCluster.KubeClient.Delete(ctx, &ise))
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
 		})
 
-		AfterAll(func() {
-			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
-			By(fmt.Sprintf("namespace %s is deleted", ns.Name))
+		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in member cluster identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-internal-service-export", Namespace: nsName}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				err := HubCluster.ImpersonateKubeClient.Update(ctx, &ise)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
+				return nil
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+	})
 
-			Expect(HubCluster.KubeClient.Delete(ctx, &internalServiceExportCRD)).Should(Succeed())
-			By(fmt.Sprintf("crd %s is deleted", internalServiceExportCRD.Name))
+	Context("allow request to modify network resources in fleet member namespaces, for user in member cluster identity", Ordered, func() {
+		var nsName, mcName string
+		BeforeEach(func() {
+			// Creating this MC for Internal Service Export E2E, this MC will fail to join since it's name is not configured to be recognized by the member agent
+			// which it uses to create the namespace to watch for IMC resource. But it serves its purpose for the tests.
+			mcName = testMemberCluster + "-" + utils.RandStr()
+			nsName = fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+			testutils.CreateMemberClusterResource(ctx, HubCluster, mcName, testUser)
+			testutils.CheckInternalMemberClusterExists(ctx, HubCluster, mcName, nsName)
 
+			ise := testutils.InternalServiceExport("test-internal-service-export", nsName)
+			Eventually(func() error {
+				return HubCluster.KubeClient.Create(ctx, &ise)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			ise := fleetnetworkingv1alpha1.InternalServiceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-internal-service-export",
+					Namespace: nsName,
+				},
+			}
+			Expect(HubCluster.KubeClient.Delete(ctx, &ise))
+			testutils.CleanupMemberClusterResources(ctx, HubCluster, mcName)
+		})
+
+		It("should allow update operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-internal-service-export", Namespace: nsName}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				return HubCluster.ImpersonateKubeClient.Update(ctx, &ise)
+			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})
 	})
 })

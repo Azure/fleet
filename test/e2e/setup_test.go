@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -152,6 +153,9 @@ func TestMain(m *testing.M) {
 	if err := placementv1beta1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
 	}
+	if err := fleetnetworkingv1alpha1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (networking) to the runtime scheme: %v", err)
+	}
 
 	// Add built-in APIs and extensions to the scheme.
 	if err := k8sscheme.AddToScheme(scheme); err != nil {
@@ -232,6 +236,5 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	deleteResourcesForFleetGuardRail()
 	setAllMemberClustersToLeave()
 	checkIfAllMemberClustersHaveLeft()
-
 	cleanupInvalidClusters()
 })
