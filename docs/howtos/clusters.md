@@ -191,8 +191,8 @@ Fleet connection:
         --set image.tag=$FLEET_VERSION \
         --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
         --set refreshtoken.tag=$FLEET_VERSION \
-        --set image.pullPolicy=Never \
-        --set refreshtoken.pullPolicy=Never \
+        --set image.pullPolicy=Always \
+        --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName="$MEMBER_CLUSTER" \
         --set logVerbosity=5 \
         --set namespace=fleet-system \
