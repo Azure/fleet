@@ -5,6 +5,8 @@ Licensed under the MIT license.
 
 package v1beta1
 
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 const (
 	ClusterResourcePlacementKind        = "ClusterResourcePlacement"
 	ClusterResourcePlacementResource    = "clusterresourceplacements"
@@ -81,3 +83,36 @@ const (
 	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
 	PreviousBindingStateAnnotation = fleetPrefix + "previous-binding-state"
 )
+
+// ResourceSelector is used to select namespace scoped resources as the target resources to be placed.
+// All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
+type ResourceSelector struct {
+	// Group name of the namespace-scoped resource.
+	// Use an empty string to select resources under the core API group (e.g., services).
+	// +required
+	Group string `json:"group"`
+
+	// Version of the namespace-scoped resource.
+	// +required
+	Version string `json:"version"`
+
+	// Kind of the namespace-scoped resource.
+	// Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
+	// +required
+	Kind string `json:"kind"`
+
+	// Namespace of the namespace-scoped resource.
+	// +required
+	Namespace string `json:"namespace"`
+
+	// You can only specify at most one of the following two fields: Name and LabelSelector.
+	// If none is specified, all the namespace-scoped resources with the given group, version, kind and namespace are selected.
+
+	// Name of the namespace-scoped resource.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// A label query over all the namespace-scoped resources. Resources matching the query are selected.
+	// +optional
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+}

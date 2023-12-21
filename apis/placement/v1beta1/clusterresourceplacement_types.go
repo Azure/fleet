@@ -477,6 +477,15 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
 	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
 
+	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
+	// successfully before applying to the target cluster if there is any override defined.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined.
+	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
+	// - "Unknown" means we haven't finished the override yet.
+	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
+
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
 	// Its condition status can be one of the following:
@@ -512,6 +521,15 @@ const (
 	// rollout strategy configurations specified in the placement.
 	// - Work is not created/updated because of the unknown reasons.
 	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+
+	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
+	// before applying to the target cluster if there is any override defined.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined.
+	// - "False" means some of them have failed.
+	// - "Unknown" means we haven't finished the override yet.
+	ResourceOverriddenConditionType ResourcePlacementConditionType = "ResourceOverridden"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:

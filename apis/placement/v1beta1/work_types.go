@@ -34,6 +34,8 @@ const (
 	// LastAppliedConfigAnnotation is to record the last applied configuration on the object.
 	LastAppliedConfigAnnotation = fleetPrefix + "last-applied-configuration"
 
+	// WorkConditionTypeOverridden represents workload in Work is overridden successfully before applying to the spoke cluster.
+	WorkConditionTypeOverridden = "Overridden"
 	// WorkConditionTypeApplied represents workload in Work is applied successfully on the spoke cluster.
 	WorkConditionTypeApplied = "Applied"
 	// WorkConditionTypeAvailable represents workload in Work exists on the spoke cluster.
@@ -47,6 +49,9 @@ const (
 type WorkSpec struct {
 	// Workload represents the manifest workload to be deployed on spoke cluster
 	Workload WorkloadTemplate `json:"workload,omitempty"`
+
+	// WorkloadOverrides represents a list of overrides applied to the resources.
+	WorkloadOverrides []WorkloadOverride `json:"workloadOverrides,omitempty"`
 }
 
 // WorkloadTemplate represents the manifest workload to be deployed on spoke cluster
@@ -61,6 +66,23 @@ type Manifest struct {
 	// +kubebuilder:validation:EmbeddedResource
 	// +kubebuilder:pruning:PreserveUnknownFields
 	runtime.RawExtension `json:",inline"`
+}
+
+type WorkloadOverride struct {
+	// Identifier represents an identity of a resource which has defined the overrides.
+	// +required
+	Identifier WorkResourceIdentifier `json:"identifier"`
+
+	// Overrides defines a list of override applied to the resource before applying to the spoke cluster.
+	// +required
+	Overrides []Override `json:"overrides"`
+
+	// ApplyMode is derived from the specified overrides.
+	// The highest priority override wins.
+	// +kubebuilder:validation:Enum=CreateOnly;ServerSideApply;ServerSideApplyWithForceConflicts
+	// +kubebuilder:default=CreateOnly
+	// +optional
+	ApplyMode ApplyMode `json:"applyMode,omitempty"`
 }
 
 // WorkStatus defines the observed state of Work.
