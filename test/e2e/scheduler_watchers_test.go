@@ -734,4 +734,705 @@ var _ = Describe("responding to specific member cluster changes", func() {
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
 		})
 	})
+
+	Context("cluster becomes eligible for unfulfilled PickN CRPs, just joined", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(4),
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+		It("should pick only healthy clusters in the system", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can add a new member cluster", func() {
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+
+			// Mark the newly created member cluster as healthy.
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should propagate works for the new cluster; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick the new cluster along with other healthy clusters", func() {
+			targetClusterNames := []string{}
+			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("cluster becomes eligible for unfulfilled PickN CRPs, label changed", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create a new member cluster.
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, nil)
+			// Mark the newly created member cluster as healthy.
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(1),
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													labelNameForWatcherTests: labelValueForWatcherTests,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should not pick any cluster", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
+		})
+
+		It("can update the member cluster label", func() {
+			Eventually(func() error {
+				memberCluster := clusterv1beta1.MemberCluster{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: fakeClusterName1ForWatcherTests}, &memberCluster); err != nil {
+					return err
+				}
+
+				memberCluster.Labels = map[string]string{
+					labelNameForWatcherTests: labelValueForWatcherTests,
+				}
+				return hubClient.Update(ctx, &memberCluster)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the member cluster with new label")
+		})
+
+		It("should propagate works for the updated cluster; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick the new cluster", func() {
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("cluster becomes eligible for unfulfilled PickN CRPs, health condition changed", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create a new member cluster.
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			// Mark the newly created member cluster as unhealthy.
+			markMemberClusterAsUnhealthy(fakeClusterName1ForWatcherTests)
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(1),
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													labelNameForWatcherTests: labelValueForWatcherTests,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should not pick any cluster", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, []string{fakeClusterName1ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should not select any cluster")
+		})
+
+		It("can mark the cluster as healthy", func() {
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should propagate works for the updated cluster; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick the new cluster", func() {
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("cluster becomes eligible for unfulfilled PickN CRPs, topology spread balanced", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(5),
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+							{
+								MaxSkew:           pointer.Int32(1),
+								TopologyKey:       regionLabelName,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+		It("should pick only healthy clusters in the system", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can add a new member cluster in a region which would violate the topology spread constraint", func() {
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1})
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should not pick the member cluster", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can add a new member cluster in a region which would re-balance the topology spread", func() {
+			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2})
+			markMemberClusterAsHealthy(fakeClusterName2ForWatcherTests)
+		})
+
+		It("should propagate works for both new clusters; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName2ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick both new clusters, along with other clusters", func() {
+			targetClusterNames := []string{}
+			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName2ForWatcherTests)
+		})
+	})
+
+	Context("cluster appears for unfulfilled PickN CRPs, topology spread constraints violated", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(4),
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+							{
+								MaxSkew:           pointer.Int32(1),
+								TopologyKey:       regionLabelName,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should place resources on all member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+		It("should pick only healthy clusters in the system", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can add a new member cluster in a region which would violate the topology spread constraint", func() {
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1})
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should not pick the member cluster", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("selected cluster becomes ineligible for fulfilled PickN CRPs, left", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create a new member cluster.
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			// Mark the newly created member cluster as healthy.
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(4),
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should propagate works for the new cluster; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick the new cluster, along with other healthy clusters", func() {
+			targetClusterNames := allMemberClusterNames
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can mark the cluster as left", func() {
+			markMemberClusterAsLeft(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should remove the cluster from the scheduling decision", func() {
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, []string{fakeClusterName1ForWatcherTests}, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("selected cluster becomes ineligible for fulfilled PickN CRPs, label changed", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create a new member cluster.
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			// Mark the newly created member cluster as healthy.
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(1),
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													labelNameForWatcherTests: labelValueForWatcherTests,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should propagate works for the new cluster; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick the new cluster", func() {
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can update the member cluster label", func() {
+			Eventually(func() error {
+				memberCluster := clusterv1beta1.MemberCluster{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: fakeClusterName1ForWatcherTests}, &memberCluster); err != nil {
+					return err
+				}
+
+				memberCluster.Labels = map[string]string{}
+				return hubClient.Update(ctx, &memberCluster)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the member cluster with new label")
+		})
+
+		It("should keep the cluster as picked", func() {
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should keep the cluster as picked")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("selected cluster becomes ineligible for fulfilled PickN CRPs, health condition changed", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create a new member cluster.
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{labelNameForWatcherTests: labelValueForWatcherTests})
+			// Mark the newly created member cluster as healthy.
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(1),
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													labelNameForWatcherTests: labelValueForWatcherTests,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should propagate works for the new cluster; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick the new cluster", func() {
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can mark the member cluster as unhealthy", func() {
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+		})
+
+		It("should keep the cluster as picked", func() {
+			targetClusterNames := []string{fakeClusterName1ForWatcherTests}
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Should keep the cluster as picked")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
+
+	Context("selected cluster becomes ineligible for fulfilled PickN CRPs, topology spread constraint violated", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+		BeforeAll(func() {
+			// Create the resources.
+			createWorkResources()
+
+			// Create new member clusters.
+			createMemberCluster(fakeClusterName1ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue1})
+			createMemberCluster(fakeClusterName2ForWatcherTests, hubClusterSAName, map[string]string{regionLabelName: regionLabelValue2})
+			// Mark the newly created member clusters as healthy.
+			markMemberClusterAsHealthy(fakeClusterName1ForWatcherTests)
+			markMemberClusterAsHealthy(fakeClusterName2ForWatcherTests)
+
+			// Create the CRP.
+			crp := &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: workResourceSelector(),
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType:    placementv1beta1.PickNPlacementType,
+						NumberOfClusters: pointer.Int32(5),
+						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+							{
+								MaxSkew:           pointer.Int32(1),
+								TopologyKey:       regionLabelName,
+								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+							},
+						},
+					},
+					Strategy: placementv1beta1.RolloutStrategy{
+						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
+							UnavailablePeriodSeconds: pointer.Int(2),
+						},
+					},
+				},
+			}
+			Expect(hubClient.Create(ctx, crp)).To(Succeed())
+		})
+
+		It("should place resources on all real member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+		It("should propagate works for both new clusters; can mark them as applied", func() {
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName1ForWatcherTests, crpName, workResourceIdentifiers())
+			verifyWorkPropagationAndMarkAsApplied(fakeClusterName2ForWatcherTests, crpName, workResourceIdentifiers())
+		})
+
+		It("should pick both new clusters, along with other clusters", func() {
+			targetClusterNames := []string{}
+			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		It("can update the labels of the cluster in the region with less clusters", func() {
+			Eventually(func() error {
+				memberCluster := clusterv1beta1.MemberCluster{}
+				if err := hubClient.Get(ctx, types.NamespacedName{Name: fakeClusterName2ForWatcherTests}, &memberCluster); err != nil {
+					return err
+				}
+
+				memberCluster.Labels = map[string]string{}
+				return hubClient.Update(ctx, &memberCluster)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update the member cluster with new label")
+		})
+
+		It("should keep the cluster as picked", func() {
+			targetClusterNames := []string{}
+			targetClusterNames = append(targetClusterNames, allMemberClusterNames...)
+			targetClusterNames = append(targetClusterNames, fakeClusterName1ForWatcherTests, fakeClusterName2ForWatcherTests)
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), targetClusterNames, nil, "0")
+			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
+		})
+
+		AfterAll(func() {
+			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+		})
+	})
 })
