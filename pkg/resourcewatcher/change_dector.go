@@ -186,6 +186,7 @@ func (d *ChangeDetector) discoverResources(dynamicResourceEventHandler cache.Res
 
 // gvrDisabled returns whether GroupVersionResource is disabled.
 func (d *ChangeDetector) shouldWatchResource(gvr schema.GroupVersionResource) bool {
+	// By default, all of the APIs are allowed.
 	if d.ResourceConfig == nil {
 		return true
 	}

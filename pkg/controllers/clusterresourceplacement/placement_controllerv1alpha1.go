@@ -49,7 +49,7 @@ type Reconciler struct {
 	// It's only needed by v1beta1 APIs.
 	UncachedReader client.Reader
 
-	// ResourceConfig contains all the API resources that we won't select based on allowed or skipped propagating APIs ption.
+	// ResourceConfig contains all the API resources that we won't select based on allowed or skipped propagating APIs option.
 	ResourceConfig *utils.ResourceConfig
 
 	// SkippedNamespaces contains the namespaces that we should not propagate.
