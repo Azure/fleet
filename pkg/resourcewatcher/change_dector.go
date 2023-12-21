@@ -64,7 +64,7 @@ type ChangeDetector struct {
 	// InformerManager manages all the dynamic informers created by the discovery client
 	InformerManager informer.Manager
 
-	// ResourceConfig contains all the api resources that we won't select based on the allowed or skipped propagating apis option.
+	// ResourceConfig contains all the API resources that we won't select based on the allowed or skipped propagating APIs option.
 	ResourceConfig *utils.ResourceConfig
 
 	// SkippedNamespaces contains all the namespaces that we won't select

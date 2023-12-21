@@ -58,7 +58,7 @@ type ResourceConfig struct {
 }
 
 // NewResourceConfig creates an empty ResourceConfig with an allow list flag.
-// If the resourceConfig is not an allowlist, it creates a default skipped propagation APIs list.
+// If the resourceConfig is not an allowlist, it creates a default skipped propagating APIs list.
 func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r := &ResourceConfig{
 		groups:            map[string]struct{}{},
@@ -171,7 +171,7 @@ func (r *ResourceConfig) parseSingle(token string) error {
 }
 
 // IsResourceDisabled returns whether a given GroupVersionKind is disabled.
-// A gkv is disabled if its group or group version is disabled.
+// A gvk is disabled if its group or group version is disabled.
 func (r *ResourceConfig) IsResourceDisabled(gvk schema.GroupVersionKind) bool {
 	isConfigured := r.isResourceConfigured(gvk)
 	if r.isAllowList {
@@ -198,17 +198,17 @@ func (r *ResourceConfig) isResourceConfigured(gvk schema.GroupVersionKind) bool 
 	return false
 }
 
-// AddGroup stores group in the resource config.
+// AddGroup stores a group in the resource config.
 func (r *ResourceConfig) AddGroup(g string) {
 	r.groups[g] = struct{}{}
 }
 
-// AddGroupVersion stores group version in the resource config.
+// AddGroupVersion stores a group version in the resource config.
 func (r *ResourceConfig) AddGroupVersion(gv schema.GroupVersion) {
 	r.groupVersions[gv] = struct{}{}
 }
 
-// AddGroupVersionKind stores GroupVersionKind in the resource config.
+// AddGroupVersionKind stores a GroupVersionKind in the resource config.
 func (r *ResourceConfig) AddGroupVersionKind(gvk schema.GroupVersionKind) {
 	r.groupVersionKinds[gvk] = struct{}{}
 }
