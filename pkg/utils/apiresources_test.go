@@ -71,22 +71,9 @@ func TestResourceConfigGVKParse(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		r := NewResourceConfig(false)
-		if err := r.Parse(test.input); err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		for i, o := range test.disabled {
-			ok := r.IsResourceDisabled(o)
-			if !ok {
-				t.Errorf("%d: unexpected error: %v", i, o)
-			}
-		}
-		for i, o := range test.enabled {
-			ok := r.IsResourceDisabled(o)
-			if ok {
-				t.Errorf("%d: unexpected error: %v", i, o)
-			}
-		}
+		r := newTestResourceConfig(t, false, test.input)
+		checkIfResourcesAreDisabledInConfig(t, r, test.disabled)
+		checkIfResourcesAreEnabledInConfig(t, r, test.enabled)
 	}
 }
 
@@ -140,22 +127,9 @@ func TestResourceConfigGVParse(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		r := NewResourceConfig(false)
-		if err := r.Parse(test.input); err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		for i, o := range test.disabled {
-			ok := r.IsResourceDisabled(o)
-			if !ok {
-				t.Errorf("%d: unexpected error: %v", i, o)
-			}
-		}
-		for i, o := range test.enabled {
-			ok := r.IsResourceDisabled(o)
-			if ok {
-				t.Errorf("%d: unexpected error: %v", i, o)
-			}
-		}
+		r := newTestResourceConfig(t, false, test.input)
+		checkIfResourcesAreDisabledInConfig(t, r, test.disabled)
+		checkIfResourcesAreEnabledInConfig(t, r, test.enabled)
 	}
 }
 
@@ -209,22 +183,9 @@ func TestResourceConfigGroupParse(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		r := NewResourceConfig(false)
-		if err := r.Parse(test.input); err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		for i, o := range test.disabled {
-			ok := r.IsResourceDisabled(o)
-			if !ok {
-				t.Errorf("%d: unexpected error: %v", i, o)
-			}
-		}
-		for i, o := range test.enabled {
-			ok := r.IsResourceDisabled(o)
-			if ok {
-				t.Errorf("%d: unexpected error: %v", i, o)
-			}
-		}
+		r := newTestResourceConfig(t, false, test.input)
+		checkIfResourcesAreDisabledInConfig(t, r, test.disabled)
+		checkIfResourcesAreEnabledInConfig(t, r, test.enabled)
 	}
 }
 
@@ -302,22 +263,9 @@ func TestResourceConfigMixedParse(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			r := NewResourceConfig(test.isAllowList)
-			if err := r.Parse(input); err != nil {
-				t.Fatalf("Parse() returned error: %v", err)
-			}
-
-			for i, o := range test.disabled {
-				if ok := r.IsResourceDisabled(o); !ok {
-					t.Errorf("%d: expected resource to be disabled : %v", i, o)
-				}
-			}
-
-			for i, o := range test.enabled {
-				if ok := r.IsResourceDisabled(o); ok {
-					t.Errorf("%d: expected resource to be enabled : %v", i, o)
-				}
-			}
+			r := newTestResourceConfig(t, test.isAllowList, input)
+			checkIfResourcesAreDisabledInConfig(t, r, test.disabled)
+			checkIfResourcesAreEnabledInConfig(t, r, test.enabled)
 		})
 	}
 }
@@ -378,46 +326,40 @@ func TestDefaultResourceConfigGroupVersionKindParse(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			r := NewResourceConfig(test.isAllowList)
-			if err := r.Parse(""); err != nil {
-				t.Fatalf("Parse() returned error: %v", err)
-			}
-			for i, o := range test.disabled {
-				if ok := r.IsResourceDisabled(o); !ok {
-					t.Errorf("%d: expected resource to be disabled : %v", i, o)
-				}
-			}
-
-			for i, o := range test.enabled {
-				if ok := r.IsResourceDisabled(o); ok {
-					t.Errorf("%d: expected resource to be enabled : %v", i, o)
-				}
-			}
+			r := newTestResourceConfig(t, test.isAllowList, "")
+			checkIfResourcesAreDisabledInConfig(t, r, test.disabled)
+			checkIfResourcesAreEnabledInConfig(t, r, test.enabled)
 		})
 	}
 }
 
-func TestResourceConfigIsEmpty(t *testing.T) {
-	tests := []struct {
-		input string
-		want  bool
-	}{
-		{
-			input: "",
-			want:  true,
-		},
-		{
-			input: "v1/Node,Pod;networking.k8s.io;apps/v1;authorization.k8s.io/v1/SelfSubjectRulesReview",
-			want:  false,
-		},
+// newTestResourceConfig creates a new ResourceConfig for either allow or disable list
+// for testing with resources parsed from the input string. If the input string is not
+// valid, it will fail the test.
+func newTestResourceConfig(t *testing.T, isAllowList bool, input string) *ResourceConfig {
+	r := NewResourceConfig(isAllowList)
+	if err := r.Parse(input); err != nil {
+		t.Fatalf("Parse() returned error: %v", err)
 	}
-	for _, test := range tests {
-		r := NewResourceConfig(true)
-		if err := r.Parse(test.input); err != nil {
-			t.Fatalf("Unexpected error: %v", err)
+	return r
+}
+
+// checkIfResourcesAreDisabledInConfig checks if the resources are disabled in the ResourceConfig.
+// If the check fails, it will fail the test.
+func checkIfResourcesAreDisabledInConfig(t *testing.T, r *ResourceConfig, resources []schema.GroupVersionKind) {
+	for _, o := range resources {
+		if ok := r.IsResourceDisabled(o); !ok {
+			t.Errorf("IsResourceDisabled(%v) = false, want true", o)
 		}
-		if got := r.IsEmpty(); got != test.want {
-			t.Errorf("Unexpected result: %v", got)
+	}
+}
+
+// checkIfResourcesAreEnabledInConfig checks if the resources are enabled in the ResourceConfig.
+// If the check fails, it will fail the test.
+func checkIfResourcesAreEnabledInConfig(t *testing.T, r *ResourceConfig, resources []schema.GroupVersionKind) {
+	for _, o := range resources {
+		if ok := r.IsResourceDisabled(o); ok {
+			t.Errorf("IsResourceDisabled(%v) = true, want false", o)
 		}
 	}
 }

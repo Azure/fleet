@@ -289,7 +289,7 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 
 // shouldSelectResource returns whether a resource should be selected for propagation.
 func (r *Reconciler) shouldSelectResource(gvr schema.GroupVersionResource) bool {
-	if r.ResourceConfig.IsEmpty() {
+	if r.ResourceConfig == nil {
 		return true
 	}
 	gvks, err := r.RestMapper.KindsFor(gvr)

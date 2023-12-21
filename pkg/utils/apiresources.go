@@ -198,22 +198,17 @@ func (r *ResourceConfig) isResourceConfigured(gvk schema.GroupVersionKind) bool 
 	return false
 }
 
-// AddGroup to store group in the resource config.
+// AddGroup stores group in the resource config.
 func (r *ResourceConfig) AddGroup(g string) {
 	r.groups[g] = struct{}{}
 }
 
-// AddGroupVersion to store group version in the resource config.
+// AddGroupVersion stores group version in the resource config.
 func (r *ResourceConfig) AddGroupVersion(gv schema.GroupVersion) {
 	r.groupVersions[gv] = struct{}{}
 }
 
-// AddGroupVersionKind to store GroupVersionKind in the resource config.
+// AddGroupVersionKind stores GroupVersionKind in the resource config.
 func (r *ResourceConfig) AddGroupVersionKind(gvk schema.GroupVersionKind) {
 	r.groupVersionKinds[gvk] = struct{}{}
-}
-
-// IsEmpty returns whether the ResourceConfig is empty.
-func (r *ResourceConfig) IsEmpty() bool {
-	return len(r.groups) == 0 && len(r.groupVersions) == 0 && len(r.groupVersionKinds) == 0
 }
