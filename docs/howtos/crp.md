@@ -72,7 +72,7 @@ it also requires that you specify the API GVK and the filtering label(s):
         kind: Namespace
         version: v1          
         labelSelector:
-          MatchLabels:
+          matchLabels:
             system: critical
     ```
 
