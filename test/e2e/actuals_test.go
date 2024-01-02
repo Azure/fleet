@@ -82,6 +82,14 @@ func workNamespaceAndConfigMapPlacedOnClusterActual(cluster *framework.Cluster) 
 	}
 }
 
+func workNamespacePlacedOnClusterActual(cluster *framework.Cluster) func() error {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+
+	return func() error {
+		return validateWorkNamespaceOnCluster(cluster, types.NamespacedName{Name: workNamespaceName})
+	}
+}
+
 func crpSyncFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{
@@ -253,6 +261,7 @@ func workResourceIdentifiers() []placementv1beta1.ResourceIdentifier {
 func crpStatusUpdatedActual(
 	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
 	wantSelectedClusters, wantUnselectedClusters []string,
+	wantObservedResourceIndex string,
 ) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
@@ -283,11 +292,12 @@ func crpStatusUpdatedActual(
 		// Note that the CRP controller will only keep decisions regarding unselected clusters for a CRP if:
 		//
 		// * The CRP is of the PickN placement type and the required N count cannot be fulfilled; or
-		// * The CRP is of the PickFixed placement type and the list of target clusters speciified cannot be fulfilled.
+		// * The CRP is of the PickFixed placement type and the list of target clusters specified cannot be fulfilled.
 		wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-			Conditions:        wantCRPConditions,
-			PlacementStatuses: wantPlacementStatus,
-			SelectedResources: wantSelectedResourceIdentifiers,
+			Conditions:            wantCRPConditions,
+			PlacementStatuses:     wantPlacementStatus,
+			SelectedResources:     wantSelectedResourceIdentifiers,
+			ObservedResourceIndex: wantObservedResourceIndex,
 		}
 		if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
 			return fmt.Errorf("CRP status diff (-got, +want): %s", diff)

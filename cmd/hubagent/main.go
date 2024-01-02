@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -56,6 +58,8 @@ func init() {
 	utilruntime.Must(workv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(placementv1beta1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(fleetnetworkingv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
@@ -132,7 +136,7 @@ func main() {
 
 	if opts.EnableWebhook {
 		whiteListedUsers := strings.Split(opts.WhiteListedUsers, ",")
-		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType), whiteListedUsers, opts.EnableGuardRail); err != nil {
+		if err := SetupWebhook(mgr, options.WebhookClientConnectionType(opts.WebhookClientConnectionType), whiteListedUsers, opts.EnableGuardRail, opts.EnableV1Beta1APIs); err != nil {
 			klog.ErrorS(err, "unable to set up webhook")
 			exitWithErrorFunc()
 		}
@@ -164,7 +168,7 @@ func main() {
 }
 
 // SetupWebhook generates the webhook cert and then set up the webhook configurator.
-func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType, whiteListedUsers []string, enableGuardRail bool) error {
+func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.WebhookClientConnectionType, whiteListedUsers []string, enableGuardRail, isFleetV1Beta1API bool) error {
 	// Generate self-signed key and crt files in FleetWebhookCertDir for the webhook server to start.
 	w, err := webhook.NewWebhookConfig(mgr, FleetWebhookPort, &webhookClientConnectionType, FleetWebhookCertDir, enableGuardRail)
 	if err != nil {
@@ -175,7 +179,7 @@ func SetupWebhook(mgr manager.Manager, webhookClientConnectionType options.Webho
 		klog.ErrorS(err, "unable to add WebhookConfig")
 		return err
 	}
-	if err = webhook.AddToManager(mgr, whiteListedUsers); err != nil {
+	if err = webhook.AddToManager(mgr, whiteListedUsers, isFleetV1Beta1API); err != nil {
 		klog.ErrorS(err, "unable to register webhooks to the manager")
 		return err
 	}

@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	mcName = "test-mc"
+	mcName           = "test-mc"
+	v1Beta1MCCRDName = "memberclusters.cluster.kubernetes-fleet.io"
 )
 
 func TestHandleCRD(t *testing.T) {
@@ -807,60 +808,6 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.V1Alpha1WorkGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
 		},
-		"allow user in MC identity with update in fleet member cluster namespace with v1beta1 IMC": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:        "test-mc",
-					Namespace:   "fleet-member-test-mc",
-					RequestKind: &validation.IMCGVK,
-					UserInfo: authenticationv1.UserInfo{
-						Username: "test-identity",
-						Groups:   []string{"system:authenticated"},
-					},
-					Operation: admissionv1.Update,
-				},
-			},
-			resourceValidator: fleetResourceValidator{
-				client: mockClient,
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.IMCGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
-		},
-		"allow user in MC identity with update in fleet member cluster namespace with v1beta1 Work": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:        "test-mc",
-					Namespace:   "fleet-member-test-mc",
-					RequestKind: &validation.WorkGVK,
-					UserInfo: authenticationv1.UserInfo{
-						Username: "test-identity",
-						Groups:   []string{"system:authenticated"},
-					},
-					Operation: admissionv1.Update,
-				},
-			},
-			resourceValidator: fleetResourceValidator{
-				client: mockClient,
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.WorkGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
-		},
-		"deny user not in MC identity with update in fleet member cluster namespace with v1beta1 IMC": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:        "test-mc",
-					Namespace:   "fleet-member-test-mc",
-					RequestKind: &validation.IMCGVK,
-					UserInfo: authenticationv1.UserInfo{
-						Username: "test-user",
-						Groups:   []string{"system:authenticated"},
-					},
-					Operation: admissionv1.Update,
-				},
-			},
-			resourceValidator: fleetResourceValidator{
-				client: mockClient,
-			},
-			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.IMCGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
-		},
 		"allow hub-agent-sa in MC identity with create with v1alpha1 IMC": {
 			req: admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
@@ -909,6 +856,82 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 			},
 			resourceValidator: fleetResourceValidator{
 				client: v1Alpha1MockClient,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedGetMCFailed, "testUser", utils.GenerateGroupString([]string{"testGroup"}), admissionv1.Update, &validation.V1Alpha1WorkGVK, "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc1"})),
+		},
+		"allow user in MC identity with update in fleet member cluster namespace with v1beta1 IMC": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-mc",
+					Namespace:   "fleet-member-test-mc",
+					RequestKind: &validation.IMCGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-identity",
+						Groups:   []string{"system:authenticated"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				client:            mockClient,
+				isFleetV1Beta1API: true,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.IMCGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow user in MC identity with update in fleet member cluster namespace with v1beta1 Work": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-mc",
+					Namespace:   "fleet-member-test-mc",
+					RequestKind: &validation.WorkGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-identity",
+						Groups:   []string{"system:authenticated"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				client:            mockClient,
+				isFleetV1Beta1API: true,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.WorkGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
+		},
+		"deny user not in MC identity with update in fleet member cluster namespace with v1beta1 IMC": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-mc",
+					Namespace:   "fleet-member-test-mc",
+					RequestKind: &validation.IMCGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"system:authenticated"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				client:            mockClient,
+				isFleetV1Beta1API: true,
+			},
+			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "test-user", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &validation.IMCGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
+		},
+		"allow request if get MC failed with internal server error with v1beta1 Work": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name:        "test-work",
+					Namespace:   "fleet-member-test-mc1",
+					RequestKind: &validation.V1Alpha1WorkGVK,
+					UserInfo: authenticationv1.UserInfo{
+						Username: "testUser",
+						Groups:   []string{"testGroup"},
+					},
+					Operation: admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				client:            v1Alpha1MockClient,
+				isFleetV1Beta1API: true,
 			},
 			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedGetMCFailed, "testUser", utils.GenerateGroupString([]string{"testGroup"}), admissionv1.Update, &validation.V1Alpha1WorkGVK, "", types.NamespacedName{Name: "test-work", Namespace: "fleet-member-test-mc1"})),
 		},

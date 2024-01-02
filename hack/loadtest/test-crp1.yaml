@@ -1,0 +1,52 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp ## updated in code to be load-test-placement-utilrand.String(10)
+spec:
+  resourceSelectors:
+    - group:    apiextensions.k8s.io
+      kind:     CustomResourceDefinition
+      name:     clonesets.apps.kruise.io
+      version:  v1
+  policy:
+    placementType: PickFixed
+    clusterNames:
+      - scale-test-eastus-21-mc-fm
+      - scale-test-eastus-53-mc-fm
+      - scale-test-eastus-67-mc-fm
+      - scale-test-eastus-79-mc-fm
+      - scale-test-westus-10-mc-fm
+      - scale-test-westus-16-mc-fm
+      - scale-test-westus-2-mc-fm
+      - scale-test-westus-22-mc-fm
+      - scale-test-westus-26-mc-fm
+      - scale-test-westus-28-mc-fm
+      - scale-test-westus-30-mc-fm
+      - scale-test-westus-36-mc-fm
+      - scale-test-westus-4-mc-fm
+      - scale-test-westus-40-mc-fm
+      - scale-test-westus-44-mc-fm
+      - scale-test-westus-48-mc-fm
+      - scale-test-westus-52-mc-fm
+      - scale-test-westus-54-mc-fm
+      - scale-test-westus-56-mc-fm
+      - scale-test-westus-58-mc-fm
+      - scale-test-westus-6-mc-fm
+      - scale-test-westus-64-mc-fm
+      - scale-test-westus-70-mc-fm
+      - scale-test-westus-74-mc-fm
+      - scale-test-westus-78-mc-fm
+      - scale-test-westus-80-mc-fm
+      - scale-test-westus-82-mc-fm
+      - scale-test-westus-86-mc-fm
+      - scale-test-westus-90-mc-fm
+      - scale-test-westus-92-mc-fm
+      - scale-test-westus-94-mc-fm
+      - scale-test-westus-96-mc-fm
+  strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 100%
+        maxSurge: 25%
+        unavailablePeriodSeconds: 60
+  revisionHistoryLimit: 15

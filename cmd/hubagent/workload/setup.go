@@ -105,8 +105,14 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}
 	}
 
-	disabledResourceConfig := utils.NewDisabledResourceConfig()
-	if err := disabledResourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
+	// AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive.
+	// If none of them are set, the resourceConfig by default stores a list of skipped propagation APIs.
+	resourceConfig := utils.NewResourceConfig(opts.AllowedPropagatingAPIs != "")
+	if err := resourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
+		// The program will never go here because the parameters have been checked.
+		return err
+	}
+	if err := resourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
 		// The program will never go here because the parameters have been checked
 		return err
 	}
@@ -128,14 +134,14 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	// Set up  a custom controller to reconcile cluster resource placement
 	crpc := &clusterresourceplacement.Reconciler{
-		Client:                 mgr.GetClient(),
-		Recorder:               mgr.GetEventRecorderFor(crpControllerName),
-		RestMapper:             mgr.GetRESTMapper(),
-		InformerManager:        dynamicInformerManager,
-		DisabledResourceConfig: disabledResourceConfig,
-		SkippedNamespaces:      skippedNamespaces,
-		Scheme:                 mgr.GetScheme(),
-		UncachedReader:         mgr.GetAPIReader(),
+		Client:            mgr.GetClient(),
+		Recorder:          mgr.GetEventRecorderFor(crpControllerName),
+		RestMapper:        mgr.GetRESTMapper(),
+		InformerManager:   dynamicInformerManager,
+		ResourceConfig:    resourceConfig,
+		SkippedNamespaces: skippedNamespaces,
+		Scheme:            mgr.GetScheme(),
+		UncachedReader:    mgr.GetAPIReader(),
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
@@ -269,7 +275,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		ResourceChangeController:                   resourceChangeController,
 		MemberClusterPlacementController:           memberClusterPlacementController,
 		InformerManager:                            dynamicInformerManager,
-		DisabledResourceConfig:                     disabledResourceConfig,
+		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
 		ConcurrentClusterPlacementWorker:           opts.ConcurrentClusterPlacementSyncs,
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,

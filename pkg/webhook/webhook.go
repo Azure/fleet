@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -88,6 +89,10 @@ const (
 	csiStorageCapacityResourceName       = "csistoragecapacities"
 	memberClusterResourceName            = "memberclusters"
 	internalMemberClusterResourceName    = "internalmemberclusters"
+	endpointSliceExportResourceName      = "endpointsliceexports"
+	endpointSliceImportResourceName      = "endpointsliceimports"
+	internalServiceExportResourceName    = "internalserviceexports"
+	internalServiceImportResourceName    = "internalserviceimports"
 	namespaceResourceName                = "namespaces"
 	replicaSetResourceName               = "replicasets"
 	podResourceName                      = "pods"
@@ -103,16 +108,17 @@ var (
 	webhookTimeoutSeconds = pointer.Int32(1)
 )
 
-var AddToManagerFuncs []func(manager.Manager, []string) error
+var AddToManagerFuncs []func(manager.Manager) error
+var AddToManagerFleetResourceValidator func(manager.Manager, []string, bool) error
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, whiteListedUsers []string) error {
+func AddToManager(m manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool) error {
 	for _, f := range AddToManagerFuncs {
-		if err := f(m, whiteListedUsers); err != nil {
+		if err := f(m); err != nil {
 			return err
 		}
 	}
-	return nil
+	return AddToManagerFleetResourceValidator(m, whiteListedUsers, isFleetV1Beta1API)
 }
 
 type Config struct {
@@ -392,6 +398,10 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Operations: cuOperations,
 			Rule:       createRule([]string{workv1alpha1.GroupVersion.Group}, []string{workv1alpha1.GroupVersion.Version}, []string{workResourceName, workResourceName + "/status"}, &namespacedScope),
+		},
+		{
+			Operations: cuOperations,
+			Rule:       createRule([]string{fleetnetworkingv1alpha1.GroupVersion.Group}, []string{fleetnetworkingv1alpha1.GroupVersion.Version}, []string{endpointSliceExportResourceName, endpointSliceImportResourceName, internalServiceExportResourceName, internalServiceExportResourceName + "/status", internalServiceImportResourceName, internalServiceImportResourceName + "/status"}, &namespacedScope),
 		},
 	}
 	guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
