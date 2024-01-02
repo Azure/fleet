@@ -10,7 +10,7 @@ spec:
       version: v1
   policy:
     placementType: PickN
-    numberOfClusters: 3
+    numberOfClusters: 80
     topologySpreadConstraints:
       - maxSkew: 2
         topologyKey: env
