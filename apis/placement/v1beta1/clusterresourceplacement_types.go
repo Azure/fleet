@@ -340,6 +340,10 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
+	// ResourceOverrides contains a list of overrides attached to the selected resources.
+	// They may be applied to the resource, and the result may depend on the scheduling decision.
+	ResourceOverrides []OverrideIdentifier `json:"resourceOverrides,omitempty"`
+
 	// Resource index logically represents the generation of the selected resources.
 	// We take a new snapshot of the selected resources whenever the selection or their content change.
 	// Each snapshot has a different resource index.

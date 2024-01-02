@@ -82,6 +82,14 @@ type ResourceSnapshotSpec struct {
 	// SelectedResources contains a list of resources selected by ResourceSelectors.
 	// +required
 	SelectedResources []ResourceContent `json:"selectedResources"`
+
+	// OverrideSnapshotIndex logically represents the generation of the override snapshots taken by the placement.
+	// We take a new snapshot of the override whenever the selected resources or their overrides have been changed.
+	// One override snapshot can contain multiple ClusterResourceOverrideSnapshot CRs in order to store a large amount of
+	// overrides.
+	// To get clusterResourceOverrideSnapshot of a given resource index, use the following command:
+	// `kubectl get ClusterResourceOverrideSnapshot --selector=kubernetes-fleet.io/override-index=$OverrideSnapshotIndex `
+	OverrideSnapshotIndex string `json:"appliedOverrideSnapshotIndex,omitempty"`
 }
 
 // ResourceContent contains the content of a resource

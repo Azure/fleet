@@ -34,8 +34,6 @@ const (
 	// LastAppliedConfigAnnotation is to record the last applied configuration on the object.
 	LastAppliedConfigAnnotation = fleetPrefix + "last-applied-configuration"
 
-	// WorkConditionTypeOverridden represents workload in Work is overridden successfully before applying to the spoke cluster.
-	WorkConditionTypeOverridden = "Overridden"
 	// WorkConditionTypeApplied represents workload in Work is applied successfully on the spoke cluster.
 	WorkConditionTypeApplied = "Applied"
 	// WorkConditionTypeAvailable represents workload in Work exists on the spoke cluster.
@@ -47,16 +45,46 @@ const (
 
 // WorkSpec defines the desired state of Work.
 type WorkSpec struct {
-	// Workload represents the manifest workload to be deployed on spoke cluster
+	// Workload represents the manifest workload to be deployed on spoke cluster.
 	Workload WorkloadTemplate `json:"workload,omitempty"`
 
-	// WorkloadOverrides represents a list of overrides applied to the resources.
+	// WorkloadOverrides represents a list of overrides applied to the selected resources.
 	WorkloadOverrides []WorkloadOverride `json:"workloadOverrides,omitempty"`
+
+	// FailedOWorkloadOverrides contains a list of resources fail to be overridden so that it cannot be placed on the
+	// spoke cluster.
+	FailedOWorkloadOverrides []FailedOWorkloadOverride `json:"failedOWorkloadOverrides,omitempty"`
+}
+
+// FailedOWorkloadOverride contains the failure details of a failed overridden resource.
+type FailedOWorkloadOverride struct {
+	// The resource failed to be overridden.
+	// +required
+	ResourceIdentifier `json:",inline"`
+
+	// Override specifies which override is invalid.
+	// +required
+	Override OverrideIdentifier `json:"override"`
+
+	// reason contains a programmatic identifier indicating the reason for the failure.
+	// Producers may define expected values and meanings for this field,
+	// and whether the values are considered a guaranteed API.
+	// The value should be a CamelCase string.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	// +kubebuilder:validation:Pattern=`^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$`
+	Reason string `json:"reason,omitempty"`
+	// message is a human readable message indicating details about the failure.
+	// This may be an empty string.
+	// +optional
+	// +kubebuilder:validation:MaxLength=32768
+	Message string `json:"message,omitempty"`
 }
 
 // WorkloadTemplate represents the manifest workload to be deployed on spoke cluster
 type WorkloadTemplate struct {
 	// Manifests represents a list of kuberenetes resources to be deployed on the spoke cluster.
+	// They're final manifests after applying the overrides.
 	// +optional
 	Manifests []Manifest `json:"manifests,omitempty"`
 }
@@ -68,17 +96,22 @@ type Manifest struct {
 	runtime.RawExtension `json:",inline"`
 }
 
+// WorkloadOverride represents a list of overrides applied to the resource.
 type WorkloadOverride struct {
 	// Identifier represents an identity of a resource which has defined the overrides.
+	// When the metadata (for example namespace) has been overridden, the identifier is using the original name or namespace.
 	// +required
 	Identifier WorkResourceIdentifier `json:"identifier"`
 
-	// Overrides defines a list of override applied to the resource before applying to the spoke cluster.
+	// AppliedOverrides defines a list of override applied to the resource before applying to the spoke cluster.
+	// The list will be ordered from the lower priority with the higher priority value to higher priority with the lower
+	// priority value.
 	// +required
-	Overrides []Override `json:"overrides"`
+	AppliedOverrides []OverrideIdentifier `json:"appliedOverrides"`
 
 	// ApplyMode is derived from the specified overrides.
 	// The highest priority override wins.
+	// It will be processed by the member agent.
 	// +kubebuilder:validation:Enum=CreateOnly;ServerSideApply;ServerSideApplyWithForceConflicts
 	// +kubebuilder:default=CreateOnly
 	// +optional

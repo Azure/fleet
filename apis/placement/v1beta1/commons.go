@@ -97,7 +97,6 @@ type ResourceSelector struct {
 	Version string `json:"version"`
 
 	// Kind of the namespace-scoped resource.
-	// Note: When `Kind` is `namespace`, ALL the resources under the selected namespaces are selected.
 	// +required
 	Kind string `json:"kind"`
 
@@ -115,4 +114,12 @@ type ResourceSelector struct {
 	// A label query over all the namespace-scoped resources. Resources matching the query are selected.
 	// +optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+}
+
+// OverrideIdentifier defines the identity of an override.
+// For example, for the ClusterResourceOverride, only name is required.
+type OverrideIdentifier struct {
+	// Name is the name of the override.
+	// +required
+	Name string `json:"name"`
 }

@@ -14,20 +14,20 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +kubebuilder:subresource:status
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Override defines a group of override policies about how to override the selected resources and how to apply these resources
+// ClusterResourceOverride defines a group of override policies about how to override the selected resources and how to apply these resources
 // to the target clusters.
 // Note: override may fail, and it will be reflected on the placement status.
-type Override struct {
+type ClusterResourceOverride struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// The desired state of ClusterResourcePlacement.
+	// The desired state of ClusterResourceOverrideSpec.
 	// +required
-	Spec OverrideSpec `json:"spec"`
+	Spec ClusterResourceOverrideSpec `json:"spec"`
 }
 
-// OverrideSpec defines the desired state of the Override.
-type OverrideSpec struct {
+// ClusterResourceOverrideSpec defines the desired state of the Override.
+type ClusterResourceOverrideSpec struct {
 	// If none of the ClusterResourceSelectors and ResourceSelectors are specified, it means selecting all resources.
 	// The ClusterResourceSelectors and ResourceSelectors are `ORed`.
 
@@ -40,7 +40,7 @@ type OverrideSpec struct {
 	// ResourceSelectors is an array of selectors used to select namespace scoped resources. The selectors are `ORed`.
 	// You can have 1-100 selectors.
 	// +optional
-	ResourceSelectors []ResourceSelector `json:"resourceSelectors,omitempty"`
+	//ResourceSelectors []ResourceSelector `json:"resourceSelectors,omitempty"`
 
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
@@ -62,7 +62,7 @@ type OverrideSpec struct {
 	// Priority is an integer defining the relative importance of this override compared to others.
 	// Lower number is considered higher priority.
 	// And resources will be applied by order from lower priority to higher.
-	// That means override with the lowest value will win.
+	// That means override with the lowest priority value will win.
 	// If multiple overrides have the same priority value, it will be sorted by name.
 	// For example, "override-1" will be applied first and then "override-2".
 	//
