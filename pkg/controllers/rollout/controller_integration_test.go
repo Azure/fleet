@@ -542,7 +542,7 @@ func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding, success bo
 		if err := k8sClient.Status().Update(ctx, binding); err != nil {
 			if apierrors.IsConflict(err) {
 				// get the binding again to avoid conflict
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)).Should(Succeed())
 			}
 			return err
 		}
