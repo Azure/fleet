@@ -4,9 +4,9 @@ metadata:
   name: crp1kube
 spec:
   resourceSelectors:
-    - group: ""
-      kind: Namespace
-      name: testing
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: clonesets.apps.kruise.io
       version: v1
   policy:
     placementType: PickAll
@@ -15,5 +15,5 @@ spec:
     rollingUpdate:
       maxUnavailable: 100%
       maxSurge: 25%
-      unavailablePeriodSeconds: 60
+      unavailablePeriodSeconds: 15
   revisionHistoryLimit: 15

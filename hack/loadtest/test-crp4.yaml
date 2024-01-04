@@ -10,7 +10,7 @@ spec:
       version: v1
   policy:
     placementType: PickN
-    numberOfClusters: 80
+    numberOfClusters: 20
     topologySpreadConstraints:
       - maxSkew: 2
         topologyKey: env
@@ -20,5 +20,5 @@ spec:
     rollingUpdate:
       maxUnavailable: 100%
       maxSurge: 25%
-      unavailablePeriodSeconds: 60
+      unavailablePeriodSeconds: 15
   revisionHistoryLimit: 15
