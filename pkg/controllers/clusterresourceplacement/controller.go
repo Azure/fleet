@@ -34,6 +34,10 @@ import (
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
+// The max size of an object in k8s is 1.5MB because of ETCD limit https://etcd.io/docs/v3.3/dev-guide/limit/.
+// We choose 1MB as the max size for all the selected resources within one clusterResourceSnapshot object.
+var resourceSnapshotResourceSizeLimit = 1024 * (1 << 10) // 1 MB
+
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	name, ok := key.(string)
 	if !ok {
@@ -487,6 +491,35 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	}
 	klog.V(2).InfoS("Created new clusterResourceSnapshot", "clusterResourcePlacement", klog.KObj(crp), "clusterSchedulingPolicySnapshot", resourceSnapshotKObj)
 	return latestResourceSnapshot, nil
+}
+
+// splitSelectedResources splits selected resources in a ClusterResourcePlacement into separate lists
+// so that the total size of each split list of selected Resources is within 1MB limit.
+func splitSelectedResources(selectedResources []fleetv1beta1.ResourceContent) [][]fleetv1beta1.ResourceContent {
+	var selectedResourcesList [][]fleetv1beta1.ResourceContent
+	i := 0
+	for i < len(selectedResources) {
+		j := i
+		currentSize := 0
+		var snapshotResources []fleetv1beta1.ResourceContent
+		for j < len(selectedResources) {
+			currentSize += len(selectedResources[j].Raw)
+			if currentSize > resourceSnapshotResourceSizeLimit {
+				break
+			}
+			snapshotResources = append(snapshotResources, selectedResources[j])
+			j++
+		}
+		// Any selected resource will always be less than 1.5MB since that's the ETCD limit. In this case an individual
+		// selected resource crosses the 1MB limit.
+		if len(snapshotResources) == 0 && len(selectedResources[j].Raw) > resourceSnapshotResourceSizeLimit {
+			snapshotResources = append(snapshotResources, selectedResources[j])
+			j++
+		}
+		selectedResourcesList = append(selectedResourcesList, snapshotResources)
+		i = j
+	}
+	return selectedResourcesList
 }
 
 // ensureLatestPolicySnapshot ensures the latest policySnapshot has the isLatest label and the numberOfClusters are updated.
