@@ -1,7 +1,7 @@
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourcePlacement
 metadata:
-  name: crp-fixed2 ## updated in code to be load-test-placement-utilrand.String(10)
+  name: crp ## updated in code to be load-test-placement-utilrand.String(10)
 spec:
   resourceSelectors:
     - group: apiextensions.k8s.io

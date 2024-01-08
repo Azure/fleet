@@ -51,6 +51,7 @@ var (
 	}, []string{"concurrency", "fleetSize"})
 
 	deleteSuccessCount        atomic.Int32
+	deleteFailCount           atomic.Int32
 	deleteTimeoutCount        atomic.Int32
 	LoadTestDeleteCountMetric = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "workload_delete_total",
@@ -84,14 +85,11 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	currency := strconv.Itoa(maxCurrentPlacement)
 	fleetSize := "0"
 
-	loopCtx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
-	defer cancel()
-
 	defer klog.Flush()
 	defer deleteNamespace(context.Background(), hubClient, nsName) //nolint
 
 	klog.Infof("create the resources in namespace `%s` in the hub cluster", nsName)
-	if err := applyTestManifests(loopCtx, hubClient, nsName); err != nil {
+	if err := applyTestManifests(ctx, hubClient, nsName); err != nil {
 		klog.ErrorS(err, "failed to apply namespaced resources", "namespace", nsName)
 		return err
 	}
@@ -104,28 +102,35 @@ func MeasureOnePlacement(ctx context.Context, hubClient client.Client, deadline,
 	}
 
 	defer hubClient.Delete(context.Background(), crp) //nolint
-	if err := hubClient.Create(loopCtx, crp); err != nil {
+	if err := hubClient.Create(ctx, crp); err != nil {
 		klog.ErrorS(err, "failed to apply crp", "namespace", nsName, "crp", crpName)
+		LoadTestApplyCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+		applyFailCount.Inc()
 		return err
 	}
 	crpCount.Inc()
 
 	klog.Infof("verify that the cluster resource placement `%s` is applied", crpName)
-	fleetSize, clusterNames = collectApplyMetrics(loopCtx, hubClient, deadline, interval, crpName, currency, fleetSize, clusterNames)
+	fleetSize, clusterNames = collectApplyMetrics(ctx, hubClient, deadline, interval, crpName, currency, fleetSize, clusterNames)
 	if fleetSize == "0" {
 		return nil
 	}
 	klog.Infof("remove the namespaced resources applied by the placement `%s`", crpName)
 	deletionStartTime := time.Now()
-	if err := deleteTestManifests(loopCtx, hubClient, nsName); err != nil {
+	if err := deleteTestManifests(ctx, hubClient, nsName); err != nil {
+		klog.V(3).Infof("the cluster resource placement `%s` failed", crpName)
+		LoadTestDeleteCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+		deleteFailCount.Inc()
+		LoadTestUpdateCountMetric.WithLabelValues(currency, fleetSize, "failed").Inc()
+		updateFailCount.Inc()
 		return err
 	}
-	collectDeleteMetrics(loopCtx, hubClient, deadline, interval, crpName, clusterNames, currency, fleetSize)
+	collectDeleteMetrics(ctx, hubClient, deadline, interval, crpName, clusterNames, currency, fleetSize)
 
 	// wait for the status of the CRP and make sure all conditions are all true
 	klog.Infof("verify cluster resource placement `%s` is updated", crpName)
-	waitForCrpToComplete(loopCtx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
-	return hubClient.Delete(loopCtx, crp)
+	waitForCrpToComplete(ctx, hubClient, deadline, interval, deletionStartTime, crpName, currency, fleetSize)
+	return hubClient.Delete(ctx, crp)
 }
 
 // collect the crp apply metrics
@@ -144,11 +149,6 @@ func collectApplyMetrics(ctx context.Context, hubClient client.Client, deadline,
 		}
 		cond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementAppliedConditionType))
 		select {
-		case <-ctx.Done():
-			newCtx, cancel := context.WithTimeout(context.Background(), time.Second*60)
-			defer cancel()
-			ctx = newCtx
-			continue
 		case <-timer.C:
 			// Deadline has been reached
 			if condition.IsConditionStatusFalse(cond, 1) {
@@ -201,12 +201,6 @@ func collectDeleteMetrics(ctx context.Context, hubClient client.Client, deadline
 
 	for {
 		select {
-		case <-ctx.Done():
-			// Context has been cancelled, exit the loop
-			newCtx, cancel := context.WithTimeout(context.Background(), time.Second*60)
-			defer cancel()
-			ctx = newCtx
-			continue
 		case <-timer.C:
 			// Deadline has been reached
 			// timeout
@@ -265,11 +259,6 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 		synchronizedCond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementSynchronizedConditionType))
 		scheduledCond := crp.GetCondition(string(v1beta1.ClusterResourcePlacementScheduledConditionType))
 		select {
-		case <-ctx.Done():
-			newCtx, cancel := context.WithTimeout(context.Background(), time.Second*60)
-			defer cancel()
-			ctx = newCtx
-			continue
 		case <-timer.C:
 			// Deadline has been reached
 			if condition.IsConditionStatusFalse(appliedCond, 1) {
@@ -304,10 +293,9 @@ func waitForCrpToComplete(ctx context.Context, hubClient client.Client, deadline
 
 func PrintTestMetrics() {
 	klog.Infof("CRP count", crpCount.Load())
-
 	klog.InfoS("Placement apply result", "total applySuccessCount", applySuccessCount.Load(), "applyFailCount", applyFailCount.Load(), "applyTimeoutCount", applyTimeoutCount.Load())
 
-	klog.InfoS("Placement delete result", "total deleteSuccessCount", deleteSuccessCount.Load(), "deleteTimeoutCount", deleteTimeoutCount.Load())
+	klog.InfoS("Placement delete result", "total deleteSuccessCount", deleteSuccessCount.Load(), "deleteFailcount", deleteFailCount.Load(), "deleteTimeoutCount", deleteTimeoutCount.Load())
 
 	klog.InfoS("Placement update result", "total updateSuccessCount", updateSuccessCount.Load(), "updateFailCount", updateFailCount.Load(), "updateTimeoutCount", updateTimeoutCount.Load())
 }
