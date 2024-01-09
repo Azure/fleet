@@ -7,6 +7,7 @@ package rollout
 
 import (
 	"fmt"
+	"k8s.io/klog/v2"
 	"strconv"
 	"time"
 
@@ -177,6 +178,10 @@ var _ = Describe("Test the rollout Controller", func() {
 			By(fmt.Sprintf("resource binding `%s` is marked as not scheduled", binding.Name))
 			deletedBindings = append(deletedBindings, binding)
 		}
+		// simulate that some of the bindings are applied
+		for i := int(newTarget); i < int(targetCluster); i++ {
+			markBindingApplied(bindings[i], true)
+		}
 		for i := 0; i < stillScheduled; i++ {
 			secondRoundBindings = append(secondRoundBindings, bindings[i])
 		}
@@ -191,10 +196,6 @@ var _ = Describe("Test the rollout Controller", func() {
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			bindings = append(bindings, binding)
 			secondRoundBindings = append(secondRoundBindings, binding)
-		}
-		// simulate that some of the bindings are applied
-		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i], true)
 		}
 		// check that the second round of bindings are scheduled
 		Eventually(func() bool {
@@ -274,6 +275,10 @@ var _ = Describe("Test the rollout Controller", func() {
 			By(fmt.Sprintf("resource binding `%s` is marked as not scheduled", binding.Name))
 			deletedBindings = append(deletedBindings, binding)
 		}
+		// simulate that some of the bindings are applied
+		for i := int(newTarget); i < int(targetCluster); i++ {
+			markBindingApplied(bindings[i], true)
+		}
 		// save the bindings that are still scheduled
 		for i := 0; i < stillScheduled; i++ {
 			secondRoundBindings = append(secondRoundBindings, bindings[i])
@@ -290,10 +295,6 @@ var _ = Describe("Test the rollout Controller", func() {
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
 			bindings = append(bindings, binding)
 			secondRoundBindings = append(secondRoundBindings, binding)
-		}
-		// simulate that some of the bindings are applied
-		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i], true)
 		}
 		// mark the master snapshot as not latest
 		masterSnapshot.SetLabels(map[string]string{
@@ -549,6 +550,7 @@ func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding, success bo
 		return nil
 	}, timeout, interval).Should(Succeed(), "should update the binding status successfully")
 	By(fmt.Sprintf("resource binding `%s` is marked as applied with status %t", binding.Name, success))
+	klog.V(2).Infof(fmt.Sprintf("resource binding `%s` is marked as applied with status %t", binding.Name, success))
 }
 
 func generateClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string) *fleetv1beta1.ClusterResourceBinding {
