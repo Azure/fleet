@@ -438,9 +438,9 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	}
 
 	shouldCreateNewMasterClusterSnapshot := true
-	// This index indicates the index in the split selectedResourceList, if this index is zero we start from creating the
-	// master clusterResourceSnapshot if it's greater than zero it means that the master clusterResourceSnapshot got created
-	// but not all sub-indexed clusterResourceSnapshots have been created yet.
+	// This index indicates the selected resource in the split selectedResourceList, if this index is zero we start
+	// from creating the master clusterResourceSnapshot if it's greater than zero it means that the master clusterResourceSnapshot
+	// got created but not all sub-indexed clusterResourceSnapshots have been created yet.
 	resourceSnapshotStartIndex := 0
 	if latestResourceSnapshot != nil && latestResourceSnapshotHash == resourceHash {
 		if err := r.ensureLatestResourceSnapshot(ctx, latestResourceSnapshot); err != nil {
@@ -494,16 +494,13 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	}
 	// split selected resources as list of lists.
 	selectedResourcesList := splitSelectedResources(resourceSnapshotSpec.SelectedResources)
-	// create master cluster resource snapshot and sub-indexed resource snapshots belonging to the same group index.
-	resourceSnapshotSubIndex := -1
 	var resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
 	for i := resourceSnapshotStartIndex; i < len(selectedResourcesList); i++ {
 		if i == 0 {
 			resourceSnapshot = buildMasterClusterResourceSnapshot(latestResourceSnapshotIndex, len(selectedResourcesList), envelopeObjCount, crp.Name, resourceHash, selectedResourcesList[i])
 			latestResourceSnapshot = resourceSnapshot
 		} else {
-			resourceSnapshotSubIndex++
-			resourceSnapshot = buildSubIndexResourceSnapshot(latestResourceSnapshotIndex, resourceSnapshotSubIndex, crp.Name, selectedResourcesList[i])
+			resourceSnapshot = buildSubIndexResourceSnapshot(latestResourceSnapshotIndex, i-1, crp.Name, selectedResourcesList[i])
 		}
 		if err = r.createResourceSnapshot(ctx, crp, resourceSnapshot); err != nil {
 			return nil, err

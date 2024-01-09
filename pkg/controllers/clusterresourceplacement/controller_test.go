@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -1127,68 +1126,57 @@ func secretResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	return createResourceContentForTest(t, s)
 }
 
-func secretResourceContentForTest1(t *testing.T, name string) *fleetv1beta1.ResourceContent {
-	var secret corev1.Secret
-	if err := utils.GetObjectFromManifest("../../../test/integration/manifests/resources/test-large-secret.yaml", &secret); err != nil {
-		t.Fatalf("failed to read secret from manifest: %v", err)
-	}
-	secret.Name = name
-	return createResourceContentForTest(t, &secret)
-}
-
 func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
-	selectedResources := []fleetv1beta1.ResourceContent{
-		*serviceResourceContentForTest(t),
+	// test service is 383 bytes in size.
+	serviceResourceContent := *serviceResourceContentForTest(t)
+	// test deployment 390 bytes in size.
+	deploymentResourceContent := *deploymentResourceContentForTest(t)
+	// test secret is 152 bytes in size.
+	secretResourceContent := *secretResourceContentForTest(t)
+	resourceSnapshotSpecWithSingleResource := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent},
 	}
-	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources: selectedResources,
-	}
-	jsonBytes, err := json.Marshal(resourceSnapshotSpecA)
+	jsonBytes, err := json.Marshal(resourceSnapshotSpecWithSingleResource)
 	if err != nil {
-		t.Fatalf("failed to create the resourceSnapshotSpecA hash: %v", err)
+		t.Fatalf("failed to create the resourceSnapshotSpecWithSingleResource hash: %v", err)
 	}
-	resourceSnapshotAHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-	resourceSnapshotSpecB := &fleetv1beta1.ResourceSnapshotSpec{
+	resourceSnapshotSpecWithSingleResourceHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	resourceSnapshotSpecWithEmptyResource := &fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: []fleetv1beta1.ResourceContent{},
 	}
 
-	jsonBytes, err = json.Marshal(resourceSnapshotSpecB)
+	jsonBytes, err = json.Marshal(resourceSnapshotSpecWithEmptyResource)
 	if err != nil {
-		t.Fatalf("failed to create the resourceSnapshotSpecB hash: %v", err)
+		t.Fatalf("failed to create the resourceSnapshotSpecWithSingleResourceHash hash: %v", err)
 	}
-	resourceSnapshotBHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-	secretZero := *secretResourceContentForTest1(t, "test-secret-0")
-	secretOne := *secretResourceContentForTest1(t, "test-secret-1")
-	secretTwo := *secretResourceContentForTest1(t, "test-secret-2")
-	secretThree := *secretResourceContentForTest1(t, "test-secret-3")
-	secretFour := *secretResourceContentForTest1(t, "test-secret-4")
-	secretFive := *secretResourceContentForTest1(t, "test-secret-5")
-	resourceSnapshotSpecC := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources: []fleetv1beta1.ResourceContent{secretZero, secretOne, secretTwo, secretThree, secretFour, secretFive},
+	resourceSnapshotSpecWithEmptyResourceHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	resourceSnapshotSpecWithMultipleResources := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent, secretResourceContent, deploymentResourceContent},
 	}
-	jsonBytes, err = json.Marshal(resourceSnapshotSpecC)
+	jsonBytes, err = json.Marshal(resourceSnapshotSpecWithMultipleResources)
 	if err != nil {
-		t.Fatalf("failed to create the resourceSnapshotSpecC hash: %v", err)
+		t.Fatalf("failed to create the resourceSnapshotSpecWithMultipleResources hash: %v", err)
 	}
-	resourceSnapshotCHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-	resourceSnapshotSpecD := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources: []fleetv1beta1.ResourceContent{secretZero, secretOne, secretTwo},
+	resourceSnapshotSpecWithMultipleResourcesHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	resourceSnapshotSpecWithMultipleResourcesSplit1 := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent, secretResourceContent},
 	}
-	resourceSnapshotSpecE := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources: []fleetv1beta1.ResourceContent{secretThree, secretFour, secretFive},
+	resourceSnapshotSpecWithMultipleResourcesSplit2 := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{deploymentResourceContent},
 	}
 	tests := []struct {
-		name                    string
-		envelopeObjCount        int
-		resourceSnapshotSpec    *fleetv1beta1.ResourceSnapshotSpec
-		revisionHistoryLimit    *int32
-		resourceSnapshots       []fleetv1beta1.ClusterResourceSnapshot
-		wantResourceSnapshots   []fleetv1beta1.ClusterResourceSnapshot
-		wantLatestSnapshotIndex int // index of the wantPolicySnapshots array
+		name                       string
+		envelopeObjCount           int
+		selectedResourcesSizeLimit int
+		resourceSnapshotSpec       *fleetv1beta1.ResourceSnapshotSpec
+		revisionHistoryLimit       *int32
+		resourceSnapshots          []fleetv1beta1.ClusterResourceSnapshot
+		wantResourceSnapshots      []fleetv1beta1.ClusterResourceSnapshot
+		wantLatestSnapshotIndex    int // index of the wantPolicySnapshots array
 	}{
 		{
 			name:                 "new resourceSnapshot and no existing snapshots owned by my-crp",
-			resourceSnapshotSpec: resourceSnapshotSpecA,
+			resourceSnapshotSpec: resourceSnapshotSpecWithSingleResource,
 			revisionHistoryLimit: &invalidRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
@@ -1240,19 +1228,19 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 			},
 			wantLatestSnapshotIndex: 1,
 		},
 		{
 			name:                 "resource has no change",
-			resourceSnapshotSpec: resourceSnapshotSpecA,
+			resourceSnapshotSpec: resourceSnapshotSpecWithSingleResource,
 			revisionHistoryLimit: &singleRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
@@ -1273,11 +1261,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 			},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1299,11 +1287,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 			},
 			wantLatestSnapshotIndex: 0,
@@ -1313,7 +1301,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			envelopeObjCount: 2,
 			// It happens when last reconcile loop fails after setting the latest label to false and
 			// before creating a new resource snapshot.
-			resourceSnapshotSpec: resourceSnapshotSpecB,
+			resourceSnapshotSpec: resourceSnapshotSpecWithEmptyResource,
 			revisionHistoryLimit: &singleRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
@@ -1333,11 +1321,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1359,7 +1347,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1381,7 +1369,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1400,11 +1388,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 			},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1427,12 +1415,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotBHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithEmptyResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "2",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 			},
 			wantLatestSnapshotIndex: 0,
@@ -1440,7 +1428,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 		{
 			name:                 "resource has changed and there is an active snapshot with multiple revisionLimit",
 			envelopeObjCount:     3,
-			resourceSnapshotSpec: resourceSnapshotSpecB,
+			resourceSnapshotSpec: resourceSnapshotSpecWithEmptyResource,
 			revisionHistoryLimit: &multipleRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
@@ -1461,11 +1449,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1487,7 +1475,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1509,7 +1497,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 			},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1533,7 +1521,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1555,7 +1543,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1575,11 +1563,11 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 				// new resource snapshot
 				{
@@ -1600,19 +1588,19 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotBHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithEmptyResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "3",
 						},
 					},
-					Spec: *resourceSnapshotSpecB,
+					Spec: *resourceSnapshotSpecWithEmptyResource,
 				},
 			},
 			wantLatestSnapshotIndex: 3,
 		},
 		{
 			name:                 "resource has been changed and reverted back and there is no active snapshot",
-			resourceSnapshotSpec: resourceSnapshotSpecA,
+			resourceSnapshotSpec: resourceSnapshotSpecWithSingleResource,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1631,12 +1619,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1658,7 +1646,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 			},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1682,7 +1670,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1702,19 +1690,20 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotAHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithSingleResourceHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecA,
+					Spec: *resourceSnapshotSpecWithSingleResource,
 				},
 			},
 			wantLatestSnapshotIndex: 1,
 		},
 		{
-			name:                 "multiple resource snapshot - selected resource cross 1MB limit",
-			resourceSnapshotSpec: resourceSnapshotSpecC,
+			name:                       "multiple resource snapshot - selected resource cross 1MB limit",
+			selectedResourcesSizeLimit: 600,
+			resourceSnapshotSpec:       resourceSnapshotSpecWithMultipleResources,
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1736,7 +1725,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecE,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit2,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1756,19 +1745,20 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotCHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithMultipleResourcesHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecD,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit1,
 				},
 			},
 			wantLatestSnapshotIndex: 1,
 		},
 		{
-			name:                 "multiple resource snapshot - selected resource cross 1MB limit, not all resource snapshots have been created",
-			resourceSnapshotSpec: resourceSnapshotSpecC,
+			name:                       "multiple resource snapshot - selected resource cross 1MB limit, not all resource snapshots have been created",
+			selectedResourcesSizeLimit: 600,
+			resourceSnapshotSpec:       resourceSnapshotSpecWithMultipleResources,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1788,12 +1778,12 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotCHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithMultipleResourcesHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecD,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit1,
 				},
 			},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1817,7 +1807,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecE,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit2,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1837,17 +1827,21 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							},
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotCHash,
+							fleetv1beta1.ResourceGroupHashAnnotation:         resourceSnapshotSpecWithMultipleResourcesHash,
 							fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "2",
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecD,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit1,
 				},
 			},
 			wantLatestSnapshotIndex: 1,
 		},
 	}
+	originalResourceSnapshotResourceSizeLimit := resourceSnapshotResourceSizeLimit
+	defer func() {
+		resourceSnapshotResourceSizeLimit = originalResourceSnapshotResourceSizeLimit
+	}()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -1871,6 +1865,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
 			}
+			resourceSnapshotResourceSizeLimit = tc.selectedResourcesSizeLimit
 			got, err := r.getOrCreateClusterResourceSnapshot(ctx, crp, tc.envelopeObjCount, tc.resourceSnapshotSpec, int(limit))
 			if err != nil {
 				t.Fatalf("failed to handle getOrCreateClusterResourceSnapshot: %v", err)
