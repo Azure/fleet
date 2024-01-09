@@ -1159,10 +1159,16 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 	}
 	resourceSnapshotSpecWithMultipleResourcesHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 	resourceSnapshotSpecWithMultipleResourcesSplit1 := &fleetv1beta1.ResourceSnapshotSpec{
-		SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent, secretResourceContent},
+		SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent},
 	}
 	resourceSnapshotSpecWithMultipleResourcesSplit2 := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{secretResourceContent},
+	}
+	resourceSnapshotSpecWithMultipleResourcesSplit3 := &fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: []fleetv1beta1.ResourceContent{deploymentResourceContent},
+	}
+	resourceSnapshotSpecWithMultipleResourcesSplit4 := &fleetv1beta1.ResourceSnapshotSpec{
+		SelectedResources: []fleetv1beta1.ResourceContent{serviceResourceContent, secretResourceContent},
 	}
 	tests := []struct {
 		name                       string
@@ -1701,7 +1707,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			wantLatestSnapshotIndex: 1,
 		},
 		{
-			name:                       "multiple resource snapshot - selected resource cross 1MB limit",
+			name:                       "multiple resource snapshot - selected resource cross clusterResourceSnapshot limit",
 			selectedResourcesSizeLimit: 600,
 			resourceSnapshotSpec:       resourceSnapshotSpecWithMultipleResources,
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -1725,7 +1731,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit2,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit3,
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1750,14 +1756,14 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit1,
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit4,
 				},
 			},
 			wantLatestSnapshotIndex: 1,
 		},
 		{
-			name:                       "multiple resource snapshot - selected resource cross 1MB limit, not all resource snapshots have been created",
-			selectedResourcesSizeLimit: 600,
+			name:                       "multiple resource snapshot - selected resource cross clusterResourceSnapshot limit, not all resource snapshots have been created",
+			selectedResourcesSizeLimit: 100,
 			resourceSnapshotSpec:       resourceSnapshotSpecWithMultipleResources,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
 				{
@@ -1811,6 +1817,28 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testName, 0, 1),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+						},
+					},
+					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit2,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, testName, 0),
 						Labels: map[string]string{
 							fleetv1beta1.ResourceIndexLabel:    "0",
@@ -1835,7 +1863,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 					Spec: *resourceSnapshotSpecWithMultipleResourcesSplit1,
 				},
 			},
-			wantLatestSnapshotIndex: 1,
+			wantLatestSnapshotIndex: 2,
 		},
 	}
 	originalResourceSnapshotResourceSizeLimit := resourceSnapshotResourceSizeLimit
