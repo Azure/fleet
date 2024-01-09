@@ -7,7 +7,6 @@ package rollout
 
 import (
 	"fmt"
-	"k8s.io/klog/v2"
 	"strconv"
 	"time"
 
@@ -550,7 +549,6 @@ func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding, success bo
 		return nil
 	}, timeout, interval).Should(Succeed(), "should update the binding status successfully")
 	By(fmt.Sprintf("resource binding `%s` is marked as applied with status %t", binding.Name, success))
-	klog.V(2).Infof(fmt.Sprintf("resource binding `%s` is marked as applied with status %t", binding.Name, success))
 }
 
 func generateClusterResourceBinding(state fleetv1beta1.BindingState, resourceSnapshotName, targetCluster string) *fleetv1beta1.ClusterResourceBinding {
