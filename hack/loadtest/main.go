@@ -83,7 +83,7 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 	var wg sync.WaitGroup
 	wg.Add(*maxCurrentPlacement)
 	for i := 0; i < *maxCurrentPlacement; i++ {
-		go func() {
+		go func(ctx context.Context) {
 			// each use a separate client to avoid client side throttling, start each client side with a jitter
 			// to avoid creating too many clients at the same time.
 			time.Sleep(time.Millisecond * time.Duration(utilrand.Intn(100**maxCurrentPlacement)))
@@ -101,14 +101,13 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 					return
 				default:
 					loopCtx, cancel := context.WithCancel(context.Background())
-					defer cancel()
 					if err = util.MeasureOnePlacement(loopCtx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames, crpFile); err != nil {
 						klog.ErrorS(err, "load test placement failed ")
 					}
 					cancel()
 				}
 			}
-		}()
+		}(context.Background())
 	}
 	wg.Wait()
 	klog.Info("Placement load test finished.")
