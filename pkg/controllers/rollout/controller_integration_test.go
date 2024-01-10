@@ -170,16 +170,16 @@ var _ = Describe("Test the rollout Controller", func() {
 		secondRoundBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		stillScheduled := 6
+		// simulate that some of the bindings are applied
+		for i := int(newTarget); i < int(targetCluster); i++ {
+			markBindingApplied(bindings[i], true)
+		}
 		for i := int(targetCluster - 1); i >= stillScheduled; i-- {
 			binding := bindings[i]
 			binding.Spec.State = fleetv1beta1.BindingStateUnscheduled
 			Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding `%s` is marked as not scheduled", binding.Name))
 			deletedBindings = append(deletedBindings, binding)
-		}
-		// simulate that some of the bindings are applied
-		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i], true)
 		}
 		for i := 0; i < stillScheduled; i++ {
 			secondRoundBindings = append(secondRoundBindings, bindings[i])
@@ -267,16 +267,16 @@ var _ = Describe("Test the rollout Controller", func() {
 		secondRoundBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		stillScheduled := 6
+		// simulate that some of the bindings are applied
+		for i := int(newTarget); i < int(targetCluster); i++ {
+			markBindingApplied(bindings[i], true)
+		}
 		for i := int(targetCluster - 1); i >= stillScheduled; i-- {
 			binding := bindings[i]
 			binding.Spec.State = fleetv1beta1.BindingStateUnscheduled
 			Expect(k8sClient.Update(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding `%s` is marked as not scheduled", binding.Name))
 			deletedBindings = append(deletedBindings, binding)
-		}
-		// simulate that some of the bindings are applied
-		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i], true)
 		}
 		// save the bindings that are still scheduled
 		for i := 0; i < stillScheduled; i++ {
@@ -542,7 +542,7 @@ func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding, success bo
 		if err := k8sClient.Status().Update(ctx, binding); err != nil {
 			if apierrors.IsConflict(err) {
 				// get the binding again to avoid conflict
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.GetName()}, binding)).Should(Succeed())
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 			}
 			return err
 		}
