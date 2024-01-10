@@ -664,7 +664,7 @@ func (r *Reconciler) ensureLatestResourceSnapshot(ctx context.Context, latest *f
 		klog.ErrorS(err, "Failed to update the clusterResourceSnapshot", "ClusterResourceSnapshot", klog.KObj(latest))
 		return controller.NewUpdateIgnoreConflictError(err)
 	}
-	klog.V(2).InfoS("Cluster resource snapshot's IsLatestSnapshotLabel was updated to true", "clusterResourceSnapshot", klog.KObj(latest))
+	klog.V(2).InfoS("ClusterResourceSnapshot's IsLatestSnapshotLabel was updated to true", "clusterResourceSnapshot", klog.KObj(latest))
 	return nil
 }
 
