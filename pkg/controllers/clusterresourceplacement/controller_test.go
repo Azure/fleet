@@ -37,8 +37,8 @@ const (
 )
 
 var (
-	fleetAPIVersion = fleetv1beta1.GroupVersion.String()
-	sortOption      = cmpopts.SortSlices(func(r1, r2 fleetv1beta1.ClusterResourceSnapshot) bool {
+	fleetAPIVersion                   = fleetv1beta1.GroupVersion.String()
+	sortClusterResourceSnapshotOption = cmpopts.SortSlices(func(r1, r2 fleetv1beta1.ClusterResourceSnapshot) bool {
 		return r1.Name < r2.Name
 	})
 	cmpOptions = []cmp.Option{
@@ -46,7 +46,7 @@ var (
 		cmpopts.SortSlices(func(p1, p2 fleetv1beta1.ClusterSchedulingPolicySnapshot) bool {
 			return p1.Name < p2.Name
 		}),
-		sortOption,
+		sortClusterResourceSnapshotOption,
 	}
 	singleRevisionLimit   = int32(1)
 	multipleRevisionLimit = int32(2)
@@ -2257,7 +2257,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 			if err := fakeClient.List(ctx, clusterResourceSnapshotList); err != nil {
 				t.Fatalf("clusterResourceSnapshot List() got error %v, want no error", err)
 			}
-			options = append(options, sortOption)
+			options = append(options, sortClusterResourceSnapshotOption)
 			if diff := cmp.Diff(tc.wantResourceSnapshots, clusterResourceSnapshotList.Items, options...); diff != "" {
 				t.Errorf("clusterResourceSnapshot List() mismatch (-want, +got):\n%s", diff)
 			}

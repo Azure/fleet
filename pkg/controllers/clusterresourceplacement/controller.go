@@ -440,7 +440,8 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 	shouldCreateNewMasterClusterSnapshot := true
 	// This index indicates the selected resource in the split selectedResourceList, if this index is zero we start
 	// from creating the master clusterResourceSnapshot if it's greater than zero it means that the master clusterResourceSnapshot
-	// got created but not all sub-indexed clusterResourceSnapshots have been created yet.
+	// got created but not all sub-indexed clusterResourceSnapshots have been created yet. It covers the corner case where the
+	// controller crashes in the middle.
 	resourceSnapshotStartIndex := 0
 	if latestResourceSnapshot != nil && latestResourceSnapshotHash == resourceHash {
 		if err := r.ensureLatestResourceSnapshot(ctx, latestResourceSnapshot); err != nil {
@@ -506,7 +507,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			return nil, err
 		}
 	}
-	if len(selectedResourcesList) == 0 {
+	if shouldCreateNewMasterClusterSnapshot && len(selectedResourcesList) == 0 {
 		resourceSnapshot = buildMasterClusterResourceSnapshot(latestResourceSnapshotIndex, 1, envelopeObjCount, crp.Name, resourceHash, []fleetv1beta1.ResourceContent{})
 		latestResourceSnapshot = resourceSnapshot
 		if err = r.createResourceSnapshot(ctx, crp, resourceSnapshot); err != nil {
