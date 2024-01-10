@@ -453,12 +453,12 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 		}
 		resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 		if err := r.Client.List(ctx, resourceSnapshotList, latestGroupResourceLabelMatcher); err != nil {
-			klog.ErrorS(err, "Failed to list the latest group cluster resource snapshots associated with the clusterResourcePlacement",
+			klog.ErrorS(err, "Failed to list the latest group clusterResourceSnapshots associated with the clusterResourcePlacement",
 				"clusterResourcePlacement", crp.Name)
 			return nil, controller.NewAPIServerError(true, err)
 		}
 		if len(resourceSnapshotList.Items) == numberOfSnapshots {
-			klog.V(2).InfoS("Cluster resource snapshots have not been changed", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
+			klog.V(2).InfoS("ClusterResourceSnapshots have not changed", "clusterResourcePlacement", crpKObj, "clusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
 			return latestResourceSnapshot, nil
 		}
 		// we should not create a new master cluster resource snapshot.
