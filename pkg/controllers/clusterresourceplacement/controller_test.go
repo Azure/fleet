@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1063,6 +1064,67 @@ func serviceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	return createResourceContentForTest(t, svc)
 }
 
+func deploymentResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
+	d := appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "deployment-name",
+			Namespace: "deployment-namespace",
+			Labels: map[string]string{
+				"app": "nginx",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "nginx",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "nginx",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:1.14.2",
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return createResourceContentForTest(t, d)
+}
+
+func secretResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
+	s := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "secret-name",
+			Namespace: "secret-namespace",
+		},
+		Data: map[string][]byte{
+			".secret-file": []byte("dmFsdWUtMg0KDQo="),
+		},
+	}
+	return createResourceContentForTest(t, s)
+}
+
 func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 	selectedResources := []fleetv1beta1.ResourceContent{
 		*serviceResourceContentForTest(t),
@@ -2012,6 +2074,70 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 			}
 			if !errors.Is(err, controller.ErrUnexpectedBehavior) {
 				t.Errorf("getOrCreateClusterResourceSnapshot() got %v, want %v type", err, controller.ErrUnexpectedBehavior)
+			}
+		})
+	}
+}
+
+func TestSplitSelectedResources(t *testing.T) {
+	// test service is 383 bytes in size.
+	serviceResourceContent := *serviceResourceContentForTest(t)
+	// test deployment 390 bytes in size.
+	deploymentResourceContent := *deploymentResourceContentForTest(t)
+	// test secret is 152 bytes in size.
+	secretResourceContent := *secretResourceContentForTest(t)
+	tests := []struct {
+		name                       string
+		selectedResourcesSizeLimit int
+		selectedResources          []fleetv1beta1.ResourceContent
+		wantSplitSelectedResources [][]fleetv1beta1.ResourceContent
+	}{
+		{
+			name:                       "empty split selected resources - empty list of selectedResources",
+			selectedResources:          []fleetv1beta1.ResourceContent{},
+			wantSplitSelectedResources: nil,
+		},
+		{
+			name:                       "selected resources don't cross individual clusterResourceSnapshot size limit",
+			selectedResourcesSizeLimit: 1000,
+			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
+			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent, serviceResourceContent, deploymentResourceContent}},
+		},
+		{
+			name:                       "selected resource cross clusterResourceSnapshot size limit - each resource in separate list, each resource is larger than the size limit",
+			selectedResourcesSizeLimit: 100,
+			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
+			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent}, {serviceResourceContent}, {deploymentResourceContent}},
+		},
+		{
+			name:                       "selected resources cross individual clusterResourceSnapshot size limit - each resource in separate list, any grouping of resources is larger than the size limit",
+			selectedResourcesSizeLimit: 500,
+			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
+			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent}, {serviceResourceContent}, {deploymentResourceContent}},
+		},
+		{
+			name:                       "selected resources cross individual clusterResourceSnapshot size limit - two resources in first list, one resource in second list",
+			selectedResourcesSizeLimit: 600,
+			selectedResources:          []fleetv1beta1.ResourceContent{secretResourceContent, serviceResourceContent, deploymentResourceContent},
+			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{secretResourceContent, serviceResourceContent}, {deploymentResourceContent}},
+		},
+		{
+			name:                       "selected resources cross individual clusterResourceSnapshot size limit - one resource in first list, two resources in second list",
+			selectedResourcesSizeLimit: 600,
+			selectedResources:          []fleetv1beta1.ResourceContent{serviceResourceContent, deploymentResourceContent, secretResourceContent},
+			wantSplitSelectedResources: [][]fleetv1beta1.ResourceContent{{serviceResourceContent}, {deploymentResourceContent, secretResourceContent}},
+		},
+	}
+	originalResourceSnapshotResourceSizeLimit := resourceSnapshotResourceSizeLimit
+	defer func() {
+		resourceSnapshotResourceSizeLimit = originalResourceSnapshotResourceSizeLimit
+	}()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resourceSnapshotResourceSizeLimit = tc.selectedResourcesSizeLimit
+			gotSplitSelectedResources := splitSelectedResources(tc.selectedResources)
+			if diff := cmp.Diff(tc.wantSplitSelectedResources, gotSplitSelectedResources); diff != "" {
+				t.Errorf("splitSelectedResources List() mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}
