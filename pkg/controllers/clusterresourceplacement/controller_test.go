@@ -2000,7 +2000,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 		},
 		{
 			name:                       "selected resources cross clusterResourceSnapshot limit, revision limit is 1, delete existing clusterResourceSnapshot with missing sub-indexed snapshots & create new clusterResourceSnapshots",
-			selectedResourcesSizeLimit: 600,
+			selectedResourcesSizeLimit: 100,
 			resourceSnapshotSpec:       resourceSnapshotSpecWithSingleResource,
 			revisionHistoryLimit:       &singleRevisionLimit,
 			resourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
@@ -2027,7 +2027,29 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 							fleetv1beta1.NumberOfEnvelopedObjectsAnnotation:  "0",
 						},
 					},
-					Spec: *resourceSnapshotSpecSplit4,
+					Spec: *resourceSnapshotSpecSplit1,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, testName, 0, 0),
+						Labels: map[string]string{
+							fleetv1beta1.ResourceIndexLabel: "0",
+							fleetv1beta1.CRPTrackingLabel:   testName,
+						},
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								Name:               testName,
+								BlockOwnerDeletion: pointer.Bool(true),
+								Controller:         pointer.Bool(true),
+								APIVersion:         fleetAPIVersion,
+								Kind:               "ClusterResourcePlacement",
+							},
+						},
+						Annotations: map[string]string{
+							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+						},
+					},
+					Spec: *resourceSnapshotSpecSplit2,
 				},
 			},
 			wantResourceSnapshots: []fleetv1beta1.ClusterResourceSnapshot{
