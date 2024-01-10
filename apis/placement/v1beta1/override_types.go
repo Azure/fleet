@@ -11,7 +11,6 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",categories={fleet,fleet-placement}
-// +kubebuilder:subresource:status
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterResourceOverride defines a group of override policies about how to override the selected resources and how to apply these resources
@@ -28,19 +27,11 @@ type ClusterResourceOverride struct {
 
 // ClusterResourceOverrideSpec defines the desired state of the Override.
 type ClusterResourceOverrideSpec struct {
-	// If none of the ClusterResourceSelectors and ResourceSelectors are specified, it means selecting all resources.
-	// The ClusterResourceSelectors and ResourceSelectors are `ORed`.
-
 	// ClusterResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// If a namespace is selected, ALL the resources under the namespace are selected automatically.
 	// You can have 1-100 selectors.
-	// +optional
-	ClusterResourceSelectors []ClusterResourceSelector `json:"clusterResourceSelectors,omitempty"`
-
-	// ResourceSelectors is an array of selectors used to select namespace scoped resources. The selectors are `ORed`.
-	// You can have 1-100 selectors.
-	// +optional
-	//ResourceSelectors []ResourceSelector `json:"resourceSelectors,omitempty"`
+	// +required
+	ClusterResourceSelectors []ClusterResourceSelector `json:"clusterResourceSelectors"`
 
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
@@ -65,10 +56,70 @@ type ClusterResourceOverrideSpec struct {
 	// That means override with the lowest priority value will win.
 	// If multiple overrides have the same priority value, it will be sorted by name.
 	// For example, "override-1" will be applied first and then "override-2".
+	// When the ResourceOverride has the same priority value as the ClusterResourceOverride, the ResourceOverride has higher
+	// priority and will win.
 	//
 	// +optional
 	// +kubebuilder:validation:Maximum=1000
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=500
+	Priority int32 `json:"priority,omitempty"`
+}
+
+// +genclient
+// +genclient:Namespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope="Namespaced",categories={fleet,fleet-placement}
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ResourceOverride defines a group of override policies about how to override the selected namespaced scope resources and
+// how to apply these resources to the target clusters.
+// Note: override may fail, and it will be reflected on the placement status.
+type ResourceOverride struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// The desired state of ResourceOverrideSpec.
+	// +required
+	Spec ResourceOverrideSpec `json:"spec"`
+}
+
+// ResourceOverrideSpec defines the desired state of the Override.
+type ResourceOverrideSpec struct {
+	// ResourceSelectors is an array of selectors used to select namespace scoped resources. The selectors are `ORed`.
+	// You can have 1-100 selectors.
+	// +required
+	ResourceSelectors []ResourceSelector `json:"resourceSelectors"`
+
+	// ClusterSelectors selects the target clusters.
+	// The resources will be overridden before applying to the matching clusters.
+	// If ClusterSelector is not set, it means selecting ALL the member clusters.
+	// +optional
+	ClusterSelector *ClusterSelector `json:"clusterSelector,omitempty"`
+
+	// OverridePolices defines how to override the selected resources.
+	// +optional
+	OverridePolices *OverridePolices `json:"overridePolices,omitempty"`
+
+	// ApplyMode defines how to apply resources if the resources exist on the target clusters.
+	// It can be "CreateOnly", "ServerSideApply" or "ServerSideApplyWithForceConflicts". Default is CreateOnly.
+	// +kubebuilder:validation:Enum=CreateOnly;ServerSideApply;ServerSideApplyWithForceConflicts
+	// +kubebuilder:default=CreateOnly
+	// +optional
+	ApplyMode ApplyMode `json:"applyMode,omitempty"`
+
+	// Priority is an integer defining the relative importance of this override compared to others.
+	// Lower number is considered higher priority.
+	// And resources will be applied by order from lower priority to higher.
+	// That means override with the lowest priority value will win.
+	// If multiple overrides have the same priority value, it will be sorted by name.
+	// For example, "override-1" will be applied first and then "override-2".
+	// When the ResourceOverride has the same priority value as the ClusterResourceOverride, the ResourceOverride has higher
+	// priority and will win.
+	//
+	// +optional
+	// +kubebuilder:validation:Maximum=1000
+	// +kubebuilder:validation:Minimum=200
 	// +kubebuilder:default=500
 	Priority int32 `json:"priority,omitempty"`
 }

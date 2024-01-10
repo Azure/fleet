@@ -47,13 +47,21 @@ type ClusterResourceOverrideSnapshot struct {
 
 // OverrideSnapshotSpec	defines the desired state of OverrideSnapshot.
 type OverrideSnapshotSpec struct {
+	// Either ClusterResourceOverrides or ResourceOverrides should be set.
+
 	// ClusterResourceOverrides contains a list of overrides related to the CRP.
 	// The list will be ordered by its priority.
-	// The Override with the highest priority value will be the first.
+	// The Override with the highest "priority" value will be the first.
 	// If the multiple overrides have the same priority value, it will be sorted by name.
 	// For example, "override-1" will be first and then "override-2".
-	// +required
-	ClusterResourceOverrides []ClusterResourceOverride `json:"clusterResourceOverrides"`
+	// +optional
+	ClusterResourceOverrides []ClusterResourceOverride `json:"clusterResourceOverrides,omitempty"`
 
-	// Later, we can introduce ResourceOverrides defined by the application developers.
+	// ResourceOverrides contains a list of overrides related to the CRP.
+	// The list will be ordered by its priority.
+	// The Override with the highest priority value will be the first.
+	// If the multiple overrides have the same priority value, it will be sorted by namespace, and then name.
+	// For example, "override-1" will be first and then "override-2" in the same namespace.
+	// +optional
+	ResourceOverrides []ResourceOverride `json:"resourceOverrides,omitempty"`
 }

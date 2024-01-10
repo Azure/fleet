@@ -101,8 +101,9 @@ type ResourceSelector struct {
 	Kind string `json:"kind"`
 
 	// Namespace of the namespace-scoped resource.
-	// +required
-	Namespace string `json:"namespace"`
+	// +optional
+	// Default is empty, which means inherit from the parent object scope.
+	Namespace string `json:"namespace,omitempty"`
 
 	// You can only specify at most one of the following two fields: Name and LabelSelector.
 	// If none is specified, all the namespace-scoped resources with the given group, version, kind and namespace are selected.
@@ -117,9 +118,30 @@ type ResourceSelector struct {
 }
 
 // OverrideIdentifier defines the identity of an override.
-// For example, for the ClusterResourceOverride, only name is required.
 type OverrideIdentifier struct {
 	// Name is the name of the override.
 	// +required
 	Name string `json:"name"`
+
+	// Namespace of the override.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Type of override. Can be "ClusterResourceOverrideType", or "ResourceOverrideType". Default is ClusterResourceOverrideType.
+	// +kubebuilder:validation:Enum=ClusterResourceOverrideType;ResourceOverrideType
+	// +kubebuilder:default=ClusterResourceOverrideType
+	// +optional
+	Type OverrideType `json:"type,omitempty"`
 }
+
+// OverrideType identifies the type of override.
+// +enum
+type OverrideType string
+
+const (
+	// ClusterResourceOverrideType is ClusterResourceOverride type.
+	ClusterResourceOverrideType OverrideType = "ClusterResourceOverrideType"
+
+	// ResourceOverrideType is ResourceOverride type.
+	ResourceOverrideType OverrideType = "ResourceOverrideType"
+)

@@ -166,6 +166,7 @@ type WorkResourceIdentifier struct {
 // spoke cluster.
 type ManifestCondition struct {
 	// resourceId represents a identity of a resource linking to manifests in spec.
+	// When the metadata (for example namespace) has been overridden, the identifier is using the original name or namespace.
 	// +required
 	Identifier WorkResourceIdentifier `json:"identifier,omitempty"`
 
