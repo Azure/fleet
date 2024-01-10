@@ -171,6 +171,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		stillScheduled := 6
 		// simulate that some of the bindings are applied
+		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as applied.
 		for i := int(newTarget); i < int(targetCluster); i++ {
 			markBindingApplied(bindings[i], true)
 		}
@@ -268,6 +269,7 @@ var _ = Describe("Test the rollout Controller", func() {
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		stillScheduled := 6
 		// simulate that some of the bindings are applied
+		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as applied.
 		for i := int(newTarget); i < int(targetCluster); i++ {
 			markBindingApplied(bindings[i], true)
 		}
