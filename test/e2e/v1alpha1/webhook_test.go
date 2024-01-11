@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"reflect"
 	"regexp"
 
@@ -30,7 +31,6 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
@@ -1211,34 +1211,6 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 })
 
 var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Ordered, func() {
-	Context("deny requests to modify fleet networking resources, for user not in system:masters group", Ordered, func() {
-		var ns corev1.Namespace
-		BeforeEach(func() {
-			ns = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "fleet-member-test-internal-service-export",
-					Labels: map[string]string{fleetv1beta1.FleetResourceLabelKey: "true"},
-				},
-			}
-			Expect(HubCluster.KubeClient.Create(ctx, &ns)).Should(Succeed())
-			By(fmt.Sprintf("namespace `%s` is created", ns.Name))
-		})
-
-		It("should deny CREATE operation on Internal service export resource in fleet-member namespace for user not in system:masters group", func() {
-			ise := testutils.InternalServiceExport("test-internal-service-export", ns.Name)
-			By("expecting denial of operation CREATE of Internal Service Export")
-			err := HubCluster.ImpersonateKubeClient.Create(ctx, &ise)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
-		})
-
-		AfterEach(func() {
-			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
-			By(fmt.Sprintf("namespace %s is deleted", ns.Name))
-		})
-	})
-
 	Context("deny request to modify network resources in fleet member namespaces, for user not in member cluster identity", Ordered, func() {
 		var nsName, mcName string
 		BeforeEach(func() {
@@ -1284,6 +1256,31 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 		})
 	})
 
+	Context("allow request to create network resources in fleet member namespaces, for user in member cluster identity", Ordered, func() {
+		var ns corev1.Namespace
+		BeforeEach(func() {
+			ns = corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "fleet-member-test-internal-service-export",
+					Labels: map[string]string{fleetv1beta1.FleetResourceLabelKey: "true"},
+				},
+			}
+			Expect(HubCluster.KubeClient.Create(ctx, &ns)).Should(Succeed())
+			By(fmt.Sprintf("namespace `%s` is created", ns.Name))
+		})
+
+		It("should allow CREATE operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
+			ise := testutils.InternalServiceExport("test-internal-service-export", ns.Name)
+			By("expecting successful CREATE of Internal Service Export")
+			Expect(HubCluster.ImpersonateKubeClient.Create(ctx, &ise)).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(HubCluster.KubeClient.Delete(ctx, &ns)).Should(Succeed())
+			By(fmt.Sprintf("namespace %s is deleted", ns.Name))
+		})
+	})
+
 	Context("allow request to modify network resources in fleet member namespaces, for user in member cluster identity", Ordered, func() {
 		var nsName, mcName string
 		BeforeEach(func() {
@@ -1316,7 +1313,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler fleet network tests", Order
 				var ise fleetnetworkingv1alpha1.InternalServiceExport
 				g.Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: "test-internal-service-export", Namespace: nsName}, &ise)).Should(Succeed())
 				ise.SetLabels(map[string]string{"test-key": "test-value"})
-				By("expecting denial of operation UPDATE of Internal Service Export")
+				By("expecting successful UPDATE of Internal Service Export")
 				return HubCluster.ImpersonateKubeClient.Update(ctx, &ise)
 			}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 		})

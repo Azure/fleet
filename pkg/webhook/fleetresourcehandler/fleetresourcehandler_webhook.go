@@ -134,7 +134,7 @@ func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context
 		// check to see if valid users other than member agent is making the request.
 		response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		// check to see if member agent is making the request only on Update.
-		if !response.Allowed && req.Operation == admissionv1.Update {
+		if !response.Allowed {
 			// if namespace name is just "fleet-member", mcName variable becomes empty and the request is allowed since that namespaces is not watched by member agents.
 			mcName := parseMemberClusterNameFromNamespace(req.Namespace)
 			return validation.ValidateMCIdentity(ctx, v.client, req, mcName, v.isFleetV1Beta1API)
