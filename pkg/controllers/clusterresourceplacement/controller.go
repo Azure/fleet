@@ -507,7 +507,7 @@ func (r *Reconciler) getOrCreateClusterResourceSnapshot(ctx context.Context, crp
 			return nil, err
 		}
 	}
-	// shouldCreateNewMasterClusterSnapshot is used here to be defensive and catch regression.
+	// shouldCreateNewMasterClusterSnapshot is used here to be defensive in case of the regression.
 	if shouldCreateNewMasterClusterSnapshot && len(selectedResourcesList) == 0 {
 		resourceSnapshot = buildMasterClusterResourceSnapshot(latestResourceSnapshotIndex, 1, envelopeObjCount, crp.Name, resourceHash, []fleetv1beta1.ResourceContent{})
 		latestResourceSnapshot = resourceSnapshot
