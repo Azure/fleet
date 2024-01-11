@@ -3,10 +3,15 @@ kind: ClusterResourcePlacement
 metadata:
   name: crp
 spec:
+  resourceSelectors:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: clonesets.apps.kruise.io
+      version: v1
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 100%
       maxSurge: 25%
-      unavailablePeriodSeconds: 60
+      unavailablePeriodSeconds: 15
     revisionHistoryLimit: 15

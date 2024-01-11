@@ -100,14 +100,17 @@ func runLoadTest(ctx context.Context, config *rest.Config) {
 				case <-ctx.Done():
 					return
 				default:
-					if err = util.MeasureOnePlacement(ctx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames, crpFile); err != nil {
-						klog.ErrorS(err, "placement load test finished")
+					loopCtx, cancel := context.WithCancel(context.Background())
+					if err = util.MeasureOnePlacement(loopCtx, hubClient, time.Duration(*placementDeadline)*time.Second, time.Duration(*pollInterval)*time.Millisecond, *maxCurrentPlacement, clusterNames, crpFile); err != nil {
+						klog.ErrorS(err, "load test placement failed ")
 					}
+					cancel()
 				}
 			}
 		}()
 	}
 	wg.Wait()
+	klog.Info("Placement load test finished.")
 	hubClient, _ := client.New(config, client.Options{
 		Scheme: scheme,
 	})

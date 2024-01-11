@@ -8,7 +8,7 @@ Please remember to save the kubeconfig file pointing to the hub cluster of the f
 3. Run the load test binary locally.
 ```shell
 export KUBECONFIG=xxxxx
-go run hack/loadtest/main.go -max-current-placement 10 --cluster cluster-1 --cluster cluster-2 --cluster cluster-3 --cluster cluster-4 
+go run hack/loadtest/main.go -max-current-placement 10 -crp-file test-crp.yaml
 ```
 
 3. Manually check the metrics against the load test.

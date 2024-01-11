@@ -1,7 +1,7 @@
 apiVersion: placement.kubernetes-fleet.io/v1beta1
 kind: ClusterResourcePlacement
 metadata:
-  name: crp
+  name: crp1kube
 spec:
   resourceSelectors:
     - group: apiextensions.k8s.io
@@ -10,17 +10,10 @@ spec:
       version: v1
   policy:
     placementType: PickAll
-    affinity:
-      clusterAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          clusterSelectorTerms:
-            - labelSelector:
-                matchLabels:
-                  fleet.azure.com/location: westus
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 100%
       maxSurge: 25%
-      unavailablePeriodSeconds: 60
+      unavailablePeriodSeconds: 15
   revisionHistoryLimit: 15
