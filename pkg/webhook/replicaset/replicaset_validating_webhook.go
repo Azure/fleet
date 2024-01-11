@@ -31,7 +31,7 @@ type replicaSetValidator struct {
 }
 
 // Add registers the webhook for K8s bulit-in object types.
-func Add(mgr manager.Manager, _ []string) error {
+func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &replicaSetValidator{Client: mgr.GetClient()}})
 	return nil

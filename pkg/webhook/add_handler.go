@@ -8,8 +8,9 @@ import (
 )
 
 func init() {
-	// AddToManagerFuncs is a list of functions to create webhook and add them to a manager.
-	AddToManagerFuncs = append(AddToManagerFuncs, fleetresourcehandler.Add)
+	// AddToManagerFleetResourceValidator is a function to register fleet guard rail resource validator to the webhook server
+	AddToManagerFleetResourceValidator = fleetresourcehandler.Add
+	// AddToManagerFuncs is a list of functions to register webhook validators to the webhook server
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.AddV1Alpha1)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceplacement.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)

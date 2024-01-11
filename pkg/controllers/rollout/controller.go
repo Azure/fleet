@@ -163,7 +163,7 @@ func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName st
 	// creating a new resource resourceBinding.
 	if len(latestResourceSnapshotName) == 0 {
 		klog.V(2).InfoS("Cannot find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName)
-		return "", controller.NewExpectedBehaviorError(fmt.Errorf("cpr `%s` has no latest resourceSnapshot", crpName))
+		return "", controller.NewExpectedBehaviorError(fmt.Errorf("crp `%s` has no latest resourceSnapshot", crpName))
 	}
 	klog.V(2).InfoS("Find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName,
 		"latestResourceSnapshotName", latestResourceSnapshotName)

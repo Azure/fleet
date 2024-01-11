@@ -26,10 +26,8 @@ import (
 )
 
 var (
-	currentTime       = time.Now()
-	oldTransitionTime = metav1.NewTime(currentTime.Add(-1 * time.Hour))
-	cluster1Name      = "cluster-1"
-	cluster2Name      = "cluster-2"
+	cluster1Name = "cluster-1"
+	cluster2Name = "cluster-2"
 )
 
 var statusCmpOptions = []cmp.Option{
@@ -51,6 +49,9 @@ var statusCmpOptions = []cmp.Option{
 }
 
 func TestSetPlacementStatus(t *testing.T) {
+	currentTime := time.Now()
+	oldTransitionTime := metav1.NewTime(currentTime.Add(-1 * time.Hour))
+
 	crpGeneration := int64(25)
 	selectedResources := []fleetv1beta1.ResourceIdentifier{
 		{

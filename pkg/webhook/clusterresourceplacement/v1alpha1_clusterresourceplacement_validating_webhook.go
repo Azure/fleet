@@ -27,7 +27,7 @@ type v1alpha1ClusterResourcePlacementValidator struct {
 }
 
 // AddV1Alpha1 registers the webhook for K8s bulit-in object types.
-func AddV1Alpha1(mgr manager.Manager, _ []string) error {
+func AddV1Alpha1(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register(V1Alpha1CRPValidationPath, &webhook.Admission{Handler: &v1alpha1ClusterResourcePlacementValidator{Client: mgr.GetClient()}})
 	return nil

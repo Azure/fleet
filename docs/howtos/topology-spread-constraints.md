@@ -100,9 +100,9 @@ spec:
     placementType: PickN
     numberOfClusters: 3
     topologySpreadConstraints:
-    - maxSkew: 2
-      topologyKey: system
-      whenUnsatisfiable: DoNotSchedule
+      - maxSkew: 2
+        topologyKey: system
+        whenUnsatisfiable: DoNotSchedule
 ```
 
 ## How Fleet enforces topology spread constraints: topology spread scores
@@ -160,9 +160,9 @@ spec:
     placementType: PickN
     numberOfClusters: 2
     topologySpreadConstraints:
-    - maxSkew: 1
-      topologyKey: region
-      whenUnsatisfiable: DoNotSchedule
+      - maxSkew: 1
+        topologyKey: region
+        whenUnsatisfiable: DoNotSchedule
 ```
 
 Fleet will first scan all the 4 clusters in the fleet; they all have the `region` label, with
@@ -217,12 +217,12 @@ spec:
     placementType: PickN
     numberOfClusters: 2
     topologySpreadConstraints:
-    - maxSkew: 2
-      topologyKey: region
-      whenUnsatisfiable: DoNotSchedule
-    - maxSkew: 3
-      topologyKey: environment
-      whenUnsatisfiable: ScheduleAnyway
+      - maxSkew: 2
+        topologyKey: region
+        whenUnsatisfiable: DoNotSchedule
+      - maxSkew: 3
+        topologyKey: environment
+        whenUnsatisfiable: ScheduleAnyway
 ```
 
 > Note
