@@ -46,6 +46,7 @@ type fleetResourceValidator struct {
 }
 
 // Handle receives the request then allows/denies the request to modify fleet resources.
+// TODO: enpointSlice in discovery/v1 is being created in fleet-system namespace.
 func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	// special case for Kind:Namespace resources req.Name and req.Namespace has the same value the ObjectMeta.Name of Namespace.
 	if req.Kind.Kind == "Namespace" {
