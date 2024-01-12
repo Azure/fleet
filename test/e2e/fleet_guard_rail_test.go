@@ -315,7 +315,6 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	})
 
 	AfterAll(func() {
-		deleteWorkResource(workName, imcNamespace)
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
@@ -414,7 +413,6 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	})
 
 	AfterAll(func() {
-		deleteWorkResource(workName, imcNamespace)
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
@@ -463,7 +461,7 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 	Context("deny request to modify fleet networking resources in fleet member namespaces, for user not in member cluster identity", func() {
 		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
-		iseName := fmt.Sprintf(iseNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
@@ -477,12 +475,6 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		})
 
 		AfterEach(func() {
-			ise := fleetnetworkingv1alpha1.InternalServiceExport{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: iseName,
-				},
-			}
-			Expect(hubClient.Delete(ctx, &ise))
 			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 		})
 
@@ -504,34 +496,43 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		})
 	})
 
-	Context("allow request to CREATE fleet networking resources in fleet member namespace, for user in member cluster identity", func() {
-		var ns corev1.Namespace
+	Context("allow request to CREATE internal service export in fleet member namespace, for user in member cluster identity", func() {
+		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
+		isiName := fmt.Sprintf(internalServiceImportNameTemplate, GinkgoParallelProcess())
+		epName := fmt.Sprintf(endpointSliceExportNameTemplate, GinkgoParallelProcess())
+		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 		BeforeEach(func() {
-			ns = corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "fleet-member-test-internal-service-export",
-					Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
-				},
-			}
-			Expect(hubClient.Create(ctx, &ns)).Should(Succeed())
-			By(fmt.Sprintf("namespace `%s` is created", ns.Name))
+			createMemberCluster(mcName, "test-user", nil)
+			checkInternalMemberClusterExists(mcName, imcNamespace)
 		})
 
 		AfterEach(func() {
-			Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
-			By(fmt.Sprintf("namespace %s is deleted", ns.Name))
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 		})
 
 		It("should allow CREATE operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
-			ise := internalServiceExport("test-internal-service-export", ns.Name)
+			ise := internalServiceExport(iseName, imcNamespace)
 			By("expecting successful CREATE of Internal Service Export")
+			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+		})
+
+		It("should allow CREATE operation on Internal service import resource in fleet-member namespace for user in member cluster identity", func() {
+			ise := internalServiceImport(isiName, imcNamespace)
+			By("expecting successful CREATE of Internal Service Import")
+			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+		})
+
+		It("should allow CREATE operation on Endpoint slice export resource in fleet-member namespace for user in member cluster identity", func() {
+			ise := endpointSliceExport(epName, imcNamespace)
+			By("expecting successful CREATE of Endpoint slice export")
 			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
 		})
 	})
 
 	Context("allow request to modify network resources in fleet member namespaces, for user in member cluster identity", func() {
 		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
-		iseName := fmt.Sprintf(iseNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
 		BeforeEach(func() {
