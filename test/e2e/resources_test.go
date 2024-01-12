@@ -7,14 +7,14 @@ package e2e
 
 import (
 	"fmt"
-	discoveryv1 "k8s.io/api/discovery/v1"
-	"k8s.io/utils/pointer"
 	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"

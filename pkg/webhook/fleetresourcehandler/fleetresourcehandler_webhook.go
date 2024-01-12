@@ -69,13 +69,13 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			klog.V(2).InfoS("handling namespace resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
 		case req.Kind == validation.V1Alpha1IMCGVK || req.Kind == validation.V1Alpha1WorkGVK || req.Kind == validation.IMCGVK || req.Kind == validation.WorkGVK || req.Kind == validation.EndpointSliceExportGVK || req.Kind == validation.EndpointSliceImportGVK || req.Kind == validation.InternalServiceExportGVK || req.Kind == validation.InternalServiceImportGVK:
-			klog.V(2).InfoS("handling fleet owned namespaced resource in system namespace", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
-			response = v.handleFleetMemberNamespacedResource(ctx, req)
+			klog.V(2).InfoS("handling internal fleet owned/created namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			response = v.handleFleetReservedNamespacedResource(ctx, req)
 		case req.Kind == validation.EventGVK:
 			klog.V(3).InfoS("handling event resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
-			klog.V(2).InfoS("handling namespaced resource created in fleet/kube pre-fixed namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling namespaced resource created in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		default:
 			klog.V(3).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
@@ -128,8 +128,8 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
 
-// handleFleetMemberNamespacedResource allows/denies the request to modify object after validation.
-func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context.Context, req admission.Request) admission.Response {
+// handleFleetReservedNamespacedResource allows/denies the request to modify object after validation.
+func (v *fleetResourceValidator) handleFleetReservedNamespacedResource(ctx context.Context, req admission.Request) admission.Response {
 	var response admission.Response
 	if strings.HasPrefix(req.Namespace, fleetMemberNamespacePrefix) {
 		// check to see if valid users other than member agent is making the request.
@@ -141,10 +141,12 @@ func (v *fleetResourceValidator) handleFleetMemberNamespacedResource(ctx context
 			return validation.ValidateMCIdentity(ctx, v.client, req, mcName, v.isFleetV1Beta1API)
 		}
 		return response
+	} else if strings.HasPrefix(req.Name, fleetNamespacePrefix) || strings.HasPrefix(req.Name, kubeNamespacePrefix) {
+		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
-	klog.V(3).InfoS("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces",
+	klog.V(3).InfoS("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces",
 		"user", req.UserInfo.Username, "groups", req.UserInfo.Groups, "operation", req.Operation, "kind", req.RequestKind.Kind, "subResource", req.SubResource, "namespacedName", types.NamespacedName{Name: req.Name, Namespace: req.Namespace})
-	return admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object")
+	return admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces for the request object")
 }
 
 // handleEvent allows/denies request to modify event after validation.
