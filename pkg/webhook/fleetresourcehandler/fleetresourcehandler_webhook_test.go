@@ -679,7 +679,7 @@ func TestHandleMemberCluster(t *testing.T) {
 	}
 }
 
-func TestHandleFleetMemberNamespacedResource(t *testing.T) {
+func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 	v1Alpha1MockClient := &test.MockClient{
 		MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			if key.Name == mcName {
@@ -736,7 +736,7 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 					Operation: admissionv1.Create,
 				},
 			},
-			wantResponse: admission.Allowed("namespace name doesn't begin with fleet-member prefix so we allow all operations on these namespaces for the request object"),
+			wantResponse: admission.Allowed("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces for the request object"),
 		},
 		"allow user in system:masters group with update in fleet member cluster namespace with v1alpha1 Work": {
 			req: admission.Request{
@@ -956,7 +956,7 @@ func TestHandleFleetMemberNamespacedResource(t *testing.T) {
 	}
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			gotResult := testCase.resourceValidator.handleFleetMemberNamespacedResource(context.Background(), testCase.req)
+			gotResult := testCase.resourceValidator.handleFleetReservedNamespacedResource(context.Background(), testCase.req)
 			assert.Equal(t, testCase.wantResponse, gotResult, utils.TestCaseMsg, testName)
 		})
 	}

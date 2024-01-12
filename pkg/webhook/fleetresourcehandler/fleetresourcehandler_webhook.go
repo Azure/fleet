@@ -141,7 +141,7 @@ func (v *fleetResourceValidator) handleFleetReservedNamespacedResource(ctx conte
 			return validation.ValidateMCIdentity(ctx, v.client, req, mcName, v.isFleetV1Beta1API)
 		}
 		return response
-	} else if strings.HasPrefix(req.Name, fleetNamespacePrefix) || strings.HasPrefix(req.Name, kubeNamespacePrefix) {
+	} else if strings.HasPrefix(req.Namespace, fleetNamespacePrefix) || strings.HasPrefix(req.Namespace, kubeNamespacePrefix) {
 		return validation.ValidateUserForResource(req, v.whiteListedUsers)
 	}
 	klog.V(3).InfoS("namespace name doesn't begin with fleet/kube prefix so we allow all operations on these namespaces",
