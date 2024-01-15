@@ -340,11 +340,6 @@ type ClusterResourcePlacementStatus struct {
 	// +optional
 	SelectedResources []ResourceIdentifier `json:"selectedResources,omitempty"`
 
-	// ResourceOverrides contains a list of overrides attached to the selected resources.
-	// Whether they are applied to the resources depends on the scheduling decision.
-	// +optional
-	ResourceOverrides []OverrideIdentifier `json:"resourceOverrides,omitempty"`
-
 	// Resource index logically represents the generation of the selected resources.
 	// We take a new snapshot of the selected resources whenever the selection or their content change.
 	// Each snapshot has a different resource index.
@@ -482,15 +477,6 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
 	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
 
-	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
-	// successfully before applying to the target cluster if there is any override defined.
-	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
-	// override is not needed if there is no override defined.
-	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
-	// - "Unknown" means we haven't finished the override yet.
-	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
-
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
 	// Its condition status can be one of the following:
@@ -526,15 +512,6 @@ const (
 	// rollout strategy configurations specified in the placement.
 	// - Work is not created/updated because of the unknown reasons.
 	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
-
-	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
-	// before applying to the target cluster if there is any override defined.
-	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
-	// override is not needed if there is no override defined.
-	// - "False" means some of them have failed.
-	// - "Unknown" means we haven't finished the override yet.
-	ResourceOverriddenConditionType ResourcePlacementConditionType = "ResourceOverridden"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
