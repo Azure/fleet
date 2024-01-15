@@ -28,6 +28,7 @@ const (
 	internalServiceExportNameTemplate = "ise-%d"
 	internalServiceImportNameTemplate = "isi-%d"
 	endpointSliceExportNameTemplate   = "ep-%d"
+	endpointSliceNameTemplate         = "es-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"
@@ -160,6 +161,29 @@ func endpointSliceExport(name, namespace string) fleetnetworkingv1alpha1.Endpoin
 				Namespace:      "test-ns",
 				Name:           "test-name",
 				NamespacedName: "test-ns/test-name",
+			},
+		},
+	}
+}
+
+func endpointSlice(name, namespace string) discoveryv1.EndpointSlice {
+	protocol := corev1.ProtocolTCP
+	return discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		AddressType: "IPv4",
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses: []string{"192.168.0.0"},
+			},
+		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Name:     pointer.String("http"),
+				Protocol: &protocol,
+				Port:     pointer.Int32(80),
 			},
 		},
 	}

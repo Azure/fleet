@@ -15,6 +15,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -41,6 +42,7 @@ var (
 	imcGVK     = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	workGVK    = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
 	iseGVK     = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
+	esGVK      = metav1.GroupVersionKind{Group: discoveryv1.SchemeGroupVersion.Group, Version: discoveryv1.SchemeGroupVersion.Version, Kind: "EndpointSlice"}
 	testGroups = []string{"system:authenticated"}
 )
 
@@ -496,11 +498,12 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 		})
 	})
 
-	Context("allow request to CREATE internal service export in fleet member namespace, for user in member cluster identity", func() {
+	Context("allow request to CREATE fleet networking resources in fleet member namespace, for user in member cluster identity", func() {
 		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
 		isiName := fmt.Sprintf(internalServiceImportNameTemplate, GinkgoParallelProcess())
 		epName := fmt.Sprintf(endpointSliceExportNameTemplate, GinkgoParallelProcess())
+		esName := fmt.Sprintf(endpointSliceNameTemplate, GinkgoParallelProcess())
 		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 		BeforeEach(func() {
 			createMemberCluster(mcName, "test-user", nil)
@@ -527,6 +530,12 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 			ise := endpointSliceExport(epName, imcNamespace)
 			By("expecting successful CREATE of Endpoint slice export")
 			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+		})
+
+		It("should allow CREATE operation in Endpoint slice resource in fleet-member namespace for user in member cluster identity", func() {
+			es := endpointSlice(esName, imcNamespace)
+			By("expecting successful CREATE of Endpoint slice")
+			Expect(impersonateHubClient.Create(ctx, &es)).Should(Succeed())
 		})
 	})
 
@@ -559,5 +568,42 @@ var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
 				return nil
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 		})
+	})
+})
+
+var _ = Describe("fleet guard rail restrict internal fleet resources from being created in fleet/kube pre-fixed namespaces", Serial, Ordered, func() {
+	Context("deny request to CREATE IMC in fleet-system namespace", func() {
+		It("should deny CREATE operation on internal member cluster resource in fleet-system namespace for invalid user", func() {
+			imc := clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mc",
+					Namespace: "fleet-system",
+				},
+				Spec: clusterv1beta1.InternalMemberClusterSpec{
+					State:                  clusterv1beta1.ClusterStateJoin,
+					HeartbeatPeriodSeconds: 30,
+				},
+			}
+			err := impersonateHubClient.Create(ctx, &imc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		})
+	})
+
+	It("should deny CREATE operation on internal service export resource in kube-system namespace for invalid user", func() {
+		ise := internalServiceExport("test-ise", "kube-system")
+		err := impersonateHubClient.Create(ctx, &ise)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal service export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
+	})
+
+	It("should deny CREATE operation on endpoint slice in fleet-system namespace for invalid user", func() {
+		es := endpointSlice("test-es", "fleet-system")
+		err := impersonateHubClient.Create(ctx, &es)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create endpoint slice call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &esGVK, "", types.NamespacedName{Name: es.Name, Namespace: es.Namespace})))
 	})
 })
