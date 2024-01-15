@@ -1,31 +1,32 @@
-# Getting started with Fleet using kind clusters
+# Getting started with Fleet using on-premises clusters
 
-In this tutorial, you will try Fleet out using 
-[kind](https://kind.sigs.k8s.io/) clusters, which are Kubernetes clusters running on your own
-local machine via [Docker](https://docker.com) containers. This is the easiest way
-to get started with Fleet, which can help you understand how Fleet simiplify the day-to-day multi-cluster management experience with very little setup needed.
+In this tutorial, you will try Fleet out using a few of your own Kubernetes clusters; Fleet can 
+help you manage workloads seamlessly across these clusters, greatly simplifying the experience
+of day-to-day Kubernetes management.
 
 > Note
 >
-> kind is a tool for setting up a Kubernetes environment for experimental purposes;
-> some instructions below for running Fleet in the kind environment may not apply to other
-> environments, and there might also be some minor differences in the Fleet
-> experience.
+> This tutorial assumes that you have some experience of performing administrative tasks for
+> Kubernetes clusters. If you are just gettings started with Kubernetes, or do not have much
+> experience of setting up a Kubernetes cluster, it is recommended that you follow the
+> [Getting started with Fleet using Kind clusters](kind.md) tutorial instead.
 
 ## Before you begin
 
 To complete this tutorial, you will need:
 
+* At least two Kubernetes clusters of your own.
+    * Note that one of these clusters will serve as your hub cluster; other clusters must be able
+    to reach it via the network.
 * The following tools on your local machine:
-    * `kind`, for running Kubernetes clusters on your local machine
-    * Docker
+    * `kubectl`, the Kubernetes CLI tool.
     * `git`
     * `curl`
     * `helm`, the Kubernetes package manager
     * `jq`
     * `base64`
 
-## Spin up a few kind clusters
+## Set up a Fleet hub cluster
 
 The Fleet open-source project manages a multi-cluster environment using a hub-spoke pattern,
 which consists of one hub cluster and one or more member clusters: 
@@ -36,41 +37,19 @@ primarily orchestrating workloads across different clusters.
 * A member cluster connects to the hub cluster and runs your workloads as orchestrated by the
 hub cluster.
 
-In this tutorial you will create two kind clusters; one of which serves as the Fleet
-hub cluster, and the other the Fleet member cluster. Run the commands below to create them:
-
-```sh
-# Replace YOUR-KIND-IMAGE with a kind node image name of your
-# choice. It should match with the version of kind installed
-# on your system; for more information, see
-# [kind releases](https://github.com/kubernetes-sigs/kind/releases).
-export KIND_IMAGE=YOUR-KIND-IMAGE
-# Replace YOUR-KUBECONFIG-PATH with the path to a Kubernetes
-# configuration file of your own, typically $HOME/.kube/config.
-export KUBECONFIG_PATH=YOUR-KUBECONFIG-PATH
-
-# The names of the kind clusters; you may use values of your own if you'd like to.
-export HUB_CLUSTER=hub
-export MEMBER_CLUSTER=member-1
-
-kind create cluster --name $HUB_CLUSTER \
-    --image=$KIND_IMAGE \
-    --kubeconfig=$KUBECONFIG_PATH
-kind create cluster --name $MEMBER_CLUSTER \
-    --image=$KIND_IMAGE \
-    --kubeconfig=$KUBECONFIG_PATH
-
-# Export the configurations for the kind clusters.
-kind export kubeconfig -n $HUB_CLUSTER
-kind export kubeconfig -n $MEMBER_CLUSTER
-```
-
-# Set up the Fleet hub cluster
+Any Kubernetes cluster running a supported version of Kubernetes can serve as the hub cluster;
+it is recommended that you reserve a cluster
+specifically for this responsibility, and do not run other workloads on it. For the best
+experience, consider disabling the built-in `kube-controller-manager` controllers for the
+cluster: you could achieve this by setting the `--controllers` CLI argument; for more information,
+see the [`kube-controller-manager` documentation](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/).
 
 To set up the hub cluster, run the commands below:
 
 ```sh
-export HUB_CLUSTER_CONTEXT=kind-$HUB_CLUSTER
+# Replace YOUR-HUB-CLUSTER-CONTEXT with the name of the kubeconfig context for your hub cluster.
+export HUB_CLUSTER_CONTEXT=YOUR-HUB-CLUSTER-CONTEXT
+
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 
 # The variables below uses the Fleet images kept in the Microsoft Container Registry (MCR),
@@ -107,20 +86,25 @@ kubectl get pods -n fleet-system
 
 You should see that all the pods are in the ready state.
 
-## Set up the Fleet member custer
+## Connect a member cluster to the hub cluster
 
-Next, you will set up the other kind cluster you created earlier as the Fleet
-member cluster, which requires that you install the Fleet member agent on
-the cluster and connect it to the Fleet hub cluster.
+Next, you will set up a cluster as the member cluster for your fleet. This cluster should
+run a supported version of Kubernetes and be able to connect to the hub cluster via the network.
 
 For your convenience, Fleet provides a script that can automate the process of joining a cluster
 into a fleet. To use the script, follow the steps below:
 
 ```sh
-# Query the API server address of the hub cluster.
-export HUB_CLUSTER_ADDRESS="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'):6443"
-
-export MEMBER_CLUSTER_CONTEXT=kind-$MEMBER_CLUSTER
+# Replace the value of HUB_CLUSTER_ADDRESS with the address of your hub cluster API server.
+export HUB_CLUSTER_ADDRESS=YOUR-HUB-CLUSTER-ADDRESS
+# Replace the value of MEMBER_CLUSTER with the name you would like to assign to the new member
+# cluster.
+#
+# Note that Fleet will recognize your cluster with this name once it joins.
+export MEMBER_CLUSTER=YOUR-MEMBER-CLUSTER
+# Replace the value of MEMBER_CLUSTER_CONTEXT with the name of the kubeconfig context you use
+# for accessing your member cluster.
+export MEMBER_CLUSTER_CONTEXT=YOUR-MEMBER-CLUSTER-CONTEXT
 
 # Run the script.
 chmod +x fleet/hack/membership/join.sh
@@ -146,6 +130,8 @@ more information.
 > If you would like to know more about the steps the script runs, or would like to join
 > a cluster into a fleet manually, refer to the [Managing Clusters](../howtos/clusters.md) How-To
 > Guide.
+
+Repeat the steps above to join more clusters into your fleet.
 
 ## Use the `ClusterResourcePlacement` API to orchestrate resources among member clusters.
 
@@ -246,4 +232,3 @@ Fleet:
 * [Read about Fleet concepts](../concepts/README.md)
 * [Read about the ClusterResourcePlacement API](../howtos/crp.md)
 * [Read the Fleet API reference](../api-references.md)
-
