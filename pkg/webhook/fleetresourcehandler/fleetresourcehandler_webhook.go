@@ -75,7 +75,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 			klog.V(3).InfoS("handling event resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
-			klog.V(2).InfoS("handling namespaced resource created in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
+			klog.V(2).InfoS("handling namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = validation.ValidateUserForResource(req, v.whiteListedUsers)
 		default:
 			klog.V(3).InfoS("resource is not monitored by fleet resource validator webhook", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
