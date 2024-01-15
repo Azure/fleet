@@ -972,25 +972,6 @@ func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 			},
 			wantResponse: admission.Denied(fmt.Sprintf(validation.ResourceDeniedFormat, "testUser", utils.GenerateGroupString([]string{"testGroup"}), admissionv1.Create, &validation.EndpointSliceExportGVK, "", types.NamespacedName{Name: "test-net-eps", Namespace: "fleet-system"})),
 		},
-		"allow request to delete in kube-system if user is validated user with discovery/v1 endPointSlice": {
-			req: admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Name:        "test-eps",
-					Namespace:   "kube-system",
-					RequestKind: &validation.EndpointSliceGVK,
-					UserInfo: authenticationv1.UserInfo{
-						Username: "testUser",
-						Groups:   []string{"system:masters"},
-					},
-					Operation: admissionv1.Delete,
-				},
-			},
-			resourceValidator: fleetResourceValidator{
-				client:            mockClient,
-				isFleetV1Beta1API: true,
-			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "testUser", utils.GenerateGroupString([]string{"system:masters"}), admissionv1.Delete, &validation.EndpointSliceGVK, "", types.NamespacedName{Name: "test-eps", Namespace: "kube-system"})),
-		},
 	}
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
