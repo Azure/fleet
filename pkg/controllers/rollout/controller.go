@@ -104,10 +104,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
-	// find the latest resource resourceBinding
+	// find the latest clusterResourceSnapshot.
 	latestResourceSnapshotName, err := r.fetchLatestResourceSnapshot(ctx, crpName)
 	if err != nil {
-		klog.ErrorS(err, "Failed to find the latest resource resourceBinding for the clusterResourcePlacement",
+		klog.ErrorS(err, "Failed to find the latest clusterResourceSnapshot for the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
 		return ctrl.Result{}, err
 	}
@@ -138,7 +138,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
 }
 
-// fetchLatestResourceSnapshot lists all the latest resource resourceBinding associated with a CRP and returns the name of the master.
+// fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the name of the master clusterResourceSnapshot.
 func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName string) (string, error) {
 	var latestResourceSnapshotName string
 	latestResourceLabelMatcher := client.MatchingLabels{
@@ -147,11 +147,11 @@ func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName st
 	}
 	resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
 	if err := r.Client.List(ctx, resourceSnapshotList, latestResourceLabelMatcher); err != nil {
-		klog.ErrorS(err, "Failed to list the latest resource resourceBinding associated with the clusterResourcePlacement",
+		klog.ErrorS(err, "Failed to list the latest clusterResourceSnapshot associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
 		return "", controller.NewAPIServerError(true, err)
 	}
-	// try to find the master resource resourceBinding
+	// try to find the master clusterResourceSnapshot.
 	for _, resourceSnapshot := range resourceSnapshotList.Items {
 		// only master has this annotation
 		if len(resourceSnapshot.Annotations[fleetv1beta1.ResourceGroupHashAnnotation]) != 0 {
@@ -159,14 +159,14 @@ func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName st
 			break
 		}
 	}
-	// no resource resourceBinding found, it's possible since we remove the label from the last one first before
-	// creating a new resource resourceBinding.
+	// no clusterResourceSnapshot found, it's possible since we remove the label from the last one first before
+	// creating a new clusterResourceSnapshot.
 	if len(latestResourceSnapshotName) == 0 {
-		klog.V(2).InfoS("Cannot find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName)
-		return "", controller.NewExpectedBehaviorError(fmt.Errorf("cpr `%s` has no latest resourceSnapshot", crpName))
+		klog.V(2).InfoS("Cannot find the latest associated clusterResourceSnapshot", "clusterResourcePlacement", crpName)
+		return "", controller.NewExpectedBehaviorError(fmt.Errorf("crp `%s` has no latest clusterResourceSnapshot", crpName))
 	}
-	klog.V(2).InfoS("Find the latest associated resource resourceBinding", "clusterResourcePlacement", crpName,
-		"latestResourceSnapshotName", latestResourceSnapshotName)
+	klog.V(2).InfoS("Found the latest associated clusterResourceSnapshot", "clusterResourcePlacement", crpName,
+		"latestClusterResourceSnapshotName", latestResourceSnapshotName)
 	return latestResourceSnapshotName, nil
 }
 

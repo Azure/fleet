@@ -56,10 +56,10 @@ kind), and its name, in the resource selector:
     ```yaml
     # As mentioned earlier, all the resources under the namespace will also be selected.
     resourceSelectors:
-    - group: ""
-      kind: Namespace
-      version: v1          
-      name: work
+      - group: ""
+        kind: Namespace
+        version: v1          
+        name: work
     ```
 
 * Alternately, you may also select a set of resources of the same API GVK using a label selector;
@@ -68,11 +68,11 @@ it also requires that you specify the API GVK and the filtering label(s):
     ```yaml
     # As mentioned earlier, all the resources under the namespaces will also be selected.
     resourceSelectors:
-    - group: ""
-      kind: Namespace
-      version: v1          
-      labelSelector:
-        MatchLabels:
+      - group: ""
+        kind: Namespace
+        version: v1          
+        labelSelector:
+          matchLabels:
             system: critical
     ```
 
@@ -87,9 +87,9 @@ this, use a resource selector with only the API GVK added:
 
     ```yaml
     resourceSelectors:
-    - group: "rbac.authorization.k8s.io"
-      kind: ClusterRole
-      version: v1          
+      - group: "rbac.authorization.k8s.io"
+        kind: ClusterRole
+        version: v1          
     ```
 
     In the example above, all the cluster roles in the hub cluster will be picked.
@@ -102,12 +102,11 @@ any of the resource selectors specified (i.e., all selectors are OR'd).
 ```yaml
 # As mentioned earlier, all the resources under the namespace will also be selected.
 resourceSelectors:
-- group: ""
+  - group: ""
     kind: Namespace
     version: v1          
     name: work
-resourceSelectors:
-- group: "rbac.authorization.k8s.io"
+  - group: "rbac.authorization.k8s.io"
     kind: ClusterRole
     version: v1
     name: secretReader      
@@ -203,9 +202,9 @@ spec:
         clusterAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
-                - labelSelector:
-                    matchLabels:
-                        system: critical
+                    - labelSelector:
+                        matchLabels:
+                            system: critical
 ```
 
 The `ClusterResourcePlacement` object above will pick all the clusters with the label
@@ -260,11 +259,11 @@ spec:
     affinity:
         clusterAffinity:
             preferredDuringSchedulingIgnoredDuringExecution:
-                weight: 20
-                preference:
-                - labelSelector:
-                    matchLabels:
-                        critical-level: 1
+                - weight: 20
+                  preference:
+                    - labelSelector:
+                        matchLabels:
+                            critical-level: 1
 ```
 
 The `ClusterResourcePlacement` object above will pick first clusters with the `critical-level=1`

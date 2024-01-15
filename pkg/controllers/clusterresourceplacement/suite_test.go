@@ -96,13 +96,13 @@ var _ = BeforeSuite(func() {
 	Expect(err).Should(Succeed(), "failed to create manager")
 
 	reconciler := &Reconciler{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		UncachedReader:         mgr.GetAPIReader(),
-		Recorder:               mgr.GetEventRecorderFor(controllerName),
-		RestMapper:             mgr.GetRESTMapper(),
-		InformerManager:        informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
-		DisabledResourceConfig: utils.NewDisabledResourceConfig(),
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		UncachedReader:  mgr.GetAPIReader(),
+		Recorder:        mgr.GetEventRecorderFor(controllerName),
+		RestMapper:      mgr.GetRESTMapper(),
+		InformerManager: informer.NewInformerManager(dynamicClient, 5*time.Minute, ctx.Done()),
+		ResourceConfig:  utils.NewResourceConfig(false),
 		SkippedNamespaces: map[string]bool{
 			"default": true,
 		},

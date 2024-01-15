@@ -10,7 +10,7 @@ spec:
       version: v1
   policy:
     placementType: PickN
-    numberOfClusters: 20
+    numberOfClusters: 25
     affinity:
       clusterAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -27,11 +27,19 @@ spec:
                 - key: fleet.azure.com/location
                   operator: In
                   values:
+                    - centralus
+        - weight: 20
+          preference:
+            labelSelector:
+              matchExpressions:
+                - key: fleet.azure.com/location
+                  operator: In
+                  values:
                     - eastus
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 100%
       maxSurge: 25%
-      unavailablePeriodSeconds: 60
+      unavailablePeriodSeconds: 15
   revisionHistoryLimit: 15
