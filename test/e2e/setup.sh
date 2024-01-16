@@ -71,9 +71,13 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set enableV1Alpha1APIs=false \
     --set enableV1Beta1APIs=true
 
-# Download CRD from Fleet networking repo
-export NETWORKING_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml
-curl $NETWORKING_CRD_URL | kubectl apply -f -
+# Download CRDs from Fleet networking repo
+export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml
+export INTERNAL_SERVICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml
+export INTERNAL_SERVICE_IMPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceimports.yaml
+curl $ENDPOINT_SLICE_EXPORT_CRD_URL | kubectl apply -f -
+curl $INTERNAL_SERVICE_EXPORT_CRD_URL | kubectl apply -f -
+curl $INTERNAL_SERVICE_IMPORT_CRD_URL | kubectl apply -f -
 
 # Install the member agent and related components to the member clusters
 

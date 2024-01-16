@@ -405,16 +405,6 @@ func checkInternalMemberClusterExists(name, namespace string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
-func checkMemberClusterNamespaceIsDeleted(name string) {
-	Eventually(func(g Gomega) error {
-		var ns corev1.Namespace
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &ns); !apierrors.IsNotFound(err) {
-			return fmt.Errorf("member cluster namespace %s still exists or an unexpected error occurred: %w", name, err)
-		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-}
-
 func createWorkResource(name, namespace string) {
 	testDeployment := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -453,24 +443,6 @@ func createWorkResource(name, namespace string) {
 		},
 	}
 	Expect(hubClient.Create(ctx, &w)).Should(Succeed())
-}
-
-func deleteWorkResource(name, namespace string) {
-	w := placementv1beta1.Work{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
-	Expect(hubClient.Delete(ctx, &w)).Should(Succeed())
-
-	Eventually(func(g Gomega) error {
-		var w placementv1beta1.Work
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &w); !apierrors.IsNotFound(err) {
-			return fmt.Errorf("work still exists or an unexpected error occurred: %w", err)
-		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
 // createWorkResources creates some resources on the hub cluster for testing purposes.

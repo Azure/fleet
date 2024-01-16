@@ -332,7 +332,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	}
 	// we don't monitor lease to prevent the deadlock issue, we also don't monitor events.
 	namespacedResourcesRules := []admv1.RuleWithOperations{
-		// we want to monitor delete operations on all namespaced resources.
+		// we want to monitor delete operations on all fleet/kube pre-fixed namespaced resources.
 		{
 			Operations: []admv1.OperationType{admv1.Delete},
 			Rule:       createRule([]string{"*"}, []string{"*"}, []string{"*/*"}, &namespacedScope),

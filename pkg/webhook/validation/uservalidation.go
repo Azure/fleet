@@ -36,10 +36,9 @@ const (
 	allowedModifyResource = "user in groups is allowed to modify resource"
 	deniedModifyResource  = "user in groups is not allowed to modify resource"
 
-	ResourceAllowedFormat            = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
-	ResourceDeniedFormat             = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
-	ResourceAllowedGetMCFailed       = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v because we failed to get MC"
-	ResourceAllowedGetFleetAPIFailed = "user: '%s' in groups: '%s' is allowed to %s resource %+v/%s: %+v because we failed to get current Fleet API version"
+	ResourceAllowedFormat      = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v"
+	ResourceDeniedFormat       = "user: '%s' in '%s' is not allowed to %s resource %+v/%s: %+v"
+	ResourceAllowedGetMCFailed = "user: '%s' in '%s' is allowed to %s resource %+v/%s: %+v because we failed to get MC"
 )
 
 var (
