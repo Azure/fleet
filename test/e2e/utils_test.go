@@ -310,7 +310,7 @@ func createResourcesForFleetGuardRail() {
 			{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "User",
-				Name:     testUser,
+				Name:     "test-user",
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -467,6 +467,18 @@ func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
+func createResourcesForMultipleResourceSnapshots() {
+	createWorkResources()
+
+	for i := 0; i < 4; i++ {
+		var secret corev1.Secret
+		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed())
+		secret.Namespace = workNamespace().Name
+		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
+		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
+	}
+}
+
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
 func setAllMemberClustersToLeave() {
 	for idx := range allMemberClusters {
@@ -511,6 +523,15 @@ func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 
 		namespaceResourcePlacedActual := workNamespacePlacedOnClusterActual(memberCluster)
 		Eventually(namespaceResourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work namespace on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfPlacedLargeSecretResourcesOnAllMemberCluster() {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+
+		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
+		Eventually(secretsPlacedActual(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
 	}
 }
 
@@ -578,6 +599,13 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 
 	// Delete the created resources.
 	cleanupWorkResources()
+}
+
+func ensureCRPDoesNotExist(crpName string) {
+	Eventually(func() bool {
+		var crp placementv1beta1.ClusterResourcePlacement
+		return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp))
+	}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 }
 
 // verifyWorkPropagationAndMarkAsApplied verifies that works derived from a specific CPR have been created

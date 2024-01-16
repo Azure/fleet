@@ -32,6 +32,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -88,6 +89,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -155,6 +157,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -244,6 +247,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -331,6 +335,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -425,6 +430,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 		ns := workNamespace()
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -513,6 +519,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -605,6 +612,7 @@ var _ = Describe("validating CRP when resource selector is not valid", Ordered, 
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -679,6 +687,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -765,6 +774,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 
 		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -939,6 +949,7 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 		}
 		Expect(hubClient.Create(ctx, &clusterRole)).Should(Succeed(), "Failed to create the clusterRole %s", clusterRoleName)
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1042,6 +1053,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1139,6 +1151,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 		By("creating work resources")
 		createWorkResources()
 
+		ensureCRPDoesNotExist(crpName)
 		// Create the CRP.
 		crp := &placementv1beta1.ClusterResourcePlacement{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1208,6 +1221,77 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 
 	It("should have one policy snapshot revision and two resource snapshot revisions", func() {
 		Expect(validateCRPSnapshotRevisions(crpName, 1, 2)).Should(Succeed(), "Failed to validate the revision history")
+	})
+
+	It("can delete the CRP", func() {
+		// Delete the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+		}
+		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
+	})
+
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
+	It("should remove controller finalizers from CRP", func() {
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
+	})
+})
+
+var _ = Describe("validating CRP when selected resources cross the 1MB limit", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating resources for multiple resource snapshots")
+		createResourcesForMultipleResourceSnapshots()
+
+		ensureCRPDoesNotExist(crpName)
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "",
+						Kind:    "Namespace",
+						Version: "v1",
+						Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s", crpName))
+		cleanupCRP(crpName)
+
+		By("deleting created work resources")
+		cleanupWorkResources()
+	})
+
+	It("check if created cluster resource snapshots are as expected", func() {
+		Eventually(multipleResourceSnapshotsCreatedActual("2", "0"), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check created cluster resource snapshots", crpName)
+	})
+
+	It("should update CRP status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+	})
+
+	It("should place the selected resources on member clusters", func() {
+		checkIfPlacedWorkResourcesOnAllMemberClusters()
+		checkIfPlacedLargeSecretResourcesOnAllMemberCluster()
 	})
 
 	It("can delete the CRP", func() {
