@@ -37,9 +37,13 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "Must be greater than 0"))
 	}
 
+	if o.EnableWebhook && o.WebhookServiceName == "" {
+		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookServiceName, "Webhook service name is required when webhook is enabled"))
+	}
+
 	connectionType := o.WebhookClientConnectionType
 	if _, err := parseWebhookClientConnectionString(connectionType); err != nil {
-		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.EnableWebhook, err.Error()))
+		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.WebhookClientConnectionType, err.Error()))
 	}
 
 	if !o.EnableV1Alpha1APIs && !o.EnableV1Beta1APIs {
