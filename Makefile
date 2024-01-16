@@ -1,5 +1,5 @@
 REGISTRY ?= ghcr.io
-KIND_IMAGE ?= kindest/node:v1.25.11
+KIND_IMAGE ?= kindest/node:v1.28.0
 ifndef TAG
 	TAG ?= $(shell git rev-parse --short=7 HEAD)
 endif
