@@ -57,7 +57,6 @@ const (
 	fleetWebhookKeyFileName       = "tls.key"
 	fleetValidatingWebhookCfgName = "fleet-validating-webhook-configuration"
 	fleetGuardRailWebhookCfgName  = "fleet-guard-rail-webhook-configuration"
-	// fleetWebhookSvcName           = "fleetwebhook"
 
 	crdResourceName                      = "customresourcedefinitions"
 	bindingResourceName                  = "bindings"
