@@ -57,7 +57,6 @@ const (
 	fleetWebhookKeyFileName       = "tls.key"
 	fleetValidatingWebhookCfgName = "fleet-validating-webhook-configuration"
 	fleetGuardRailWebhookCfgName  = "fleet-guard-rail-webhook-configuration"
-	fleetWebhookSvcName           = "fleetwebhook"
 
 	crdResourceName                      = "customresourcedefinitions"
 	bindingResourceName                  = "bindings"
@@ -126,6 +125,7 @@ type Config struct {
 
 	// webhook server info
 	serviceNamespace string
+	serviceName      string
 	servicePort      int32
 	serviceURL       string
 
@@ -137,7 +137,7 @@ type Config struct {
 	enableGuardRail bool
 }
 
-func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
+func NewWebhookConfig(mgr manager.Manager, webhookServiceName string, port int, clientConnectionType *options.WebhookClientConnectionType, certDir string, enableGuardRail bool) (*Config, error) {
 	// We assume the Pod namespace should be passed to env through downward API in the Pod spec.
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
@@ -147,7 +147,8 @@ func NewWebhookConfig(mgr manager.Manager, port int, clientConnectionType *optio
 		mgr:                  mgr,
 		servicePort:          int32(port),
 		serviceNamespace:     namespace,
-		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", fleetWebhookSvcName, namespace, port),
+		serviceName:          webhookServiceName,
+		serviceURL:           fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", webhookServiceName, namespace, port),
 		clientConnectionType: clientConnectionType,
 		enableGuardRail:      enableGuardRail,
 	}
@@ -500,7 +501,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 func (w *Config) createClientConfig(validationPath string) admv1.WebhookClientConfig {
 	serviceRef := admv1.ServiceReference{
 		Namespace: w.serviceNamespace,
-		Name:      fleetWebhookSvcName,
+		Name:      w.serviceName,
 		Port:      pointer.Int32(w.servicePort),
 	}
 	serviceEndpoint := w.serviceURL + validationPath
@@ -577,15 +578,15 @@ func (w *Config) genSelfSignedCert() (caPEMByte, certPEMByte, keyPEMByte []byte,
 	caPEMByte = caPEM.Bytes()
 
 	dnsNames := []string{
-		fmt.Sprintf("%s.%s.svc", fleetWebhookSvcName, w.serviceNamespace),
-		fmt.Sprintf("%s.%s.svc.cluster.local", fleetWebhookSvcName, w.serviceNamespace),
+		fmt.Sprintf("%s.%s.svc", w.serviceName, w.serviceNamespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", w.serviceName, w.serviceNamespace),
 	}
 	// server cert config
 	cert := &x509.Certificate{
 		DNSNames:     dnsNames,
 		SerialNumber: big.NewInt(2022),
 		Subject: pkix.Name{
-			CommonName:         fmt.Sprintf("%s.cert.server", fleetWebhookSvcName),
+			CommonName:         fmt.Sprintf("%s.cert.server", w.serviceName),
 			OrganizationalUnit: []string{"Azure Kubernetes Service"},
 			Organization:       []string{"Microsoft"},
 			Locality:           []string{"Redmond"},

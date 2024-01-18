@@ -161,6 +161,7 @@ install-hub-agent-helm:
     --set logVerbosity=5 \
     --set namespace=fleet-system \
     --set enableWebhook=true \
+    --set webhookServiceName=fleetwebhook \
     --set webhookClientConnectionType=service
 
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret
