@@ -13,6 +13,7 @@ image:
 logVerbosity: 5
 
 enableWebhook: true
+webhookServiceName: fleetwebhook
 enableGuardRail: true
 webhookClientConnectionType: service
 
