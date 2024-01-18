@@ -1241,7 +1241,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 })
 
-var _ = Describe("validating CRP when selected resources cross the 1MB limit", Ordered, func() {
+var _ = Describe("validating CRP when selected resources cross the 1MB limit", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
