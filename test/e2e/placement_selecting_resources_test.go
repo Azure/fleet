@@ -1228,7 +1228,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	})
 })
 
-// running spec in parallel with other specs causes slow down and causes timeouts.
+// running spec in parallel with other specs causes timeouts.
 var _ = Describe("validating CRP when selected resources cross the 1MB limit", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
