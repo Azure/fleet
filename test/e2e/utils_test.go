@@ -477,6 +477,17 @@ func createResourcesForMultipleResourceSnapshots() {
 		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
 		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
 	}
+
+	// need to check to avoid flake.
+	Eventually(func() error {
+		for i := 0; i < 4; i++ {
+			var secret corev1.Secret
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespace().Name}, &secret); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all all large secrets exist")
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -599,13 +610,6 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 
 	// Delete the created resources.
 	cleanupWorkResources()
-}
-
-func ensureCRPDoesNotExist(crpName string) {
-	Eventually(func() bool {
-		var crp placementv1beta1.ClusterResourcePlacement
-		return apierrors.IsNotFound(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp))
-	}, eventuallyDuration, eventuallyInterval).Should(BeTrue())
 }
 
 // verifyWorkPropagationAndMarkAsApplied verifies that works derived from a specific CPR have been created
