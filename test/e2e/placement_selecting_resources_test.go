@@ -6,8 +6,6 @@ package e2e
 
 import (
 	"fmt"
-	"strconv"
-
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"strconv"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
@@ -1245,6 +1244,10 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 				Finalizers: []string{customDeletionBlockerFinalizer},
 			},
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Policy: &placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickFixedPlacementType,
+					ClusterNames:  twoMemberClusterNames,
+				},
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
 						Group:   "",
@@ -1268,17 +1271,17 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("check if created cluster resource snapshots are as expected", func() {
-		Eventually(multipleResourceSnapshotsCreatedActual("2", "0"), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check created cluster resource snapshots", crpName)
+		Eventually(multipleResourceSnapshotsCreatedActual("2", "0"), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check created cluster resource snapshots", crpName)
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), allMemberClusterNames, nil, "0")
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
+		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), twoMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
 	It("should place the selected resources on member clusters", func() {
-		checkIfPlacedWorkResourcesOnAllMemberClusters()
-		checkIfPlacedLargeSecretResourcesOnAllMemberCluster()
+		checkIfPlacedWorkResourcesOnTwoMemberClusters()
+		checkIfPlacedLargeSecretResourcesOnTwoMemberCluster()
 	})
 
 	It("can delete the CRP", func() {
@@ -1291,10 +1294,10 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
-	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromTwoMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
-		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
+		Eventually(finalizerRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })

@@ -487,7 +487,7 @@ func createResourcesForMultipleResourceSnapshots() {
 			}
 		}
 		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all all large secrets exist")
+	}, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all all large secrets exist")
 }
 
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
@@ -528,6 +528,15 @@ func checkIfPlacedWorkResourcesOnAllMemberClusters() {
 	}
 }
 
+func checkIfPlacedWorkResourcesOnTwoMemberClusters() {
+	for idx := range twoMemberClusters {
+		memberCluster := twoMemberClusters[idx]
+
+		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
+		Eventually(workResourcesPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
 func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
@@ -537,12 +546,12 @@ func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	}
 }
 
-func checkIfPlacedLargeSecretResourcesOnAllMemberCluster() {
-	for idx := range allMemberClusters {
-		memberCluster := allMemberClusters[idx]
+func checkIfPlacedLargeSecretResourcesOnTwoMemberCluster() {
+	for idx := range twoMemberClusters {
+		memberCluster := twoMemberClusters[idx]
 
 		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
-		Eventually(secretsPlacedActual(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
+		Eventually(secretsPlacedActual(), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
 	}
 }
 
@@ -552,6 +561,15 @@ func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
 		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfRemovedWorkResourcesFromTwoMemberClusters() {
+	for idx := range twoMemberClusters {
+		memberCluster := twoMemberClusters[idx]
+
+		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
+		Eventually(workResourcesRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 }
 

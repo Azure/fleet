@@ -59,10 +59,11 @@ const (
 )
 
 const (
-	eventuallyDuration   = time.Minute * 5
-	eventuallyInterval   = time.Second * 10
-	consistentlyDuration = time.Second * 10
-	consistentlyInterval = time.Second * 2
+	eventuallyDuration      = time.Minute * 2
+	largeEventuallyDuration = time.Minute * 5
+	eventuallyInterval      = time.Second * 5
+	consistentlyDuration    = time.Second * 10
+	consistentlyInterval    = time.Second * 2
 )
 
 var (
@@ -82,7 +83,9 @@ var (
 	memberCluster3WestProdClient   client.Client
 
 	allMemberClusters     []*framework.Cluster
+	twoMemberClusters     []*framework.Cluster
 	allMemberClusterNames = []string{}
+	twoMemberClusterNames = []string{}
 )
 
 var (
@@ -208,11 +211,15 @@ func beforeSuiteForAllProcesses() {
 	Expect(memberCluster3WestProdClient).NotTo(BeNil(), "Failed to initialize client for accessing kubernetes cluster")
 
 	allMemberClusters = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary, memberCluster3WestProd}
+	twoMemberClusters = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
 	once.Do(func() {
 		// Set these arrays only once; this is necessary as for the first spawned Ginkgo process,
 		// the `beforeSuiteForAllProcesses` function is called twice.
 		for _, cluster := range allMemberClusters {
 			allMemberClusterNames = append(allMemberClusterNames, cluster.ClusterName)
+		}
+		for _, cluster := range twoMemberClusters {
+			twoMemberClusterNames = append(twoMemberClusterNames, cluster.ClusterName)
 		}
 	})
 }
