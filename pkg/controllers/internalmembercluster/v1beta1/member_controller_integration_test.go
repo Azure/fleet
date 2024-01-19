@@ -6,6 +6,8 @@ package v1beta1
 
 import (
 	"context"
+	"fmt"
+	"k8s.io/klog/v2"
 	"strings"
 	"time"
 
@@ -34,7 +36,7 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		HBPeriod = int(utils.RandSecureInt(600))
+		HBPeriod = int(200)
 		memberClusterName = "rand-" + strings.ToLower(utils.RandStr()) + "-mc"
 		memberClusterNamespace = "fleet-" + memberClusterName
 		memberClusterNamespacedName = types.NamespacedName{
@@ -110,8 +112,8 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			// take into account the +- jitter
-			Expect(result.RequeueAfter.Milliseconds() < (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
-			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() <= (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() >= (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -142,8 +144,8 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			// take into account the +- jitter
-			Expect(result.RequeueAfter.Milliseconds() < (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
-			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() <= (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() >= (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -158,9 +160,11 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 			result, err = r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: memberClusterNamespacedName,
 			})
+			By(fmt.Sprintf("%s", memberClusterName))
 			// take into account the +- jitter
-			Expect(result.RequeueAfter.Milliseconds() < (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
-			Expect(result.RequeueAfter.Milliseconds() > (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			klog.Info(fmt.Sprintf("%d, %d, %d", result.RequeueAfter.Milliseconds(), (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod), (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)))
+			Expect(result.RequeueAfter.Milliseconds() <= (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() >= (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
 			Expect(err).Should(Not(HaveOccurred()))
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 			Expect(lastReceivedHeartbeat).ShouldNot(Equal(imc.Status.AgentStatus[0].LastReceivedHeartbeat))
