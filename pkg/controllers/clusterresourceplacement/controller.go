@@ -35,8 +35,8 @@ import (
 )
 
 // The max size of an object in k8s is 1.5MB because of ETCD limit https://etcd.io/docs/v3.3/dev-guide/limit/.
-// We choose 1MB as the max size for all the selected resources within one clusterResourceSnapshot object.
-var resourceSnapshotResourceSizeLimit = 1024 * (1 << 10) // 1 MB
+// We choose 800 bytes as the max size for all the selected resources within one clusterResourceSnapshot object.
+var resourceSnapshotResourceSizeLimit = 800 * (1 << 10) // 800 bytes
 
 func (r *Reconciler) Reconcile(ctx context.Context, key controller.QueueKey) (ctrl.Result, error) {
 	name, ok := key.(string)

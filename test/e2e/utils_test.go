@@ -470,7 +470,7 @@ func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 func createResourcesForMultipleResourceSnapshots() {
 	createWorkResources()
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 3; i++ {
 		var secret corev1.Secret
 		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed())
 		secret.Namespace = workNamespace().Name
@@ -480,7 +480,7 @@ func createResourcesForMultipleResourceSnapshots() {
 
 	// need to check to avoid flake.
 	Eventually(func() error {
-		for i := 0; i < 4; i++ {
+		for i := 0; i < 3; i++ {
 			var secret corev1.Secret
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespace().Name}, &secret); err != nil {
 				return err

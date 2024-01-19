@@ -116,7 +116,7 @@ func workNamespacePlacedOnClusterActual(cluster *framework.Cluster) func() error
 func secretsPlacedOnClusterActual(cluster *framework.Cluster) func() error {
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	return func() error {
-		for i := 0; i < 4; i++ {
+		for i := 0; i < 3; i++ {
 			if err := validateSecretOnCluster(cluster, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespaceName}); err != nil {
 				return err
 			}
@@ -297,7 +297,7 @@ func resourceIdentifiersForMultipleResourcesSnapshots() []placementv1beta1.Resou
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	var placementResourceIdentifiers []placementv1beta1.ResourceIdentifier
 
-	for i := 3; i >= 0; i-- {
+	for i := 2; i >= 0; i-- {
 		placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
 			Kind:      "Secret",
 			Name:      fmt.Sprintf(appSecretNameTemplate, i),
