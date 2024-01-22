@@ -1293,7 +1293,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 
 	It("should place the selected resources on member clusters", func() {
 		checkIfPlacedWorkResourcesOnTargetMemberClusters()
-		checkIfPlacedLargeSecretResourcesOnTwoMemberClusters()
+		checkIfPlacedLargeSecretResourcesOnTargetMemberClusters()
 	})
 
 	It("can delete the CRP", func() {
@@ -1306,7 +1306,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
-	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromTwoMemberClusters)
+	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromTargetMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
@@ -1417,7 +1417,7 @@ func checkIfPlacedWorkResourcesOnTargetMemberClusters() {
 	}
 }
 
-func checkIfPlacedLargeSecretResourcesOnTwoMemberClusters() {
+func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters() {
 	for idx := range targetMemberClusters {
 		memberCluster := targetMemberClusters[idx]
 
@@ -1426,7 +1426,7 @@ func checkIfPlacedLargeSecretResourcesOnTwoMemberClusters() {
 	}
 }
 
-func checkIfRemovedWorkResourcesFromTwoMemberClusters() {
+func checkIfRemovedWorkResourcesFromTargetMemberClusters() {
 	for idx := range targetMemberClusters {
 		memberCluster := targetMemberClusters[idx]
 
