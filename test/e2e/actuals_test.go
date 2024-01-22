@@ -7,7 +7,6 @@ package e2e
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
@@ -110,18 +109,6 @@ func workNamespacePlacedOnClusterActual(cluster *framework.Cluster) func() error
 
 	return func() error {
 		return validateWorkNamespaceOnCluster(cluster, types.NamespacedName{Name: workNamespaceName})
-	}
-}
-
-func secretsPlacedOnClusterActual(cluster *framework.Cluster) func() error {
-	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	return func() error {
-		for i := 0; i < 3; i++ {
-			if err := validateSecretOnCluster(cluster, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespaceName}); err != nil {
-				return err
-			}
-		}
-		return nil
 	}
 }
 
@@ -293,34 +280,6 @@ func workResourceIdentifiers() []placementv1beta1.ResourceIdentifier {
 	}
 }
 
-func resourceIdentifiersForMultipleResourcesSnapshots() []placementv1beta1.ResourceIdentifier {
-	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	var placementResourceIdentifiers []placementv1beta1.ResourceIdentifier
-
-	for i := 2; i >= 0; i-- {
-		placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
-			Kind:      "Secret",
-			Name:      fmt.Sprintf(appSecretNameTemplate, i),
-			Namespace: workNamespaceName,
-			Version:   "v1",
-		})
-	}
-
-	placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
-		Kind:    "Namespace",
-		Name:    workNamespaceName,
-		Version: "v1",
-	})
-	placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
-		Kind:      "ConfigMap",
-		Name:      fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
-		Version:   "v1",
-		Namespace: workNamespaceName,
-	})
-
-	return placementResourceIdentifiers
-}
-
 func crpStatusUpdatedActual(
 	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
 	wantSelectedClusters, wantUnselectedClusters []string,
@@ -408,49 +367,6 @@ func crpRemovedActual() func() error {
 			return fmt.Errorf("CRP still exists or an unexpected error occurred: %w", err)
 		}
 
-		return nil
-	}
-}
-
-func multipleResourceSnapshotsCreatedActual(numberOfResourceSnapshotsAnnotation, resourceIndexLabel string) func() error {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
-	return func() error {
-		var resourceSnapshotList placementv1beta1.ClusterResourceSnapshotList
-		masterResourceSnapshotLabels := client.MatchingLabels{
-			placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
-			placementv1beta1.CRPTrackingLabel:      crpName,
-		}
-		if err := hubClient.List(ctx, &resourceSnapshotList, masterResourceSnapshotLabels); err != nil {
-			return err
-		}
-		// there should be only one master resource snapshot.
-		if len(resourceSnapshotList.Items) != 1 {
-			return fmt.Errorf("number of master cluster resource snapshots has unexpected value: got %d, want %d", len(resourceSnapshotList.Items), 1)
-		}
-		masterResourceSnapshot := resourceSnapshotList.Items[0]
-		resourceSnapshotListLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
-		if err := hubClient.List(ctx, &resourceSnapshotList, resourceSnapshotListLabels); err != nil {
-			return err
-		}
-		numberOfResourceSnapshots := masterResourceSnapshot.Annotations[placementv1beta1.NumberOfResourceSnapshotsAnnotation]
-		if numberOfResourceSnapshots != numberOfResourceSnapshotsAnnotation {
-			return fmt.Errorf("NumberOfResourceSnapshotsAnnotation in master cluster resource snapshot has unexpected value:  got %s, want %s", numberOfResourceSnapshots, numberOfResourceSnapshotsAnnotation)
-		}
-		if strconv.Itoa(len(resourceSnapshotList.Items)) != numberOfResourceSnapshots {
-			return fmt.Errorf("number of cluster resource snapshots has unexpected value: got %s, want %s", strconv.Itoa(len(resourceSnapshotList.Items)), numberOfResourceSnapshots)
-		}
-		masterResourceIndex := masterResourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel]
-		if masterResourceIndex != resourceIndexLabel {
-			return fmt.Errorf("resource index for master cluster resource snapshot %s has unexpected value: got %s, want %s", masterResourceSnapshot.Name, masterResourceIndex, resourceIndexLabel)
-		}
-		for i := range resourceSnapshotList.Items {
-			resourceSnapshot := resourceSnapshotList.Items[i]
-			index := resourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel]
-			if index != masterResourceIndex {
-				return fmt.Errorf("resource index for cluster resource snapshot %s has unexpected value: got %s, want %s", resourceSnapshot.Name, index, masterResourceIndex)
-			}
-		}
 		return nil
 	}
 }

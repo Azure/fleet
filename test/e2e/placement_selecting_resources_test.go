@@ -7,6 +7,7 @@ package e2e
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
@@ -17,11 +18,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/controllers/work"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/test/e2e/framework"
+)
+
+var (
+	targetMemberClusters     = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
+	targetMemberClusterNames = []string{memberCluster1EastProd.ClusterName, memberCluster2EastCanary.ClusterName}
+	// we are propagating large secrets from hub to member clusters the timeout needs to be large.
+	largeEventuallyDuration = time.Minute * 5
 )
 
 // Note that this container will run in parallel with other containers.
@@ -1247,7 +1258,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
-					ClusterNames:  twoMemberClusterNames,
+					ClusterNames:  targetMemberClusterNames,
 				},
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
@@ -1276,13 +1287,13 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), twoMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), targetMemberClusterNames, nil, "0")
 		Eventually(crpStatusUpdatedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
 	It("should place the selected resources on member clusters", func() {
-		checkIfPlacedWorkResourcesOnTwoMemberClusters()
-		checkIfPlacedLargeSecretResourcesOnTwoMemberCluster()
+		checkIfPlacedWorkResourcesOnTargetMemberClusters()
+		checkIfPlacedLargeSecretResourcesOnTwoMemberClusters()
 	})
 
 	It("can delete the CRP", func() {
@@ -1302,3 +1313,136 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 		Eventually(finalizerRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
+
+func createResourcesForMultipleResourceSnapshots() {
+	createWorkResources()
+
+	for i := 0; i < 3; i++ {
+		var secret corev1.Secret
+		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed(), "Failed to read large secret from file")
+		secret.Namespace = workNamespace().Name
+		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
+		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
+	}
+
+	// need to check to avoid flake.
+	Eventually(func() error {
+		for i := 0; i < 3; i++ {
+			var secret corev1.Secret
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespace().Name}, &secret); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all large secrets exist")
+}
+
+func multipleResourceSnapshotsCreatedActual(wantNumberOfResourceSnapshots, wantResourceIndex string) func() error {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+	return func() error {
+		var resourceSnapshotList placementv1beta1.ClusterResourceSnapshotList
+		masterResourceSnapshotLabels := client.MatchingLabels{
+			placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+			placementv1beta1.CRPTrackingLabel:      crpName,
+		}
+		if err := hubClient.List(ctx, &resourceSnapshotList, masterResourceSnapshotLabels); err != nil {
+			return err
+		}
+		// there should be only one master resource snapshot.
+		if len(resourceSnapshotList.Items) != 1 {
+			return fmt.Errorf("number of master cluster resource snapshots has unexpected value: got %d, want %d", len(resourceSnapshotList.Items), 1)
+		}
+		masterResourceSnapshot := resourceSnapshotList.Items[0]
+		resourceSnapshotListLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
+		if err := hubClient.List(ctx, &resourceSnapshotList, resourceSnapshotListLabels); err != nil {
+			return err
+		}
+		numberOfResourceSnapshots := masterResourceSnapshot.Annotations[placementv1beta1.NumberOfResourceSnapshotsAnnotation]
+		if numberOfResourceSnapshots != wantNumberOfResourceSnapshots {
+			return fmt.Errorf("NumberOfResourceSnapshotsAnnotation in master cluster resource snapshot has unexpected value:  got %s, want %s", numberOfResourceSnapshots, wantNumberOfResourceSnapshots)
+		}
+		if strconv.Itoa(len(resourceSnapshotList.Items)) != numberOfResourceSnapshots {
+			return fmt.Errorf("number of cluster resource snapshots has unexpected value: got %s, want %s", strconv.Itoa(len(resourceSnapshotList.Items)), numberOfResourceSnapshots)
+		}
+		masterResourceIndex := masterResourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel]
+		if masterResourceIndex != wantResourceIndex {
+			return fmt.Errorf("resource index for master cluster resource snapshot %s has unexpected value: got %s, want %s", masterResourceSnapshot.Name, masterResourceIndex, wantResourceIndex)
+		}
+		for i := range resourceSnapshotList.Items {
+			resourceSnapshot := resourceSnapshotList.Items[i]
+			index := resourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel]
+			if index != masterResourceIndex {
+				return fmt.Errorf("resource index for cluster resource snapshot %s has unexpected value: got %s, want %s", resourceSnapshot.Name, index, masterResourceIndex)
+			}
+		}
+		return nil
+	}
+}
+
+func resourceIdentifiersForMultipleResourcesSnapshots() []placementv1beta1.ResourceIdentifier {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	var placementResourceIdentifiers []placementv1beta1.ResourceIdentifier
+
+	for i := 2; i >= 0; i-- {
+		placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
+			Kind:      "Secret",
+			Name:      fmt.Sprintf(appSecretNameTemplate, i),
+			Namespace: workNamespaceName,
+			Version:   "v1",
+		})
+	}
+
+	placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
+		Kind:    "Namespace",
+		Name:    workNamespaceName,
+		Version: "v1",
+	})
+	placementResourceIdentifiers = append(placementResourceIdentifiers, placementv1beta1.ResourceIdentifier{
+		Kind:      "ConfigMap",
+		Name:      fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
+		Version:   "v1",
+		Namespace: workNamespaceName,
+	})
+
+	return placementResourceIdentifiers
+}
+
+func checkIfPlacedWorkResourcesOnTargetMemberClusters() {
+	for idx := range targetMemberClusters {
+		memberCluster := targetMemberClusters[idx]
+
+		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
+		Eventually(workResourcesPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfPlacedLargeSecretResourcesOnTwoMemberClusters() {
+	for idx := range targetMemberClusters {
+		memberCluster := targetMemberClusters[idx]
+
+		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
+		Eventually(secretsPlacedActual(), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfRemovedWorkResourcesFromTwoMemberClusters() {
+	for idx := range targetMemberClusters {
+		memberCluster := targetMemberClusters[idx]
+
+		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
+		Eventually(workResourcesRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func secretsPlacedOnClusterActual(cluster *framework.Cluster) func() error {
+	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	return func() error {
+		for i := 0; i < 3; i++ {
+			if err := validateSecretOnCluster(cluster, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespaceName}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}

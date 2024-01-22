@@ -467,29 +467,6 @@ func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
 	Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from %s cluster", cluster.ClusterName)
 }
 
-func createResourcesForMultipleResourceSnapshots() {
-	createWorkResources()
-
-	for i := 0; i < 3; i++ {
-		var secret corev1.Secret
-		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed())
-		secret.Namespace = workNamespace().Name
-		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
-		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
-	}
-
-	// need to check to avoid flake.
-	Eventually(func() error {
-		for i := 0; i < 3; i++ {
-			var secret corev1.Secret
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespace().Name}, &secret); err != nil {
-				return err
-			}
-		}
-		return nil
-	}, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all all large secrets exist")
-}
-
 // setAllMemberClustersToLeave sets all member clusters to leave the fleet.
 func setAllMemberClustersToLeave() {
 	for idx := range allMemberClusters {
@@ -528,15 +505,6 @@ func checkIfPlacedWorkResourcesOnAllMemberClusters() {
 	}
 }
 
-func checkIfPlacedWorkResourcesOnTwoMemberClusters() {
-	for idx := range twoMemberClusters {
-		memberCluster := twoMemberClusters[idx]
-
-		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
-		Eventually(workResourcesPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
-	}
-}
-
 func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
@@ -546,30 +514,12 @@ func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
 	}
 }
 
-func checkIfPlacedLargeSecretResourcesOnTwoMemberCluster() {
-	for idx := range twoMemberClusters {
-		memberCluster := twoMemberClusters[idx]
-
-		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
-		Eventually(secretsPlacedActual(), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
-	}
-}
-
 func checkIfRemovedWorkResourcesFromAllMemberClusters() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
 
 		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
 		Eventually(workResourcesRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
-	}
-}
-
-func checkIfRemovedWorkResourcesFromTwoMemberClusters() {
-	for idx := range twoMemberClusters {
-		memberCluster := twoMemberClusters[idx]
-
-		workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(memberCluster)
-		Eventually(workResourcesRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove work resources from member cluster %s", memberCluster.ClusterName)
 	}
 }
 
