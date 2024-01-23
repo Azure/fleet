@@ -29,8 +29,6 @@ import (
 )
 
 var (
-	targetMemberClusters     = []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
-	targetMemberClusterNames = []string{memberCluster1EastProd.ClusterName, memberCluster2EastCanary.ClusterName}
 	// we are propagating large secrets from hub to member clusters the timeout needs to be large.
 	largeEventuallyDuration = time.Minute * 5
 )
@@ -1242,7 +1240,6 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 // running spec in parallel with other specs causes timeouts.
 var _ = Describe("validating CRP when selected resources cross the 1MB limit", Ordered, Serial, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
 	BeforeAll(func() {
 		By("creating resources for multiple resource snapshots")
 		createResourcesForMultipleResourceSnapshots()
@@ -1258,7 +1255,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 			Spec: placementv1beta1.ClusterResourcePlacementSpec{
 				Policy: &placementv1beta1.PlacementPolicy{
 					PlacementType: placementv1beta1.PickFixedPlacementType,
-					ClusterNames:  targetMemberClusterNames,
+					ClusterNames:  []string{memberCluster1EastProdName, memberCluster2EastCanaryName},
 				},
 				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					{
@@ -1287,13 +1284,14 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), targetMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(resourceIdentifiersForMultipleResourcesSnapshots(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0")
 		Eventually(crpStatusUpdatedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
 	})
 
 	It("should place the selected resources on member clusters", func() {
-		checkIfPlacedWorkResourcesOnTargetMemberClusters()
-		checkIfPlacedLargeSecretResourcesOnTargetMemberClusters()
+		targetMemberClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
+		checkIfPlacedWorkResourcesOnTargetMemberClusters(targetMemberClusters)
+		checkIfPlacedLargeSecretResourcesOnTargetMemberClusters(targetMemberClusters)
 	})
 
 	It("can delete the CRP", func() {
@@ -1306,7 +1304,10 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
-	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromTargetMemberClusters)
+	It("should remove placed resources from all member clusters", func() {
+		targetMemberClusters := []*framework.Cluster{memberCluster1EastProd, memberCluster2EastCanary}
+		checkIfRemovedWorkResourcesFromTargetMemberClusters(targetMemberClusters)
+	})
 
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
@@ -1408,7 +1409,7 @@ func resourceIdentifiersForMultipleResourcesSnapshots() []placementv1beta1.Resou
 	return placementResourceIdentifiers
 }
 
-func checkIfPlacedWorkResourcesOnTargetMemberClusters() {
+func checkIfPlacedWorkResourcesOnTargetMemberClusters(targetMemberClusters []*framework.Cluster) {
 	for idx := range targetMemberClusters {
 		memberCluster := targetMemberClusters[idx]
 
@@ -1417,7 +1418,7 @@ func checkIfPlacedWorkResourcesOnTargetMemberClusters() {
 	}
 }
 
-func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters() {
+func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters(targetMemberClusters []*framework.Cluster) {
 	for idx := range targetMemberClusters {
 		memberCluster := targetMemberClusters[idx]
 
@@ -1426,7 +1427,7 @@ func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters() {
 	}
 }
 
-func checkIfRemovedWorkResourcesFromTargetMemberClusters() {
+func checkIfRemovedWorkResourcesFromTargetMemberClusters(targetMemberClusters []*framework.Cluster) {
 	for idx := range targetMemberClusters {
 		memberCluster := targetMemberClusters[idx]
 
