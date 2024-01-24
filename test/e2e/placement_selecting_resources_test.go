@@ -1275,7 +1275,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 		By(fmt.Sprintf("deleting placement %s", crpName))
 		cleanupCRP(crpName)
 
-		By("deleting created work resources")
+		By("deleting resources created for multiple resource snapshots")
 		cleanupWorkResources()
 	})
 
