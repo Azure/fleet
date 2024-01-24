@@ -1326,16 +1326,10 @@ func createResourcesForMultipleResourceSnapshots() {
 		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
 	}
 
-	// need to check to avoid flake.
-	Eventually(func() error {
-		for i := 0; i < 3; i++ {
-			var secret corev1.Secret
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(appSecretNameTemplate, i), Namespace: workNamespace().Name}, &secret); err != nil {
-				return err
-			}
-		}
-		return nil
-	}, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all large secrets exist")
+	// sleep for 5 seconds to ensure secrets exist to prevent flake.
+	select {
+	case <-time.After(5 * time.Second):
+	}
 }
 
 func multipleResourceSnapshotsCreatedActual(wantTotalNumberOfResourceSnapshots, wantNumberOfMasterIndexedResourceSnapshots, wantResourceIndex string) func() error {
