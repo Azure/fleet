@@ -1280,7 +1280,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("check if created cluster resource snapshots are as expected", func() {
-		Eventually(multipleResourceSnapshotsCreatedActual("2", "0"), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check created cluster resource snapshots", crpName)
+		Eventually(multipleResourceSnapshotsCreatedActual("2", "2", "0"), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check created cluster resource snapshots", crpName)
 	})
 
 	It("should update CRP status as expected", func() {
@@ -1338,7 +1338,7 @@ func createResourcesForMultipleResourceSnapshots() {
 	}, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to ensure all large secrets exist")
 }
 
-func multipleResourceSnapshotsCreatedActual(wantNumberOfResourceSnapshots, wantResourceIndex string) func() error {
+func multipleResourceSnapshotsCreatedActual(wantTotalNumberOfResourceSnapshots, wantNumberOfMasterIndexedResourceSnapshots, wantResourceIndex string) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	return func() error {
@@ -1355,27 +1355,33 @@ func multipleResourceSnapshotsCreatedActual(wantNumberOfResourceSnapshots, wantR
 			return fmt.Errorf("number of master cluster resource snapshots has unexpected value: got %d, want %d", len(resourceSnapshotList.Items), 1)
 		}
 		masterResourceSnapshot := resourceSnapshotList.Items[0]
+		// labels to list all existing cluster resource snapshots.
 		resourceSnapshotListLabels := client.MatchingLabels{placementv1beta1.CRPTrackingLabel: crpName}
 		if err := hubClient.List(ctx, &resourceSnapshotList, resourceSnapshotListLabels); err != nil {
 			return err
 		}
-		numberOfResourceSnapshots := masterResourceSnapshot.Annotations[placementv1beta1.NumberOfResourceSnapshotsAnnotation]
-		if numberOfResourceSnapshots != wantNumberOfResourceSnapshots {
-			return fmt.Errorf("NumberOfResourceSnapshotsAnnotation in master cluster resource snapshot has unexpected value:  got %s, want %s", numberOfResourceSnapshots, wantNumberOfResourceSnapshots)
+		// ensure total number of cluster resource snapshots equals to wanted number of cluster resource snapshots
+		if strconv.Itoa(len(resourceSnapshotList.Items)) != wantTotalNumberOfResourceSnapshots {
+			return fmt.Errorf("total number of cluster resource snapshots has unexpected value: got %s, want %s", strconv.Itoa(len(resourceSnapshotList.Items)), wantTotalNumberOfResourceSnapshots)
 		}
-		if strconv.Itoa(len(resourceSnapshotList.Items)) != numberOfResourceSnapshots {
-			return fmt.Errorf("number of cluster resource snapshots has unexpected value: got %s, want %s", strconv.Itoa(len(resourceSnapshotList.Items)), numberOfResourceSnapshots)
+		numberOfResourceSnapshots := masterResourceSnapshot.Annotations[placementv1beta1.NumberOfResourceSnapshotsAnnotation]
+		if numberOfResourceSnapshots != wantNumberOfMasterIndexedResourceSnapshots {
+			return fmt.Errorf("NumberOfResourceSnapshotsAnnotation in master cluster resource snapshot has unexpected value:  got %s, want %s", numberOfResourceSnapshots, wantNumberOfMasterIndexedResourceSnapshots)
 		}
 		masterResourceIndex := masterResourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel]
 		if masterResourceIndex != wantResourceIndex {
 			return fmt.Errorf("resource index for master cluster resource snapshot %s has unexpected value: got %s, want %s", masterResourceSnapshot.Name, masterResourceIndex, wantResourceIndex)
 		}
-		for i := range resourceSnapshotList.Items {
-			resourceSnapshot := resourceSnapshotList.Items[i]
-			index := resourceSnapshot.Labels[placementv1beta1.ResourceIndexLabel]
-			if index != masterResourceIndex {
-				return fmt.Errorf("resource index for cluster resource snapshot %s has unexpected value: got %s, want %s", resourceSnapshot.Name, index, masterResourceIndex)
-			}
+		// labels to list all cluster resource snapshots with master resource index.
+		resourceSnapshotListLabels = client.MatchingLabels{
+			placementv1beta1.ResourceIndexLabel: masterResourceIndex,
+			placementv1beta1.CRPTrackingLabel:   crpName,
+		}
+		if err := hubClient.List(ctx, &resourceSnapshotList, resourceSnapshotListLabels); err != nil {
+			return err
+		}
+		if strconv.Itoa(len(resourceSnapshotList.Items)) != wantNumberOfMasterIndexedResourceSnapshots {
+			return fmt.Errorf("number of cluster resource snapshots with master resource index has unexpected value: got %s, want %s", strconv.Itoa(len(resourceSnapshotList.Items)), wantNumberOfMasterIndexedResourceSnapshots)
 		}
 		return nil
 	}
