@@ -1327,9 +1327,7 @@ func createResourcesForMultipleResourceSnapshots() {
 	}
 
 	// sleep for 5 seconds to ensure secrets exist to prevent flake.
-	select {
-	case <-time.After(5 * time.Second):
-	}
+	time.Sleep(5 * time.Second)
 }
 
 func multipleResourceSnapshotsCreatedActual(wantTotalNumberOfResourceSnapshots, wantNumberOfMasterIndexedResourceSnapshots, wantResourceIndex string) func() error {
