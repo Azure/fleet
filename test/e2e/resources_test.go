@@ -23,12 +23,12 @@ import (
 const (
 	workNamespaceNameTemplate         = "application-%d"
 	appConfigMapNameTemplate          = "app-config-%d"
+	appSecretNameTemplate             = "app-secret-%d" // #nosec G101
 	crpNameTemplate                   = "crp-%d"
 	mcNameTemplate                    = "mc-%d"
 	internalServiceExportNameTemplate = "ise-%d"
 	internalServiceImportNameTemplate = "isi-%d"
 	endpointSliceExportNameTemplate   = "ep-%d"
-	endpointSliceNameTemplate         = "es-%d"
 
 	customDeletionBlockerFinalizer = "custom-deletion-blocker-finalizer"
 	workNamespaceLabelName         = "process"

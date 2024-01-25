@@ -310,7 +310,7 @@ func createResourcesForFleetGuardRail() {
 			{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "User",
-				Name:     testUser,
+				Name:     "test-user",
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
