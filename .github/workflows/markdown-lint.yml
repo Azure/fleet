@@ -9,6 +9,9 @@ on:
 jobs:
   markdown-link-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
     - uses: actions/checkout@v4
     - uses: gaurav-nelson/github-action-markdown-link-check@v1

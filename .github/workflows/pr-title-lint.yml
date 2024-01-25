@@ -11,6 +11,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: thehanimo/pr-title-checker@v1.4.1
         with:
