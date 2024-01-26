@@ -36,6 +36,8 @@ The fleet reserved namespace are `fleet-system` and `fleet-member-{clusterName}`
 
 ## What kind of the resources are allowed to be propagated from the hub cluster to the member clusters? How can I control the list?
 
+The resources to be propagated from the hub cluster to the member clusters can be controlled by either an exclude/skip list or an include/allow list which are mutually exclusive.
+
 `ClusterResourcePlacement` excludes certain groups/resources when propagating the resources by default. They are defined [here](https://github.com/Azure/fleet/blob/main/pkg/utils/apiresources.go).
 - `k8s.io/api/events/v1` (group)
 - `k8s.io/api/coordination/v1` (group)
@@ -45,6 +47,8 @@ The fleet reserved namespace are `fleet-system` and `fleet-member-{clusterName}`
 - any resources in the "default" namespace
 
 You can use `skipped-propagating-apis` and `skipped-propagating-namespaces` flag when installing the hub-agent to skip resources from being propagated by specifying their group/group-version/group-version-kind and namespaces.
+
+You can use `allowed-propagating-apis` flag on the hub-agent to only allow propagation of desired set of resources specified in the form of group/group-version/group-version-kind. This flag is mutually exclusive with `skipped-propagating-apis`.
 
 ## What happens to existing resources in member clusters when their definitions conflict with the desired resources in the hub cluster?
 
