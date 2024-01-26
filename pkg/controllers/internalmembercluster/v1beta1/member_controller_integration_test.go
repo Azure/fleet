@@ -110,8 +110,10 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			// take into account the +- jitter
-			Expect(result.RequeueAfter.Milliseconds() <= (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
-			Expect(result.RequeueAfter.Milliseconds() >= (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			upperBoundOfWantRequeueAfter := (1000 + 1000*jitterPercent/2/100) * time.Millisecond.Milliseconds() * int64(HBPeriod)
+			lowerBoundOfWantRequeueAfter := (1000 - 1000*jitterPercent/2/100) * time.Millisecond.Milliseconds() * int64(HBPeriod)
+			Expect(result.RequeueAfter.Milliseconds() <= upperBoundOfWantRequeueAfter).Should(BeTrue(), "Reconcile() RequeueAfter got %v, want <= %v", result.RequeueAfter, upperBoundOfWantRequeueAfter)
+			Expect(result.RequeueAfter.Milliseconds() >= lowerBoundOfWantRequeueAfter).Should(BeTrue(), "Reconcile() RequeueAfter got %v, want >= %v", result.RequeueAfter, lowerBoundOfWantRequeueAfter)
 			Expect(err).Should(Not(HaveOccurred()))
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -142,8 +144,10 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			// take into account the +- jitter
-			Expect(result.RequeueAfter.Milliseconds() <= (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
-			Expect(result.RequeueAfter.Milliseconds() >= (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			upperBoundOfWantRequeueAfter := (1000 + 1000*jitterPercent/2/100) * time.Millisecond.Milliseconds() * int64(HBPeriod)
+			lowerBoundOfWantRequeueAfter := (1000 - 1000*jitterPercent/2/100) * time.Millisecond.Milliseconds() * int64(HBPeriod)
+			Expect(result.RequeueAfter.Milliseconds() <= upperBoundOfWantRequeueAfter).Should(BeTrue(), "Reconcile() RequeueAfter got %v, want <= %v", result.RequeueAfter, upperBoundOfWantRequeueAfter)
+			Expect(result.RequeueAfter.Milliseconds() >= lowerBoundOfWantRequeueAfter).Should(BeTrue(), "Reconcile() RequeueAfter got %v, want >= %v", result.RequeueAfter, lowerBoundOfWantRequeueAfter)
 			Expect(err).Should(Not(HaveOccurred()))
 
 			var imc clusterv1beta1.InternalMemberCluster
@@ -159,8 +163,8 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 				NamespacedName: memberClusterNamespacedName,
 			})
 			// take into account the +- jitter
-			Expect(result.RequeueAfter.Milliseconds() <= (1000+1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
-			Expect(result.RequeueAfter.Milliseconds() >= (1000-1000*jitterPercent/2/100)*time.Millisecond.Milliseconds()*int64(HBPeriod)).Should(BeTrue())
+			Expect(result.RequeueAfter.Milliseconds() <= upperBoundOfWantRequeueAfter).Should(BeTrue(), "Reconcile() RequeueAfter got %v, want <= %v", result.RequeueAfter, upperBoundOfWantRequeueAfter)
+			Expect(result.RequeueAfter.Milliseconds() >= lowerBoundOfWantRequeueAfter).Should(BeTrue(), "Reconcile() RequeueAfter got %v, want >= %v", result.RequeueAfter, lowerBoundOfWantRequeueAfter)
 			Expect(err).Should(Not(HaveOccurred()))
 			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &imc)).Should(Succeed())
 			Expect(lastReceivedHeartbeat).ShouldNot(Equal(imc.Status.AgentStatus[0].LastReceivedHeartbeat))
