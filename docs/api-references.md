@@ -228,7 +228,7 @@ _Appears in:_
 
 
 ClusterResourcePlacement is used to select cluster scoped resources, including built-in resources and custom resources, and placement them onto selected member clusters in a fleet. 
- If a namespace is selected, ALL the resources under the namespace are placed to the target clusters. Note that you can't select the following resources: - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces). - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement, ClusterSchedulingPolicySnapshot, ClusterResourceSnapshot, ClusterResourceBinding, etc. 
+ If a namespace is selected, ALL the resources under the namespace are placed to the target clusters unless `allowed-propagating-apis` flag is configured on hub-agent. Note that you can't select the following resources: - reserved namespaces including: default, kube-* (reserved for Kubernetes system namespaces), fleet-* (reserved for fleet system namespaces). - reserved fleet resource types including: MemberCluster, InternalMemberCluster, ClusterResourcePlacement, ClusterSchedulingPolicySnapshot, ClusterResourceSnapshot, ClusterResourceBinding, etc.
  `ClusterSchedulingPolicySnapshot` and `ClusterResourceSnapshot` objects are created when there are changes in the system to keep the history of the changes affecting a `ClusterResourcePlacement`.
 
 _Appears in:_
