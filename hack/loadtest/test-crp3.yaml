@@ -10,6 +10,23 @@ spec:
       version: v1
   policy:
     placementType: PickAll
+    affinity:
+      clusterAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - weight: 20
+            preference:
+              labelSelector:
+                matchExpressions:
+                  - key: system
+                    operator: DoesNotExist
+          - weight: -20
+            preference:
+              labelSelector:
+                matchExpressions:
+                  - key: env
+                    operator: In
+                    values:
+                      - canary
   strategy:
     type: RollingUpdate
     rollingUpdate:
