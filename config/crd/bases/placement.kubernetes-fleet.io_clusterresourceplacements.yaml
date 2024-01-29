@@ -415,6 +415,28 @@ spec:
                 description: The rollout strategy to use to replace existing placement
                   with new ones.
                 properties:
+                  applyStrategy:
+                    description: ApplyStrategy describes how to roll out the changes
+                      when the existing resource is owned by non-CRP appliers.
+                    properties:
+                      serverSideApply:
+                        description: ServerSideApply defines the configuration for
+                          server side apply. It is honored only when type is ServerSideApply
+                        properties:
+                          force:
+                            description: Force represents to force apply to succeed
+                              when resolving the conflicts.
+                            type: boolean
+                        type: object
+                      type:
+                        default: FailIfExists
+                        description: Type defines the strategy to create or update
+                          this manifest, default value is FailIfExists.
+                        enum:
+                        - FailIfExists
+                        - ServerSideApply
+                        type: string
+                    type: object
                   rollingUpdate:
                     description: Rolling update config params. Present only if RolloutStrategyType
                       = RollingUpdate.
@@ -779,6 +801,31 @@ spec:
                         - version
                         type: object
                       maxItems: 100
+                      type: array
+                    overrides:
+                      description: Overrides contains a list of override snapshot
+                        associated with the selected resources.
+                      items:
+                        description: OverrideSnapshotIdentifier defines the identity
+                          of an override snapshot.
+                        properties:
+                          name:
+                            description: Name is the name of the override snapshot.
+                            type: string
+                          namespace:
+                            description: Namespace of the override snapshot.
+                            type: string
+                          type:
+                            default: ClusterResourceOverride
+                            description: Type of override snapshot. Can be "ClusterResourceOverride",
+                              or "ResourceOverride". Default is ClusterResourceOverride.
+                            enum:
+                            - ClusterResourceOverride
+                            - ResourceOverride
+                            type: string
+                        required:
+                        - name
+                        type: object
                       type: array
                   type: object
                 type: array

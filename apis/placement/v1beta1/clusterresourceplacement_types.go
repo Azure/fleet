@@ -282,6 +282,48 @@ type RolloutStrategy struct {
 	// Rolling update config params. Present only if RolloutStrategyType = RollingUpdate.
 	// +optional
 	RollingUpdate *RollingUpdateConfig `json:"rollingUpdate,omitempty"`
+
+	// ApplyStrategy describes how to roll out the changes when the existing resource is owned by non-CRP appliers.
+	// +optional
+	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
+}
+
+// ApplyStrategy describes how to create/update the resource when the existing resource is owned by non-CRP appliers.
+// Note: if the existing resource is owned by multiple CRPs, it will fail when the apply strategy is different and the
+// related Applied condition of manifest will be in the status of False with the reason of ApplyConflictBetweenPlacements.
+type ApplyStrategy struct {
+	// Type defines the strategy to create or update this manifest, default value is FailIfExists.
+	// +kubebuilder:default=FailIfExists
+	// +kubebuilder:validation:Enum=FailIfExists;ServerSideApply
+	// +optional
+	Type ApplyStrategyType `json:"type,omitempty"`
+
+	// ServerSideApply defines the configuration for server side apply. It is honored only when
+	// type is ServerSideApply
+	// +optional
+	ServerSideApply *ServerSideApplyConfig `json:"serverSideApply,omitempty"`
+}
+
+// ApplyStrategyType defines how to apply or update to a resource.
+// +enum
+type ApplyStrategyType string
+
+const (
+	// ApplyStrategyTypeFailIfExists will fail to create/update when the existing resource is owned by non-CRP appliers
+	// the related Applied condition of manifest will be in the status of False with the reason of ResourceOwnedByNonPlacement.
+	ApplyStrategyTypeFailIfExists ApplyStrategyType = "FailIfExists"
+
+	// ApplyStrategyTypeServerSideApply will use the Server-Side apply to manage the resource when the existing resource
+	// is owned by non-CRP appliers.
+	ApplyStrategyTypeServerSideApply ApplyStrategyType = "ServerSideApply"
+)
+
+// ServerSideApplyConfig defines the configuration for server side apply.
+// https://kubernetes.io/docs/reference/using-api/server-side-apply/
+type ServerSideApplyConfig struct {
+	// Force represents to force apply to succeed when resolving the conflicts.
+	// +optional
+	ForceConflicts bool `json:"force"`
 }
 
 // +enum
@@ -442,6 +484,10 @@ type ResourcePlacementStatus struct {
 	// Conditions is an array of current observed conditions for ResourcePlacementStatus.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Overrides contains a list of override snapshot associated with the selected resources.
+	// +optional
+	Overrides []OverrideSnapshotIdentifier `json:"overrides,omitempty"`
 }
 
 // FailedResourcePlacement contains the failure details of a failed resource placement.
@@ -476,6 +522,15 @@ const (
 	// - "False" means all the selected resources have not been synchronized under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
 	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
+
+	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
+	// successfully before applying to the target cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
+	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
+	// - "Unknown" means we haven't finished the override yet.
+	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
@@ -512,6 +567,15 @@ const (
 	// rollout strategy configurations specified in the placement.
 	// - Work is not created/updated because of the unknown reasons.
 	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+
+	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
+	// before applying to the target cluster if there is any override defined.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
+	// - "False" means some of them have failed.
+	// - "Unknown" means we haven't finished the override yet.
+	ResourceOverriddenConditionType ResourcePlacementConditionType = "ResourceOverridden"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
