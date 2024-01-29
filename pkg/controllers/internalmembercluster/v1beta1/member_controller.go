@@ -56,8 +56,8 @@ const (
 	// EventReasonInternalMemberClusterLeft is the event type and reason string when the agent left.
 	EventReasonInternalMemberClusterLeft = "InternalMemberClusterLeft"
 
-	// we add +-7.5% jitter
-	jitterPercent = 15
+	// we add +-7% jitter
+	jitterPercent = 14
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
