@@ -93,11 +93,11 @@ spec:
                     any ClusterResourcePlacement that does not tolerate the Taint.
                   properties:
                     effect:
-                      description: The effect of the taint on pods that do not tolerate
-                        the taint. Valid effect is NoSchedule.
+                      description: The effect of the taint on ClusterResourcePlacements
+                        that do not tolerate the taint. Valid effect is NoSchedule.
                       type: string
                     key:
-                      description: The taint key to be applied to a node.
+                      description: The taint key to be applied to a MemberCluster.
                       type: string
                     value:
                       description: The taint value corresponding to the taint key.

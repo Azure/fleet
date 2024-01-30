@@ -88,13 +88,13 @@ const (
 // Taint attached to MemberCluster has the "effect" on
 // any ClusterResourcePlacement that does not tolerate the Taint.
 type Taint struct {
-	// The taint key to be applied to a node.
+	// The taint key to be applied to a MemberCluster.
 	// +required
 	Key string `json:"key"`
 	// The taint value corresponding to the taint key.
 	// +optional
 	Value string `json:"value,omitempty"`
-	// The effect of the taint on pods that do not tolerate the taint.
+	// The effect of the taint on ClusterResourcePlacements that do not tolerate the taint.
 	// Valid effect is NoSchedule.
 	// +required
 	Effect TaintEffect `json:"effect"`
