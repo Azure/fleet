@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,6 +48,10 @@ type MemberClusterSpec struct {
 	// How often (in seconds) for the member cluster to send a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second. Max: 10 minutes.
 	// +optional
 	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
+
+	// If specified, the MemberCluster's taints.
+	// +optional
+	Taints []corev1.Taint `json:"taints,omitempty"`
 }
 
 // MemberClusterStatus defines the observed status of MemberCluster.

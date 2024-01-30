@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -168,6 +169,10 @@ type PlacementPolicy struct {
 	// +patchMergeKey=topologyKey
 	// +patchStrategy=merge
 	TopologySpreadConstraints []TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty" patchStrategy:"merge" patchMergeKey:"topologyKey"`
+
+	// If specified, the ClusterResourcePlacement's tolerations.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
 // Affinity is a group of cluster affinity scheduling rules. More to be added.
