@@ -103,7 +103,9 @@ spec:
                                     labelSelector:
                                       description: LabelSelector is a label query
                                         over all the joined member clusters. Clusters
-                                        matching the query are selected.
+                                        matching the query are selected. If you specify
+                                        both the label selector and the metric selectors,
+                                        the results are AND'd.
                                       properties:
                                         matchExpressions:
                                           description: matchExpressions is a list
@@ -154,8 +156,62 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-map-type: atomic
-                                  required:
-                                  - labelSelector
+                                    metricSelector:
+                                      description: MetricSelector is a metric query
+                                        over all joined member clusters. Clusters
+                                        matching the query are selected. If you specify
+                                        both the label selector and the metric selectors,
+                                        the results are AND'd.
+                                      properties:
+                                        matchMetrics:
+                                          description: MatchMetrics is an array of
+                                            MetricMatchers. The requirements are AND'd.
+                                          items:
+                                            description: MetricRange is one metric
+                                              requirement when picking clusters for
+                                              resource placement.
+                                            properties:
+                                              name:
+                                                description: Name is the name of the
+                                                  metric; it should be a Kubernetes
+                                                  label name.
+                                                type: string
+                                              ranges:
+                                                description: Ranges are the required
+                                                  or preferred ranges for the metric.
+                                                items:
+                                                  description: MetricRange describes
+                                                    a required or preferred range
+                                                    for a metric.
+                                                  properties:
+                                                    maximum:
+                                                      description: Maximum is the
+                                                        maximum value of the range.
+                                                        If this value is not specified,
+                                                        the largest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        of maximum value must be specified.
+                                                      type: string
+                                                    minimum:
+                                                      description: Minimum is the
+                                                        minimum value of the range.
+                                                        If this value is not specified,
+                                                        the smallest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        or maximum value must be specified.
+                                                      type: string
+                                                  type: object
+                                                type: array
+                                            required:
+                                            - name
+                                            - ranges
+                                            type: object
+                                          type: array
+                                      required:
+                                      - matchMetrics
+                                      type: object
                                   type: object
                                 weight:
                                   description: Weight associated with matching the
@@ -189,7 +245,9 @@ spec:
                                     labelSelector:
                                       description: LabelSelector is a label query
                                         over all the joined member clusters. Clusters
-                                        matching the query are selected.
+                                        matching the query are selected. If you specify
+                                        both the label selector and the metric selectors,
+                                        the results are AND'd.
                                       properties:
                                         matchExpressions:
                                           description: matchExpressions is a list
@@ -240,8 +298,62 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-map-type: atomic
-                                  required:
-                                  - labelSelector
+                                    metricSelector:
+                                      description: MetricSelector is a metric query
+                                        over all joined member clusters. Clusters
+                                        matching the query are selected. If you specify
+                                        both the label selector and the metric selectors,
+                                        the results are AND'd.
+                                      properties:
+                                        matchMetrics:
+                                          description: MatchMetrics is an array of
+                                            MetricMatchers. The requirements are AND'd.
+                                          items:
+                                            description: MetricRange is one metric
+                                              requirement when picking clusters for
+                                              resource placement.
+                                            properties:
+                                              name:
+                                                description: Name is the name of the
+                                                  metric; it should be a Kubernetes
+                                                  label name.
+                                                type: string
+                                              ranges:
+                                                description: Ranges are the required
+                                                  or preferred ranges for the metric.
+                                                items:
+                                                  description: MetricRange describes
+                                                    a required or preferred range
+                                                    for a metric.
+                                                  properties:
+                                                    maximum:
+                                                      description: Maximum is the
+                                                        maximum value of the range.
+                                                        If this value is not specified,
+                                                        the largest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        of maximum value must be specified.
+                                                      type: string
+                                                    minimum:
+                                                      description: Minimum is the
+                                                        minimum value of the range.
+                                                        If this value is not specified,
+                                                        the smallest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        or maximum value must be specified.
+                                                      type: string
+                                                  type: object
+                                                type: array
+                                            required:
+                                            - name
+                                            - ranges
+                                            type: object
+                                          type: array
+                                      required:
+                                      - matchMetrics
+                                      type: object
                                   type: object
                                 maxItems: 10
                                 type: array

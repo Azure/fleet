@@ -218,11 +218,51 @@ type PreferredClusterSelector struct {
 	Preference ClusterSelectorTerm `json:"preference"`
 }
 
+// MetricRange describes a required or preferred range for a metric.
+type MetricRange struct {
+	// Minimum is the minimum value of the range.
+	// If this value is not specified, the smallest observed value of the metric will
+	// be used.
+	// At least one of the minimum or maximum value must be specified.
+	// +optional
+	Minimum string `json:"minimum"`
+	// Maximum is the maximum value of the range.
+	// If this value is not specified, the largest observed value of the metric will be
+	// used.
+	// At least one of the minimum of maximum value must be specified.
+	// +optional
+	Maximum string `json:"maximum"`
+}
+
+// MetricRange is one metric requirement when picking clusters for resource placement.
+type MetricMatcher struct {
+	// Name is the name of the metric; it should be a Kubernetes label name.
+	// +required
+	Name string `json:"name"`
+	// Ranges are the required or preferred ranges for the metric.
+	// +required
+	Ranges []MetricRange `json:"ranges"`
+}
+
+// MetricSelector helps user specify metric requirements when picking clusters for resource
+// placement.
+type MetricSelector struct {
+	// MatchMetrics is an array of MetricMatchers. The requirements are AND'd.
+	// +required
+	MatchMetrics []MetricMatcher `json:"matchMetrics"`
+}
+
 // ClusterSelectorTerm contains the requirements to select clusters.
 type ClusterSelectorTerm struct {
 	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected.
-	// +required
+	// If you specify both the label selector and the metric selectors, the results are AND'd.
+	// +optional
 	LabelSelector metav1.LabelSelector `json:"labelSelector"`
+
+	// MetricSelector is a metric query over all joined member clusters. Clusters matching the query are selected.
+	// If you specify both the label selector and the metric selectors, the results are AND'd.
+	// +optional
+	MetricSelector MetricSelector `json:"metricSelector"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.

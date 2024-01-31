@@ -262,6 +262,25 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              metrics:
+                description: Metrics is an array of non-resource metrics observed
+                  for the member cluster.
+                items:
+                  description: Metric is the observed value of a non-resource metric.
+                  properties:
+                    name:
+                      description: The name of the metric; it should be a valid Kubernetes
+                        label name.
+                      type: string
+                    value:
+                      description: The observed value of the metric; it should be
+                        a sortable numeric.
+                      type: string
+                  required:
+                  - name
+                  - value
+                  type: object
+                type: array
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
                   It is copied from the corresponding InternalMemberCluster object.
