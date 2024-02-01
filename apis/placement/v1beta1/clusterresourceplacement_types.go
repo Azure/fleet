@@ -171,6 +171,7 @@ type PlacementPolicy struct {
 	TopologySpreadConstraints []TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty" patchStrategy:"merge" patchMergeKey:"topologyKey"`
 
 	// If specified, the ClusterResourcePlacement's tolerations.
+	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Tolerations []Toleration `json:"tolerations,omitempty"`
 }
@@ -478,7 +479,8 @@ type Toleration struct {
 	// +optional
 	Value string `json:"value,omitempty"`
 	// Effect indicates the taint effect to match. Empty means match all taint effects.
-	// When specified, allowed value is NoSchedule.
+	// When specified, only allowed value is NoSchedule.
+	//+kubebuilder:validation:Enum=NoSchedule
 	// +optional
 	Effect corev1.TaintEffect `json:"effect,omitempty"`
 }

@@ -50,6 +50,7 @@ type MemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
 
 	// If specified, the MemberCluster's taints.
+	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Taints []Taint `json:"taints,omitempty"`
 }
@@ -84,7 +85,8 @@ type Taint struct {
 	// +optional
 	Value string `json:"value,omitempty"`
 	// The effect of the taint on ClusterResourcePlacements that do not tolerate the taint.
-	// Valid effect is NoSchedule.
+	// Only NoSchedule is supported.
+	// +kubebuilder:validation:Enum=NoSchedule
 	// +required
 	Effect corev1.TaintEffect `json:"effect"`
 }
