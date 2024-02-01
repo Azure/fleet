@@ -6,11 +6,10 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 )
 
 const (
@@ -461,15 +460,6 @@ type FailedResourcePlacement struct {
 	Condition metav1.Condition `json:"condition"`
 }
 
-// TolerationOperator is the set of operators that can be used in a toleration.
-// +enum
-type TolerationOperator string
-
-const (
-	TolerationOpExists TolerationOperator = "Exists"
-	TolerationOpEqual  TolerationOperator = "Equal"
-)
-
 // Toleration allows ClusterResourcePlacement to tolerate any taint that matches
 // the triple <key,value,effect> using the matching operator <operator>.
 type Toleration struct {
@@ -482,7 +472,7 @@ type Toleration struct {
 	// Exists is equivalent to wildcard for value, so that a pod can
 	// tolerate all taints of a particular category.
 	// +optional
-	Operator TolerationOperator `json:"operator,omitempty"`
+	Operator corev1.TolerationOperator `json:"operator,omitempty"`
 	// Value is the taint value the toleration matches to.
 	// If the operator is Exists, the value should be empty, otherwise just a regular string.
 	// +optional
@@ -490,7 +480,7 @@ type Toleration struct {
 	// Effect indicates the taint effect to match. Empty means match all taint effects.
 	// When specified, allowed value is NoSchedule.
 	// +optional
-	Effect clusterv1beta1.TaintEffect `json:"effect,omitempty"`
+	Effect corev1.TaintEffect `json:"effect,omitempty"`
 }
 
 // ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement.

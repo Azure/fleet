@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,18 +74,6 @@ type MemberClusterStatus struct {
 	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`
 }
 
-// TaintEffect defines the effect of the taint.
-// +enum
-type TaintEffect string
-
-const (
-	// TaintEffectNoSchedule does not allow new pods to schedule onto the node unless they
-	// tolerate the taint, but allow all pods submitted to Kubelet without going through
-	// the scheduler to start, and allow all already-running pods to continue running.
-	// Enforced by the scheduler.
-	TaintEffectNoSchedule TaintEffect = "NoSchedule"
-)
-
 // Taint attached to MemberCluster has the "effect" on
 // any ClusterResourcePlacement that does not tolerate the Taint.
 type Taint struct {
@@ -97,7 +86,7 @@ type Taint struct {
 	// The effect of the taint on ClusterResourcePlacements that do not tolerate the taint.
 	// Valid effect is NoSchedule.
 	// +required
-	Effect TaintEffect `json:"effect"`
+	Effect corev1.TaintEffect `json:"effect"`
 }
 
 // MemberClusterConditionType defines a specific condition of a member cluster.
