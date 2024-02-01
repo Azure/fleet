@@ -47,6 +47,11 @@ const (
 type WorkSpec struct {
 	// Workload represents the manifest workload to be deployed on spoke cluster
 	Workload WorkloadTemplate `json:"workload,omitempty"`
+
+	// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
+	// and is owned by other appliers.
+	// +optional
+	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
 }
 
 // WorkloadTemplate represents the manifest workload to be deployed on spoke cluster
