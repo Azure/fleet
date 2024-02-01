@@ -100,7 +100,8 @@ const (
 var (
 	admissionReviewVersions = []string{admv1.SchemeGroupVersion.Version, admv1beta1.SchemeGroupVersion.Version}
 
-	failPolicy            = admv1.Ignore
+	ignoreFailurePolicy   = admv1.Ignore
+	failFailurePolicy     = admv1.Fail
 	sideEffortsNone       = admv1.SideEffectClassNone
 	namespacedScope       = admv1.NamespacedScope
 	clusterScope          = admv1.ClusterScope
@@ -224,7 +225,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 		{
 			Name:                    "fleet.pod.validating",
 			ClientConfig:            w.createClientConfig(pod.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -235,12 +236,11 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
 			ClientConfig:            w.createClientConfig(clusterresourceplacement.V1Alpha1CRPValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -252,12 +252,11 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1beta1.validating",
 			ClientConfig:            w.createClientConfig(clusterresourceplacement.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -269,12 +268,11 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
 		},
 		{
 			Name:                    "fleet.replicaset.validating",
 			ClientConfig:            w.createClientConfig(replicaset.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &failFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -285,7 +283,6 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
 		},
 	}
 
@@ -409,7 +406,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.customresourcedefinition.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -423,7 +420,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.membercluster.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -437,7 +434,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.v1alpha1.membercluster.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
@@ -451,7 +448,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.fleetmembernamespacedresources.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			NamespaceSelector:       fleetMemberNamespaceSelector,
@@ -461,7 +458,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.fleetsystemnamespacedresources.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			NamespaceSelector:       fleetSystemNamespaceSelector,
@@ -471,7 +468,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.kubenamespacedresources.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			NamespaceSelector:       kubeNamespaceSelector,
@@ -481,7 +478,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 		{
 			Name:                    "fleet.namespace.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
-			FailurePolicy:           &failPolicy,
+			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
 			AdmissionReviewVersions: admissionReviewVersions,
 			Rules: []admv1.RuleWithOperations{
