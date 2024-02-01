@@ -125,7 +125,12 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		klog.V(2).InfoS("work controller is not started yet, requeue the request", "work", req.NamespacedName)
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
-	klog.InfoS("work apply controller reconcile loop triggered.", "work", req.NamespacedName)
+	startTime := time.Now()
+	klog.V(2).InfoS("ApplyWork reconciliation starts", "work", req.NamespacedName)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("ApplyWork reconciliation ends", "work", req.NamespacedName, "latency", latency)
+	}()
 
 	// Fetch the work resource
 	work := &fleetv1beta1.Work{}

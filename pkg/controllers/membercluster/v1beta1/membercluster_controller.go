@@ -62,7 +62,13 @@ type Reconciler struct {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("Reconcile", "memberCluster", req.NamespacedName)
+	startTime := time.Now()
+	klog.V(2).InfoS("MemberCluster reconciliation starts", "memberCluster", req.NamespacedName)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("MemberCluster reconciliation ends", "memberCluster", req.NamespacedName, "latency", latency)
+	}()
+
 	var mc clusterv1beta1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
