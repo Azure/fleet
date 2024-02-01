@@ -473,7 +473,7 @@ type Toleration struct {
 	// Exists is equivalent to wildcard for value, so that a pod can
 	// tolerate all taints of a particular category.
 	// +kubebuilder:default=Equal
-	// +kubebuilder:validation:Enum=Equal,Exists
+	// +kubebuilder:validation:Enum=Equal;Exists
 	// +optional
 	Operator corev1.TolerationOperator `json:"operator,omitempty"`
 	// Value is the taint value the toleration matches to.
