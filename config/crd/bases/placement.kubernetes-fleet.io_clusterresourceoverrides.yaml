@@ -131,7 +131,7 @@ spec:
                       to be applied on the selected resources. The order of the rules
                       determines the override order. When there are two rules selecting
                       the same fields on the target cluster, the last one will win.
-                      You can have 1-100 rules.
+                      You can have 1-20 rules.
                     items:
                       properties:
                         clusterSelector:
@@ -243,7 +243,7 @@ spec:
                       required:
                       - jsonPatchOverrides
                       type: object
-                    maxItems: 100
+                    maxItems: 20
                     minItems: 1
                     type: array
                 required:

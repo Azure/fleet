@@ -47,7 +47,7 @@ spec:
                       to be applied on the selected resources. The order of the rules
                       determines the override order. When there are two rules selecting
                       the same fields on the target cluster, the last one will win.
-                      You can have 1-100 rules.
+                      You can have 1-20 rules.
                     items:
                       properties:
                         clusterSelector:
@@ -159,7 +159,7 @@ spec:
                       required:
                       - jsonPatchOverrides
                       type: object
-                    maxItems: 100
+                    maxItems: 20
                     minItems: 1
                     type: array
                 required:
@@ -173,7 +173,8 @@ spec:
                   description: ResourceSelector is used to select namespace scoped
                     resources as the target resources to be placed. All the fields
                     are `ANDed`. In other words, a resource must match all the fields
-                    to be selected.
+                    to be selected. The resource namespace will inherit from the parent
+                    object scope.
                   properties:
                     group:
                       description: Group name of the namespace-scoped resource. Use
@@ -185,10 +186,6 @@ spec:
                       type: string
                     name:
                       description: Name of the namespace-scoped resource.
-                      type: string
-                    namespace:
-                      description: Namespace of the namespace-scoped resource. Default
-                        is empty, which means inherit from the parent object scope.
                       type: string
                     version:
                       description: Version of the namespace-scoped resource.

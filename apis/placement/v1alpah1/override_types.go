@@ -28,6 +28,8 @@ type ClusterResourceOverride struct {
 }
 
 // ClusterResourceOverrideSpec defines the desired state of the Override.
+// If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
+// conflicts.
 type ClusterResourceOverrideSpec struct {
 	// ClusterResourceSelectors is an array of selectors used to select cluster scoped resources. The selectors are `ORed`.
 	// If a namespace is selected, ALL the resources under the namespace are selected automatically.
@@ -51,10 +53,10 @@ type OverridePolicy struct {
 	// OverrideRules defines an array of override rules to be applied on the selected resources.
 	// The order of the rules determines the override order.
 	// When there are two rules selecting the same fields on the target cluster, the last one will win.
-	// You can have 1-100 rules.
+	// You can have 1-20 rules.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:MaxItems=20
 	// +required
 	OverrideRules []OverrideRule `json:"overrideRules"`
 }
@@ -92,6 +94,8 @@ type ResourceOverride struct {
 }
 
 // ResourceOverrideSpec defines the desired state of the Override.
+// If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
+// conflicts.
 type ResourceOverrideSpec struct {
 	// ResourceSelectors is an array of selectors used to select namespace scoped resources. The selectors are `ORed`.
 	// You can have 1-20 selectors.
@@ -108,6 +112,7 @@ type ResourceOverrideSpec struct {
 
 // ResourceSelector is used to select namespace scoped resources as the target resources to be placed.
 // All the fields are `ANDed`. In other words, a resource must match all the fields to be selected.
+// The resource namespace will inherit from the parent object scope.
 type ResourceSelector struct {
 	// Group name of the namespace-scoped resource.
 	// Use an empty string to select resources under the core API group (e.g., services).
@@ -121,11 +126,6 @@ type ResourceSelector struct {
 	// Kind of the namespace-scoped resource.
 	// +required
 	Kind string `json:"kind"`
-
-	// Namespace of the namespace-scoped resource.
-	// +optional
-	// Default is empty, which means inherit from the parent object scope.
-	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the namespace-scoped resource.
 	// +required
@@ -153,10 +153,57 @@ type JSONPatchOverrideOperator string
 
 const (
 	// JSONPatchOverrideOpAdd adds the value to the target location.
+	// An example target JSON document:
+	//
+	//   { "foo": [ "bar", "baz" ] }
+	//
+	//   A JSON Patch override:
+	//
+	//   [
+	//     { "operator": "add", "path": "/foo/1", "value": "qux" }
+	//   ]
+	//
+	//   The resulting JSON document:
+	//
+	//   { "foo": [ "bar", "qux", "baz" ] }
 	JSONPatchOverrideOpAdd JSONPatchOverrideOperator = "Add"
 	// JSONPatchOverrideOpRemove removes the value from the target location.
+	// An example target JSON document:
+	//
+	//   {
+	//     "baz": "qux",
+	//     "foo": "bar"
+	//   }
+	//   A JSON Patch override:
+	//
+	//   [
+	//     { "operator": "remove", "path": "/baz" }
+	//   ]
+	//
+	//   The resulting JSON document:
+	//
+	//   { "foo": "bar" }
 	JSONPatchOverrideOpRemove JSONPatchOverrideOperator = "Remove"
 	// JSONPatchOverrideOpReplace replaces the value at the target location with a new value.
+	// An example target JSON document:
+	//
+	//   {
+	//     "baz": "qux",
+	//     "foo": "bar"
+	//   }
+	//
+	//   A JSON Patch override:
+	//
+	//   [
+	//     { "operator": "replace", "path": "/baz", "value": "boo" }
+	//   ]
+	//
+	//   The resulting JSON document:
+	//
+	//   {
+	//     "baz": "boo",
+	//     "foo": "bar"
+	//   }
 	JSONPatchOverrideOpReplace JSONPatchOverrideOperator = "Replace"
 )
 
