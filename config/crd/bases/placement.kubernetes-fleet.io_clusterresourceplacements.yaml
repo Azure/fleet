@@ -176,7 +176,7 @@ spec:
                                                   metric; it should be a Kubernetes
                                                   label name.
                                                 type: string
-                                              ranges:
+                                              range:
                                                 description: Range is the required
                                                   or preferred range for the metric.
                                                 properties:
@@ -201,7 +201,7 @@ spec:
                                                 type: object
                                             required:
                                             - name
-                                            - ranges
+                                            - range
                                             type: object
                                           type: array
                                       required:
@@ -313,7 +313,7 @@ spec:
                                                   metric; it should be a Kubernetes
                                                   label name.
                                                 type: string
-                                              ranges:
+                                              range:
                                                 description: Range is the required
                                                   or preferred range for the metric.
                                                 properties:
@@ -338,7 +338,7 @@ spec:
                                                 type: object
                                             required:
                                             - name
-                                            - ranges
+                                            - range
                                             type: object
                                           type: array
                                       required:

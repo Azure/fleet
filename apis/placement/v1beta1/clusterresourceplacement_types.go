@@ -241,7 +241,7 @@ type MetricMatcher struct {
 	Name string `json:"name"`
 	// Range is the required or preferred range for the metric.
 	// +required
-	Range MetricRange `json:"ranges"`
+	Range MetricRange `json:"range"`
 }
 
 // MetricSelector helps user specify metric requirements when picking clusters for resource
