@@ -104,8 +104,8 @@ spec:
                                       description: LabelSelector is a label query
                                         over all the joined member clusters. Clusters
                                         matching the query are selected. If you specify
-                                        both the label selector and the metric selectors,
-                                        the results are AND'd.
+                                        both label and metric selectors, the results
+                                        are AND'd.
                                       properties:
                                         matchExpressions:
                                           description: matchExpressions is a list
@@ -160,8 +160,8 @@ spec:
                                       description: MetricSelector is a metric query
                                         over all joined member clusters. Clusters
                                         matching the query are selected. If you specify
-                                        both the label selector and the metric selectors,
-                                        the results are AND'd.
+                                        both label and metric selectors, the results
+                                        are AND'd.
                                       properties:
                                         matchMetrics:
                                           description: MatchMetrics is an array of
@@ -177,33 +177,28 @@ spec:
                                                   label name.
                                                 type: string
                                               ranges:
-                                                description: Ranges are the required
-                                                  or preferred ranges for the metric.
-                                                items:
-                                                  description: MetricRange describes
-                                                    a required or preferred range
-                                                    for a metric.
-                                                  properties:
-                                                    maximum:
-                                                      description: Maximum is the
-                                                        maximum value of the range.
-                                                        If this value is not specified,
-                                                        the largest observed value
-                                                        of the metric will be used.
-                                                        At least one of the minimum
-                                                        of maximum value must be specified.
-                                                      type: string
-                                                    minimum:
-                                                      description: Minimum is the
-                                                        minimum value of the range.
-                                                        If this value is not specified,
-                                                        the smallest observed value
-                                                        of the metric will be used.
-                                                        At least one of the minimum
-                                                        or maximum value must be specified.
-                                                      type: string
-                                                  type: object
-                                                type: array
+                                                description: Range is the required
+                                                  or preferred range for the metric.
+                                                properties:
+                                                  maximum:
+                                                    description: Maximum is the maximum
+                                                      value of the range. If this
+                                                      value is not specified, the
+                                                      largest observed value of the
+                                                      metric will be used. At least
+                                                      one of the minimum of maximum
+                                                      value must be specified.
+                                                    type: string
+                                                  minimum:
+                                                    description: Minimum is the minimum
+                                                      value of the range. If this
+                                                      value is not specified, the
+                                                      smallest observed value of the
+                                                      metric will be used. At least
+                                                      one of the minimum or maximum
+                                                      value must be specified.
+                                                    type: string
+                                                type: object
                                             required:
                                             - name
                                             - ranges
@@ -246,8 +241,8 @@ spec:
                                       description: LabelSelector is a label query
                                         over all the joined member clusters. Clusters
                                         matching the query are selected. If you specify
-                                        both the label selector and the metric selectors,
-                                        the results are AND'd.
+                                        both label and metric selectors, the results
+                                        are AND'd.
                                       properties:
                                         matchExpressions:
                                           description: matchExpressions is a list
@@ -302,8 +297,8 @@ spec:
                                       description: MetricSelector is a metric query
                                         over all joined member clusters. Clusters
                                         matching the query are selected. If you specify
-                                        both the label selector and the metric selectors,
-                                        the results are AND'd.
+                                        both label and metric selectors, the results
+                                        are AND'd.
                                       properties:
                                         matchMetrics:
                                           description: MatchMetrics is an array of
@@ -319,33 +314,28 @@ spec:
                                                   label name.
                                                 type: string
                                               ranges:
-                                                description: Ranges are the required
-                                                  or preferred ranges for the metric.
-                                                items:
-                                                  description: MetricRange describes
-                                                    a required or preferred range
-                                                    for a metric.
-                                                  properties:
-                                                    maximum:
-                                                      description: Maximum is the
-                                                        maximum value of the range.
-                                                        If this value is not specified,
-                                                        the largest observed value
-                                                        of the metric will be used.
-                                                        At least one of the minimum
-                                                        of maximum value must be specified.
-                                                      type: string
-                                                    minimum:
-                                                      description: Minimum is the
-                                                        minimum value of the range.
-                                                        If this value is not specified,
-                                                        the smallest observed value
-                                                        of the metric will be used.
-                                                        At least one of the minimum
-                                                        or maximum value must be specified.
-                                                      type: string
-                                                  type: object
-                                                type: array
+                                                description: Range is the required
+                                                  or preferred range for the metric.
+                                                properties:
+                                                  maximum:
+                                                    description: Maximum is the maximum
+                                                      value of the range. If this
+                                                      value is not specified, the
+                                                      largest observed value of the
+                                                      metric will be used. At least
+                                                      one of the minimum of maximum
+                                                      value must be specified.
+                                                    type: string
+                                                  minimum:
+                                                    description: Minimum is the minimum
+                                                      value of the range. If this
+                                                      value is not specified, the
+                                                      smallest observed value of the
+                                                      metric will be used. At least
+                                                      one of the minimum or maximum
+                                                      value must be specified.
+                                                    type: string
+                                                type: object
                                             required:
                                             - name
                                             - ranges

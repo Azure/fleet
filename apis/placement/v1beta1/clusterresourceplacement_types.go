@@ -239,9 +239,9 @@ type MetricMatcher struct {
 	// Name is the name of the metric; it should be a Kubernetes label name.
 	// +required
 	Name string `json:"name"`
-	// Ranges are the required or preferred ranges for the metric.
+	// Range is the required or preferred range for the metric.
 	// +required
-	Ranges []MetricRange `json:"ranges"`
+	Range MetricRange `json:"ranges"`
 }
 
 // MetricSelector helps user specify metric requirements when picking clusters for resource
@@ -255,12 +255,12 @@ type MetricSelector struct {
 // ClusterSelectorTerm contains the requirements to select clusters.
 type ClusterSelectorTerm struct {
 	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected.
-	// If you specify both the label selector and the metric selectors, the results are AND'd.
+	// If you specify both label and metric selectors, the results are AND'd.
 	// +optional
 	LabelSelector metav1.LabelSelector `json:"labelSelector"`
 
 	// MetricSelector is a metric query over all joined member clusters. Clusters matching the query are selected.
-	// If you specify both the label selector and the metric selectors, the results are AND'd.
+	// If you specify both label and metric selectors, the results are AND'd.
 	// +optional
 	MetricSelector MetricSelector `json:"metricSelector"`
 }
