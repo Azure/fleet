@@ -82,19 +82,14 @@ const (
 	PreviousBindingStateAnnotation = fleetPrefix + "previous-binding-state"
 )
 
-// OverrideSnapshotIdentifier defines the identity of an override snapshot.
-type OverrideSnapshotIdentifier struct {
-	// Name is the name of the override snapshot.
+// NamespacedName comprises a resource name, with a mandatory namespace.
+type NamespacedName struct {
+	// Name is the name of the namespaced scope resource.
 	// +required
 	Name string `json:"name"`
-	// Namespace of the override snapshot.
-	// +optional
-	Namespace string `json:"namespace,omitempty"`
-	// Type of override snapshot. Can be "ClusterResourceOverride", or "ResourceOverride". Default is ClusterResourceOverride.
-	// +kubebuilder:validation:Enum=ClusterResourceOverride;ResourceOverride
-	// +kubebuilder:default=ClusterResourceOverride
-	// +optional
-	Type OverrideType `json:"type,omitempty"`
+	// Namespace is namespace of the namespaced scope resource.
+	// +required
+	Namespace string `json:"namespace"`
 }
 
 // OverrideType identifies the type of override.
