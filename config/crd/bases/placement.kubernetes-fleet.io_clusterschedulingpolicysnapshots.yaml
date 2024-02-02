@@ -161,28 +161,33 @@ spec:
                                                   label name.
                                                 type: string
                                               range:
-                                                description: Range is the required
+                                                description: Range are the required
                                                   or preferred range for the metric.
-                                                properties:
-                                                  maximum:
-                                                    description: Maximum is the maximum
-                                                      value of the range. If this
-                                                      value is not specified, the
-                                                      largest observed value of the
-                                                      metric will be used. At least
-                                                      one of the minimum of maximum
-                                                      value must be specified.
-                                                    type: string
-                                                  minimum:
-                                                    description: Minimum is the minimum
-                                                      value of the range. If this
-                                                      value is not specified, the
-                                                      smallest observed value of the
-                                                      metric will be used. At least
-                                                      one of the minimum or maximum
-                                                      value must be specified.
-                                                    type: string
-                                                type: object
+                                                items:
+                                                  description: MetricRange describes
+                                                    a required or preferred range
+                                                    for a metric.
+                                                  properties:
+                                                    maximum:
+                                                      description: Maximum is the
+                                                        maximum value of the range.
+                                                        If this value is not specified,
+                                                        the largest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        of maximum value must be specified.
+                                                      type: string
+                                                    minimum:
+                                                      description: Minimum is the
+                                                        minimum value of the range.
+                                                        If this value is not specified,
+                                                        the smallest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        or maximum value must be specified.
+                                                      type: string
+                                                  type: object
+                                                type: array
                                             required:
                                             - name
                                             - range
@@ -298,28 +303,33 @@ spec:
                                                   label name.
                                                 type: string
                                               range:
-                                                description: Range is the required
+                                                description: Range are the required
                                                   or preferred range for the metric.
-                                                properties:
-                                                  maximum:
-                                                    description: Maximum is the maximum
-                                                      value of the range. If this
-                                                      value is not specified, the
-                                                      largest observed value of the
-                                                      metric will be used. At least
-                                                      one of the minimum of maximum
-                                                      value must be specified.
-                                                    type: string
-                                                  minimum:
-                                                    description: Minimum is the minimum
-                                                      value of the range. If this
-                                                      value is not specified, the
-                                                      smallest observed value of the
-                                                      metric will be used. At least
-                                                      one of the minimum or maximum
-                                                      value must be specified.
-                                                    type: string
-                                                type: object
+                                                items:
+                                                  description: MetricRange describes
+                                                    a required or preferred range
+                                                    for a metric.
+                                                  properties:
+                                                    maximum:
+                                                      description: Maximum is the
+                                                        maximum value of the range.
+                                                        If this value is not specified,
+                                                        the largest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        of maximum value must be specified.
+                                                      type: string
+                                                    minimum:
+                                                      description: Minimum is the
+                                                        minimum value of the range.
+                                                        If this value is not specified,
+                                                        the smallest observed value
+                                                        of the metric will be used.
+                                                        At least one of the minimum
+                                                        or maximum value must be specified.
+                                                      type: string
+                                                  type: object
+                                                type: array
                                             required:
                                             - name
                                             - range

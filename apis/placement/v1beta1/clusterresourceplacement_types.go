@@ -239,9 +239,9 @@ type MetricMatcher struct {
 	// Name is the name of the metric; it should be a Kubernetes label name.
 	// +required
 	Name string `json:"name"`
-	// Range is the required or preferred range for the metric.
+	// Range are the required or preferred range for the metric.
 	// +required
-	Range MetricRange `json:"range"`
+	Ranges []MetricRange `json:"range"`
 }
 
 // MetricSelector helps user specify metric requirements when picking clusters for resource
