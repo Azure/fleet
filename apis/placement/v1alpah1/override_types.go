@@ -28,6 +28,7 @@ type ClusterResourceOverride struct {
 }
 
 // ClusterResourceOverrideSpec defines the desired state of the Override.
+// The ClusterResourceOverride create or update will fail when the resource has been selected by the existing ClusterResourceOverride.
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
 type ClusterResourceOverrideSpec struct {
@@ -61,6 +62,7 @@ type OverridePolicy struct {
 	OverrideRules []OverrideRule `json:"overrideRules"`
 }
 
+// OverrideRule defines how to override the selected resources on the target clusters.
 type OverrideRule struct {
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
@@ -94,6 +96,7 @@ type ResourceOverride struct {
 }
 
 // ResourceOverrideSpec defines the desired state of the Override.
+// The ResourceOverride create or update will fail when the resource has been selected by the existing ResourceOverride.
 // If the resource is selected by both ClusterResourceOverride and ResourceOverride, ResourceOverride will win when resolving
 // conflicts.
 type ResourceOverrideSpec struct {

@@ -49,6 +49,8 @@ spec:
                       the same fields on the target cluster, the last one will win.
                       You can have 1-20 rules.
                     items:
+                      description: OverrideRule defines how to override the selected
+                        resources on the target clusters.
                       properties:
                         clusterSelector:
                           description: ClusterSelectors selects the target clusters.
