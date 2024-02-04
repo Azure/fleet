@@ -91,14 +91,3 @@ type NamespacedName struct {
 	// +required
 	Namespace string `json:"namespace"`
 }
-
-// OverrideType identifies the type of override.
-// +enum
-type OverrideType string
-
-const (
-	// ClusterResourceOverrideType is ClusterResourceOverride type.
-	ClusterResourceOverrideType OverrideType = "ClusterResourceOverride"
-	// ResourceOverrideType is ResourceOverride type.
-	ResourceOverrideType OverrideType = "ResourceOverride"
-)

@@ -612,15 +612,15 @@ spec:
                   properties:
                     applicableClusterResourceOverrides:
                       description: ApplicableClusterResourceOverrides contains a list
-                        of applicable ResourceOverride snapshots associated with the
-                        selected resources.
+                        of applicable ClusterResourceOverride snapshots associated
+                        with the selected resources.
                       items:
                         type: string
                       type: array
                     applicableResourceOverrides:
                       description: ApplicableResourceOverrides contains a list of
-                        applicable ClusterResourceOverride snapshots associated with
-                        the selected resources.
+                        applicable ResourceOverride snapshots associated with the
+                        selected resources.
                       items:
                         description: NamespacedName comprises a resource name, with
                           a mandatory namespace.

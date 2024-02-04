@@ -482,13 +482,13 @@ type ResourcePlacementStatus struct {
 	// +optional
 	ClusterName string `json:"clusterName,omitempty"`
 
-	// ApplicableResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with the
-	// selected resources.
+	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
+	// resources.
 	// +optional
 	ApplicableResourceOverrides []NamespacedName `json:"applicableResourceOverrides,omitempty"`
 
-	// ApplicableClusterResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the
-	// selected resources.
+	// ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
+	// the selected resources.
 	// +optional
 	ApplicableClusterResourceOverrides []string `json:"applicableClusterResourceOverrides,omitempty"`
 
