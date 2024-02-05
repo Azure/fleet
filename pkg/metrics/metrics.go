@@ -50,3 +50,78 @@ var (
 		}).Inc()
 	}
 )
+
+// The scheduler related metrics.
+var (
+	// SchedulingCycleDurationMilliseconds is a Fleet scheduler metric that tracks how long it
+	// takes to complete a scheduling loop run.
+	SchedulingCycleDurationMilliseconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "scheduling_cycle_duration_milliseconds",
+			Help: "The duration of a scheduling cycle run in milliseconds",
+			Buckets: []float64{
+				10, 50, 100, 500, 1000, 5000, 10000, 50000,
+			},
+		},
+		[]string{
+			"is_failed",
+			"needs_requeue",
+		},
+	)
+
+	// Metrics for the scheduler active queue.
+	// At this moment, the Fleet scheduler uses only one queue, namely the active queue,
+	// which queus scheduling policy changes that need immeidate reconciliation.
+	//
+	// All metrics below are standard ones that are supported by the client-go workqueue
+	// implementation.
+
+	// SchedulerActiveQueueDepth is the depth of the active queue in the Fleet scheduler.
+	SchedulerActiveQueueDepth = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "scheduler_active_queue_depth",
+		Help: "The current depth of the active queue in the Fleet scheduler",
+	})
+
+	// SchedulerActiveQueueAddsCount is the number of adds invoked on the active queue.
+	ScheduleActiveQueueAddsCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "scheduler_active_queue_adds_count",
+		Help: "The number of work items added to the active queue",
+	})
+
+	// SchedulerActiveQueueLatencySeconds is the processing latency of the active queue.
+	SchedulerActiveQueueLatencySeconds = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "scheduler_active_queue_latency_seconds",
+		Help: "The processing latency of the scheduler active queue in seconds",
+	})
+
+	// SchedulerActiveQueueWorkDurationSeconds is the duration spent on processing each
+	// work item sent to the active queue.
+	//
+	// Note that this is different from the SchedulingCycleDurationMilliseconds metric,
+	// as not all work items sent to the active queue will trigger a scheduling loop
+	// run.
+	SchedulerActiveQueueWorkDurationSeconds = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "scheduler_active_queue_work_duration_seconds",
+		Help: "The work processing duration (in seconds) of items in the scheduler active queue",
+	})
+
+	// SchedulerActiveQueueUnfinishedWorkTotalWaitTimeSeconds is the current total amount of time
+	// each work item in the active queue spent waiting.
+	SchedulerActiveQueueUnfinishedWorkTotalWaitTimeSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "scheduler_active_queue_unfinished_work_total_wait_time_seconds",
+		Help: "The amount of time (in seconds) of all unfinished work items spent waiting in the scheduler active queue",
+	})
+
+	// SchedulerActiveQueueLongestRunningProcessorWaitTimeSeconds is the longest wait time of
+	// each work item currently stuck in the active queue.
+	SchedulerActiveQueueLongestRunningProcessorWaitTimeSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "scheduler_active_queue_longest_running_processor_wait_time_seconds",
+		Help: "The longest waiting time (in seconds) of all unfinished work items in the scheduler active queue",
+	})
+
+	// SchedulerActiveQueueRetriesCount is the number of retries happened on the active queue.
+	SchedulerActiveQueueRetriesCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "scheduler_active_queue_retries",
+		Help: "The number of retries happened on the scheduler active queue",
+	})
+)

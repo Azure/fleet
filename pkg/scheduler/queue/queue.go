@@ -10,6 +10,7 @@ package queue
 import (
 	"time"
 
+	"go.goms.io/fleet/pkg/metrics"
 	"k8s.io/client-go/util/workqueue"
 )
 
@@ -157,6 +158,36 @@ func (sq *simpleClusterResourcePlacementSchedulingQueue) Forget(crpKey ClusterRe
 	sq.active.Forget(crpKey)
 }
 
+type simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider struct{}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewDepthMetric(name string) workqueue.GaugeMetric {
+	return metrics.SchedulerActiveQueueDepth
+}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewAddsMetric(name string) workqueue.CounterMetric {
+	return metrics.ScheduleActiveQueueAddsCount
+}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewLatencyMetric(name string) workqueue.HistogramMetric {
+	return metrics.SchedulerActiveQueueLatencySeconds
+}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewWorkDurationMetric(name string) workqueue.HistogramMetric {
+	return metrics.SchedulerActiveQueueWorkDurationSeconds
+}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewUnfinishedWorkSecondsMetric(name string) workqueue.SettableGaugeMetric {
+	return metrics.SchedulerActiveQueueUnfinishedWorkTotalWaitTimeSeconds
+}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewLongestRunningProcessorSecondsMetric(name string) workqueue.SettableGaugeMetric {
+	return metrics.SchedulerActiveQueueLongestRunningProcessorWaitTimeSeconds
+}
+
+func (_ *simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider) NewRetriesMetric(name string) workqueue.CounterMetric {
+	return metrics.SchedulerActiveQueueRetriesCount
+}
+
 // NewSimpleClusterResourcePlacementSchedulingQueue returns a
 // simpleClusterResourcePlacementSchedulingQueue.
 func NewSimpleClusterResourcePlacementSchedulingQueue(opts ...Option) ClusterResourcePlacementSchedulingQueue {
@@ -165,7 +196,11 @@ func NewSimpleClusterResourcePlacementSchedulingQueue(opts ...Option) ClusterRes
 		opt(&options)
 	}
 
+	queueConfig := workqueue.RateLimitingQueueConfig{
+		Name:            options.name,
+		MetricsProvider: &simpleClusterResourcePlacementActiveSchedulingQueueMetricProvider{},
+	}
 	return &simpleClusterResourcePlacementSchedulingQueue{
-		active: workqueue.NewNamedRateLimitingQueue(options.rateLimiter, options.name),
+		active: workqueue.NewRateLimitingQueueWithConfig(options.rateLimiter, queueConfig),
 	}
 }
