@@ -170,7 +170,8 @@ type PlacementPolicy struct {
 	// +patchStrategy=merge
 	TopologySpreadConstraints []TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty" patchStrategy:"merge" patchMergeKey:"topologyKey"`
 
-	// If specified, the ClusterResourcePlacement's tolerations.
+	// If specified, the ClusterResourcePlacement's Tolerations.
+	// Tolerations cannot be updated or deleted.
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Tolerations []Toleration `json:"tolerations,omitempty"`
