@@ -63,7 +63,12 @@ func CreateControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		os.Exit(1)
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, apiutil.WithLazyDiscovery)
+	restHTTPClient, err := rest.HTTPClientFor(spokeCfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create spoke rest http client")
+		return nil, nil, err
+	}
+	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, restHTTPClient)
 	if err != nil {
 		setupLog.Error(err, "unable to create spoke rest mapper")
 		os.Exit(1)

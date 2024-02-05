@@ -10,8 +10,9 @@ package queue
 import (
 	"time"
 
-	"go.goms.io/fleet/pkg/metrics"
 	"k8s.io/client-go/util/workqueue"
+
+	"go.goms.io/fleet/pkg/metrics"
 )
 
 // ClusterResourcePlacementKey is the unique identifier (its name) for a ClusterResourcePlacement checked

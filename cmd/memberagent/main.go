@@ -267,7 +267,12 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, apiutil.WithLazyDiscovery)
+	restHTTPClient, err := rest.HTTPClientFor(memberConfig)
+	if err != nil {
+		klog.ErrorS(err, "unable to create spoke rest http client")
+		return err
+	}
+	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, restHTTPClient)
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke rest mapper")
 		return err

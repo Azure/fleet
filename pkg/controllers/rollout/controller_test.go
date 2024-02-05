@@ -107,7 +107,7 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			queue := controllertest.Queue{Interface: workqueue.New()}
-			handleResourceSnapshot(tt.snapshot, queue)
+			handleResourceSnapshot(tt.snapshot, &queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
 				t.Errorf("handleResourceSnapshot test `%s` didn't queue the object when it should enqueue", name)
 			}
@@ -143,7 +143,7 @@ func TestReconcilerHandleResourceBinding(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			queue := controllertest.Queue{Interface: workqueue.New()}
-			handleResourceBinding(tt.resourceBinding, queue)
+			handleResourceBinding(tt.resourceBinding, &queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
 				t.Errorf("handleResourceBinding test `%s` didn't queue the object when it should enqueue", name)
 			}

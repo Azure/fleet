@@ -174,8 +174,7 @@ func TestHandleV1Alpha1MemberCluster(t *testing.T) {
 	scheme := runtime.NewScheme()
 	err = fleetv1alpha1.AddToScheme(scheme)
 	assert.Nil(t, err)
-	decoder, err := admission.NewDecoder(scheme)
-	assert.Nil(t, err)
+	decoder := admission.NewDecoder(scheme)
 
 	testCases := map[string]struct {
 		req               admission.Request
@@ -461,8 +460,7 @@ func TestHandleMemberCluster(t *testing.T) {
 	scheme := runtime.NewScheme()
 	err = fleetv1alpha1.AddToScheme(scheme)
 	assert.Nil(t, err)
-	decoder, err := admission.NewDecoder(scheme)
-	assert.Nil(t, err)
+	decoder := admission.NewDecoder(scheme)
 
 	testCases := map[string]struct {
 		req               admission.Request
