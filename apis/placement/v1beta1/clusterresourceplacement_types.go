@@ -471,8 +471,8 @@ type Toleration struct {
 	Key string `json:"key,omitempty"`
 	// Operator represents a key's relationship to the value.
 	// Valid operators are Exists and Equal. Defaults to Equal.
-	// Exists is equivalent to wildcard for value, so that a pod can
-	// tolerate all taints of a particular category.
+	// Exists is equivalent to wildcard for value, so that a
+	// ClusterResourcePlacement can tolerate all taints of a particular category.
 	// +kubebuilder:default=Equal
 	// +kubebuilder:validation:Enum=Equal;Exists
 	// +optional
