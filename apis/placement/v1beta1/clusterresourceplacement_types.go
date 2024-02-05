@@ -469,6 +469,7 @@ type Toleration struct {
 	// If the key is empty, operator must be Exists; this combination means to match all values and all keys.
 	// +optional
 	Key string `json:"key,omitempty"`
+
 	// Operator represents a key's relationship to the value.
 	// Valid operators are Exists and Equal. Defaults to Equal.
 	// Exists is equivalent to wildcard for value, so that a
@@ -477,10 +478,12 @@ type Toleration struct {
 	// +kubebuilder:validation:Enum=Equal;Exists
 	// +optional
 	Operator corev1.TolerationOperator `json:"operator,omitempty"`
+
 	// Value is the taint value the toleration matches to.
 	// If the operator is Exists, the value should be empty, otherwise just a regular string.
 	// +optional
 	Value string `json:"value,omitempty"`
+
 	// Effect indicates the taint effect to match. Empty means match all taint effects.
 	// When specified, only allowed value is NoSchedule.
 	// +kubebuilder:validation:Enum=NoSchedule

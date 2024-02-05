@@ -81,9 +81,11 @@ type Taint struct {
 	// The taint key to be applied to a MemberCluster.
 	// +required
 	Key string `json:"key"`
+
 	// The taint value corresponding to the taint key.
 	// +optional
 	Value string `json:"value,omitempty"`
+
 	// The effect of the taint on ClusterResourcePlacements that do not tolerate the taint.
 	// Only NoSchedule is supported.
 	// +kubebuilder:validation:Enum=NoSchedule
