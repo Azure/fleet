@@ -71,9 +71,9 @@ type Options struct {
 	// ConcurrentResourceChangeSyncs is the number of resource change reconcilers that are
 	// allowed to sync concurrently.
 	ConcurrentResourceChangeSyncs int
-	// ConcurrentMemberClusterSyncs is the number of `memberCluster` reconcilers that are
-	// allowed to sync concurrently.
-	ConcurrentMemberClusterSyncs int
+	// ConcurrentRolloutSyncs is the number of concurrent rollout related reconcilers (rollout,override,workgenerator)
+	// that are allowed to sync concurrently.
+	ConcurrentRolloutSyncs int
 	// RateLimiterOpts is the ratelimit parameters for the work queue
 	RateLimiterOpts RateLimitOptions
 	// EnableV1Alpha1APIs enables the agents to watch the v1alpha1 CRs.
@@ -93,7 +93,7 @@ func NewOptions() *Options {
 		},
 		ConcurrentClusterPlacementSyncs: 1,
 		ConcurrentResourceChangeSyncs:   1,
-		ConcurrentMemberClusterSyncs:    1,
+		ConcurrentRolloutSyncs:          1,
 		EnableV1Alpha1APIs:              true,
 	}
 }
@@ -131,7 +131,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 300*time.Second, "Base frequency the informers are resynced.")
 	flags.IntVar(&o.ConcurrentClusterPlacementSyncs, "concurrent-cluster-placement-syncs", 1, "The number of cluster placement reconcilers to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
-	flags.IntVar(&o.ConcurrentMemberClusterSyncs, "concurrent-member-cluster-syncs", 1, "The number of member cluster reconcilers that are allowed to run concurrently.")
+	flags.IntVar(&o.ConcurrentRolloutSyncs, "concurrent-rollout-syncs", 1, "The number of rollout related reconcilers that are allowed to run concurrently.")
 	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
 	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
 

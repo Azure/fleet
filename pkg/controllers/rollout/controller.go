@@ -20,9 +20,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	ctrl "sigs.k8s.io/controller-runtime"
+	controllerRuntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -38,12 +39,13 @@ import (
 // Reconciler recomputes the cluster resource binding.
 type Reconciler struct {
 	client.Client
-	UncachedReader client.Reader
-	recorder       record.EventRecorder
+	UncachedReader          client.Reader
+	MaxConcurrentReconciles int
+	recorder                record.EventRecorder
 }
 
 // Reconcile triggers a single binding reconcile round.
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req controllerRuntime.Request) (controllerRuntime.Result, error) {
 	startTime := time.Now()
 	crpName := req.NamespacedName.Name
 	klog.V(2).InfoS("Start to rollout the bindings", "clusterResourcePlacement", crpName)
@@ -58,22 +60,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: crpName}, &crp); err != nil {
 		if errors.IsNotFound(err) {
 			klog.V(4).InfoS("Ignoring NotFound clusterResourcePlacement", "clusterResourcePlacement", crpName)
-			return ctrl.Result{}, nil
+			return controllerRuntime.Result{}, nil
 		}
 		klog.ErrorS(err, "Failed to get clusterResourcePlacement", "clusterResourcePlacement", crpName)
-		return ctrl.Result{}, controller.NewAPIServerError(true, err)
+		return controllerRuntime.Result{}, controller.NewAPIServerError(true, err)
 	}
 	// check that the crp is not being deleted
 	if crp.DeletionTimestamp != nil {
 		klog.V(2).InfoS("Ignoring clusterResourcePlacement that is being deleted", "clusterResourcePlacement", crpName)
-		return ctrl.Result{}, nil
+		return controllerRuntime.Result{}, nil
 	}
 
 	// check that it's actually rollingUpdate strategy
 	// TODO: support the rollout all at once type of RolloutStrategy
 	if crp.Spec.Strategy.Type != fleetv1beta1.RollingUpdateRolloutStrategyType {
 		klog.V(2).InfoS("Ignoring clusterResourcePlacement with non-rolling-update strategy", "clusterResourcePlacement", crpName)
-		return ctrl.Result{}, nil
+		return controllerRuntime.Result{}, nil
 	}
 
 	// list all the bindings associated with the clusterResourcePlacement
@@ -85,7 +87,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.UncachedReader.List(ctx, bindingList, crpLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list all the bindings associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
-		return ctrl.Result{}, controller.NewAPIServerError(false, err)
+		return controllerRuntime.Result{}, controller.NewAPIServerError(false, err)
 	}
 	// take a deep copy of the bindings so that we can safely modify them
 	allBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0, len(bindingList.Items))
@@ -96,12 +98,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// handle the case that a cluster was unselected by the scheduler and then selected again but the unselected binding is not completely deleted yet
 	wait, err := waitForResourcesToCleanUp(allBindings, &crp)
 	if err != nil {
-		return ctrl.Result{}, err
+		return controllerRuntime.Result{}, err
 	}
 	if wait {
 		// wait for the deletion to finish
 		klog.V(2).InfoS("Found multiple bindings pointing to the same cluster, wait for the deletion to finish", "clusterResourcePlacement", crpName)
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		return controllerRuntime.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
 	// find the latest clusterResourceSnapshot.
@@ -109,7 +111,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err != nil {
 		klog.ErrorS(err, "Failed to find the latest clusterResourceSnapshot for the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
-		return ctrl.Result{}, err
+		return controllerRuntime.Result{}, err
 	}
 	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
 
@@ -118,14 +120,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
 	if err = validator.ValidateClusterResourcePlacement(&crp); err != nil {
 		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)
-		return ctrl.Result{}, controller.NewUnexpectedBehaviorError(err)
+		return controllerRuntime.Result{}, controller.NewUnexpectedBehaviorError(err)
 	}
 
 	// pick the bindings to be updated according to the rollout plan
 	toBeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, &crp)
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
-		return ctrl.Result{}, nil
+		return controllerRuntime.Result{}, nil
 	}
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings))
 
@@ -134,7 +136,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// to avoid the case that the rollout process stalling because the time based binding readiness does not trigger any event.
 	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch the next ready one early.
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
-	return ctrl.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
+	return controllerRuntime.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
 }
 
@@ -458,9 +460,10 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 // SetupWithManager sets up the rollout controller with the Manager.
 // The rollout controller watches resource snapshots and resource bindings.
 // It reconciles on the CRP when a new resource resourceBinding is created or an existing resource binding is created/updated.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr controllerRuntime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("rollout-controller")
-	return ctrl.NewControllerManagedBy(mgr).Named("rollout_controller").
+	return controllerRuntime.NewControllerManagedBy(mgr).Named("rollout_controller").
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // bump the number of concurrent reconciles
 		Watches(&source.Kind{Type: &fleetv1beta1.ClusterResourceSnapshot{}}, handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceSnapshot create event", "resourceSnapshot", klog.KObj(e.Object))

@@ -202,8 +202,9 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		// Set up  a new controller to do rollout resources according to CRP rollout strategy
 		klog.Info("Setting up rollout controller")
 		if err := (&rollout.Reconciler{
-			Client:         mgr.GetClient(),
-			UncachedReader: mgr.GetAPIReader(),
+			Client:                  mgr.GetClient(),
+			UncachedReader:          mgr.GetAPIReader(),
+			MaxConcurrentReconciles: opts.ConcurrentRolloutSyncs,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
 			return err
@@ -212,7 +213,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		// Set up the work generator
 		klog.Info("Setting up work generator")
 		if err := (&workgenerator.Reconciler{
-			Client: mgr.GetClient(),
+			Client:                  mgr.GetClient(),
+			MaxConcurrentReconciles: opts.ConcurrentRolloutSyncs,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up work generator")
 			return err
