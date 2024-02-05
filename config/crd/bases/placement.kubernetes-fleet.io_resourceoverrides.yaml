@@ -17,7 +17,7 @@ spec:
     singular: resourceoverride
   scope: Namespaced
   versions:
-  - name: v1alpah1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ResourceOverride defines a group of override policies about how

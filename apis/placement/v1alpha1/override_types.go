@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1alpah1
+package v1alpha1
 
 import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"

@@ -17,7 +17,7 @@ spec:
     singular: clusterresourceoverride
   scope: Cluster
   versions:
-  - name: v1alpah1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ClusterResourceOverride defines a group of override policies
