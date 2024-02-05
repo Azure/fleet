@@ -258,7 +258,8 @@ spec:
                     - PickFixed
                     type: string
                   tolerations:
-                    description: If specified, the ClusterResourcePlacement's tolerations.
+                    description: If specified, the ClusterResourcePlacement's Tolerations.
+                      Tolerations cannot be updated or deleted.
                     items:
                       description: Toleration allows ClusterResourcePlacement to tolerate
                         any taint that matches the triple <key,value,effect> using
