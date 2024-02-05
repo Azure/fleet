@@ -284,7 +284,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			hubMgr.GetClient(),
 			spokeDynamicClient,
 			memberMgr.GetClient(),
-			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Cache.Namespaces[0])
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
 			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "work")
@@ -304,7 +304,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			hubMgr.GetClient(),
 			spokeDynamicClient,
 			memberMgr.GetClient(),
-			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Cache.Namespaces[0])
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "work")

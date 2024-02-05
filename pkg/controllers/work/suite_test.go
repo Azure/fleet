@@ -108,7 +108,7 @@ func createControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_controller"),
 		maxWorkConcurrency,
-		opts.Namespace,
+		opts.Cache.Namespaces[0],
 	)
 
 	if err = workController.SetupWithManager(hubMgr); err != nil {
