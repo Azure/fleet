@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -85,6 +86,13 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	opts := ctrl.Options{
 		Scheme: scheme.Scheme,
+		// The ctrl.Options.Namespace field has been deprecated; to keep behaviors consistent,
+		// here the it sets an empty string, as it is the value that the test configuration
+		// reads when the Namespace field deprecation has not happened (i.e., in the original
+		// setup the work controller reconciles objects in all namespaces).
+		Cache: cache.Options{
+			Namespaces: []string{""},
+		},
 	}
 	k8sClient, err = client.New(cfg, client.Options{
 		Scheme: scheme.Scheme,
