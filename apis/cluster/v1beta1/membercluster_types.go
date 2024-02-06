@@ -55,6 +55,14 @@ type MemberClusterSpec struct {
 	Taints []Taint `json:"taints,omitempty"`
 }
 
+// Metric is the observed value of a non-resource metric.
+type Metric struct {
+	// The name of the metric; it should be a valid Kubernetes label name.
+	Name string `json:"name"`
+	// The observed value of the metric; it should be a sortable numeric.
+	Value string `json:"value"`
+}
+
 // MemberClusterStatus defines the observed status of MemberCluster.
 type MemberClusterStatus struct {
 	// +patchMergeKey=type
@@ -65,6 +73,9 @@ type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for the member cluster.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// Metrics is an array of non-resource metrics observed for the member cluster.
+	Metrics []Metric `json:"metrics,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional

@@ -225,11 +225,122 @@ type PreferredClusterSelector struct {
 	Preference ClusterSelectorTerm `json:"preference"`
 }
 
+// InterpolationOrder is the order where Fleet should perform linear interpolation
+// for weights in a preferred range.
+// +enum
+type InterpolationOrder string
+
+const (
+	// FromMinimum instructs Fleet to perform linear interpolation of weights starting
+	// from the minimum value, i.e., when the minimum value is most preferred.
+	//
+	// For example, for a preferred range [10, 30] with a minimum weight of 10 and a maximum
+	// weight of 100, Fleet will assign:
+	// * a weight of 100 to the cluster with the minimum value in the range; and
+	// * a weight of 10 to the cluster with the maximum value in the range; and
+	// * a weight of 37 to the cluster with a value of 16 in the range.
+	//
+	//   It is calculated using the formula below:
+	//   100-(16-10)/(30-10)*(100-10) = 73
+	FromMinimum InterpolationOrder = "FromMinimum"
+	// FromMaximum instructs Fleet to perform linear interpolation of weights starting
+	// from the maximum value, i.e., when the maximum value is most preferred.
+	//
+	// For example, for a preferred range [10, 30] with a minimum weight of 10 and a maximum
+	// weight of 100, Fleet will assign:
+	// * a weight of 10 to the cluster with the minimum value in the range; and
+	// * a weight of 100 to the cluster with the maximum value in the range; and
+	// * a weight of 37 to the cluster with a value of 16 in the range.
+	//
+	//   It is calculated using the formula below:
+	//   10+(16-10)/(30-10)*(100-10) = 37
+	FromMaximum InterpolationOrder = "FromMaximum"
+	// DoNotInterpolate instructs Fleet not to perform linear interpolation; when this
+	// option is used, alls clusters with a value in the preferred range will be assigned
+	// the same weight.
+	//
+	// This is the default option.
+	DoNotInterpolate InterpolationOrder = "DoNotInterpolate"
+)
+
+// MetricRange describes a required or preferred range for a metric.
+type MetricRange struct {
+	// Minimum is the minimum value of the range.
+	// If this value is not specified, the smallest observed value of the metric will
+	// be used.
+	// At least one of the minimum or maximum value must be specified.
+	// +optional
+	Minimum string `json:"minimum"`
+	// Maximum is the maximum value of the range.
+	// If this value is not specified, the largest observed value of the metric will be
+	// used.
+	// At least one of the minimum of maximum value must be specified.
+	// +optional
+	Maximum string `json:"maximum"`
+	// Interpolate is the interpolation order for the metric range.
+	//
+	// Specify this value if you would like Fleet to perform linear interpolation of weights
+	// for clusters with a metric value in the given range.
+	//
+	// Use the FromMinimum option if you would like to perfer clusters with a lower
+	// metric value; on the contrast, use the FromMaximum option if you would like to
+	// prefer clusters with a higher metric value.
+	//
+	// The default option is DoNotInterpolate, which means that all clusters with a
+	// metric value in the preferred range will be assigned the same weight.
+	// +optional
+	// +kubebuilder:default=DoNotInterpolate
+	Interpolate InterpolationOrder `json:"interpolate"`
+	// MinimumWeight is the minimum weight to assign to a cluster in the perferred range.
+	//
+	// This value is only used when linear interpolation is enabled, i.e., the value of
+	// Interpolate is set to FromMinimum or FromMaximum.
+	//
+	// When this field is set and interpolation starts from the minimum, the minimum weight
+	// will be assigned to the cluster with the maximum value in the range; and when
+	// interpolation starts from the maximum, the minimum weight will be assigned to the
+	// cluster with the minimum value in the range.
+	//
+	// Note that if you do not specify this value but choose to use weight interpolation,
+	// Fleet will use 0 as the minimum weight. Also, this value must be smaller than the
+	// weight value.
+	//
+	// +optional
+	// +kubebuilder:default=0
+	MinimumWeight int32 `json:"minimumWeight"`
+}
+
+// MetricMatcher is a specific metric requirement when picking clusters for resource placement.
+type MetricMatcher struct {
+	// Name is the name of the metric; it should be a Kubernetes label name.
+	// +required
+	Name string `json:"name"`
+	// Range are the required or preferred range for the metric.
+	// +required
+	Ranges []MetricRange `json:"range"`
+}
+
+// MetricSelector helps user specify metric requirements when picking clusters for resource
+// placement.
+type MetricSelector struct {
+	// MatchMetrics is an array of MetricMatchers. The requirements are AND'd.
+	// +required
+	MatchMetrics []MetricMatcher `json:"matchMetrics"`
+}
+
 // ClusterSelectorTerm contains the requirements to select clusters.
 type ClusterSelectorTerm struct {
-	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected.
+	// LabelSelector is a label query over all the joined member clusters. Clusters matching
+	// the query are selected.
+	// If you specify both label and metric selectors in the same term, the results are AND'd.
 	// +required
 	LabelSelector metav1.LabelSelector `json:"labelSelector"`
+
+	// MetricSelector is a metric query over all joined member clusters. Clusters matching
+	// the query are selected.
+	// If you specify both label and metric selectors in the same term, the results are AND'd.
+	// +optional
+	MetricSelector MetricSelector `json:"metricSelector"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.
