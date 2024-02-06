@@ -161,8 +161,18 @@ spec:
                                                   label name.
                                                 type: string
                                               range:
-                                                description: Range are the required
+                                                description: "Range are the required
                                                   or preferred range for the metric.
+                                                  \n You may choose to specify multiple
+                                                  required/preferred ranges for a
+                                                  metric; these requirements will
+                                                  be OR'd. However, when weight interpolation
+                                                  is enabled, only one range can be
+                                                  specified; for cases where you'd
+                                                  like to use both weight interpolation
+                                                  and multiple preferred ranges for
+                                                  the same metric, consider specifying
+                                                  multiple cluster selector terms."
                                                 items:
                                                   description: MetricRange describes
                                                     a required or preferred range
@@ -244,11 +254,7 @@ spec:
                                             - range
                                             type: object
                                           type: array
-                                      required:
-                                      - matchMetrics
                                       type: object
-                                  required:
-                                  - labelSelector
                                   type: object
                                 weight:
                                   description: Weight associated with matching the
@@ -356,8 +362,18 @@ spec:
                                                   label name.
                                                 type: string
                                               range:
-                                                description: Range are the required
+                                                description: "Range are the required
                                                   or preferred range for the metric.
+                                                  \n You may choose to specify multiple
+                                                  required/preferred ranges for a
+                                                  metric; these requirements will
+                                                  be OR'd. However, when weight interpolation
+                                                  is enabled, only one range can be
+                                                  specified; for cases where you'd
+                                                  like to use both weight interpolation
+                                                  and multiple preferred ranges for
+                                                  the same metric, consider specifying
+                                                  multiple cluster selector terms."
                                                 items:
                                                   description: MetricRange describes
                                                     a required or preferred range
@@ -439,11 +455,7 @@ spec:
                                             - range
                                             type: object
                                           type: array
-                                      required:
-                                      - matchMetrics
                                       type: object
-                                  required:
-                                  - labelSelector
                                   type: object
                                 maxItems: 10
                                 type: array

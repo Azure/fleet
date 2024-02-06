@@ -316,6 +316,12 @@ type MetricMatcher struct {
 	// +required
 	Name string `json:"name"`
 	// Range are the required or preferred range for the metric.
+	//
+	// You may choose to specify multiple required/preferred ranges for a metric; these
+	// requirements will be OR'd. However, when weight interpolation is enabled,
+	// only one range can be specified; for cases where you'd like to use both
+	// weight interpolation and multiple preferred ranges for the same metric,
+	// consider specifying multiple cluster selector terms.
 	// +required
 	Ranges []MetricRange `json:"range"`
 }
@@ -324,7 +330,7 @@ type MetricMatcher struct {
 // placement.
 type MetricSelector struct {
 	// MatchMetrics is an array of MetricMatchers. The requirements are AND'd.
-	// +required
+	// +optional
 	MatchMetrics []MetricMatcher `json:"matchMetrics"`
 }
 
@@ -333,7 +339,7 @@ type ClusterSelectorTerm struct {
 	// LabelSelector is a label query over all the joined member clusters. Clusters matching
 	// the query are selected.
 	// If you specify both label and metric selectors in the same term, the results are AND'd.
-	// +required
+	// +optional
 	LabelSelector metav1.LabelSelector `json:"labelSelector"`
 
 	// MetricSelector is a metric query over all joined member clusters. Clusters matching
