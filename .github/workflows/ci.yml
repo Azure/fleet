@@ -50,7 +50,7 @@ jobs:
         run: make test
 
       - name: Upload Codecov report
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
            ## Repository upload token - get it from codecov.io. Required only for private repositories
           token: ${{ secrets.CODECOV_TOKEN }}
