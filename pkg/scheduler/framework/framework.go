@@ -681,11 +681,11 @@ func (f *framework) createBindings(ctx context.Context, toCreate []*placementv1b
 						}
 						klog.ErrorS(err, "Failed to create a new binding", "clusterResourceBinding", klog.KObj(newBinding))
 					}
-					return controller.NewAPIServerError(false, err)
+					return err
 				})
 		})
 	}
-	return errs.Wait()
+	return controller.NewAPIServerError(false, errs.Wait())
 }
 
 // patchBindings patches a list of existing bindings using JSON patch.
@@ -706,11 +706,11 @@ func (f *framework) patchBindings(ctx context.Context, toPatch []*bindingWithPat
 					if err != nil {
 						klog.ErrorS(err, "Failed to patch a binding", "clusterResourceBinding", klog.KObj(patchBinding.updated))
 					}
-					return controller.NewUpdateIgnoreConflictError(err)
+					return err
 				})
 		})
 	}
-	return errs.Wait()
+	return controller.NewUpdateIgnoreConflictError(errs.Wait())
 }
 
 // updatePolicySnapshotStatusFromBindings updates the policy snapshot status, in accordance with the list of
