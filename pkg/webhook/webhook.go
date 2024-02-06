@@ -100,12 +100,13 @@ const (
 var (
 	admissionReviewVersions = []string{admv1.SchemeGroupVersion.Version, admv1beta1.SchemeGroupVersion.Version}
 
-	ignoreFailurePolicy   = admv1.Ignore
-	failFailurePolicy     = admv1.Fail
-	sideEffortsNone       = admv1.SideEffectClassNone
-	namespacedScope       = admv1.NamespacedScope
-	clusterScope          = admv1.ClusterScope
-	webhookTimeoutSeconds = pointer.Int32(1)
+	ignoreFailurePolicy      = admv1.Ignore
+	failFailurePolicy        = admv1.Fail
+	sideEffortsNone          = admv1.SideEffectClassNone
+	namespacedScope          = admv1.NamespacedScope
+	clusterScope             = admv1.ClusterScope
+	oneSecondWebhookTimeout  = pointer.Int32(1)
+	fiveSecondWebhookTimeout = pointer.Int32(5)
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
@@ -236,6 +237,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{podResourceName}, &namespacedScope),
 				},
 			},
+			TimeoutSeconds: fiveSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1alpha1.validating",
@@ -252,6 +254,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{fleetv1alpha1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
+			TimeoutSeconds: fiveSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.clusterresourceplacementv1beta1.validating",
@@ -268,6 +271,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{placementv1beta1.GroupVersion.Group}, []string{placementv1beta1.GroupVersion.Version}, []string{placementv1beta1.ClusterResourcePlacementResource}, &clusterScope),
 				},
 			},
+			TimeoutSeconds: fiveSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.replicaset.validating",
@@ -283,6 +287,7 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 					Rule: createRule([]string{appsv1.SchemeGroupVersion.Group}, []string{appsv1.SchemeGroupVersion.Version}, []string{replicaSetResourceName}, &namespacedScope),
 				},
 			},
+			TimeoutSeconds: fiveSecondWebhookTimeout,
 		},
 	}
 
@@ -415,7 +420,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 					Rule:       createRule([]string{apiextensionsv1.SchemeGroupVersion.Group}, []string{apiextensionsv1.SchemeGroupVersion.Version}, []string{crdResourceName}, &clusterScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
+			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.membercluster.validating",
@@ -429,7 +434,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 					Rule:       createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
+			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.v1alpha1.membercluster.validating",
@@ -443,7 +448,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 					Rule:       createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{memberClusterResourceName, memberClusterResourceName + "/status"}, &clusterScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
+			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.fleetmembernamespacedresources.validating",
@@ -453,7 +458,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			AdmissionReviewVersions: admissionReviewVersions,
 			NamespaceSelector:       fleetMemberNamespaceSelector,
 			Rules:                   namespacedResourcesRules,
-			TimeoutSeconds:          webhookTimeoutSeconds,
+			TimeoutSeconds:          oneSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.fleetsystemnamespacedresources.validating",
@@ -463,7 +468,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			AdmissionReviewVersions: admissionReviewVersions,
 			NamespaceSelector:       fleetSystemNamespaceSelector,
 			Rules:                   namespacedResourcesRules,
-			TimeoutSeconds:          webhookTimeoutSeconds,
+			TimeoutSeconds:          oneSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.kubenamespacedresources.validating",
@@ -473,7 +478,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			AdmissionReviewVersions: admissionReviewVersions,
 			NamespaceSelector:       kubeNamespaceSelector,
 			Rules:                   namespacedResourcesRules,
-			TimeoutSeconds:          webhookTimeoutSeconds,
+			TimeoutSeconds:          oneSecondWebhookTimeout,
 		},
 		{
 			Name:                    "fleet.namespace.validating",
@@ -487,7 +492,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 					Rule:       createRule([]string{corev1.SchemeGroupVersion.Group}, []string{corev1.SchemeGroupVersion.Version}, []string{namespaceResourceName}, &clusterScope),
 				},
 			},
-			TimeoutSeconds: webhookTimeoutSeconds,
+			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 	}
 
