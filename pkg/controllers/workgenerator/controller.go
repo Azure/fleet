@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	controllerRuntime "sigs.k8s.io/controller-runtime"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
@@ -66,12 +66,13 @@ var (
 // TODO: incorporate an overriding policy if one exists
 type Reconciler struct {
 	client.Client
+	// the max number of concurrent reconciles per controller.
 	MaxConcurrentReconciles int
 	recorder                record.EventRecorder
 }
 
 // Reconcile triggers a single binding reconcile round.
-func (r *Reconciler) Reconcile(ctx context.Context, req controllerRuntime.Request) (controllerRuntime.Result, error) {
+func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Request) (controllerruntime.Result, error) {
 	klog.V(2).InfoS("Start to reconcile a ClusterResourceBinding", "resourceBinding", req.Name)
 	startTime := time.Now()
 	bindingRef := klog.KRef(req.Namespace, req.Name)
@@ -82,10 +83,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerRuntime.Reques
 	var resourceBinding fleetv1beta1.ClusterResourceBinding
 	if err := r.Client.Get(ctx, req.NamespacedName, &resourceBinding); err != nil {
 		if apierrors.IsNotFound(err) {
-			return controllerRuntime.Result{}, nil
+			return controllerruntime.Result{}, nil
 		}
 		klog.ErrorS(err, "Failed to get the resource binding", "resourceBinding", bindingRef)
-		return controllerRuntime.Result{}, controller.NewAPIServerError(true, err)
+		return controllerruntime.Result{}, controller.NewAPIServerError(true, err)
 	}
 
 	// handle the case the binding is deleting
@@ -96,12 +97,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerRuntime.Reques
 	// we only care about the bound bindings. We treat unscheduled bindings as bound until they are deleted.
 	if resourceBinding.Spec.State != fleetv1beta1.BindingStateBound && resourceBinding.Spec.State != fleetv1beta1.BindingStateUnscheduled {
 		klog.V(2).InfoS("Skip reconcile clusterResourceBinding that is not bound", "state", resourceBinding.Spec.State, "resourceBinding", bindingRef)
-		return controllerRuntime.Result{}, nil
+		return controllerruntime.Result{}, nil
 	}
 
 	// make sure that the resource binding obj has a finalizer
 	if err := r.ensureFinalizer(ctx, &resourceBinding); err != nil {
-		return controllerRuntime.Result{}, err
+		return controllerruntime.Result{}, err
 	}
 
 	workUpdated := false
@@ -146,7 +147,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerRuntime.Reques
 	// update the resource binding status
 	if updateErr := r.Client.Status().Update(ctx, &resourceBinding); updateErr != nil {
 		klog.ErrorS(updateErr, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
-		return controllerRuntime.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
+		return controllerruntime.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 	}
 	if errors.Is(syncErr, errResourceSnapshotNotFound) {
 		// This error usually indicates that the resource snapshot is deleted since the rollout controller which fills
@@ -155,19 +156,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerRuntime.Reques
 		// However, this error can happen when the resource snapshot exists during the IT test when the client that creates
 		// the resource snapshot is not the same as the controller client so that we need to retry in this case.
 		// This error can also happen if the user uses a customized rollout controller that does not share the same informer cache with this controller.
-		return controllerRuntime.Result{Requeue: true}, nil
+		return controllerruntime.Result{Requeue: true}, nil
 	}
 	// requeue if we did an update, or we failed to sync the work
-	return controllerRuntime.Result{Requeue: workUpdated}, syncErr
+	return controllerruntime.Result{Requeue: workUpdated}, syncErr
 }
 
 // handleDelete handle a deleting binding
-func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (controllerRuntime.Result, error) {
+func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (controllerruntime.Result, error) {
 	klog.V(4).InfoS("Start to handle deleting resource binding", "resourceBinding", klog.KObj(resourceBinding))
 	// list all the corresponding works if exist
 	works, err := r.listAllWorksAssociated(ctx, resourceBinding)
 	if err != nil {
-		return controllerRuntime.Result{}, err
+		return controllerruntime.Result{}, err
 	}
 
 	// delete all the listed works
@@ -178,7 +179,7 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 		work := works[workName]
 
 		if err := r.Client.Delete(ctx, work); err != nil && !apierrors.IsNotFound(err) {
-			return controllerRuntime.Result{}, controller.NewAPIServerError(false, err)
+			return controllerruntime.Result{}, controller.NewAPIServerError(false, err)
 		}
 	}
 
@@ -187,15 +188,15 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 		controllerutil.RemoveFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
 		if err = r.Client.Update(ctx, resourceBinding); err != nil {
 			klog.ErrorS(err, "Failed to remove the work finalizer from resource binding", "resourceBinding", klog.KObj(resourceBinding))
-			return controllerRuntime.Result{}, controller.NewUpdateIgnoreConflictError(err)
+			return controllerruntime.Result{}, controller.NewUpdateIgnoreConflictError(err)
 		}
 		klog.V(2).InfoS("The resource binding is deleted", "resourceBinding", klog.KObj(resourceBinding))
-		return controllerRuntime.Result{}, nil
+		return controllerruntime.Result{}, nil
 	}
 	klog.V(2).InfoS("The resource binding still has undeleted work", "resourceBinding", klog.KObj(resourceBinding),
 		"number of associated work", len(works))
 	// we watch the work objects deleting events, so we can afford to wait a bit longer here as a fallback case.
-	return controllerRuntime.Result{RequeueAfter: 30 * time.Second}, nil
+	return controllerruntime.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 // ensureFinalizer makes sure that the resourceSnapshot CR has a finalizer on it.
@@ -605,10 +606,10 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 
 // SetupWithManager sets up the controller with the Manager.
 // It watches binding events and also update/delete events for work.
-func (r *Reconciler) SetupWithManager(mgr controllerRuntime.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("work generator")
-	return controllerRuntime.NewControllerManagedBy(mgr).
-		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // bump the number of concurrent reconciles
+	return controllerruntime.NewControllerManagedBy(mgr).
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&source.Kind{Type: &fleetv1beta1.Work{}}, &handler.Funcs{
 			// we care about work delete event as we want to know when a work is deleted so that we can
