@@ -51,6 +51,8 @@ const (
 
 	resourceChangeControllerName = "resource-change-controller"
 	mcPlacementControllerName    = "memberCluster-placement-controller"
+
+	schedulerQueueName = "scheduler-queue"
 )
 
 var (
@@ -222,7 +224,9 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		klog.Info("Setting up scheduler")
 		defaultProfile := profile.NewDefaultProfile()
 		defaultFramework := framework.NewFramework(defaultProfile, mgr)
-		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue()
+		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue(
+			queue.WithName(schedulerQueueName),
+		)
 		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr)
 		klog.Info("Starting the scheduler")
 		// Scheduler must run in a separate goroutine as Run() is a blocking call.
