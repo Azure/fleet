@@ -1,0 +1,282 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.4
+  name: clusterresourceoverridesnapshots.placement.kubernetes-fleet.io
+spec:
+  group: placement.kubernetes-fleet.io
+  names:
+    categories:
+    - fleet
+    - fleet-placement
+    kind: ClusterResourceOverrideSnapshot
+    listKind: ClusterResourceOverrideSnapshotList
+    plural: clusterresourceoverridesnapshots
+    singular: clusterresourceoverridesnapshot
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: 'ClusterResourceOverrideSnapshot is used to store a snapshot
+          of ClusterResourceOverride. Its spec is immutable. We assign an ever-increasing
+          index for snapshots. The naming convention of a ClusterResourceOverrideSnapshot
+          is {ClusterResourceOverride}-{resourceIndex}. resourceIndex will begin with
+          0. Each snapshot MUST have the following labels: - `OverrideTrackingLabel`
+          which points to its owner ClusterResourceOverride. - `IsLatestSnapshotLabel`
+          which indicates whether the snapshot is the latest one.'
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: The desired state of ClusterResourceOverrideSnapshotSpec.
+            properties:
+              overrideHash:
+                description: OverrideHash is the sha-256 hash value of the OverrideSpec
+                  field.
+                format: byte
+                type: string
+              overrideSpec:
+                description: OverrideSpec stores the spec of ClusterResourceOverride.
+                properties:
+                  clusterResourceSelectors:
+                    description: ClusterResourceSelectors is an array of selectors
+                      used to select cluster scoped resources. The selectors are `ORed`.
+                      If a namespace is selected, ALL the resources under the namespace
+                      are selected automatically. LabelSelector is not supported.
+                      You can have 1-20 selectors. We only support Name selector for
+                      now.
+                    items:
+                      description: ClusterResourceSelector is used to select cluster
+                        scoped resources as the target resources to be placed. If
+                        a namespace is selected, ALL the resources under the namespace
+                        are selected automatically. All the fields are `ANDed`. In
+                        other words, a resource must match all the fields to be selected.
+                      properties:
+                        group:
+                          description: Group name of the cluster-scoped resource.
+                            Use an empty string to select resources under the core
+                            API group (e.g., namespaces).
+                          type: string
+                        kind:
+                          description: 'Kind of the cluster-scoped resource. Note:
+                            When `Kind` is `namespace`, ALL the resources under the
+                            selected namespaces are selected.'
+                          type: string
+                        labelSelector:
+                          description: A label query over all the cluster-scoped resources.
+                            Resources matching the query are selected. Note that namespace-scoped
+                            resources can't be selected even if they match the query.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: A label selector requirement is a selector
+                                  that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                      This array is replaced during a strategic merge
+                                      patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: matchLabels is a map of {key,value} pairs.
+                                A single {key,value} in the matchLabels map is equivalent
+                                to an element of matchExpressions, whose key field
+                                is "key", the operator is "In", and the values array
+                                contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        name:
+                          description: Name of the cluster-scoped resource.
+                          type: string
+                        version:
+                          description: Version of the cluster-scoped resource.
+                          type: string
+                      required:
+                      - group
+                      - kind
+                      - version
+                      type: object
+                    maxItems: 20
+                    minItems: 1
+                    type: array
+                  policy:
+                    description: Policy defines how to override the selected resources
+                      on the target clusters.
+                    properties:
+                      overrideRules:
+                        description: OverrideRules defines an array of override rules
+                          to be applied on the selected resources. The order of the
+                          rules determines the override order. When there are two
+                          rules selecting the same fields on the target cluster, the
+                          last one will win. You can have 1-20 rules.
+                        items:
+                          description: OverrideRule defines how to override the selected
+                            resources on the target clusters.
+                          properties:
+                            clusterSelector:
+                              description: ClusterSelectors selects the target clusters.
+                                The resources will be overridden before applying to
+                                the matching clusters. If ClusterSelector is not set,
+                                it means selecting ALL the member clusters.
+                              properties:
+                                clusterSelectorTerms:
+                                  description: ClusterSelectorTerms is a list of cluster
+                                    selector terms. The terms are `ORed`.
+                                  items:
+                                    description: ClusterSelectorTerm contains the
+                                      requirements to select clusters.
+                                    properties:
+                                      labelSelector:
+                                        description: LabelSelector is a label query
+                                          over all the joined member clusters. Clusters
+                                          matching the query are selected.
+                                        properties:
+                                          matchExpressions:
+                                            description: matchExpressions is a list
+                                              of label selector requirements. The
+                                              requirements are ANDed.
+                                            items:
+                                              description: A label selector requirement
+                                                is a selector that contains values,
+                                                a key, and an operator that relates
+                                                the key and values.
+                                              properties:
+                                                key:
+                                                  description: key is the label key
+                                                    that the selector applies to.
+                                                  type: string
+                                                operator:
+                                                  description: operator represents
+                                                    a key's relationship to a set
+                                                    of values. Valid operators are
+                                                    In, NotIn, Exists and DoesNotExist.
+                                                  type: string
+                                                values:
+                                                  description: values is an array
+                                                    of string values. If the operator
+                                                    is In or NotIn, the values array
+                                                    must be non-empty. If the operator
+                                                    is Exists or DoesNotExist, the
+                                                    values array must be empty. This
+                                                    array is replaced during a strategic
+                                                    merge patch.
+                                                  items:
+                                                    type: string
+                                                  type: array
+                                              required:
+                                              - key
+                                              - operator
+                                              type: object
+                                            type: array
+                                          matchLabels:
+                                            additionalProperties:
+                                              type: string
+                                            description: matchLabels is a map of {key,value}
+                                              pairs. A single {key,value} in the matchLabels
+                                              map is equivalent to an element of matchExpressions,
+                                              whose key field is "key", the operator
+                                              is "In", and the values array contains
+                                              only "value". The requirements are ANDed.
+                                            type: object
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                    required:
+                                    - labelSelector
+                                    type: object
+                                  maxItems: 10
+                                  type: array
+                              required:
+                              - clusterSelectorTerms
+                              type: object
+                            jsonPatchOverrides:
+                              description: JSONPatchOverrides defines a list of JSON
+                                patch override rules.
+                              items:
+                                description: JSONPatchOverride applies a JSON patch
+                                  on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
+                                properties:
+                                  operator:
+                                    description: Operator defines the operation on
+                                      the target field.
+                                    enum:
+                                    - Add
+                                    - Remove
+                                    - Replace
+                                    type: string
+                                  path:
+                                    description: 'Path defines the target location.
+                                      Note: override will fail if the resource path
+                                      does not exist.'
+                                    type: string
+                                  value:
+                                    description: Value defines the content to be applied
+                                      on the target location. Value should be empty
+                                      when operator is Remove.
+                                    type: string
+                                required:
+                                - operator
+                                - path
+                                type: object
+                              maxItems: 20
+                              minItems: 1
+                              type: array
+                          required:
+                          - jsonPatchOverrides
+                          type: object
+                        maxItems: 20
+                        minItems: 1
+                        type: array
+                    required:
+                    - overrideRules
+                    type: object
+                required:
+                - clusterResourceSelectors
+                - policy
+                type: object
+            required:
+            - overrideHash
+            - overrideSpec
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
