@@ -289,6 +289,57 @@ type RolloutStrategy struct {
 	// Rolling update config params. Present only if RolloutStrategyType = RollingUpdate.
 	// +optional
 	RollingUpdate *RollingUpdateConfig `json:"rollingUpdate,omitempty"`
+
+	// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
+	// and is owned by other appliers.
+	// +optional
+	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
+}
+
+// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
+// and is owned by other appliers.
+// Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
+// reason ApplyConflictBetweenPlacements.
+type ApplyStrategy struct {
+	// Type defines the type of strategy to use. Default to FailIfExists.
+	// +kubebuilder:default=FailIfExists
+	// +kubebuilder:validation:Enum=FailIfExists;ServerSideApply
+	// +optional
+	Type ApplyStrategyType `json:"type,omitempty"`
+
+	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
+	// +optional
+	ServerSideApplyConfig *ServerSideApplyConfig `json:"serverSideApplyConfig,omitempty"`
+}
+
+// ApplyStrategyType describes the type of the strategy used to resolve the conflict if the resource to be placed already
+// exists in the target cluster and is owned by other appliers.
+// +enum
+type ApplyStrategyType string
+
+const (
+	// ApplyStrategyTypeFailIfExists will fail to apply a resource if it already exists in the target cluster and is owned
+	// by other appliers.
+	ApplyStrategyTypeFailIfExists ApplyStrategyType = "FailIfExists"
+
+	// ApplyStrategyTypeServerSideApply will use server-side apply to resolve conflicts between the resource to be placed
+	// and the existing resource in the target cluster.
+	// Details: https://kubernetes.io/docs/reference/using-api/server-side-apply
+	ApplyStrategyTypeServerSideApply ApplyStrategyType = "ServerSideApply"
+)
+
+// ServerSideApplyConfig defines the configuration for server side apply.
+// Details: https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts
+type ServerSideApplyConfig struct {
+	// Force represents to force apply to succeed when resolving the conflicts
+	// For any conflicting fields,
+	// - If true, use the values from the resource to be applied to overwrite the values of the existing resource in the
+	// target cluster, as well as take over ownership of such fields.
+	// - If false, apply will fail with the reason ApplyConflictWithOtherApplier.
+	//
+	// For non-conflicting fields, values stay unchanged and ownership are shared between appliers.
+	// +optional
+	ForceConflicts bool `json:"force"`
 }
 
 // +enum
@@ -438,6 +489,16 @@ type ResourcePlacementStatus struct {
 	// +optional
 	ClusterName string `json:"clusterName,omitempty"`
 
+	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
+	// resources.
+	// +optional
+	ApplicableResourceOverrides []NamespacedName `json:"applicableResourceOverrides,omitempty"`
+
+	// ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
+	// the selected resources.
+	// +optional
+	ApplicableClusterResourceOverrides []string `json:"applicableClusterResourceOverrides,omitempty"`
+
 	// +kubebuilder:validation:MaxItems=100
 
 	// FailedPlacements is a list of all the resources failed to be placed to the given cluster.
@@ -511,7 +572,34 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
 	// - "False" means all the selected resources have not been synchronized under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	// To be deprecated, it will be replaced by ClusterResourcePlacementRolloutStarted and ClusterResourcePlacementWorkCreated
+	// conditions.
 	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
+
+	// ClusterResourcePlacementRolloutStartedConditionType indicates whether the selected resources start rolling out or
+	// not.
+	// Its condition status can be one of the following:
+	// - "True" means the selected resources successfully start rolling out in all scheduled clusters.
+	// - "False" means the selected resources have not been rolled out in all scheduled clusters yet.
+	ClusterResourcePlacementRolloutStartedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementRolloutStarted"
+
+	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
+	// successfully before applying to the target cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
+	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
+	// - "Unknown" means we haven't finished the override yet.
+	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
+
+	// ClusterResourcePlacementWorkCreatedConditionType indicates whether the selected resources are created under
+	// the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully created under the per-cluster namespaces
+	// (i.e., fleet-member-<member-name>) on the hub cluster.
+	// - "False" means all the selected resources have not been created under the per-cluster namespaces
+	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	ClusterResourcePlacementWorkCreatedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkCreated"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
@@ -532,6 +620,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
+	// TODO, use "Scheduled" instead.
 	ResourceScheduledConditionType ResourcePlacementConditionType = "ResourceScheduled"
 
 	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
@@ -547,13 +636,44 @@ const (
 	// - Rollout controller has decided not to create or update the resources in this cluster for now to honor the
 	// rollout strategy configurations specified in the placement.
 	// - Work is not created/updated because of the unknown reasons.
+	// To be deprecated, it will be replaced by RolloutStarted and WorkCreated conditions.
 	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+
+	// ResourceRolloutStartedConditionType indicates whether the selected resources start rolling out or
+	// not.
+	// Its condition status can be one of the following:
+	// - "True" means the selected resources successfully start rolling out in the target clusters.
+	// - "False" means the selected resources have not been rolled out in the target cluster yet to honor the rollout
+	// strategy configurations specified in the placement
+	// - "Unknown" means it is in the processing state.
+	ResourceRolloutStartedConditionType ResourcePlacementConditionType = "RolloutStarted"
+
+	// ResourceOverriddenConditionType indicates whether all the selected resources have been overridden successfully
+	// before applying to the target cluster if there is any override defined.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
+	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
+	// - "False" means some of them have failed.
+	// - "Unknown" means we haven't finished the override yet.
+	ResourceOverriddenConditionType ResourcePlacementConditionType = "Overridden"
+
+	// ResourceWorkCreatedConditionType indicates whether we have created or updated the corresponding work object(s)
+	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
+	// the placement.
+	// Its condition status can be one of the following:
+	// - "True" means we have successfully created the latest corresponding work(s) or updated the existing work(s) to
+	// the latest.
+	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
+	// yet.
+	// - "Unknown" means we haven't finished creating work yet.
+	ResourceWorkCreatedConditionType ResourcePlacementConditionType = "WorkCreated"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the apply yet.
+	// TODO: use "Applied" instead.
 	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
 )
 

@@ -455,6 +455,36 @@ spec:
                 description: The rollout strategy to use to replace existing placement
                   with new ones.
                 properties:
+                  applyStrategy:
+                    description: ApplyStrategy describes how to resolve the conflict
+                      if the resource to be placed already exists in the target cluster
+                      and is owned by other appliers.
+                    properties:
+                      serverSideApplyConfig:
+                        description: ServerSideApplyConfig defines the configuration
+                          for server side apply. It is honored only when type is ServerSideApply.
+                        properties:
+                          force:
+                            description: "Force represents to force apply to succeed
+                              when resolving the conflicts For any conflicting fields,
+                              - If true, use the values from the resource to be applied
+                              to overwrite the values of the existing resource in
+                              the target cluster, as well as take over ownership of
+                              such fields. - If false, apply will fail with the reason
+                              ApplyConflictWithOtherApplier. \n For non-conflicting
+                              fields, values stay unchanged and ownership are shared
+                              between appliers."
+                            type: boolean
+                        type: object
+                      type:
+                        default: FailIfExists
+                        description: Type defines the type of strategy to use. Default
+                          to FailIfExists.
+                        enum:
+                        - FailIfExists
+                        - ServerSideApply
+                        type: string
+                    type: object
                   rollingUpdate:
                     description: Rolling update config params. Present only if RolloutStrategyType
                       = RollingUpdate.
@@ -620,6 +650,34 @@ spec:
                   description: ResourcePlacementStatus represents the placement status
                     of selected resources for one target cluster.
                   properties:
+                    applicableClusterResourceOverrides:
+                      description: ApplicableClusterResourceOverrides contains a list
+                        of applicable ClusterResourceOverride snapshots associated
+                        with the selected resources.
+                      items:
+                        type: string
+                      type: array
+                    applicableResourceOverrides:
+                      description: ApplicableResourceOverrides contains a list of
+                        applicable ResourceOverride snapshots associated with the
+                        selected resources.
+                      items:
+                        description: NamespacedName comprises a resource name, with
+                          a mandatory namespace.
+                        properties:
+                          name:
+                            description: Name is the name of the namespaced scope
+                              resource.
+                            type: string
+                          namespace:
+                            description: Namespace is namespace of the namespaced
+                              scope resource.
+                            type: string
+                        required:
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                     clusterName:
                       description: ClusterName is the name of the cluster this resource
                         is assigned to. If it is not empty, its value should be unique

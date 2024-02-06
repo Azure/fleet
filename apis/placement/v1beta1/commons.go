@@ -81,3 +81,13 @@ const (
 	// This is used to remember if an "unscheduled" binding was moved from a "bound" state or a "scheduled" state.
 	PreviousBindingStateAnnotation = fleetPrefix + "previous-binding-state"
 )
+
+// NamespacedName comprises a resource name, with a mandatory namespace.
+type NamespacedName struct {
+	// Name is the name of the namespaced scope resource.
+	// +required
+	Name string `json:"name"`
+	// Namespace is namespace of the namespaced scope resource.
+	// +required
+	Namespace string `json:"namespace"`
+}
