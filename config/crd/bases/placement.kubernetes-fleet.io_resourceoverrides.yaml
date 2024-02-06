@@ -68,7 +68,9 @@ spec:
                                   labelSelector:
                                     description: LabelSelector is a label query over
                                       all the joined member clusters. Clusters matching
-                                      the query are selected.
+                                      the query are selected. If you specify both
+                                      label and metric selectors in the same term,
+                                      the results are AND'd.
                                     properties:
                                       matchExpressions:
                                         description: matchExpressions is a list of
@@ -118,6 +120,111 @@ spec:
                                         type: object
                                     type: object
                                     x-kubernetes-map-type: atomic
+                                  metricSelector:
+                                    description: MetricSelector is a metric query
+                                      over all joined member clusters. Clusters matching
+                                      the query are selected. If you specify both
+                                      label and metric selectors in the same term,
+                                      the results are AND'd.
+                                    properties:
+                                      matchMetrics:
+                                        description: MatchMetrics is an array of MetricMatchers.
+                                          The requirements are AND'd.
+                                        items:
+                                          description: MetricMatcher is a specific
+                                            metric requirement when picking clusters
+                                            for resource placement.
+                                          properties:
+                                            name:
+                                              description: Name is the name of the
+                                                metric; it should be a Kubernetes
+                                                label name.
+                                              type: string
+                                            range:
+                                              description: Range are the required
+                                                or preferred range for the metric.
+                                              items:
+                                                description: MetricRange describes
+                                                  a required or preferred range for
+                                                  a metric.
+                                                properties:
+                                                  interpolate:
+                                                    default: DoNotInterpolate
+                                                    description: "Interpolate is the
+                                                      interpolation order for the
+                                                      metric range. \n Specify this
+                                                      value if you would like Fleet
+                                                      to perform linear interpolation
+                                                      of weights for clusters with
+                                                      a metric value in the given
+                                                      range. \n Use the FromMinimum
+                                                      option if you would like to
+                                                      perfer clusters with a lower
+                                                      metric value; on the contrast,
+                                                      use the FromMaximum option if
+                                                      you would like to prefer clusters
+                                                      with a higher metric value.
+                                                      \n The default option is DoNotInterpolate,
+                                                      which means that all clusters
+                                                      with a metric value in the preferred
+                                                      range will be assigned the same
+                                                      weight."
+                                                    type: string
+                                                  maximum:
+                                                    description: Maximum is the maximum
+                                                      value of the range. If this
+                                                      value is not specified, the
+                                                      largest observed value of the
+                                                      metric will be used. At least
+                                                      one of the minimum of maximum
+                                                      value must be specified.
+                                                    type: string
+                                                  minimum:
+                                                    description: Minimum is the minimum
+                                                      value of the range. If this
+                                                      value is not specified, the
+                                                      smallest observed value of the
+                                                      metric will be used. At least
+                                                      one of the minimum or maximum
+                                                      value must be specified.
+                                                    type: string
+                                                  minimumWeight:
+                                                    default: 0
+                                                    description: "MinimumWeight is
+                                                      the minimum weight to assign
+                                                      to a cluster in the perferred
+                                                      range. \n This value is only
+                                                      used when linear interpolation
+                                                      is enabled, i.e., the value
+                                                      of Interpolate is set to FromMinimum
+                                                      or FromMaximum. \n When this
+                                                      field is set and interpolation
+                                                      starts from the minimum, the
+                                                      minimum weight will be assigned
+                                                      to the cluster with the maximum
+                                                      value in the range; and when
+                                                      interpolation starts from the
+                                                      maximum, the minimum weight
+                                                      will be assigned to the cluster
+                                                      with the minimum value in the
+                                                      range. \n Note that if you do
+                                                      not specify this value but choose
+                                                      to use weight interpolation,
+                                                      Fleet will use 0 as the minimum
+                                                      weight. Also, this value must
+                                                      be smaller than the weight value."
+                                                    format: int32
+                                                    type: integer
+                                                type: object
+                                              type: array
+                                          required:
+                                          - name
+                                          - range
+                                          type: object
+                                        type: array
+                                    required:
+                                    - matchMetrics
+                                    type: object
                                 required:
                                 - labelSelector
                                 type: object
