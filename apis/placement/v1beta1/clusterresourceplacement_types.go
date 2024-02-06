@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -168,6 +169,12 @@ type PlacementPolicy struct {
 	// +patchMergeKey=topologyKey
 	// +patchStrategy=merge
 	TopologySpreadConstraints []TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty" patchStrategy:"merge" patchMergeKey:"topologyKey"`
+
+	// If specified, the ClusterResourcePlacement's Tolerations.
+	// Tolerations cannot be updated or deleted.
+	// +kubebuilder:validation:MaxItems=100
+	// +optional
+	Tolerations []Toleration `json:"tolerations,omitempty"`
 }
 
 // Affinity is a group of cluster affinity scheduling rules. More to be added.
@@ -453,6 +460,35 @@ type FailedResourcePlacement struct {
 	// The failed condition status.
 	// +required
 	Condition metav1.Condition `json:"condition"`
+}
+
+// Toleration allows ClusterResourcePlacement to tolerate any taint that matches
+// the triple <key,value,effect> using the matching operator <operator>.
+type Toleration struct {
+	// Key is the taint key that the toleration applies to. Empty means match all taint keys.
+	// If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+	// +optional
+	Key string `json:"key,omitempty"`
+
+	// Operator represents a key's relationship to the value.
+	// Valid operators are Exists and Equal. Defaults to Equal.
+	// Exists is equivalent to wildcard for value, so that a
+	// ClusterResourcePlacement can tolerate all taints of a particular category.
+	// +kubebuilder:default=Equal
+	// +kubebuilder:validation:Enum=Equal;Exists
+	// +optional
+	Operator corev1.TolerationOperator `json:"operator,omitempty"`
+
+	// Value is the taint value the toleration matches to.
+	// If the operator is Exists, the value should be empty, otherwise just a regular string.
+	// +optional
+	Value string `json:"value,omitempty"`
+
+	// Effect indicates the taint effect to match. Empty means match all taint effects.
+	// When specified, only allowed value is NoSchedule.
+	// +kubebuilder:validation:Enum=NoSchedule
+	// +optional
+	Effect corev1.TaintEffect `json:"effect,omitempty"`
 }
 
 // ClusterResourcePlacementConditionType defines a specific condition of a cluster resource placement.

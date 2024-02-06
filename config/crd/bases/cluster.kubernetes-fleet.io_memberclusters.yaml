@@ -86,6 +86,30 @@ spec:
                 - name
                 type: object
                 x-kubernetes-map-type: atomic
+              taints:
+                description: If specified, the MemberCluster's taints.
+                items:
+                  description: Taint attached to MemberCluster has the "effect" on
+                    any ClusterResourcePlacement that does not tolerate the Taint.
+                  properties:
+                    effect:
+                      description: The effect of the taint on ClusterResourcePlacements
+                        that do not tolerate the taint. Only NoSchedule is supported.
+                      enum:
+                      - NoSchedule
+                      type: string
+                    key:
+                      description: The taint key to be applied to a MemberCluster.
+                      type: string
+                    value:
+                      description: The taint value corresponding to the taint key.
+                      type: string
+                  required:
+                  - effect
+                  - key
+                  type: object
+                maxItems: 100
+                type: array
             required:
             - identity
             type: object
