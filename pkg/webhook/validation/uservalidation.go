@@ -7,22 +7,16 @@ import (
 	"fmt"
 	"reflect"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	authenticationv1 "k8s.io/api/authentication/v1"
-	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
-
-	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 const (
@@ -42,20 +36,7 @@ const (
 )
 
 var (
-	fleetCRDGroups           = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
-	CRDGVK                   = metav1.GroupVersionKind{Group: apiextensionsv1.SchemeGroupVersion.Group, Version: apiextensionsv1.SchemeGroupVersion.Version, Kind: "CustomResourceDefinition"}
-	V1Alpha1MCGVK            = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "MemberCluster"}
-	V1Alpha1IMCGVK           = metav1.GroupVersionKind{Group: fleetv1alpha1.GroupVersion.Group, Version: fleetv1alpha1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	V1Alpha1WorkGVK          = metav1.GroupVersionKind{Group: workv1alpha1.GroupVersion.Group, Version: workv1alpha1.GroupVersion.Version, Kind: "Work"}
-	MCGVK                    = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
-	IMCGVK                   = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
-	WorkGVK                  = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
-	NamespaceGVK             = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Namespace"}
-	EventGVK                 = metav1.GroupVersionKind{Group: corev1.SchemeGroupVersion.Group, Version: corev1.SchemeGroupVersion.Version, Kind: "Event"}
-	EndpointSliceExportGVK   = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "EndpointSliceExport"}
-	EndpointSliceImportGVK   = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "EndpointSliceImport"}
-	InternalServiceExportGVK = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
-	InternalServiceImportGVK = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceImport"}
+	fleetCRDGroups = []string{"networking.fleet.azure.com", "fleet.azure.com", "multicluster.x-k8s.io", "cluster.kubernetes-fleet.io", "placement.kubernetes-fleet.io"}
 )
 
 // ValidateUserForFleetCRD checks to see if user is not allowed to modify fleet CRDs.

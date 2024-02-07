@@ -1196,7 +1196,7 @@ var _ = Describe("Fleet's Reserved Namespace Handler webhook tests", func() {
 		It("should allow create/update/delete operation on namespace without fleet/kube prefix for user not in system:masters group", func() {
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace",
+					Name: "test-mynamespace",
 				},
 			}
 			Expect(HubCluster.ImpersonateKubeClient.Create(ctx, &ns)).Should(Succeed())

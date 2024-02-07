@@ -55,22 +55,22 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 	var response admission.Response
 	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update || req.Operation == admissionv1.Delete {
 		switch {
-		case req.Kind == validation.CRDGVK:
+		case req.Kind == utils.CRDGVK:
 			klog.V(2).InfoS("handling CRD resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
-		case req.Kind == validation.V1Alpha1MCGVK:
+		case req.Kind == utils.V1Alpha1MCGVK:
 			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleV1Alpha1MemberCluster(req)
-		case req.Kind == validation.MCGVK:
+		case req.Kind == utils.MCGVK:
 			klog.V(2).InfoS("handling member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleMemberCluster(req)
-		case req.Kind == validation.NamespaceGVK:
+		case req.Kind == utils.NamespaceMetaGVK:
 			klog.V(2).InfoS("handling namespace resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
-		case req.Kind == validation.V1Alpha1IMCGVK || req.Kind == validation.V1Alpha1WorkGVK || req.Kind == validation.IMCGVK || req.Kind == validation.WorkGVK || req.Kind == validation.EndpointSliceExportGVK || req.Kind == validation.EndpointSliceImportGVK || req.Kind == validation.InternalServiceExportGVK || req.Kind == validation.InternalServiceImportGVK:
+		case req.Kind == utils.V1Alpha1IMCGVK || req.Kind == utils.V1Alpha1WorkGVK || req.Kind == utils.IMCGVK || req.Kind == utils.WorkV1Beta1GVK || req.Kind == utils.EndpointSliceExportGVK || req.Kind == utils.EndpointSliceImportGVK || req.Kind == utils.InternalServiceExportGVK || req.Kind == utils.InternalServiceImportGVK:
 			klog.V(2).InfoS("handling fleet owned namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetReservedNamespacedResource(ctx, req)
-		case req.Kind == validation.EventGVK:
+		case req.Kind == utils.EventGVK:
 			klog.V(3).InfoS("handling event resource", "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleEvent(ctx, req)
 		case req.Namespace != "":
