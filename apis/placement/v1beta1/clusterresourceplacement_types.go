@@ -243,6 +243,7 @@ const (
 	//   It is calculated using the formula below:
 	//   100-(16-10)/(30-10)*(100-10) = 73
 	FromMinimum InterpolationOrder = "FromMinimum"
+
 	// FromMaximum instructs Fleet to perform linear interpolation of weights starting
 	// from the maximum value, i.e., when the maximum value is most preferred.
 	//
@@ -255,6 +256,7 @@ const (
 	//   It is calculated using the formula below:
 	//   10+(16-10)/(30-10)*(100-10) = 37
 	FromMaximum InterpolationOrder = "FromMaximum"
+
 	// DoNotInterpolate instructs Fleet not to perform linear interpolation; when this
 	// option is used, alls clusters with a value in the preferred range will be assigned
 	// the same weight.
@@ -271,12 +273,14 @@ type MetricRange struct {
 	// At least one of the minimum or maximum value must be specified.
 	// +optional
 	Minimum string `json:"minimum"`
+
 	// Maximum is the maximum value of the range.
 	// If this value is not specified, the largest observed value of the metric will be
 	// used.
 	// At least one of the minimum of maximum value must be specified.
 	// +optional
 	Maximum string `json:"maximum"`
+
 	// Interpolate is the interpolation order for the metric range.
 	//
 	// Specify this value if you would like Fleet to perform linear interpolation of weights
@@ -291,6 +295,7 @@ type MetricRange struct {
 	// +optional
 	// +kubebuilder:default=DoNotInterpolate
 	Interpolate InterpolationOrder `json:"interpolate"`
+
 	// MinimumWeight is the minimum weight to assign to a cluster in the perferred range.
 	//
 	// This value is only used when linear interpolation is enabled, i.e., the value of
@@ -315,6 +320,7 @@ type MetricMatcher struct {
 	// Name is the name of the metric; it should be a Kubernetes label name.
 	// +required
 	Name string `json:"name"`
+
 	// Range are the required or preferred range for the metric.
 	//
 	// You may choose to specify multiple required/preferred ranges for a metric; these
