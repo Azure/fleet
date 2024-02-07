@@ -59,6 +59,7 @@ type MemberClusterSpec struct {
 type Metric struct {
 	// The name of the metric; it should be a valid Kubernetes label name.
 	Name string `json:"name"`
+
 	// The observed value of the metric; it should be a sortable numeric.
 	Value string `json:"value"`
 }
