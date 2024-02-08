@@ -1,5 +1,5 @@
 REGISTRY ?= ghcr.io
-KIND_IMAGE ?= kindest/node:v1.25.11
+KIND_IMAGE ?= kindest/node:v1.28.0
 ifndef TAG
 	TAG ?= $(shell git rev-parse --short=7 HEAD)
 endif
@@ -44,7 +44,7 @@ GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
 # ENVTEST_K8S_VERSION refers to the version of k8s binary assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.26.1
+ENVTEST_K8S_VERSION = 1.28.0
 # ENVTEST_VER is the version of the ENVTEST binary
 ENVTEST_VER = latest
 ENVTEST_BIN := setup-envtest
@@ -74,6 +74,11 @@ $(GOIMPORTS):
 # ENVTEST
 $(ENVTEST):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) sigs.k8s.io/controller-runtime/tools/setup-envtest $(ENVTEST_BIN) $(ENVTEST_VER)
+
+.PHONY: help
+help: ## Display this help.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
 
 ## --------------------------------------
 ## Linting
@@ -156,11 +161,13 @@ install-hub-agent-helm:
     --set logVerbosity=5 \
     --set namespace=fleet-system \
     --set enableWebhook=true \
+    --set webhookServiceName=fleetwebhook \
     --set webhookClientConnectionType=service
 
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret
 e2e-v1alpha1-hub-kubeconfig-secret:
 	kind export kubeconfig --name $(HUB_KIND_CLUSTER_NAME)
+	kubectl apply -f test/e2e/v1alpha1/hub-agent-sa-secret.yaml
 	TOKEN=$$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d) ;\
 	kind export kubeconfig --name $(MEMBER_KIND_CLUSTER_NAME) ;\
 	kubectl delete secret hub-kubeconfig-secret --ignore-not-found ;\

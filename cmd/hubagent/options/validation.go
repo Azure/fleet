@@ -18,10 +18,18 @@ func (o *Options) Validate() field.ErrorList {
 	errs := field.ErrorList{}
 	newPath := field.NewPath("Options")
 
-	disabledResourceConfig := utils.NewDisabledResourceConfig()
-	if err := disabledResourceConfig.Parse(o.SkippedPropagatingAPIs); err != nil {
+	if o.AllowedPropagatingAPIs != "" && o.SkippedPropagatingAPIs != "" {
+		errs = append(errs, field.Invalid(newPath.Child("AllowedPropagatingAPIs"), o.AllowedPropagatingAPIs, "AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive"))
+	}
+
+	resourceConfig := utils.NewResourceConfig(o.AllowedPropagatingAPIs != "")
+	if err := resourceConfig.Parse(o.SkippedPropagatingAPIs); err != nil {
 		errs = append(errs, field.Invalid(newPath.Child("SkippedPropagatingAPIs"), o.SkippedPropagatingAPIs, "Invalid API string"))
 	}
+	if err := resourceConfig.Parse(o.AllowedPropagatingAPIs); err != nil {
+		errs = append(errs, field.Invalid(newPath.Child("AllowedPropagatingAPIs"), o.AllowedPropagatingAPIs, "Invalid API string"))
+	}
+
 	if o.ClusterUnhealthyThreshold.Duration <= 0 {
 		errs = append(errs, field.Invalid(newPath.Child("ClusterUnhealthyThreshold"), o.ClusterUnhealthyThreshold, "Must be greater than 0"))
 	}
@@ -29,9 +37,13 @@ func (o *Options) Validate() field.ErrorList {
 		errs = append(errs, field.Invalid(newPath.Child("WorkPendingGracePeriod"), o.WorkPendingGracePeriod, "Must be greater than 0"))
 	}
 
+	if o.EnableWebhook && o.WebhookServiceName == "" {
+		errs = append(errs, field.Invalid(newPath.Child("WebhookServiceName"), o.WebhookServiceName, "Webhook service name is required when webhook is enabled"))
+	}
+
 	connectionType := o.WebhookClientConnectionType
 	if _, err := parseWebhookClientConnectionString(connectionType); err != nil {
-		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.EnableWebhook, err.Error()))
+		errs = append(errs, field.Invalid(newPath.Child("WebhookClientConnectionType"), o.WebhookClientConnectionType, err.Error()))
 	}
 
 	if !o.EnableV1Alpha1APIs && !o.EnableV1Beta1APIs {

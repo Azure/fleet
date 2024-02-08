@@ -35,6 +35,8 @@ type Options struct {
 	MetricsBindAddress string
 	// EnableWebhook indicates if we will run a webhook
 	EnableWebhook bool
+	// Webhook service name
+	WebhookServiceName string
 	// EnableGuardRail indicates if we will enable fleet guard rail webhook configurations.
 	EnableGuardRail bool
 	// WhiteListedUsers indicates the list of user who are allowed to modify fleet resources
@@ -48,8 +50,13 @@ type Options struct {
 	// WorkPendingGracePeriod represents the grace period after a work is created/updated.
 	// We consider a work failed if a work's last applied condition doesn't change after period.
 	WorkPendingGracePeriod metav1.Duration
-	// SkippedPropagatingAPIs indicates comma separated resources that should be skipped for propagating.
+	// SkippedPropagatingAPIs and AllowedPropagatingAPIs options are used to control the propagation of resources.
+	// If none of them are set, the default skippedPropagatingAPIs list will be used.
+	// SkippedPropagatingAPIs indicates semicolon separated resources that should be skipped for propagating.
 	SkippedPropagatingAPIs string
+	// AllowedPropagatingAPIs indicates semicolon separated resources that should be allowed for propagating.
+	// This is mutually exclusive with SkippedPropagatingAPIs.
+	AllowedPropagatingAPIs string
 	// SkippedPropagatingNamespaces is a list of namespaces that will be skipped for propagating.
 	SkippedPropagatingNamespaces string
 	// HubQPS is the QPS to use while talking with hub-apiserver. Default is 20.0.
@@ -58,15 +65,14 @@ type Options struct {
 	HubBurst int
 	// ResyncPeriod is the base frequency the informers are resynced. Defaults is 5 minutes.
 	ResyncPeriod metav1.Duration
-	// ConcurrentClusterPlacementSyncs is the number of cluster `placement` reconcilers that are
-	// allowed to sync concurrently.
+	// ConcurrentClusterPlacementSyncs is the number of cluster `placement` reconcilers that are allowed to sync concurrently.
 	ConcurrentClusterPlacementSyncs int
-	// ConcurrentResourceChangeSyncs is the number of resource change reconcilers that are
-	// allowed to sync concurrently.
+	// ConcurrentResourceChangeSyncs is the number of resource change reconcilers that are allowed to sync concurrently.
 	ConcurrentResourceChangeSyncs int
-	// ConcurrentMemberClusterSyncs is the number of `memberCluster` reconcilers that are
-	// allowed to sync concurrently.
-	ConcurrentMemberClusterSyncs int
+	// MaxFleetSizeSupported is the max number of member clusters this fleet supports.
+	// We will set the max concurrency of related reconcilers (membercluster, rollout,workgenerator)
+	// according to this value.
+	MaxFleetSizeSupported int
 	// RateLimiterOpts is the ratelimit parameters for the work queue
 	RateLimiterOpts RateLimitOptions
 	// EnableV1Alpha1APIs enables the agents to watch the v1alpha1 CRs.
@@ -86,7 +92,7 @@ func NewOptions() *Options {
 		},
 		ConcurrentClusterPlacementSyncs: 1,
 		ConcurrentResourceChangeSyncs:   1,
-		ConcurrentMemberClusterSyncs:    1,
+		MaxFleetSizeSupported:           100,
 		EnableV1Alpha1APIs:              true,
 	}
 }
@@ -100,6 +106,8 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.LeaderElection.LeaseDuration.Duration, "leader-lease-duration", 15*time.Second, "This is effectively the maximum duration that a leader can be stopped before someone else will replace it.")
 	flag.StringVar(&o.LeaderElection.ResourceNamespace, "leader-election-namespace", utils.FleetSystemNamespace, "The namespace in which the leader election resource will be created.")
 	flag.BoolVar(&o.EnableWebhook, "enable-webhook", true, "If set, the fleet webhook is enabled.")
+	// set a defautl value 'fleetwebhook' for webhook service name for backward compatibility. The service name was hard coded to 'fleetwebhook' in the past.
+	flag.StringVar(&o.WebhookServiceName, "webhook-service-name", "fleetwebhook", "Fleet webhook service name.")
 	flag.BoolVar(&o.EnableGuardRail, "enable-guard-rail", false, "If set, the fleet guard rail webhook configurations are enabled.")
 	flag.StringVar(&o.WhiteListedUsers, "whitelisted-users", "", "If set, white listed users can modify fleet related resources.")
 	flag.StringVar(&o.WebhookClientConnectionType, "webhook-client-connection-type", "url", "Sets the connection type used by the webhook client. Only URL or Service is valid.")
@@ -107,6 +115,10 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ClusterUnhealthyThreshold.Duration, "cluster-unhealthy-threshold", 60*time.Second, "The duration for a member cluster to be in a degraded state before considered unhealthy.")
 	flags.DurationVar(&o.WorkPendingGracePeriod.Duration, "work-pending-grace-period", 15*time.Second,
 		"Specifies the grace period of allowing a manifest to be pending before marking it as failed.")
+	flags.StringVar(&o.AllowedPropagatingAPIs, "allowed-propagating-apis", "", "Semicolon separated resources that should be allowed for propagation. Supported formats are:\n"+
+		"<group> for allowing resources with a specific API group(e.g. networking.k8s.io),\n"+
+		"<group>/<version> for allowing resources with a specific API version(e.g. networking.k8s.io/v1beta1),\n"+
+		"<group>/<version>/<kind>,<kind> for allowing one or more specific resources (e.g. networking.k8s.io/v1beta1/Ingress,IngressClass) where the Kinds are case-insensitive.")
 	flags.StringVar(&o.SkippedPropagatingAPIs, "skipped-propagating-apis", "", "Semicolon separated resources that should be skipped from propagating in addition to the default skip list(cluster.fleet.io;policy.fleet.io;work.fleet.io). Supported formats are:\n"+
 		"<group> for skip resources with a specific API group(e.g. networking.k8s.io),\n"+
 		"<group>/<version> for skip resources with a specific API version(e.g. networking.k8s.io/v1beta1),\n"+
@@ -118,7 +130,7 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 300*time.Second, "Base frequency the informers are resynced.")
 	flags.IntVar(&o.ConcurrentClusterPlacementSyncs, "concurrent-cluster-placement-syncs", 1, "The number of cluster placement reconcilers to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
-	flags.IntVar(&o.ConcurrentMemberClusterSyncs, "concurrent-member-cluster-syncs", 1, "The number of member cluster reconcilers that are allowed to run concurrently.")
+	flags.IntVar(&o.MaxFleetSizeSupported, "max-fleet-size", 100, "The max number of member clusters supported in this fleet")
 	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
 	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
 

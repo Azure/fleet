@@ -128,7 +128,7 @@ func buildClusterResourcePlacementApplyCondition(crp *fleetv1beta1.ClusterResour
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
 			Reason:             ApplyFailedReason,
-			Message:            fmt.Sprintf("Failed to apply manifests to %d clusters, please check the `failedResourcePlacements` status", failedCount),
+			Message:            fmt.Sprintf("Failed to apply manifests to %d clusters, please check the `failedPlacements` status", failedCount),
 			ObservedGeneration: crp.Generation,
 		}
 	}
@@ -202,7 +202,7 @@ func (r *Reconciler) setWorkStatusForResourcePlacementStatus(ctx context.Context
 	klog.V(2).InfoS("Building the resourcePlacementStatus", "clusterResourcePlacement", crpKObj, "clusterName", status.ClusterName,
 		"numberOfPendingWorks", pendingWorkCounter, "numberOfFailedResources", len(failedResourcePlacements))
 
-	status.FailedResourcePlacements = failedResourcePlacements
+	status.FailedPlacements = failedResourcePlacements
 
 	isSync, workSynchronizedCondition := buildWorkSynchronizedCondition(crp, clusterResourceBinding)
 	meta.SetStatusCondition(&status.Conditions, workSynchronizedCondition)
@@ -262,7 +262,7 @@ func buildWorkAppliedCondition(crp *fleetv1beta1.ClusterResourcePlacement, hasPe
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourcesAppliedConditionType),
 			Reason:             ResourceApplyFailedReason,
-			Message:            "Failed to apply manifests, please check the `failedResourcePlacements` status",
+			Message:            "Failed to apply manifests, please check the `failedPlacements` status",
 			ObservedGeneration: crp.Generation,
 		}
 	}

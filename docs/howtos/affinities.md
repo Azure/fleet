@@ -4,7 +4,7 @@ This how-to guide discusses how to use affinity settings to fine-tune how Fleet 
 for resource placement.
 
 Affinities terms are featured in the `ClusterResourcePlacement` API, specifically the scheduling
-policy section. Each affinity term is particular requirement that Fleet will check against clusters;
+policy section. Each affinity term is a particular requirement that Fleet will check against clusters;
 and the fulfillment of this requirement (or the lack of) would have certain effect on whether
 Fleet would pick a cluster for resource placement.
 
@@ -86,7 +86,7 @@ spec:
     placementType: PickAll
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
                 - labelSelector:
                     matchExpressions:
@@ -118,14 +118,14 @@ spec:
     placementType: PickAll
     affinity:
         clusterAffinity:
-            requiredDuringSchedulingIgnoredDuringExection:
+            requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
                 - labelSelector:
                     matchLabels:
                       region: east
                     matchExpressions:
                     - key: system
-                    - operator: Exists
+                      operator: Exists
 
 ```
 
@@ -159,7 +159,7 @@ spec:
                 - labelSelector:
                     matchExpressions:
                     - key: system
-                    - operator: DoesNotExist
+                      operator: DoesNotExist
 ```
 
 With these two affinity terms, any cluster picked must:
@@ -275,10 +275,10 @@ spec:
         clusterAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
               clusterSelectorTerms:
-              - labelSelector:
-                  matchExpressions:
-                  - key: system
-                  - operator: Exists
+                - labelSelector:
+                    matchExpressions:
+                    - key: system
+                      operator: Exists
             preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 20
               preference:

@@ -15,7 +15,7 @@ Fleet provides the following capabilities
 
 **Fleet:** A multi cluster solution that users use to manage Kubernetes clusters.
 
-**Hub cluster:** An Kubernetes cluster that hosts the control plane of the fleet.
+**Hub cluster:** A Kubernetes cluster that hosts the control plane of the fleet.
 
 **Member cluster:** A Kubernetes cluster that is part of the fleet.
 
@@ -41,7 +41,7 @@ export this variable which specifies the number of member clusters that will be 
 export MEMBER_CLUSTER_COUNT=1
 ```
 
-from the root directory of the repo run the following command, by default a hub cluster gets created which is the control plane for fleet (**The makefile uses kindest/node:v1.25.11**)
+from the root directory of the repo run the following command, by default a hub cluster gets created which is the control plane for fleet (**The makefile uses kindest/node:v1.28.0**)
 
 ```shell
 make setup-clusters

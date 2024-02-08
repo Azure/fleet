@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,6 +48,11 @@ type MemberClusterSpec struct {
 	// How often (in seconds) for the member cluster to send a heartbeat to the hub cluster. Default: 60 seconds. Min: 1 second. Max: 10 minutes.
 	// +optional
 	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
+
+	// If specified, the MemberCluster's taints.
+	// +kubebuilder:validation:MaxItems=100
+	// +optional
+	Taints []Taint `json:"taints,omitempty"`
 }
 
 // MemberClusterStatus defines the observed status of MemberCluster.
@@ -67,6 +73,24 @@ type MemberClusterStatus struct {
 	// AgentStatus is an array of current observed status, each corresponding to one member agent running in the member cluster.
 	// +optional
 	AgentStatus []AgentStatus `json:"agentStatus,omitempty"`
+}
+
+// Taint attached to MemberCluster has the "effect" on
+// any ClusterResourcePlacement that does not tolerate the Taint.
+type Taint struct {
+	// The taint key to be applied to a MemberCluster.
+	// +required
+	Key string `json:"key"`
+
+	// The taint value corresponding to the taint key.
+	// +optional
+	Value string `json:"value,omitempty"`
+
+	// The effect of the taint on ClusterResourcePlacements that do not tolerate the taint.
+	// Only NoSchedule is supported.
+	// +kubebuilder:validation:Enum=NoSchedule
+	// +required
+	Effect corev1.TaintEffect `json:"effect"`
 }
 
 // MemberClusterConditionType defines a specific condition of a member cluster.

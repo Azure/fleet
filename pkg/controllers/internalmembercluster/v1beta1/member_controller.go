@@ -70,7 +70,12 @@ func NewReconciler(hubClient client.Client, memberClient client.Client, workCont
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("Reconcile", "InternalMemberCluster", req.NamespacedName)
+	startTime := time.Now()
+	klog.V(2).InfoS("InternalMemberCluster reconciliation starts", "internalMemberCluster", req.NamespacedName)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("InternalMemberCluster reconciliation ends", "internalMemberCluster", req.NamespacedName, "latency", latency)
+	}()
 
 	var imc clusterv1beta1.InternalMemberCluster
 	if err := r.hubClient.Get(ctx, req.NamespacedName, &imc); err != nil {

@@ -1,0 +1,45 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp
+spec:
+  resourceSelectors:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: clonesets.apps.kruise.io
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 25
+    affinity:
+      clusterAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 20
+          preference:
+            labelSelector:
+              matchExpressions:
+                - key: system
+                  operator: DoesNotExist
+        - weight: -20
+          preference:
+            labelSelector:
+              matchExpressions:
+                - key: fleet.azure.com/location
+                  operator: In
+                  values:
+                    - centralus
+        - weight: 20
+          preference:
+            labelSelector:
+              matchExpressions:
+                - key: fleet.azure.com/location
+                  operator: In
+                  values:
+                    - eastus
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+      maxSurge: 25%
+      unavailablePeriodSeconds: 15
+  revisionHistoryLimit: 15

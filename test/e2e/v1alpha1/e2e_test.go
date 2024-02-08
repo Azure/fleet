@@ -36,8 +36,8 @@ import (
 var (
 	hubClusterName    = "kind-hub-testing"
 	memberClusterName = "kind-member-testing"
-	HubCluster        = framework.NewCluster(hubClusterName, scheme)
-	MemberCluster     = framework.NewCluster(memberClusterName, scheme)
+	HubCluster        = framework.NewCluster(hubClusterName, "", scheme)
+	MemberCluster     = framework.NewCluster(memberClusterName, "", scheme)
 	hubURL            string
 	scheme            = runtime.NewScheme()
 	mc                *v1alpha1.MemberCluster
@@ -235,8 +235,8 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	By("delete resources created for webhook e2e")
-	testutils.DeleteResourcesForWebHookE2E(ctx, HubCluster)
+	By("clean up resources created for webhook e2e")
+	testutils.CleanupResourcesForWebHookE2E(ctx, HubCluster)
 
 	By("update member cluster in the hub cluster")
 	Expect(HubCluster.KubeClient.Get(ctx, types.NamespacedName{Name: mc.Name}, mc)).Should(Succeed(), "Failed to retrieve member cluster %s in %s cluster", mc.Name, HubCluster.ClusterName)

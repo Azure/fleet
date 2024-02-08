@@ -26,8 +26,7 @@ in batch mode, these calculations are performed once. Scheduler sorts all the el
 
 ## Placement Decisions
 
-The output of the scheduler is an array of `ClusterResourceBinding`s on the member cluster reserved namespaces of the hub
-cluster.
+The output of the scheduler is an array of `ClusterResourceBinding`s on the hub cluster.
 
 `ClusterResourceBinding` sample:
 ```yaml

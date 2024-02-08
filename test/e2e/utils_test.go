@@ -17,7 +17,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,7 +48,7 @@ func createMemberCluster(name, svcAccountName string, labels map[string]string) 
 			HeartbeatPeriodSeconds: 60,
 		},
 	}
-	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member clsuter object %s", name)
+	Expect(hubClient.Create(ctx, mcObj)).To(Succeed(), "Failed to create member cluster object %s", name)
 }
 
 // markMemberClusterAsHealthy marks the specified member cluster as healthy.
@@ -150,7 +150,7 @@ func markMemberClusterAsLeft(name string) {
 func setAllMemberClustersToJoin() {
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
-		createMemberCluster(memberCluster.ClusterName, hubClusterSAName, labelsByClusterName[memberCluster.ClusterName])
+		createMemberCluster(memberCluster.ClusterName, memberCluster.PresentingServiceAccountInHubClusterName, labelsByClusterName[memberCluster.ClusterName])
 	}
 }
 
@@ -275,7 +275,7 @@ func cleanupInvalidClusters() {
 
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !errors.IsNotFound(err) {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !apierrors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 
@@ -310,7 +310,7 @@ func createResourcesForFleetGuardRail() {
 			{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "User",
-				Name:     testUser,
+				Name:     "test-user",
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -349,7 +349,7 @@ func cleanupMemberCluster(memberClusterName string) {
 	Eventually(func() error {
 		mcObj := &clusterv1beta1.MemberCluster{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj)
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -363,7 +363,7 @@ func cleanupMemberCluster(memberClusterName string) {
 	// Wait until the member cluster is fully removed.
 	Eventually(func() error {
 		mcObj := &clusterv1beta1.MemberCluster{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: memberClusterName}, mcObj); !apierrors.IsNotFound(err) {
 			return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
@@ -386,7 +386,7 @@ func ensureMemberClusterAndRelatedResourcesDeletion(memberClusterName string) {
 	reservedNSName := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
 	Eventually(func() error {
 		ns := corev1.Namespace{}
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !errors.IsNotFound(err) {
+		if err := hubClient.Get(ctx, types.NamespacedName{Name: reservedNSName}, &ns); !apierrors.IsNotFound(err) {
 			return fmt.Errorf("namespace still exists or an unexpected error occurred: %w", err)
 		}
 		return nil
@@ -402,16 +402,6 @@ func checkInternalMemberClusterExists(name, namespace string) {
 	}
 	Eventually(func() error {
 		return hubClient.Get(ctx, types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace}, imc)
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
-}
-
-func checkMemberClusterNamespaceIsDeleted(name string) {
-	Eventually(func(g Gomega) error {
-		var ns corev1.Namespace
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, &ns); !errors.IsNotFound(err) {
-			return fmt.Errorf("member cluster namespace %s still exists or an unexpected error occurred: %w", name, err)
-		}
-		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
@@ -453,24 +443,6 @@ func createWorkResource(name, namespace string) {
 		},
 	}
 	Expect(hubClient.Create(ctx, &w)).Should(Succeed())
-}
-
-func deleteWorkResource(name, namespace string) {
-	w := placementv1beta1.Work{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
-	Expect(hubClient.Delete(ctx, &w)).Should(Succeed())
-
-	Eventually(func(g Gomega) error {
-		var w placementv1beta1.Work
-		if err := hubClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &w); !errors.IsNotFound(err) {
-			return fmt.Errorf("work still exists or an unexpected error occurred: %w", err)
-		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 }
 
 // createWorkResources creates some resources on the hub cluster for testing purposes.
@@ -515,7 +487,7 @@ func checkIfAllMemberClustersHaveLeft() {
 
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !errors.IsNotFound(err) {
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: memberCluster.ClusterName}, mcObj); !apierrors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
 
@@ -530,6 +502,15 @@ func checkIfPlacedWorkResourcesOnAllMemberClusters() {
 
 		workResourcesPlacedActual := workNamespaceAndConfigMapPlacedOnClusterActual(memberCluster)
 		Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
+	}
+}
+
+func checkIfPlacedNamespaceResourceOnAllMemberClusters() {
+	for idx := range allMemberClusters {
+		memberCluster := allMemberClusters[idx]
+
+		namespaceResourcePlacedActual := workNamespacePlacedOnClusterActual(memberCluster)
+		Eventually(namespaceResourcePlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work namespace on member cluster %s", memberCluster.ClusterName)
 	}
 }
 
@@ -548,7 +529,7 @@ func cleanupCRP(name string) {
 	Eventually(func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		err := hubClient.Get(ctx, types.NamespacedName{Name: name}, crp)
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {

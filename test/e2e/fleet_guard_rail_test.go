@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -39,6 +40,7 @@ var (
 	mcGVK      = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "MemberCluster"}
 	imcGVK     = metav1.GroupVersionKind{Group: clusterv1beta1.GroupVersion.Group, Version: clusterv1beta1.GroupVersion.Version, Kind: "InternalMemberCluster"}
 	workGVK    = metav1.GroupVersionKind{Group: placementv1beta1.GroupVersion.Group, Version: placementv1beta1.GroupVersion.Version, Kind: "Work"}
+	iseGVK     = metav1.GroupVersionKind{Group: fleetnetworkingv1alpha1.GroupVersion.Group, Version: fleetnetworkingv1alpha1.GroupVersion.Version, Kind: "InternalServiceExport"}
 	testGroups = []string{"system:authenticated"}
 )
 
@@ -159,28 +161,17 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 	})
 })
 
-var _ = Describe("fleet guard rail tests for deny IMC CREATE operations", func() {
+var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-member prefixed namespace with user not in MC identity", Serial, Ordered, func() {
 	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
 	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 
-	BeforeEach(func() {
-		ns := corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   fmt.Sprintf(utils.NamespaceNameFormat, mcName),
-				Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
-			},
-		}
-		Expect(hubClient.Create(ctx, &ns)).Should(Succeed())
+	BeforeAll(func() {
+		createMemberCluster(mcName, testIdentity, nil)
+		checkInternalMemberClusterExists(mcName, imcNamespace)
 	})
 
-	AfterEach(func() {
-		ns := corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf(utils.NamespaceNameFormat, mcName),
-			},
-		}
-		Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
-		checkMemberClusterNamespaceIsDeleted(imcNamespace)
+	AfterAll(func() {
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -200,20 +191,6 @@ var _ = Describe("fleet guard rail tests for deny IMC CREATE operations", func()
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
-	})
-})
-
-var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-member prefixed namespace with user not in MC identity", Serial, Ordered, func() {
-	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
-	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-
-	BeforeAll(func() {
-		createMemberCluster(mcName, testIdentity, nil)
-		checkInternalMemberClusterExists(mcName, imcNamespace)
-	})
-
-	AfterAll(func() {
-		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should deny UPDATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
@@ -326,31 +303,22 @@ var _ = Describe("fleet guard rail tests for IMC UPDATE operation, in fleet-memb
 	})
 })
 
-var _ = Describe("fleet guard rail tests for deny Work CREATE operations", func() {
+var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed namespace with user not in MC identity", Serial, Ordered, func() {
+	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
 	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, workName)
 
-	BeforeEach(func() {
-		ns := corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   fmt.Sprintf(utils.NamespaceNameFormat, workName),
-				Labels: map[string]string{placementv1beta1.FleetResourceLabelKey: "true"},
-			},
-		}
-		Expect(hubClient.Create(ctx, &ns)).Should(Succeed())
+	BeforeAll(func() {
+		createMemberCluster(mcName, testIdentity, nil)
+		checkInternalMemberClusterExists(mcName, imcNamespace)
+		createWorkResource(workName, imcNamespace)
 	})
 
-	AfterEach(func() {
-		ns := corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf(utils.NamespaceNameFormat, workName),
-			},
-		}
-		Expect(hubClient.Delete(ctx, &ns)).Should(Succeed())
-		checkMemberClusterNamespaceIsDeleted(imcNamespace)
+	AfterAll(func() {
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
-	It("should deny CREATE operation on internal member cluster CR for user not in MC identity in fleet member namespace", func() {
+	It("should deny CREATE operation on work CR for user not in MC identity in fleet member namespace", func() {
 		testDeployment := appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Deployment",
@@ -393,23 +361,6 @@ var _ = Describe("fleet guard rail tests for deny Work CREATE operations", func(
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create work call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &workGVK, "", types.NamespacedName{Name: w.Name, Namespace: w.Namespace})))
-	})
-})
-
-var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed namespace with user not in MC identity", Serial, Ordered, func() {
-	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
-	imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
-	workName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
-
-	BeforeAll(func() {
-		createMemberCluster(mcName, testIdentity, nil)
-		checkInternalMemberClusterExists(mcName, imcNamespace)
-		createWorkResource(workName, imcNamespace)
-	})
-
-	AfterAll(func() {
-		deleteWorkResource(workName, imcNamespace)
-		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
 	It("should deny UPDATE operation on work CR status for user not in MC identity", func() {
@@ -462,7 +413,6 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 	})
 
 	AfterAll(func() {
-		deleteWorkResource(workName, imcNamespace)
 		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
 	})
 
@@ -505,5 +455,138 @@ var _ = Describe("fleet guard rail for UPDATE work operations, in fleet prefixed
 			By("expecting successful UPDATE of work Spec")
 			return hubClient.Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+})
+
+var _ = Describe("fleet guard rail networking E2Es", Serial, Ordered, func() {
+	Context("deny request to modify fleet networking resources in fleet member namespaces, for user not in member cluster identity", func() {
+		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
+		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+
+		BeforeEach(func() {
+			createMemberCluster(mcName, "random-user", nil)
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+			ise := internalServiceExport(iseName, imcNamespace)
+			// can return no kind match error.
+			Eventually(func(g Gomega) error {
+				return hubClient.Create(ctx, &ise)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+		})
+
+		It("should deny update operation on Internal service export resource in fleet-member namespace for user not in member cluster identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: iseName, Namespace: imcNamespace}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				err := impersonateHubClient.Update(ctx, &ise)
+				if k8sErrors.IsConflict(err) {
+					return err
+				}
+				var statusErr *k8sErrors.StatusError
+				g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update Internal Serivce Export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+				g.Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Update, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+
+	Context("allow request to CREATE fleet networking resources in fleet member namespace, for user in member cluster identity", func() {
+		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
+		isiName := fmt.Sprintf(internalServiceImportNameTemplate, GinkgoParallelProcess())
+		epName := fmt.Sprintf(endpointSliceExportNameTemplate, GinkgoParallelProcess())
+		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+		BeforeEach(func() {
+			createMemberCluster(mcName, "test-user", nil)
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+		})
+
+		AfterEach(func() {
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+		})
+
+		It("should allow CREATE operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
+			ise := internalServiceExport(iseName, imcNamespace)
+			By("expecting successful CREATE of Internal Service Export")
+			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+		})
+
+		It("should allow CREATE operation on Internal service import resource in fleet-member namespace for user in member cluster identity", func() {
+			ise := internalServiceImport(isiName, imcNamespace)
+			By("expecting successful CREATE of Internal Service Import")
+			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+		})
+
+		It("should allow CREATE operation on Endpoint slice export resource in fleet-member namespace for user in member cluster identity", func() {
+			ise := endpointSliceExport(epName, imcNamespace)
+			By("expecting successful CREATE of Endpoint slice export")
+			Expect(impersonateHubClient.Create(ctx, &ise)).Should(Succeed())
+		})
+	})
+
+	Context("allow request to modify network resources in fleet member namespaces, for user in member cluster identity", func() {
+		mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+		iseName := fmt.Sprintf(internalServiceExportNameTemplate, GinkgoParallelProcess())
+		imcNamespace := fmt.Sprintf(utils.NamespaceNameFormat, mcName)
+
+		BeforeEach(func() {
+			createMemberCluster(mcName, testUser, nil)
+			checkInternalMemberClusterExists(mcName, imcNamespace)
+			ise := internalServiceExport(iseName, imcNamespace)
+			// can return no kind match error.
+			Eventually(func(g Gomega) error {
+				return hubClient.Create(ctx, &ise)
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+
+		AfterEach(func() {
+			ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+		})
+
+		It("should allow update operation on Internal service export resource in fleet-member namespace for user in member cluster identity", func() {
+			Eventually(func(g Gomega) error {
+				var ise fleetnetworkingv1alpha1.InternalServiceExport
+				g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: iseName, Namespace: imcNamespace}, &ise)).Should(Succeed())
+				ise.SetLabels(map[string]string{"test-key": "test-value"})
+				By("expecting denial of operation UPDATE of Internal Service Export")
+				Expect(impersonateHubClient.Update(ctx, &ise)).Should(Succeed())
+				return nil
+			}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("fleet guard rail restrict internal fleet resources from being created in fleet/kube pre-fixed namespaces", Serial, Ordered, func() {
+	Context("deny request to CREATE IMC in fleet-system namespace", func() {
+		It("should deny CREATE operation on internal member cluster resource in fleet-system namespace for invalid user", func() {
+			imc := clusterv1beta1.InternalMemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mc",
+					Namespace: "fleet-system",
+				},
+				Spec: clusterv1beta1.InternalMemberClusterSpec{
+					State:                  clusterv1beta1.ClusterStateJoin,
+					HeartbeatPeriodSeconds: 30,
+				},
+			}
+			err := impersonateHubClient.Create(ctx, &imc)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal member cluster call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &imcGVK, "", types.NamespacedName{Name: imc.Name, Namespace: imc.Namespace})))
+		})
+	})
+
+	It("should deny CREATE operation on internal service export resource in kube-system namespace for invalid user", func() {
+		ise := internalServiceExport("test-ise", "kube-system")
+		err := impersonateHubClient.Create(ctx, &ise)
+		var statusErr *k8sErrors.StatusError
+		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create internal service export call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+		Expect(string(statusErr.Status().Reason)).Should(Equal(fmt.Sprintf(validation.ResourceDeniedFormat, testUser, utils.GenerateGroupString(testGroups), admissionv1.Create, &iseGVK, "", types.NamespacedName{Name: ise.Name, Namespace: ise.Namespace})))
 	})
 })

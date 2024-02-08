@@ -7,6 +7,7 @@ package workload
 
 import (
 	"context"
+	"math"
 	"strings"
 	"sync"
 
@@ -105,8 +106,14 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		}
 	}
 
-	disabledResourceConfig := utils.NewDisabledResourceConfig()
-	if err := disabledResourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
+	// AllowedPropagatingAPIs and SkippedPropagatingAPIs are mutually exclusive.
+	// If none of them are set, the resourceConfig by default stores a list of skipped propagation APIs.
+	resourceConfig := utils.NewResourceConfig(opts.AllowedPropagatingAPIs != "")
+	if err := resourceConfig.Parse(opts.AllowedPropagatingAPIs); err != nil {
+		// The program will never go here because the parameters have been checked.
+		return err
+	}
+	if err := resourceConfig.Parse(opts.SkippedPropagatingAPIs); err != nil {
 		// The program will never go here because the parameters have been checked
 		return err
 	}
@@ -128,14 +135,14 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 
 	// Set up  a custom controller to reconcile cluster resource placement
 	crpc := &clusterresourceplacement.Reconciler{
-		Client:                 mgr.GetClient(),
-		Recorder:               mgr.GetEventRecorderFor(crpControllerName),
-		RestMapper:             mgr.GetRESTMapper(),
-		InformerManager:        dynamicInformerManager,
-		DisabledResourceConfig: disabledResourceConfig,
-		SkippedNamespaces:      skippedNamespaces,
-		Scheme:                 mgr.GetScheme(),
-		UncachedReader:         mgr.GetAPIReader(),
+		Client:            mgr.GetClient(),
+		Recorder:          mgr.GetEventRecorderFor(crpControllerName),
+		RestMapper:        mgr.GetRESTMapper(),
+		InformerManager:   dynamicInformerManager,
+		ResourceConfig:    resourceConfig,
+		SkippedNamespaces: skippedNamespaces,
+		Scheme:            mgr.GetScheme(),
+		UncachedReader:    mgr.GetAPIReader(),
 	}
 
 	rateLimiter := options.DefaultControllerRateLimiter(opts.RateLimiterOpts)
@@ -196,8 +203,9 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		// Set up  a new controller to do rollout resources according to CRP rollout strategy
 		klog.Info("Setting up rollout controller")
 		if err := (&rollout.Reconciler{
-			Client:         mgr.GetClient(),
-			UncachedReader: mgr.GetAPIReader(),
+			Client:                  mgr.GetClient(),
+			UncachedReader:          mgr.GetAPIReader(),
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 34)), //3 rollout reconciler routine per 100 member clusters
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
 			return err
@@ -206,7 +214,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		// Set up the work generator
 		klog.Info("Setting up work generator")
 		if err := (&workgenerator.Reconciler{
-			Client: mgr.GetClient(),
+			Client:                  mgr.GetClient(),
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 10)), //one work generator reconciler routine per 10 member clusters,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up work generator")
 			return err
@@ -269,7 +278,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		ResourceChangeController:                   resourceChangeController,
 		MemberClusterPlacementController:           memberClusterPlacementController,
 		InformerManager:                            dynamicInformerManager,
-		DisabledResourceConfig:                     disabledResourceConfig,
+		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
 		ConcurrentClusterPlacementWorker:           opts.ConcurrentClusterPlacementSyncs,
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,

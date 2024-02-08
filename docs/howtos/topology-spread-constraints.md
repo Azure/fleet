@@ -46,7 +46,7 @@ groups.
 
 * `maxSkew` specifies how **unevenly** resource placements are spread in your fleet.
 
-    The skew of a set of resource placements are defined as the different in count of
+    The skew of a set of resource placements are defined as the difference in count of
     resource placements between the group with the most and the group with
     the least, as split by the topology key.
 
@@ -98,10 +98,11 @@ spec:
     - ...
   policy:
     placementType: PickN
+    numberOfClusters: 3
     topologySpreadConstraints:
-    - maxSkew: 2
-      topologyKey: system
-      whenUnsatisfiable: DoNotSchedule
+      - maxSkew: 2
+        topologyKey: system
+        whenUnsatisfiable: DoNotSchedule
 ```
 
 ## How Fleet enforces topology spread constraints: topology spread scores
@@ -159,9 +160,9 @@ spec:
     placementType: PickN
     numberOfClusters: 2
     topologySpreadConstraints:
-    - maxSkew: 1
-      topologyKey: region
-      whenUnsatisfiable: DoNotSchedule
+      - maxSkew: 1
+        topologyKey: region
+        whenUnsatisfiable: DoNotSchedule
 ```
 
 Fleet will first scan all the 4 clusters in the fleet; they all have the `region` label, with
@@ -216,12 +217,12 @@ spec:
     placementType: PickN
     numberOfClusters: 2
     topologySpreadConstraints:
-    - maxSkew: 2
-      topologyKey: region
-      whenUnsatisfiable: DoNotSchedule
-    - maxSkew: 3
-      topologyKey: environment
-      whenUnsatisfiable: ScheduleAnyway
+      - maxSkew: 2
+        topologyKey: region
+        whenUnsatisfiable: DoNotSchedule
+      - maxSkew: 3
+        topologyKey: environment
+        whenUnsatisfiable: ScheduleAnyway
 ```
 
 > Note

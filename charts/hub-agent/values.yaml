@@ -13,6 +13,7 @@ image:
 logVerbosity: 5
 
 enableWebhook: true
+webhookServiceName: fleetwebhook
 enableGuardRail: true
 webhookClientConnectionType: service
 
@@ -30,9 +31,6 @@ resources:
 tolerations: []
 
 affinity: {}
-
-secret:
-  name: hub-kubeconfig-secret
 
 enableV1Alpha1APIs: true
 enableV1Beta1APIs: false

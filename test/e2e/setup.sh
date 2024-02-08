@@ -6,7 +6,7 @@ set -o pipefail
 
 # Before updating the default kind image to use, verify that the version is supported
 # by the current kind release.
-KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.25.11}"
+KIND_IMAGE="${KIND_IMAGE:-kindest/node:v1.28.0}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 MEMBER_CLUSTER_COUNT=$1
 
@@ -71,12 +71,39 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set enableV1Alpha1APIs=false \
     --set enableV1Beta1APIs=true
 
-# Instal the member agent and related components to the member clusters
+# Download CRDs from Fleet networking repo
+export ENDPOINT_SLICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_endpointsliceexports.yaml
+export INTERNAL_SERVICE_EXPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceexports.yaml
+export INTERNAL_SERVICE_IMPORT_CRD_URL=https://raw.githubusercontent.com/Azure/fleet-networking/v0.2.7/config/crd/bases/networking.fleet.azure.com_internalserviceimports.yaml
+curl $ENDPOINT_SLICE_EXPORT_CRD_URL | kubectl apply -f -
+curl $INTERNAL_SERVICE_EXPORT_CRD_URL | kubectl apply -f -
+curl $INTERNAL_SERVICE_IMPORT_CRD_URL | kubectl apply -f -
 
-# Retrieve an access token from the hub cluster
-TOKEN=$(kubectl get secret hub-kubeconfig-secret -n fleet-system -o jsonpath='{.data.token}' | base64 -d)
+# Install the member agent and related components to the member clusters
+
+# Set up a service account for each member in the hub cluster.
+#
+# Note that these service account has no permission set up at all; the authorization will be
+# configured by the hub agent.
 for i in "${MEMBER_CLUSTERS[@]}"
 do
+    kubectl create serviceaccount fleet-member-agent-$i -n fleet-system
+    cat <<EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: Secret
+    metadata:
+        name: fleet-member-agent-$i-sa
+        namespace: fleet-system
+        annotations:
+            kubernetes.io/service-account.name: fleet-member-agent-$i
+    type: kubernetes.io/service-account-token
+EOF
+done
+
+for i in "${MEMBER_CLUSTERS[@]}"
+do
+    kind export kubeconfig --name $HUB_CLUSTER
+    TOKEN=$(kubectl get secret fleet-member-agent-$i-sa -n fleet-system -o jsonpath='{.data.token}' | base64 -d)
     kind export kubeconfig --name "$i"
     kubectl delete secret hub-kubeconfig-secret --ignore-not-found
     kubectl create secret generic hub-kubeconfig-secret --from-literal=token=$TOKEN
@@ -104,3 +131,4 @@ do
         --set enableV1Alpha1APIs=false \
         --set enableV1Beta1APIs=true
 done
+

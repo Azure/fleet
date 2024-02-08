@@ -56,10 +56,10 @@ kind), and its name, in the resource selector:
     ```yaml
     # As mentioned earlier, all the resources under the namespace will also be selected.
     resourceSelectors:
-    - group: ""
-      kind: Namespace
-      version: v1          
-      name: work
+      - group: ""
+        kind: Namespace
+        version: v1          
+        name: work
     ```
 
 * Alternately, you may also select a set of resources of the same API GVK using a label selector;
@@ -68,11 +68,11 @@ it also requires that you specify the API GVK and the filtering label(s):
     ```yaml
     # As mentioned earlier, all the resources under the namespaces will also be selected.
     resourceSelectors:
-    - group: ""
-      kind: Namespace
-      version: v1          
-      labelSelector:
-        MatchLabels:
+      - group: ""
+        kind: Namespace
+        version: v1          
+        labelSelector:
+          matchLabels:
             system: critical
     ```
 
@@ -87,9 +87,9 @@ this, use a resource selector with only the API GVK added:
 
     ```yaml
     resourceSelectors:
-    - group: "rbac.authorization.k8s.io"
-      kind: ClusterRole
-      version: v1          
+      - group: "rbac.authorization.k8s.io"
+        kind: ClusterRole
+        version: v1          
     ```
 
     In the example above, all the cluster roles in the hub cluster will be picked.
@@ -102,12 +102,11 @@ any of the resource selectors specified (i.e., all selectors are OR'd).
 ```yaml
 # As mentioned earlier, all the resources under the namespace will also be selected.
 resourceSelectors:
-- group: ""
+  - group: ""
     kind: Namespace
     version: v1          
     name: work
-resourceSelectors:
-- group: "rbac.authorization.k8s.io"
+  - group: "rbac.authorization.k8s.io"
     kind: ClusterRole
     version: v1
     name: secretReader      
@@ -123,7 +122,7 @@ under it) and the cluster role `secretReader`.
 
 ## Scheduling policy
 
-Each scheduling policy is associated with a placement type, which determintes how Fleet will
+Each scheduling policy is associated with a placement type, which determines how Fleet will
 pick clusters. The `ClusterResourcePlacement` API supports the following placement types:
 
 | Placement type | Description |
@@ -179,7 +178,7 @@ of a label.
     * `requiredDuringSchedulingIgnoredDuringExecution` terms are requirements that a cluster
     must meet before it can be picked; and
     * `preferredDuringSchedulingIgnoredDuringExecution` terms are requirements that, if a 
-    cluster meets, will set Fleet to prioritze it in scheduling.
+    cluster meets, will set Fleet to prioritize it in scheduling.
 
     In the scheduling policy of the `PickAll` placement type, you may only use the
     `requiredDuringSchedulingIgnoredDuringExecution` terms.
@@ -203,9 +202,9 @@ spec:
         clusterAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
                 clusterSelectorTerms:
-                - labelSelector:
-                    matchLabels:
-                        system: critical
+                    - labelSelector:
+                        matchLabels:
+                            system: critical
 ```
 
 The `ClusterResourcePlacement` object above will pick all the clusters with the label
@@ -260,11 +259,11 @@ spec:
     affinity:
         clusterAffinity:
             preferredDuringSchedulingIgnoredDuringExecution:
-                weight: 20
-                preference:
-                - labelSelector:
-                    matchLabels:
-                        critical-level: 1
+                - weight: 20
+                  preference:
+                    - labelSelector:
+                        matchLabels:
+                            critical-level: 1
 ```
 
 The `ClusterResourcePlacement` object above will pick first clusters with the `critical-level=1`
@@ -292,7 +291,7 @@ affinity score ranks the highest;
 * if there are multiple clusters with same topology spread score and affinity score, sort their
 names by alphanumeric order; the one with the most significant name ranks the highest.
 
-    This helps establishes deterministic scheduling behavior.
+    This helps establish deterministic scheduling behavior.
 
 Both affinity terms and topology spread constraints are optional. If you do not specify
 affinity terms or topology spread constraints, all clusters will be assigned 0 in
@@ -364,7 +363,7 @@ After a `ClusterResourcePlacement` is created, you may want to
 These changes may trigger the following outcomes:
 
 * New resources may need to be placed on all picked clusters
-* Resources already placed on a pick cluster may get updated or deleted
+* Resources already placed on a picked cluster may get updated or deleted
 * Some clusters picked previously are now unpicked, and resources must be removed from such clusters
 * Some clusters are newly picked, and resources must be added to them
 

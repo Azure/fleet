@@ -128,8 +128,8 @@ use to access the hub cluster.
     You may have noticed that at this moment, no access control has been set on the service
     account; Fleet will set things up when the member cluster joins. The service account will be
     given the minimally viable set of permissions for the Fleet member cluster to connect to the
-    hub cluster; its access will restricted to one namespace, specifically reserved for the
-    member cluster, per best security practices.
+    hub cluster; its access will be restricted to one namespace, specifically reserved for the
+    member cluster, as per security best practices.
 
 4. Register the member cluster with the hub cluster; Fleet manages cluster membership using the
 `MemberCluster` API:
@@ -185,8 +185,8 @@ Fleet connection:
         --set image.tag=$FLEET_VERSION \
         --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
         --set refreshtoken.tag=$FLEET_VERSION \
-        --set image.pullPolicy=Never \
-        --set refreshtoken.pullPolicy=Never \
+        --set image.pullPolicy=Always \
+        --set refreshtoken.pullPolicy=Always \
         --set config.memberClusterName="$MEMBER_CLUSTER" \
         --set logVerbosity=5 \
         --set namespace=fleet-system \

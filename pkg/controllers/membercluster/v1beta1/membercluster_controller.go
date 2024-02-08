@@ -21,9 +21,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	ctrl "sigs.k8s.io/controller-runtime"
+	runtime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -57,16 +58,24 @@ type Reconciler struct {
 	recorder record.EventRecorder
 	// Need to update MC based on the IMC conditions based on the agent list.
 	NetworkingAgentsEnabled bool
+	// the max number of concurrent reconciles per controller.
+	MaxConcurrentReconciles int
 	// agents are used as hashset to query the expected agent type, so the value will be ignored.
 	agents map[clusterv1beta1.AgentType]bool
 }
 
-func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("Reconcile", "memberCluster", req.NamespacedName)
+func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtime.Result, error) {
+	startTime := time.Now()
+	klog.V(2).InfoS("MemberCluster reconciliation starts", "memberCluster", req.NamespacedName)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("MemberCluster reconciliation ends", "memberCluster", req.NamespacedName, "latency", latency)
+	}()
+
 	var mc clusterv1beta1.MemberCluster
 	if err := r.Client.Get(ctx, req.NamespacedName, &mc); err != nil {
 		klog.ErrorS(err, "failed to get member cluster", "memberCluster", req.Name)
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 	mcObjRef := klog.KObj(&mc)
 
@@ -79,15 +88,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Add the finalizer to the member cluster
 	if err := r.ensureFinalizer(ctx, &mc); err != nil {
 		klog.ErrorS(err, "failed to add the finalizer to member cluster", "memberCluster", mcObjRef)
-		return ctrl.Result{}, err
+		return runtime.Result{}, err
 	}
 	currentIMC, err := r.getInternalMemberCluster(ctx, mc.GetName())
 	if err != nil {
-		return ctrl.Result{}, err
+		return runtime.Result{}, err
 	}
 	if err := r.join(ctx, &mc, currentIMC); err != nil {
 		klog.ErrorS(err, "failed to join", "memberCluster", mcObjRef)
-		return ctrl.Result{}, err
+		return runtime.Result{}, err
 	}
 
 	// Copy status from InternalMemberCluster to MemberCluster.
@@ -98,23 +107,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		} else {
 			klog.ErrorS(err, "failed to update status", "memberCluster", mcObjRef)
 		}
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 
-	return ctrl.Result{}, nil
+	return runtime.Result{}, nil
 }
 
 // handleDelete handles the delete event of the member cluster, makes sure the agent has finished leaving the fleet first and
 // then garbage collects all the resources in the cluster namespace.
-func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
+func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.MemberCluster) (runtime.Result, error) {
 	mcObjRef := klog.KObj(mc)
 	if !controllerutil.ContainsFinalizer(mc, placementv1beta1.MemberClusterFinalizer) {
 		klog.V(2).InfoS("No need to do anything for the deleting member cluster without a finalizer", "memberCluster", mcObjRef)
-		return ctrl.Result{}, nil
+		return runtime.Result{}, nil
 	}
 	currentImc, err := r.getInternalMemberCluster(ctx, mc.GetName())
 	if err != nil {
-		return ctrl.Result{}, err
+		return runtime.Result{}, err
 	}
 	// calculate the current status of the member cluster from imc status
 	r.syncInternalMemberClusterStatus(currentImc, mc)
@@ -128,11 +137,11 @@ func (r *Reconciler) handleDelete(ctx context.Context, mc *clusterv1beta1.Member
 	// mark the imc as left again to make sure the agent is leaving the fleet
 	if err := r.leave(ctx, mc, currentImc); err != nil {
 		klog.ErrorS(err, "failed to leave", "memberCluster", mcObjRef)
-		return ctrl.Result{}, err
+		return runtime.Result{}, err
 	}
 	// update the mc status while we wait for all the agents to leave
 	err = r.updateMemberClusterStatus(ctx, mc)
-	return ctrl.Result{}, controller.NewUpdateIgnoreConflictError(err)
+	return runtime.Result{}, controller.NewUpdateIgnoreConflictError(err)
 }
 
 func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) (*clusterv1beta1.InternalMemberCluster, error) {
@@ -153,14 +162,14 @@ func (r *Reconciler) getInternalMemberCluster(ctx context.Context, name string) 
 }
 
 // garbageCollectWork remove all the finalizers on the work that are in the cluster namespace
-func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.MemberCluster) (ctrl.Result, error) {
+func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.MemberCluster) (runtime.Result, error) {
 	var works placementv1beta1.WorkList
 	var clusterNS corev1.Namespace
 	// check if the namespace still exist
 	namespaceName := fmt.Sprintf(utils.NamespaceNameFormat, mc.Name)
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: namespaceName}, &clusterNS); apierrors.IsNotFound(err) {
 		klog.V(2).InfoS("the member cluster namespace is successfully deleted", "memberCluster", klog.KObj(mc))
-		return ctrl.Result{}, nil
+		return runtime.Result{}, nil
 	}
 	// list all the work object we created in the member cluster namespace
 	listOpts := []client.ListOption{
@@ -169,7 +178,7 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 	}
 	if err := r.Client.List(ctx, &works, listOpts...); err != nil {
 		klog.ErrorS(err, "failed to list all the work object", "memberCluster", klog.KObj(mc))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return runtime.Result{}, client.IgnoreNotFound(err)
 	}
 	for _, work := range works.Items {
 		staleWork := work.DeepCopy()
@@ -177,13 +186,13 @@ func (r *Reconciler) garbageCollectWork(ctx context.Context, mc *clusterv1beta1.
 		if updateErr := r.Update(ctx, staleWork, &client.UpdateOptions{}); updateErr != nil {
 			klog.ErrorS(updateErr, "failed to remove the finalizer from the work",
 				"memberCluster", klog.KObj(mc), "work", klog.KObj(staleWork))
-			return ctrl.Result{}, updateErr
+			return runtime.Result{}, updateErr
 		}
 	}
 	klog.V(2).InfoS("successfully removed all the work finalizers in the cluster namespace",
 		"memberCluster", klog.KObj(mc), "number of work", len(works.Items))
 	controllerutil.RemoveFinalizer(mc, placementv1beta1.MemberClusterFinalizer)
-	return ctrl.Result{}, r.Update(ctx, mc, &client.UpdateOptions{})
+	return runtime.Result{}, r.Update(ctx, mc, &client.UpdateOptions{})
 }
 
 // ensureFinalizer makes sure that the member cluster CR has a finalizer on it
@@ -589,7 +598,7 @@ func markMemberClusterUnknown(recorder record.EventRecorder, mc apis.Conditioned
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("mcv1beta1")
 	r.agents = make(map[clusterv1beta1.AgentType]bool)
 	r.agents[clusterv1beta1.MemberAgent] = true
@@ -598,7 +607,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.agents[clusterv1beta1.MultiClusterServiceAgent] = true
 		r.agents[clusterv1beta1.ServiceExportImportAgent] = true
 	}
-	return ctrl.NewControllerManagedBy(mgr).
+	return runtime.NewControllerManagedBy(mgr).
+		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&clusterv1beta1.MemberCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&clusterv1beta1.InternalMemberCluster{}).
 		Complete(r)
