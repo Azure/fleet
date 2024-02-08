@@ -106,7 +106,7 @@ func (v *fleetResourceValidator) handleV1Alpha1MemberCluster(req admission.Reque
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMemberClusterUpdate(&currentMC, &oldMC, req, v.whiteListedUsers)
+		return validation.ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
@@ -122,7 +122,7 @@ func (v *fleetResourceValidator) handleMemberCluster(req admission.Request) admi
 		if err := v.decoder.DecodeRaw(req.OldObject, &oldMC); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
-		return validation.ValidateMemberClusterUpdate(&currentMC, &oldMC, req, v.whiteListedUsers)
+		return validation.ValidateMemberClusterUpdate(currentMC, oldMC, req, v.whiteListedUsers)
 	}
 	return validation.ValidateUserForResource(req, v.whiteListedUsers)
 }
