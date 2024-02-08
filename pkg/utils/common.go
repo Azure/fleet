@@ -392,3 +392,11 @@ func GenerateGroupString(groups []string) string {
 	}
 	return groupString
 }
+
+// GetTolerations returns tolerations from supplied placement policy.
+func GetTolerations(policy *placementv1beta1.PlacementPolicy) []placementv1beta1.Toleration {
+	if policy != nil {
+		return policy.Tolerations
+	}
+	return nil
+}
