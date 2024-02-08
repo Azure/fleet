@@ -94,7 +94,7 @@ func ValidateV1Alpha1MemberClusterUpdate(currentMC, oldMC fleetv1alpha1.MemberCl
 		return admission.Denied(err.Error())
 	}
 	if (isLabelUpdated || isAnnotationUpdated) && !isObjUpdated {
-		// we allow any user to modify MemberCluster/Namespace labels/annotations.
+		// we allow any user to modify v1alpha1 MemberCluster labels & annotations.
 		klog.V(3).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
@@ -112,6 +112,7 @@ func ValidateMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, 
 	isLabelUpdated := isMapFieldUpdated(currentMC.GetLabels(), oldMC.GetLabels())
 	isAnnotationUpdated := isMapFieldUpdated(currentMC.GetAnnotations(), oldMC.GetAnnotations())
 	isTaintsUpdated := isTaintsFieldUpdated(currentMC.Spec.Taints, oldMC.Spec.Taints)
+	// set taints field to nil.
 	currentMC.Spec.Taints = nil
 	oldMC.Spec.Taints = nil
 	isObjUpdated, err := isMemberClusterUpdated(&currentMC, &oldMC)
@@ -119,7 +120,7 @@ func ValidateMemberClusterUpdate(currentMC, oldMC clusterv1beta1.MemberCluster, 
 		return admission.Denied(err.Error())
 	}
 	if (isLabelUpdated || isAnnotationUpdated || isTaintsUpdated) && !isObjUpdated {
-		// we allow any user to modify MemberCluster/Namespace labels/annotations.
+		// we allow any user to modify MemberCluster/Namespace labels, annotations & taints.
 		klog.V(3).InfoS("user in groups is allowed to modify member cluster labels/annotations", "user", userInfo.Username, "groups", userInfo.Groups, "operation", req.Operation, "GVK", req.RequestKind, "subResource", req.SubResource, "namespacedName", namespacedName)
 		response = admission.Allowed(fmt.Sprintf(ResourceAllowedFormat, userInfo.Username, utils.GenerateGroupString(userInfo.Groups), req.Operation, req.RequestKind, req.SubResource, namespacedName))
 	}
