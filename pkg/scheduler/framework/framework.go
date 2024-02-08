@@ -679,13 +679,13 @@ func (f *framework) createBindings(ctx context.Context, toCreate []*placementv1b
 							// The binding already exists, which is fine.
 							return nil
 						}
-						klog.ErrorS(err, "failed to create a new binding", "clusterResourceBinding", klog.KObj(newBinding))
+						klog.ErrorS(err, "Failed to create a new binding", "clusterResourceBinding", klog.KObj(newBinding))
 					}
 					return err
 				})
 		})
 	}
-	return errs.Wait()
+	return controller.NewAPIServerError(false, errs.Wait())
 }
 
 // patchBindings patches a list of existing bindings using JSON patch.
@@ -697,19 +697,20 @@ func (f *framework) patchBindings(ctx context.Context, toPatch []*bindingWithPat
 		errs.Go(func() error {
 			return retry.OnError(retry.DefaultBackoff,
 				func(err error) bool {
+					// we can't retry on conflict errors here easily as we need to fetch the original binding to patch it.
 					return apierrors.IsServiceUnavailable(err) || apierrors.IsServerTimeout(err)
 				},
 				func() error {
-					// Use JSON patch to avoid races so we shouldn't get a conflict error.
+					// we will get conflict error if the binding has been updated.
 					err := f.client.Patch(cctx, patchBinding.updated, patchBinding.patch)
 					if err != nil {
-						klog.ErrorS(err, "failed to patch a binding", "clusterResourceBinding", klog.KObj(patchBinding.updated))
+						klog.ErrorS(err, "Failed to patch a binding", "clusterResourceBinding", klog.KObj(patchBinding.updated))
 					}
 					return err
 				})
 		})
 	}
-	return errs.Wait()
+	return controller.NewUpdateIgnoreConflictError(errs.Wait())
 }
 
 // updatePolicySnapshotStatusFromBindings updates the policy snapshot status, in accordance with the list of
