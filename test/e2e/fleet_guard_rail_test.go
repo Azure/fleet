@@ -139,6 +139,21 @@ var _ = Describe("fleet guard rail tests for allow/deny MC UPDATE, DELETE operat
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	})
 
+	It("should allow update operation on member cluster CR taints for any user", func() {
+		var mc clusterv1beta1.MemberCluster
+		By(fmt.Sprintf("update taints in member cluster %s, expecting successful UPDATE of member cluster", mcName))
+		Eventually(func(g Gomega) error {
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			taint := clusterv1beta1.Taint{
+				Key:    "key1",
+				Value:  "value1",
+				Effect: corev1.TaintEffectNoSchedule,
+			}
+			mc.Spec.Taints = append(mc.Spec.Taints, taint)
+			return impersonateHubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
+	})
+
 	It("should allow update operation on member cluster CR spec for user in system:masters group", func() {
 		var mc clusterv1beta1.MemberCluster
 		By(fmt.Sprintf("update spec of member cluster %s, expecting successful UPDATE of member cluster", mcName))
