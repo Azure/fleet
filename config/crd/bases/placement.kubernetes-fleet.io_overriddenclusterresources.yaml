@@ -24,7 +24,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1alpah1
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: "OverriddenClusterResource is used to store the result of cluster
