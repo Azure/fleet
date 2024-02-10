@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -419,6 +420,23 @@ func TestHandleMemberCluster(t *testing.T) {
 			Annotations: map[string]string{"test-key": "test-value"},
 		},
 	}
+	taintUpdatedMCObject := &clusterv1beta1.MemberCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "MemberCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-mc",
+		},
+		Spec: clusterv1beta1.MemberClusterSpec{
+			Taints: []clusterv1beta1.Taint{
+				{
+					Key:    "key1",
+					Value:  "value1",
+					Effect: corev1.TaintEffectNoSchedule,
+				},
+			},
+		},
+	}
 	specUpdatedMCObject := &clusterv1beta1.MemberCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "MemberCluster",
@@ -452,6 +470,8 @@ func TestHandleMemberCluster(t *testing.T) {
 	labelUpdatedMCObjectBytes, err := json.Marshal(labelUpdatedMCObject)
 	assert.Nil(t, err)
 	annotationUpdatedMCObjectBytes, err := json.Marshal(annotationUpdatedMCObject)
+	assert.Nil(t, err)
+	taintUpdatedMCObjectBytes, err := json.Marshal(taintUpdatedMCObject)
 	assert.Nil(t, err)
 	specUpdatedMCObjectBytes, err := json.Marshal(specUpdatedMCObject)
 	assert.Nil(t, err)
@@ -522,6 +542,31 @@ func TestHandleMemberCluster(t *testing.T) {
 					Object: runtime.RawExtension{
 						Raw:    annotationUpdatedMCObjectBytes,
 						Object: annotationUpdatedMCObject,
+					},
+					OldObject: runtime.RawExtension{
+						Raw:    MCObjectBytes,
+						Object: MCObject,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: "test-user",
+						Groups:   []string{"test-group"},
+					},
+					RequestKind: &validation.MCGVK,
+					Operation:   admissionv1.Update,
+				},
+			},
+			resourceValidator: fleetResourceValidator{
+				decoder: decoder,
+			},
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &validation.MCGVK, "", types.NamespacedName{Name: "test-mc"})),
+		},
+		"allow any user to modify MC taints": {
+			req: admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Name: "test-mc",
+					Object: runtime.RawExtension{
+						Raw:    taintUpdatedMCObjectBytes,
+						Object: taintUpdatedMCObject,
 					},
 					OldObject: runtime.RawExtension{
 						Raw:    MCObjectBytes,
