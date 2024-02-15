@@ -9,6 +9,7 @@ package validator
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -113,22 +114,26 @@ func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.Pla
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
 	switch policy.PlacementType {
 	case placementv1beta1.PickFixedPlacementType:
 		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	case placementv1beta1.PickAllPlacementType:
 		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	case placementv1beta1.PickNPlacementType:
 		if err := validatePolicyForPickNPolicyType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	}
+	if err := validateTolerations(policy.Tolerations); err != nil {
+		allErr = append(allErr, err)
+	}
 
-	return nil
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
@@ -211,6 +216,32 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 		}
 	}
 	return apiErrors.NewAggregate(allErr)
+}
+
+func validateTolerations(tolerations []placementv1beta1.Toleration) error {
+	errFmt := "invalid toleration %+v"
+	allErr := make([]error, 0)
+	var tolerationMap map[string]placementv1beta1.Toleration
+	for _, toleration := range tolerations {
+		if toleration.Key == "" && toleration.Operator != corev1.TolerationOpExists {
+			allErr = append(allErr, fmt.Errorf(errFmt, toleration))
+		}
+		if toleration.Value == "" && toleration.Operator == corev1.TolerationOpEqual {
+			allErr = append(allErr, fmt.Errorf(errFmt, toleration))
+		}
+		key := buildTolerationKey(toleration)
+		_, exists := tolerationMap[key]
+		if !exists {
+			tolerationMap[key] = toleration
+		} else {
+			allErr = append(allErr, fmt.Errorf("tolerations must be unique"))
+		}
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func buildTolerationKey(toleration placementv1beta1.Toleration) string {
+	return toleration.Key + ":" + string(toleration.Operator) + ":" + toleration.Value + ":" + string(toleration.Effect)
 }
 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
