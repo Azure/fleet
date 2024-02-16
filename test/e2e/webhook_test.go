@@ -312,7 +312,7 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 				return err
 			}
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("toleration %+v already exists, tolerations must be unique", invalidToleration2)))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("toleration %+v already exists, tolerations must be unique", nonUniqueToleration)))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
