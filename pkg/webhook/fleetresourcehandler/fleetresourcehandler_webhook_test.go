@@ -958,7 +958,7 @@ func TestHandleFleetReservedNamespacedResource(t *testing.T) {
 				client:            mockClient,
 				isFleetV1Beta1API: true,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &utils.WorkGVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-identity", utils.GenerateGroupString([]string{"system:authenticated"}), admissionv1.Update, &utils.WorkV1Beta1GVK, "", types.NamespacedName{Name: "test-mc", Namespace: "fleet-member-test-mc"})),
 		},
 		"deny user not in MC identity with update in fleet member cluster namespace with v1beta1 IMC": {
 			req: admission.Request{
