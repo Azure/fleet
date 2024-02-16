@@ -576,14 +576,14 @@ func TestHandleMemberCluster(t *testing.T) {
 						Username: "test-user",
 						Groups:   []string{"test-group"},
 					},
-					RequestKind: &validation.MCGVK,
+					RequestKind: &utils.MCGVK,
 					Operation:   admissionv1.Update,
 				},
 			},
 			resourceValidator: fleetResourceValidator{
 				decoder: decoder,
 			},
-			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &validation.MCGVK, "", types.NamespacedName{Name: "test-mc"})),
+			wantResponse: admission.Allowed(fmt.Sprintf(validation.ResourceAllowedFormat, "test-user", utils.GenerateGroupString([]string{"test-group"}), admissionv1.Update, &utils.MCGVK, "", types.NamespacedName{Name: "test-mc"})),
 		},
 		"allow system:masters group user to modify MC spec": {
 			req: admission.Request{
