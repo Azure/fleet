@@ -105,11 +105,11 @@ func sortResources(resources []runtime.Object) {
 	sort.Slice(resources, func(i, j int) bool {
 		obj1 := resources[i].DeepCopyObject().(*unstructured.Unstructured)
 		obj2 := resources[j].DeepCopyObject().(*unstructured.Unstructured)
-		if obj1.GetKind() == utils.NamespaceGVK.Kind || obj2.GetKind() == utils.NamespaceGVK.Kind {
-			return obj1.GetKind() == utils.NamespaceGVK.Kind
+		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String() {
+			return obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String()
 		}
-		if obj1.GetKind() == utils.CRDGVK.Kind || obj2.GetKind() == utils.CRDGVK.Kind {
-			return obj1.GetKind() == utils.CRDGVK.Kind
+		if obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String() {
+			return obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String()
 		}
 		// compare group/version;kind
 		gvkComp := strings.Compare(obj1.GroupVersionKind().String(), obj2.GroupVersionKind().String())
