@@ -6,13 +6,17 @@ Licensed under the MIT license.
 package validator
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
@@ -1033,6 +1037,81 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 			if actualResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); actualResult != testCase.wantResult {
 				t.Errorf("IsPlacementPolicyUpdateValid() actualResult = %v, wantResult %v", actualResult, testCase.wantResult)
 			}
+		})
+	}
+}
+
+func TestValidateToleration(t *testing.T) {
+	tests := map[string]struct {
+		tolerations []placementv1beta1.Toleration
+		wantErr     error
+	}{
+		"valid tolerations": {
+			tolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpExists,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Operator: corev1.TolerationOpExists,
+				},
+			},
+			wantErr: nil,
+		},
+		"invalid toleration, key is empty, operator is Equal": {
+			tolerations: []placementv1beta1.Toleration{
+				{
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}),
+		},
+		"invalid toleration, value is empty, operator is not Exists": {
+			tolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Effect: corev1.TaintEffectNoSchedule}),
+		},
+		"invalid toleration, non-unique toleration": {
+			tolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpExists,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpExists,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantErr: fmt.Errorf(uniqueTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpExists, Value: "value1", Effect: corev1.TaintEffectNoSchedule}),
+		},
+	}
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			actualErr := validateTolerations(testCase.tolerations)
+			assert.Equal(t, testCase.wantErr, actualErr, utils.TestCaseMsg, testName)
 		})
 	}
 }

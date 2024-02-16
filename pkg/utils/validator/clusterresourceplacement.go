@@ -23,6 +23,11 @@ import (
 
 var ResourceInformer informer.Manager
 
+var (
+	invalidTolerationErrFmt = "invalid toleration %+v"
+	uniqueTolerationErrFmt  = "toleration %+v already exists, tolerations must be unique"
+)
+
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
 func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
 	allErr := make([]error, 0)
@@ -219,25 +224,23 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 }
 
 func validateTolerations(tolerations []placementv1beta1.Toleration) error {
-	errFmt := "invalid toleration %+v"
-	allErr := make([]error, 0)
-	var tolerationMap map[string]placementv1beta1.Toleration
+	tolerationMap := make(map[string]placementv1beta1.Toleration)
 	for _, toleration := range tolerations {
 		if toleration.Key == "" && toleration.Operator != corev1.TolerationOpExists {
-			allErr = append(allErr, fmt.Errorf(errFmt, toleration))
+			return fmt.Errorf(invalidTolerationErrFmt, toleration)
 		}
 		if toleration.Value == "" && toleration.Operator == corev1.TolerationOpEqual {
-			allErr = append(allErr, fmt.Errorf(errFmt, toleration))
+			return fmt.Errorf(invalidTolerationErrFmt, toleration)
 		}
 		key := buildTolerationKey(toleration)
 		_, exists := tolerationMap[key]
 		if !exists {
 			tolerationMap[key] = toleration
 		} else {
-			allErr = append(allErr, fmt.Errorf("tolerations must be unique"))
+			return fmt.Errorf(uniqueTolerationErrFmt, toleration)
 		}
 	}
-	return apiErrors.NewAggregate(allErr)
+	return nil
 }
 
 func buildTolerationKey(toleration placementv1beta1.Toleration) string {
