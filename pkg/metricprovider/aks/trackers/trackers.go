@@ -65,7 +65,7 @@ func (nt *NodeTracker) AddOrUpdate(node *corev1.Node) {
 		// any inconsistencies.
 		for _, rn := range supportedResourceNames {
 			c1 := rc[rn]
-			c2 := node.Status.Capacity[corev1.ResourceName(rn)]
+			c2 := node.Status.Capacity[rn]
 			if !c1.Equal(c2) {
 				// The reported total capacity has changed.
 
@@ -84,7 +84,7 @@ func (nt *NodeTracker) AddOrUpdate(node *corev1.Node) {
 
 		// The node's total capacity has not been tracked.
 		for _, rn := range supportedResourceNames {
-			c := node.Status.Capacity[corev1.ResourceName(rn)]
+			c := node.Status.Capacity[rn]
 			rc[rn] = c
 
 			tc := nt.totalCapacity[rn]
@@ -104,7 +104,7 @@ func (nt *NodeTracker) AddOrUpdate(node *corev1.Node) {
 		// any inconsistencies.
 		for _, rn := range supportedResourceNames {
 			c1 := ra[rn]
-			c2 := node.Status.Allocatable[corev1.ResourceName(rn)]
+			c2 := node.Status.Allocatable[rn]
 			if !c1.Equal(c2) {
 				// The reported allocatable capacity has changed.
 
@@ -123,7 +123,7 @@ func (nt *NodeTracker) AddOrUpdate(node *corev1.Node) {
 
 		// The node's allocatable capacity has not been tracked.
 		for _, rn := range supportedResourceNames {
-			a := node.Status.Allocatable[corev1.ResourceName(rn)]
+			a := node.Status.Allocatable[rn]
 			ra[rn] = a
 
 			ta := nt.totalAllocatable[rn]
@@ -246,7 +246,7 @@ func (pt *PodTracker) AddOrUpdate(pod *corev1.Pod) {
 	for _, container := range pod.Spec.Containers {
 		for _, rn := range supportedResourceNames {
 			r := requestsAcrossAllContainers[rn]
-			r.Add(container.Resources.Requests[corev1.ResourceName(rn)])
+			r.Add(container.Resources.Requests[rn])
 			requestsAcrossAllContainers[rn] = r
 		}
 	}
