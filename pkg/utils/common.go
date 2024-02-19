@@ -179,20 +179,20 @@ var (
 	}
 
 	RoleGVK = metav1.GroupVersionKind{
-		Group:   metav1.SchemeGroupVersion.Group,
-		Version: metav1.SchemeGroupVersion.Version,
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
 		Kind:    "Role",
 	}
 
 	RoleBindingGVK = metav1.GroupVersionKind{
-		Group:   metav1.SchemeGroupVersion.Group,
-		Version: metav1.SchemeGroupVersion.Version,
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
 		Kind:    "RoleBinding",
 	}
 
 	PodGVK = metav1.GroupVersionKind{
-		Group:   metav1.SchemeGroupVersion.Group,
-		Version: metav1.SchemeGroupVersion.Version,
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "Pod",
 	}
 
