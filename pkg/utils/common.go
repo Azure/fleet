@@ -8,6 +8,7 @@ package utils
 import (
 	"crypto/rand"
 	"fmt"
+	"k8s.io/klog/v2"
 	"math/big"
 	"strings"
 	"time"
@@ -23,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
