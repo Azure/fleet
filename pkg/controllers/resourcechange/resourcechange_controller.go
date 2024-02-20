@@ -258,7 +258,6 @@ func collectAllAffectedPlacementsV1Alpha1(res *unstructured.Unstructured, crpLis
 		match := false
 		var placement fleetv1alpha1.ClusterResourcePlacement
 		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(crp.DeepCopyObject().(*unstructured.Unstructured).Object, &placement)
-
 		// find the placements selected this resource (before this change)
 		for _, selectedRes := range placement.Status.SelectedResources {
 			if selectedRes.Group == res.GroupVersionKind().Group && selectedRes.Version == res.GroupVersionKind().Version &&
@@ -298,7 +297,6 @@ func collectAllAffectedPlacementsV1Beta1(res *unstructured.Unstructured, crpList
 		match := false
 		var placement placementv1beta1.ClusterResourcePlacement
 		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(crp.DeepCopyObject().(*unstructured.Unstructured).Object, &placement)
-
 		// find the placements selected this resource (before this change)
 		for _, selectedRes := range placement.Status.SelectedResources {
 			if selectedRes.Group == res.GroupVersionKind().Group && selectedRes.Version == res.GroupVersionKind().Version &&

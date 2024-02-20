@@ -583,18 +583,7 @@ func TestCollectAllAffectedPlacementsV1Alpha1(t *testing.T) {
 			wantCrp: make(map[string]bool),
 		},
 		"don't select placement with name, nil label selector for namespace with different name": {
-			res: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Namespace",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace-1",
-					Labels: map[string]string{
-						"region": utilrand.String(10),
-					},
-				},
-			},
+			res: matchRes,
 			crpList: []*fleetv1alpha1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -606,7 +595,7 @@ func TestCollectAllAffectedPlacementsV1Alpha1(t *testing.T) {
 								Group:   corev1.GroupName,
 								Version: "v1",
 								Kind:    "Namespace",
-								Name:    "test-namespace-2",
+								Name:    "test-namespace-1",
 							},
 						},
 					},
@@ -615,18 +604,7 @@ func TestCollectAllAffectedPlacementsV1Alpha1(t *testing.T) {
 			wantCrp: make(map[string]bool),
 		},
 		"select placement with empty name, nil label selector for namespace": {
-			res: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Namespace",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace-1",
-					Labels: map[string]string{
-						"region": utilrand.String(10),
-					},
-				},
-			},
+			res: matchRes,
 			crpList: []*fleetv1alpha1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -973,18 +951,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 			wantCrp: make(map[string]bool),
 		},
 		"don't select placement with name, nil label selector for namespace with different name": {
-			res: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Namespace",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace-1",
-					Labels: map[string]string{
-						"region": utilrand.String(10),
-					},
-				},
-			},
+			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -996,7 +963,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 								Group:   corev1.GroupName,
 								Version: "v1",
 								Kind:    "Namespace",
-								Name:    "test-namespace-2",
+								Name:    "test-namespace-1",
 							},
 						},
 					},
@@ -1005,18 +972,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 			wantCrp: make(map[string]bool),
 		},
 		"select placement with empty name, nil label selector for namespace": {
-			res: &corev1.Namespace{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Namespace",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace-1",
-					Labels: map[string]string{
-						"region": utilrand.String(10),
-					},
-				},
-			},
+			res: matchRes,
 			crpList: []*placementv1beta1.ClusterResourcePlacement{
 				{
 					ObjectMeta: metav1.ObjectMeta{
