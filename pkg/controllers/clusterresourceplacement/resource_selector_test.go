@@ -843,19 +843,19 @@ func TestSortResource(t *testing.T) {
 
 	tests := map[string]struct {
 		resources []runtime.Object
-		expected  []runtime.Object
+		want      []runtime.Object
 	}{
 		"should gather selected resources with Namespace in front": {
 			resources: []runtime.Object{deployment, namespace},
-			expected:  []runtime.Object{namespace, deployment},
+			want:      []runtime.Object{namespace, deployment},
 		},
 		"should gather selected resources with CRD in front": {
 			resources: []runtime.Object{clusterRole, crd},
-			expected:  []runtime.Object{crd, clusterRole},
+			want:      []runtime.Object{crd, clusterRole},
 		},
 		"should gather selected resources with CRD or Namespace in front": {
 			resources: []runtime.Object{deployment, clusterRole, crd, namespace},
-			expected:  []runtime.Object{namespace, crd, clusterRole, deployment},
+			want:      []runtime.Object{namespace, crd, clusterRole, deployment},
 		},
 	}
 
@@ -864,9 +864,9 @@ func TestSortResource(t *testing.T) {
 			sortResources(tt.resources)
 
 			// Check that the returned resources match the expected resources
-			diff := cmp.Diff(tt.expected, tt.resources)
+			diff := cmp.Diff(tt.want, tt.resources)
 			if diff != "" {
-				t.Errorf("MakeGatewayInfo() mismatch (-want +got):\n%s", diff)
+				t.Errorf("sortResources() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

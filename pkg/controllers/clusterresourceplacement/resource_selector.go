@@ -108,8 +108,8 @@ func sortResources(resources []runtime.Object) {
 		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String() {
 			return obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String()
 		}
-		if obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String() {
-			return obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String()
+		if obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.CRDGVK.String() {
+			return obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String()
 		}
 		// compare group/version;kind
 		gvkComp := strings.Compare(obj1.GroupVersionKind().String(), obj2.GroupVersionKind().String())
