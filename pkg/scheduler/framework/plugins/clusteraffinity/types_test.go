@@ -6,9 +6,12 @@ Licensed under the MIT license.
 package clusteraffinity
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -450,6 +453,118 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(preferredAffinityTerm{}, affinityTerm{})); diff != "" {
 				t.Errorf("NewPreferredAffinityTerms() preferredAffinityTerm mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestExtractResourceMetricDataFrom tests the extractResourceMetricDataFrom function.
+func TestExtractResourceMetricDataFrom(t *testing.T) {
+	ru := &clusterv1beta1.ResourceUsage{
+		Capacity: corev1.ResourceList{
+			corev1.ResourceCPU:              resource.MustParse("12"),
+			corev1.ResourceMemory:           resource.MustParse("24Gi"),
+			corev1.ResourceStorage:          resource.MustParse("100Gi"),
+			corev1.ResourceEphemeralStorage: resource.MustParse("100Gi"),
+		},
+		Allocatable: corev1.ResourceList{
+			corev1.ResourceCPU:              resource.MustParse("10"),
+			corev1.ResourceMemory:           resource.MustParse("20Gi"),
+			corev1.ResourceStorage:          resource.MustParse("90Gi"),
+			corev1.ResourceEphemeralStorage: resource.MustParse("90Gi"),
+		},
+		Available: corev1.ResourceList{
+			corev1.ResourceCPU:              resource.MustParse("4"),
+			corev1.ResourceMemory:           resource.MustParse("4Gi"),
+			corev1.ResourceStorage:          resource.MustParse("40Gi"),
+			corev1.ResourceEphemeralStorage: resource.MustParse("24Gi"),
+		},
+	}
+
+	testCases := []struct {
+		name                 string
+		usage                *clusterv1beta1.ResourceUsage
+		label                string
+		wantResourceQuantity resource.Quantity
+		wantErrMsg           string
+	}{
+		{
+			name:                 "cpu resource metric (allocatable)",
+			usage:                ru,
+			label:                "allocatable-cpu",
+			wantResourceQuantity: resource.MustParse("10"),
+		},
+		{
+			name:                 "cpu resource metric (available)",
+			usage:                ru,
+			label:                "available-cpu",
+			wantResourceQuantity: resource.MustParse("4"),
+		},
+		{
+			name:                 "memory resource metric (allocatable)",
+			usage:                ru,
+			label:                "allocatable-memory",
+			wantResourceQuantity: resource.MustParse("20Gi"),
+		},
+		{
+			name:                 "memory resource metric (available)",
+			usage:                ru,
+			label:                "available-memory",
+			wantResourceQuantity: resource.MustParse("4Gi"),
+		},
+		{
+			name:       "unavailable capacity type",
+			usage:      ru,
+			label:      "mincapacity-cpu",
+			wantErrMsg: "failed to look up resource metric name mincapacity-cpu: the capacity type does not exist",
+		},
+		{
+			name:       "unavailable resource type",
+			usage:      ru,
+			label:      "allocatable-megagpu",
+			wantErrMsg: "failed to look up resource metric name allocatable-megagpu: the resource name does not exist",
+		},
+		{
+			name:       "invalid metric name (no separator)",
+			usage:      ru,
+			label:      "allocatablecpu",
+			wantErrMsg: "failed to parse resource metric name allocatablecpu: the name is not of the correct format",
+		},
+		{
+			name:       "invalid metric name (no capacity type)",
+			usage:      ru,
+			label:      "-cpu",
+			wantErrMsg: "failed to parse resource metric name -cpu: the name is not of the correct format",
+		},
+		{
+			name:       "invalid metric name (no resource type)",
+			usage:      ru,
+			label:      "allocatable-",
+			wantErrMsg: "failed to parse resource metric name allocatable-: the name is not of the correct format",
+		},
+		{
+			name:       "no resource usage",
+			label:      "allocatable-cpu",
+			wantErrMsg: "failed to look up resource metric: the resource usage is nil",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResourceQuantity, err := ExtractResourceMetricDataFrom(tc.usage, tc.label)
+			if err != nil {
+				if tc.wantErrMsg == "" {
+					t.Fatalf("extractResourceMetricDataFrom(), got error %v, want no error", err)
+				}
+
+				if !strings.HasPrefix(err.Error(), tc.wantErrMsg) {
+					t.Fatalf("extractResourceMetricDataFrom(), got error %v, want %v", err.Error(), tc.wantErrMsg)
+				}
+				return
+			}
+
+			if !tc.wantResourceQuantity.Equal(gotResourceQuantity) {
+				t.Fatalf("extractResourceMetricDataFrom() = %v, want %v", gotResourceQuantity, tc.wantResourceQuantity)
 			}
 		})
 	}

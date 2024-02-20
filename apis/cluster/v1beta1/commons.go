@@ -24,9 +24,13 @@ type ResourceUsage struct {
 	// +optional
 	Capacity corev1.ResourceList `json:"capacity,omitempty"`
 
-	// Allocatable represents the total resources of all the nodes on a member cluster that are available for scheduling.
+	// Allocatable represents the total allocatable resources of all the nodes on a member cluster.
 	// +optional
 	Allocatable corev1.ResourceList `json:"allocatable,omitempty"`
+
+	// Available represents the total available resources of all the nodes on a member cluster/
+	// +optional
+	Available corev1.ResourceList `json:"available,omitempty"`
 
 	// When the resource usage is observed.
 	// +optional

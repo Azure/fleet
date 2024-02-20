@@ -13,6 +13,29 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
+const (
+	// Fleet supports two types of metrics: resource metrics and non-resource metrics.
+	//
+	// Non-resource metrics are key/value pairs, where the key is a Kubernetes label name
+	// and the value a sortable numeric. Resource metrics, however, are stored in a structured
+	// manner, as a Kubernetes cluster might have different capacities for the same type
+	// of resource.
+	//
+	// For scheduling, Fleet allows users to query both types of metrics to inform
+	// scheduling decisions. For non-resource metrics, users could refer to them directly
+	// using their keys (the label names); and for resource metrics, Fleet reserves a special
+	// format so that resource metrics can also be referenced using some label names.
+	//
+	// Such label names belong to a special domain, `resources.kubernetes-fleet.io`, and
+	// its name should be separated by a dash (`-`), where the part before is the capacity
+	// type, and the part after the name of the resource.
+	//
+	// TO-DO (chenyu1): uncomment with future PRs.
+	//
+	//resourceMetricLabelPrefix  = "resources.kubernetes-fleet.io/"
+	resourceMetricLabelNameSep = "-"
+)
+
 // Plugin is the scheduler plugin that enforces the cluster affinity (if any) defined on a CRP.
 type Plugin struct {
 	// The name of the plugin.

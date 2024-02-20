@@ -23,7 +23,9 @@ import (
 //
 // This function facilitates arbitrary lookup of resource usage data (reported in a structured
 // form) using a label name of a specific format.
-func extractResourceMetricDataFrom(usage *clusterv1beta1.ResourceUsage, name string) (resource.Quantity, error) {
+//
+// TO-DO (chenyu1): switch to a private function with future PRs.
+func ExtractResourceMetricDataFrom(usage *clusterv1beta1.ResourceUsage, name string) (resource.Quantity, error) {
 	capacityType, resourceName, found := strings.Cut(name, resourceMetricLabelNameSep)
 	// Do some sanity checks.
 	if !found || len(capacityType) == 0 || len(resourceName) == 0 {
@@ -83,7 +85,7 @@ func extractResourceMetricDataFrom(usage *clusterv1beta1.ResourceUsage, name str
 					// Deserialize the quantity.
 					q, parseErr := resource.ParseQuantity(s[0].String())
 					if parseErr != nil {
-						return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s:  the quantity is not valid (deserialization failed: %v)", name, parseErr)
+						return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s:  the quantity is not valid (deserialization failed: %w)", name, parseErr)
 					}
 
 					return q, nil

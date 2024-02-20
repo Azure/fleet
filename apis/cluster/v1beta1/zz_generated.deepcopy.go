@@ -11,7 +11,7 @@ Licensed under the MIT license.
 package v1beta1
 
 import (
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -290,6 +290,13 @@ func (in *ResourceUsage) DeepCopyInto(out *ResourceUsage) {
 	}
 	if in.Allocatable != nil {
 		in, out := &in.Allocatable, &out.Allocatable
+		*out = make(v1.ResourceList, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val.DeepCopy()
+		}
+	}
+	if in.Available != nil {
+		in, out := &in.Available, &out.Available
 		*out = make(v1.ResourceList, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val.DeepCopy()
