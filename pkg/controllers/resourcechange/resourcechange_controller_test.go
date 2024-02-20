@@ -582,6 +582,47 @@ func TestCollectAllAffectedPlacementsV1Alpha1(t *testing.T) {
 			},
 			wantCrp: make(map[string]bool),
 		},
+		"don't select placement with name, nil label selector for namespace with different name": {
+			res: matchRes,
+			crpList: []*fleetv1alpha1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+						ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    "test-namespace-1",
+							},
+						},
+					},
+				},
+			},
+			wantCrp: make(map[string]bool),
+		},
+		"select placement with empty name, nil label selector for namespace": {
+			res: matchRes,
+			crpList: []*fleetv1alpha1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Spec: fleetv1alpha1.ClusterResourcePlacementSpec{
+						ResourceSelectors: []fleetv1alpha1.ClusterResourceSelector{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    "Namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCrp: map[string]bool{"resource-selected": true},
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -909,6 +950,47 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 			},
 			wantCrp: make(map[string]bool),
 		},
+		"don't select placement with name, nil label selector for namespace with different name": {
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    "test-namespace-1",
+							},
+						},
+					},
+				},
+			},
+			wantCrp: make(map[string]bool),
+		},
+		"select placement with empty name, nil label selector for namespace": {
+			res: matchRes,
+			crpList: []*placementv1beta1.ClusterResourcePlacement{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "resource-selected",
+					},
+					Spec: placementv1beta1.ClusterResourcePlacementSpec{
+						ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+							{
+								Group:   corev1.GroupName,
+								Version: "v1",
+								Kind:    "Namespace",
+							},
+						},
+					},
+				},
+			},
+			wantCrp: map[string]bool{"resource-selected": true},
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -919,7 +1001,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 			}
 			uRes, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.res)
 			validator.ResourceInformer = validator.MockResourceInformer{}
-			got := collectAllAffectedPlacementsV1Alpha1(&unstructured.Unstructured{Object: uRes}, crpList)
+			got := collectAllAffectedPlacementsV1Beta1(&unstructured.Unstructured{Object: uRes}, crpList)
 			if !reflect.DeepEqual(got, tt.wantCrp) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantCrp)
 			}
