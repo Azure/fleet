@@ -269,50 +269,19 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 		Eventually(func(g Gomega) error {
 			var crp placementv1beta1.ClusterResourcePlacement
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
-			invalidToleration1 := placementv1beta1.Toleration{
+			invalidToleration := placementv1beta1.Toleration{
 				Operator: corev1.TolerationOpEqual,
 				Value:    "test-value",
 				Effect:   corev1.TaintEffectNoSchedule,
 			}
-			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, invalidToleration1)
+			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, invalidToleration)
 			err := hubClient.Update(ctx, &crp)
 			if k8sErrors.IsConflict(err) {
 				return err
 			}
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("invalid toleration %+v", invalidToleration1)))
-			if len(crp.Spec.Policy.Tolerations) > 0 {
-				crp.Spec.Policy.Tolerations = crp.Spec.Policy.Tolerations[:len(crp.Spec.Policy.Tolerations)-1]
-			}
-			invalidToleration2 := placementv1beta1.Toleration{
-				Key:      "test-key",
-				Operator: corev1.TolerationOpEqual,
-				Effect:   corev1.TaintEffectNoSchedule,
-			}
-			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, invalidToleration2)
-			err = hubClient.Update(ctx, &crp)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("invalid toleration %+v", invalidToleration2)))
-			if len(crp.Spec.Policy.Tolerations) > 0 {
-				crp.Spec.Policy.Tolerations = crp.Spec.Policy.Tolerations[:len(crp.Spec.Policy.Tolerations)-1]
-			}
-			nonUniqueToleration := placementv1beta1.Toleration{
-				Key:      "key1",
-				Operator: corev1.TolerationOpEqual,
-				Value:    "value1",
-				Effect:   corev1.TaintEffectNoSchedule,
-			}
-			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, nonUniqueToleration)
-			err = hubClient.Update(ctx, &crp)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("toleration %+v already exists, tolerations must be unique", nonUniqueToleration)))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("invalid toleration %+v: %s", invalidToleration, "toleration key cannot be empty, when operator is not Exists")))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})

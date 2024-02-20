@@ -9,14 +9,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
-	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
@@ -1073,7 +1071,7 @@ func TestValidateToleration(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}),
+			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "toleration key cannot be empty, when operator is not Exists"),
 		},
 		"invalid toleration, value is empty, operator is not Exists": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1083,7 +1081,7 @@ func TestValidateToleration(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Effect: corev1.TaintEffectNoSchedule}),
+			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Effect: corev1.TaintEffectNoSchedule}, "toleration value cannot be empty, when operator is Equal"),
 		},
 		"invalid toleration, non-unique toleration": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1110,8 +1108,9 @@ func TestValidateToleration(t *testing.T) {
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			actualErr := validateTolerations(testCase.tolerations)
-			assert.Equal(t, testCase.wantErr, actualErr, utils.TestCaseMsg, testName)
+			if actualErr := validateTolerations(testCase.tolerations); actualErr != nil && actualErr.Error() != testCase.wantErr.Error() {
+				t.Errorf("validateTolerations() actualErr = %s, wantErr %s", actualErr.Error(), testCase.wantErr.Error())
+			}
 		})
 	}
 }

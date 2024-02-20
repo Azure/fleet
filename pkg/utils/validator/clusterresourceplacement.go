@@ -24,7 +24,7 @@ import (
 var ResourceInformer informer.Manager
 
 var (
-	invalidTolerationErrFmt = "invalid toleration %+v"
+	invalidTolerationErrFmt = "invalid toleration %+v: %s"
 	uniqueTolerationErrFmt  = "toleration %+v already exists, tolerations must be unique"
 )
 
@@ -224,27 +224,21 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 }
 
 func validateTolerations(tolerations []placementv1beta1.Toleration) error {
-	tolerationMap := make(map[string]placementv1beta1.Toleration)
+	tolerationMap := make(map[placementv1beta1.Toleration]bool)
 	for _, toleration := range tolerations {
 		if toleration.Key == "" && toleration.Operator != corev1.TolerationOpExists {
-			return fmt.Errorf(invalidTolerationErrFmt, toleration)
+			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is not Exists")
 		}
 		if toleration.Value == "" && toleration.Operator == corev1.TolerationOpEqual {
-			return fmt.Errorf(invalidTolerationErrFmt, toleration)
+			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal")
 		}
-		key := buildTolerationKey(toleration)
-		_, exists := tolerationMap[key]
-		if !exists {
-			tolerationMap[key] = toleration
-		} else {
+
+		if _, exists := tolerationMap[toleration]; exists {
 			return fmt.Errorf(uniqueTolerationErrFmt, toleration)
 		}
+		tolerationMap[toleration] = true
 	}
 	return nil
-}
-
-func buildTolerationKey(toleration placementv1beta1.Toleration) string {
-	return toleration.Key + ":" + string(toleration.Operator) + ":" + toleration.Value + ":" + string(toleration.Effect)
 }
 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
