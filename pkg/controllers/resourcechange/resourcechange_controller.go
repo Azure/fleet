@@ -29,7 +29,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/keys"
-	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 // Reconciler finds the placements that reference to any resource.
@@ -259,11 +258,7 @@ func collectAllAffectedPlacementsV1Alpha1(res *unstructured.Unstructured, crpLis
 		match := false
 		var placement fleetv1alpha1.ClusterResourcePlacement
 		_ = runtime.DefaultUnstructuredConverter.FromUnstructured(crp.DeepCopyObject().(*unstructured.Unstructured).Object, &placement)
-		// TODO: remove after we add validation webhooks
-		if err := validator.ValidateClusterResourcePlacementAlpha(&placement); err != nil {
-			klog.ErrorS(err, "find one invalid cluster resource placement", "placement", klog.KObj(&placement))
-			continue
-		}
+
 		// find the placements selected this resource (before this change)
 		for _, selectedRes := range placement.Status.SelectedResources {
 			if selectedRes.Group == res.GroupVersionKind().Group && selectedRes.Version == res.GroupVersionKind().Version &&
@@ -282,11 +277,12 @@ func collectAllAffectedPlacementsV1Alpha1(res *unstructured.Unstructured, crpLis
 				continue
 			}
 			// if there is 1 selector match, it is a placement match, add only once
-			if selector.Name == res.GetName() {
-				placements[placement.Name] = true
-				break
-			}
-			if matchSelectorLabelSelectorV1Alpha1(res.GetLabels(), selector) {
+			if selector.Name != "" {
+				if selector.Name == res.GetName() {
+					placements[placement.Name] = true
+					break
+				}
+			} else if matchSelectorLabelSelectorV1Alpha1(res.GetLabels(), selector) {
 				placements[placement.Name] = true
 				break
 			}
@@ -321,11 +317,12 @@ func collectAllAffectedPlacementsV1Beta1(res *unstructured.Unstructured, crpList
 				continue
 			}
 			// if there is 1 selector match, it is a placement match, add only once
-			if selector.Name == res.GetName() {
-				placements[placement.Name] = true
-				break
-			}
-			if matchSelectorLabelSelectorV1Beta1(res.GetLabels(), selector) {
+			if selector.Name != "" {
+				if selector.Name == res.GetName() {
+					placements[placement.Name] = true
+					break
+				}
+			} else if matchSelectorLabelSelectorV1Beta1(res.GetLabels(), selector) {
 				placements[placement.Name] = true
 				break
 			}
