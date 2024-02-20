@@ -105,8 +105,8 @@ func sortResources(resources []runtime.Object) {
 	sort.Slice(resources, func(i, j int) bool {
 		obj1 := resources[i].DeepCopyObject().(*unstructured.Unstructured)
 		obj2 := resources[j].DeepCopyObject().(*unstructured.Unstructured)
-		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String() {
-			return obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceGVK.String()
+		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() {
+			return obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String()
 		}
 		if obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() {
 			return obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String()

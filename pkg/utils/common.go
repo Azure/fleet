@@ -169,9 +169,7 @@ var (
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "ConfigMap",
 	}
-)
 
-var (
 	NamespaceMetaGVK = metav1.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
