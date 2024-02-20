@@ -6,12 +6,94 @@ Licensed under the MIT license.
 package clusteraffinity
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
+
+// extractResourceMetricDataFrom extracts a specific piece of resource metric data (usually
+// a resource quantity) from the reported resource usage.
+//
+// This function facilitates arbitrary lookup of resource usage data (reported in a structured
+// form) using a label name of a specific format.
+func extractResourceMetricDataFrom(usage *clusterv1beta1.ResourceUsage, name string) (resource.Quantity, error) {
+	capacityType, resourceName, found := strings.Cut(name, resourceMetricLabelNameSep)
+	// Do some sanity checks.
+	if !found || len(capacityType) == 0 || len(resourceName) == 0 {
+		return resource.Quantity{}, fmt.Errorf("failed to parse resource metric name %s: the name is not of the correct format", name)
+	}
+
+	if usage == nil {
+		return resource.Quantity{}, fmt.Errorf("failed to look up resource metric: the resource usage is nil")
+	}
+
+	// Use reflection to query the capacity type in the resource usage object.
+	usageVal := reflect.ValueOf(usage).Elem()
+	for i := 0; i < usageVal.NumField(); i++ {
+		if strings.ToLower(usageVal.Type().Field(i).Name) == capacityType {
+			// Found the capacity type; verify if it stores a resource list.
+			capacityVal := usageVal.Field(i)
+			if capacityVal.Kind() != reflect.Map {
+				// The capacity type does not store a resource list.
+				//
+				// Normally this branch will never run.
+				return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s: the capacity type is not valid", name)
+			}
+
+			// Query the resource list for the resource name.
+			for _, k := range capacityVal.MapKeys() {
+				if k.Kind() == reflect.String && k.String() == resourceName {
+					// Found the resource name; serialize the quantity.
+					v := capacityVal.MapIndex(k)
+					qt := reflect.TypeOf(resource.Quantity{})
+					if !v.Type().AssignableTo(qt) {
+						// The resource name exists, but it does not store a quantity.
+						//
+						// Normally this branch will never run.
+						return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s: the quantity is not valid (not a quantity type)", name)
+					}
+
+					// Retrieve a pointer to the quantity as the serialization method is only
+					// available via the pointer type.
+					vp := reflect.New(qt)
+					vp.Elem().Set(v)
+					strer := vp.MethodByName("String")
+					if !strer.IsValid() {
+						// A quantity for the resource exists, but it does not have the serialization method.
+						//
+						// Normally this branch will never run.
+						return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s: the quantity is not valid (no serialization available)", name)
+					}
+
+					s := strer.Call([]reflect.Value{})
+					if len(s) != 1 || s[0].Kind() != reflect.String {
+						// The serialization method does not return the expected value.
+						//
+						// Normally this branch will never run.
+						return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s: the quantity is not valid (serialization failed)", name)
+					}
+
+					// Deserialize the quantity.
+					q, parseErr := resource.ParseQuantity(s[0].String())
+					if parseErr != nil {
+						return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s:  the quantity is not valid (deserialization failed: %v)", name, parseErr)
+					}
+
+					return q, nil
+				}
+			}
+			return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s: the resource name does not exist", name)
+		}
+	}
+	return resource.Quantity{}, fmt.Errorf("failed to look up resource metric name %s: the capacity type does not exist", name)
+}
 
 // affinityTerm is a processed version of ClusterSelectorTerm.
 type affinityTerm struct {
