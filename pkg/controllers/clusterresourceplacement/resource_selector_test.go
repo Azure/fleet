@@ -794,3 +794,80 @@ func createResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.R
 		},
 	}
 }
+
+func TestSortResource(t *testing.T) {
+	// Create the Namespace object
+	namespace := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "test",
+			},
+		},
+	}
+
+	// Create the Deployment object
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "test-nginx",
+				"namespace": "test",
+			},
+		},
+	}
+
+	// Create the CustomResourceDefinition object
+	crd := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata": map[string]interface{}{
+				"name": "test-crd",
+			},
+		},
+	}
+
+	// Create the ClusterRole object
+	clusterRole := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind":       "ClusterRole",
+			"metadata": map[string]interface{}{
+				"name": "test-clusterrole",
+			},
+		},
+	}
+
+	tests := map[string]struct {
+		resources []runtime.Object
+		want      []runtime.Object
+	}{
+		"should gather selected resources with Namespace in front": {
+			resources: []runtime.Object{deployment, namespace},
+			want:      []runtime.Object{namespace, deployment},
+		},
+		"should gather selected resources with CRD in front": {
+			resources: []runtime.Object{clusterRole, crd},
+			want:      []runtime.Object{crd, clusterRole},
+		},
+		"should gather selected resources with CRD or Namespace in front": {
+			resources: []runtime.Object{deployment, clusterRole, crd, namespace},
+			want:      []runtime.Object{namespace, crd, clusterRole, deployment},
+		},
+	}
+
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			sortResources(tt.resources)
+
+			// Check that the returned resources match the expected resources
+			diff := cmp.Diff(tt.want, tt.resources)
+			if diff != "" {
+				t.Errorf("sortResources() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

@@ -97,9 +97,20 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 	}
 	// sort the resources in strict order so that we will get the stable list of manifest so that
 	// the generated work object doesn't change between reconcile loops
+	sortResources(resources)
+
+	return resources, nil
+}
+func sortResources(resources []runtime.Object) {
 	sort.Slice(resources, func(i, j int) bool {
 		obj1 := resources[i].DeepCopyObject().(*unstructured.Unstructured)
 		obj2 := resources[j].DeepCopyObject().(*unstructured.Unstructured)
+		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() {
+			return obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String()
+		}
+		if obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String() {
+			return obj1.GetObjectKind().GroupVersionKind().String() == utils.CRDMetaGVK.String()
+		}
 		// compare group/version;kind
 		gvkComp := strings.Compare(obj1.GroupVersionKind().String(), obj2.GroupVersionKind().String())
 		if gvkComp > 0 {
@@ -112,7 +123,6 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 		return strings.Compare(fmt.Sprintf("%s/%s", obj1.GetNamespace(), obj1.GetName()),
 			fmt.Sprintf("%s/%s", obj2.GetNamespace(), obj2.GetName())) > 0
 	})
-	return resources, nil
 }
 
 // fetchClusterScopedResources retrieves the objects based on the selector.

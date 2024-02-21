@@ -15,7 +15,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -24,6 +26,7 @@ import (
 	"k8s.io/klog/v2"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
+	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -165,6 +168,102 @@ var (
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "ConfigMap",
+	}
+
+	NamespaceMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Namespace",
+	}
+
+	RoleMetaGVK = metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "Role",
+	}
+
+	RoleBindingMetaGVK = metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "RoleBinding",
+	}
+
+	PodMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Pod",
+	}
+
+	CRDMetaGVK = metav1.GroupVersionKind{
+		Group:   apiextensionsv1.SchemeGroupVersion.Group,
+		Version: apiextensionsv1.SchemeGroupVersion.Version,
+		Kind:    "CustomResourceDefinition",
+	}
+
+	V1Alpha1MCMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "MemberCluster",
+	}
+
+	V1Alpha1IMCMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "InternalMemberCluster",
+	}
+
+	V1Alpha1WorkMetaGVK = metav1.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    "Work",
+	}
+
+	MCMetaGVK = metav1.GroupVersionKind{
+		Group:   clusterv1beta1.GroupVersion.Group,
+		Version: clusterv1beta1.GroupVersion.Version,
+		Kind:    "MemberCluster",
+	}
+
+	IMCMetaGVK = metav1.GroupVersionKind{
+		Group:   clusterv1beta1.GroupVersion.Group,
+		Version: clusterv1beta1.GroupVersion.Version,
+		Kind:    "InternalMemberCluster",
+	}
+
+	WorkV1Beta1MetaGVK = metav1.GroupVersionKind{
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    "Work",
+	}
+
+	EventMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Event",
+	}
+
+	EndpointSliceExportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "EndpointSliceExport",
+	}
+
+	EndpointSliceImportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "EndpointSliceImport",
+	}
+
+	InternalServiceExportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "InternalServiceExport",
+	}
+
+	InternalServiceImportMetaGVK = metav1.GroupVersionKind{
+		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
+		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
+		Kind:    "InternalServiceImport",
 	}
 )
 

@@ -242,6 +242,11 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				SelectedResources: []v1alpha1.ResourceIdentifier{
 					{
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    namespace1.Name,
+					},
+					{
 						Group:     "rbac.authorization.k8s.io",
 						Version:   "v1",
 						Kind:      "RoleBinding",
@@ -254,11 +259,6 @@ var _ = Describe("workload orchestration testing", func() {
 						Kind:      "Role",
 						Name:      role.Name,
 						Namespace: role.Namespace,
-					},
-					{
-						Version: "v1",
-						Kind:    "Namespace",
-						Name:    namespace1.Name,
 					},
 				},
 				TargetClusters: []string{"kind-member-testing"},
@@ -373,15 +373,15 @@ var _ = Describe("workload orchestration testing", func() {
 				},
 				SelectedResources: []v1alpha1.ResourceIdentifier{
 					{
+						Version: "v1",
+						Kind:    "Namespace",
+						Name:    namespace.Name,
+					},
+					{
 						Version:   "v1",
 						Kind:      "Secret",
 						Name:      testSmallSecret.Name,
 						Namespace: testSmallSecret.Namespace,
-					},
-					{
-						Version: "v1",
-						Kind:    "Namespace",
-						Name:    namespace.Name,
 					},
 				},
 				TargetClusters: []string{"kind-member-testing"},

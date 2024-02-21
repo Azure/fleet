@@ -1747,7 +1747,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Reason:             clusterresourceplacement.ApplyFailedReason,
 					},
 				},
-				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier2, fleetResourceIdentifier1},
 				TargetClusters:    []string{clusterA.Name},
 				FailedResourcePlacements: []fleetv1alpha1.FailedResourcePlacement{
 					{
@@ -1852,7 +1852,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 						Reason:             clusterresourceplacement.ApplySucceededReason,
 					},
 				},
-				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier1, fleetResourceIdentifier2, fleetResourceIdentifier3},
+				SelectedResources: []fleetv1alpha1.ResourceIdentifier{fleetResourceIdentifier3, fleetResourceIdentifier2, fleetResourceIdentifier1},
 				TargetClusters:    []string{clusterA.Name},
 			}
 
