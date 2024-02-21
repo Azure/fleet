@@ -58,7 +58,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == utils.CRDMetaGVK:
 			klog.V(2).InfoS("handling CRD resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleCRD(req)
-		case req.Kind == utils.V1Alpha1MCMetaGVK:
+		case req.Kind == utils.MCV1Alpha1MetaGVK:
 			klog.V(2).InfoS("handling v1alpha1 member cluster resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleV1Alpha1MemberCluster(req)
 		case req.Kind == utils.MCMetaGVK:
@@ -67,7 +67,7 @@ func (v *fleetResourceValidator) Handle(ctx context.Context, req admission.Reque
 		case req.Kind == utils.NamespaceMetaGVK:
 			klog.V(2).InfoS("handling namespace resource", "name", req.Name, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleNamespace(req)
-		case req.Kind == utils.V1Alpha1IMCMetaGVK || req.Kind == utils.V1Alpha1WorkMetaGVK || req.Kind == utils.IMCMetaGVK || req.Kind == utils.WorkV1Beta1MetaGVK || req.Kind == utils.EndpointSliceExportMetaGVK || req.Kind == utils.EndpointSliceImportMetaGVK || req.Kind == utils.InternalServiceExportMetaGVK || req.Kind == utils.InternalServiceImportMetaGVK:
+		case req.Kind == utils.IMCV1Alpha1MetaGVK || req.Kind == utils.WorkV1Alpha1MetaGVK || req.Kind == utils.IMCMetaGVK || req.Kind == utils.WorkMetaGVK || req.Kind == utils.EndpointSliceExportMetaGVK || req.Kind == utils.EndpointSliceImportMetaGVK || req.Kind == utils.InternalServiceExportMetaGVK || req.Kind == utils.InternalServiceImportMetaGVK:
 			klog.V(2).InfoS("handling fleet owned namespaced resource in fleet reserved namespaces", "GVK", req.RequestKind, "namespacedName", namespacedName, "operation", req.Operation, "subResource", req.SubResource)
 			response = v.handleFleetReservedNamespacedResource(ctx, req)
 		case req.Kind == utils.EventMetaGVK:

@@ -104,6 +104,12 @@ var (
 
 // Those are the GVR/GVK of the fleet related resources.
 var (
+	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "ClusterResourcePlacement",
+	}
+
 	ClusterResourcePlacementV1Alpha1GVR = schema.GroupVersionResource{
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
@@ -116,130 +122,16 @@ var (
 		Resource: placementv1beta1.ClusterResourcePlacementResource,
 	}
 
-	ClusterResourcePlacementV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "ClusterResourcePlacement",
-	}
-
-	NamespaceGVK = schema.GroupVersionKind{
-		Group:   corev1.GroupName,
-		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "Namespace",
-	}
-
-	NamespaceGVR = schema.GroupVersionResource{
-		Group:    corev1.GroupName,
-		Version:  corev1.SchemeGroupVersion.Version,
-		Resource: "namespaces",
-	}
-
-	MemberClusterGVR = schema.GroupVersionResource{
-		Group:    fleetv1alpha1.GroupVersion.Group,
-		Version:  fleetv1alpha1.GroupVersion.Version,
-		Resource: fleetv1alpha1.MemberClusterResource,
-	}
-
-	MemberClusterGVK = schema.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    fleetv1alpha1.MemberClusterKind,
-	}
-
-	WorkGVK = schema.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    workv1alpha1.WorkKind,
-	}
-
-	WorkGVR = schema.GroupVersionResource{
-		Group:    workv1alpha1.GroupVersion.Group,
-		Version:  workv1alpha1.GroupVersion.Version,
-		Resource: workv1alpha1.WorkResource,
-	}
-
-	ServiceGVR = schema.GroupVersionResource{
-		Group:    corev1.GroupName,
-		Version:  corev1.SchemeGroupVersion.Version,
-		Resource: "services",
-	}
-
 	ConfigMapGVK = schema.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "ConfigMap",
 	}
 
-	NamespaceMetaGVK = metav1.GroupVersionKind{
-		Group:   corev1.GroupName,
-		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "Namespace",
-	}
-
-	RoleMetaGVK = metav1.GroupVersionKind{
-		Group:   rbacv1.SchemeGroupVersion.Group,
-		Version: rbacv1.SchemeGroupVersion.Version,
-		Kind:    "Role",
-	}
-
-	RoleBindingMetaGVK = metav1.GroupVersionKind{
-		Group:   rbacv1.SchemeGroupVersion.Group,
-		Version: rbacv1.SchemeGroupVersion.Version,
-		Kind:    "RoleBinding",
-	}
-
-	PodMetaGVK = metav1.GroupVersionKind{
-		Group:   corev1.SchemeGroupVersion.Group,
-		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "Pod",
-	}
-
 	CRDMetaGVK = metav1.GroupVersionKind{
 		Group:   apiextensionsv1.SchemeGroupVersion.Group,
 		Version: apiextensionsv1.SchemeGroupVersion.Version,
 		Kind:    "CustomResourceDefinition",
-	}
-
-	V1Alpha1MCMetaGVK = metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "MemberCluster",
-	}
-
-	V1Alpha1IMCMetaGVK = metav1.GroupVersionKind{
-		Group:   fleetv1alpha1.GroupVersion.Group,
-		Version: fleetv1alpha1.GroupVersion.Version,
-		Kind:    "InternalMemberCluster",
-	}
-
-	V1Alpha1WorkMetaGVK = metav1.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    "Work",
-	}
-
-	MCMetaGVK = metav1.GroupVersionKind{
-		Group:   clusterv1beta1.GroupVersion.Group,
-		Version: clusterv1beta1.GroupVersion.Version,
-		Kind:    "MemberCluster",
-	}
-
-	IMCMetaGVK = metav1.GroupVersionKind{
-		Group:   clusterv1beta1.GroupVersion.Group,
-		Version: clusterv1beta1.GroupVersion.Version,
-		Kind:    "InternalMemberCluster",
-	}
-
-	WorkV1Beta1MetaGVK = metav1.GroupVersionKind{
-		Group:   placementv1beta1.GroupVersion.Group,
-		Version: placementv1beta1.GroupVersion.Version,
-		Kind:    "Work",
-	}
-
-	EventMetaGVK = metav1.GroupVersionKind{
-		Group:   corev1.SchemeGroupVersion.Group,
-		Version: corev1.SchemeGroupVersion.Version,
-		Kind:    "Event",
 	}
 
 	EndpointSliceExportMetaGVK = metav1.GroupVersionKind{
@@ -254,6 +146,18 @@ var (
 		Kind:    "EndpointSliceImport",
 	}
 
+	EventMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Event",
+	}
+
+	IMCV1Alpha1MetaGVK = metav1.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "InternalMemberCluster",
+	}
+
 	InternalServiceExportMetaGVK = metav1.GroupVersionKind{
 		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
 		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
@@ -264,6 +168,102 @@ var (
 		Group:   fleetnetworkingv1alpha1.GroupVersion.Group,
 		Version: fleetnetworkingv1alpha1.GroupVersion.Version,
 		Kind:    "InternalServiceImport",
+	}
+
+	IMCMetaGVK = metav1.GroupVersionKind{
+		Group:   clusterv1beta1.GroupVersion.Group,
+		Version: clusterv1beta1.GroupVersion.Version,
+		Kind:    "InternalMemberCluster",
+	}
+
+	MCV1Alpha1MetaGVK = metav1.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    "MemberCluster",
+	}
+
+	MCV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   fleetv1alpha1.GroupVersion.Group,
+		Version: fleetv1alpha1.GroupVersion.Version,
+		Kind:    fleetv1alpha1.MemberClusterKind,
+	}
+
+	MCV1Alpha1GVR = schema.GroupVersionResource{
+		Group:    fleetv1alpha1.GroupVersion.Group,
+		Version:  fleetv1alpha1.GroupVersion.Version,
+		Resource: fleetv1alpha1.MemberClusterResource,
+	}
+
+	MCMetaGVK = metav1.GroupVersionKind{
+		Group:   clusterv1beta1.GroupVersion.Group,
+		Version: clusterv1beta1.GroupVersion.Version,
+		Kind:    "MemberCluster",
+	}
+
+	NamespaceMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Namespace",
+	}
+
+	NamespaceGVK = schema.GroupVersionKind{
+		Group:   corev1.GroupName,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Namespace",
+	}
+
+	NamespaceGVR = schema.GroupVersionResource{
+		Group:    corev1.GroupName,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "namespaces",
+	}
+
+	PodMetaGVK = metav1.GroupVersionKind{
+		Group:   corev1.SchemeGroupVersion.Group,
+		Version: corev1.SchemeGroupVersion.Version,
+		Kind:    "Pod",
+	}
+
+	RoleMetaGVK = metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "Role",
+	}
+
+	RoleBindingMetaGVK = metav1.GroupVersionKind{
+		Group:   rbacv1.SchemeGroupVersion.Group,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "RoleBinding",
+	}
+
+	ServiceGVR = schema.GroupVersionResource{
+		Group:    corev1.GroupName,
+		Version:  corev1.SchemeGroupVersion.Version,
+		Resource: "services",
+	}
+
+	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    "Work",
+	}
+
+	WorkV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    workv1alpha1.WorkKind,
+	}
+
+	WorkV1Alpha1GVR = schema.GroupVersionResource{
+		Group:    workv1alpha1.GroupVersion.Group,
+		Version:  workv1alpha1.GroupVersion.Version,
+		Resource: workv1alpha1.WorkResource,
+	}
+
+	WorkMetaGVK = metav1.GroupVersionKind{
+		Group:   placementv1beta1.GroupVersion.Group,
+		Version: placementv1beta1.GroupVersion.Version,
+		Kind:    "Work",
 	}
 )
 

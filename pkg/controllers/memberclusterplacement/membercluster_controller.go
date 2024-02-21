@@ -49,7 +49,7 @@ func (r *Reconciler) Reconcile(_ context.Context, key controller.QueueKey) (ctrl
 	}()
 
 	klog.V(2).InfoS("Start to reconcile a member cluster to enqueue placement events", "memberCluster", memberClusterName)
-	mObj, err := r.InformerManager.Lister(utils.MemberClusterGVR).Get(memberClusterName)
+	mObj, err := r.InformerManager.Lister(utils.MCV1Alpha1GVR).Get(memberClusterName)
 	if err != nil {
 		klog.ErrorS(err, "failed to get the member cluster", "memberCluster", memberClusterName)
 		if !apierrors.IsNotFound(err) {

@@ -85,7 +85,7 @@ func (r *Reconciler) selectClusters(placement *fleetv1alpha1.ClusterResourcePlac
 
 // listClusters retrieves the clusters according to its label selector, this will hit the informer cache.
 func (r *Reconciler) listClusters(labelSelector labels.Selector) ([]string, error) {
-	objs, err := r.InformerManager.Lister(utils.MemberClusterGVR).List(labelSelector)
+	objs, err := r.InformerManager.Lister(utils.MCV1Alpha1GVR).List(labelSelector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the clusters according to obj label selector: %w", err)
 	}
@@ -108,7 +108,7 @@ func (r *Reconciler) listClusters(labelSelector labels.Selector) ([]string, erro
 func (r *Reconciler) getClusters(clusterNames []string) ([]string, error) {
 	selectedClusters := make([]string, 0)
 	for _, clusterName := range clusterNames {
-		obj, err := r.InformerManager.Lister(utils.MemberClusterGVR).Get(clusterName)
+		obj, err := r.InformerManager.Lister(utils.MCV1Alpha1GVR).Get(clusterName)
 		if err != nil {
 			klog.ErrorS(err, "cannot get the cluster", "clusterName", clusterName)
 			if !apierrors.IsNotFound(err) {
