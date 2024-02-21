@@ -10,12 +10,13 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -58,6 +59,9 @@ type Scheduler struct {
 	// manager is the controller manager in use by the scheduler.
 	manager ctrl.Manager
 
+	// workerNumber is number of scheduling loop we will run concurrently
+	workerNumber int
+
 	// eventRecorder is the event recorder in use by the scheduler.
 	eventRecorder record.EventRecorder
 }
@@ -68,6 +72,7 @@ func NewScheduler(
 	framework framework.Framework,
 	queue queue.ClusterResourcePlacementSchedulingQueue,
 	manager ctrl.Manager,
+	workerNumber int,
 ) *Scheduler {
 	return &Scheduler{
 		name:           name,
@@ -76,6 +81,7 @@ func NewScheduler(
 		client:         manager.GetClient(),
 		uncachedReader: manager.GetAPIReader(),
 		manager:        manager,
+		workerNumber:   workerNumber,
 		eventRecorder:  manager.GetEventRecorderFor(name),
 	}
 }
@@ -221,14 +227,21 @@ func (s *Scheduler) Run(ctx context.Context) {
 	// Starting the scheduling queue.
 	s.queue.Run()
 
-	// Run scheduleOnce forever.
-	//
-	// The loop starts in a dedicated goroutine; it exits when the context is canceled.
-	go wait.UntilWithContext(ctx, s.scheduleOnce, 0)
+	wg := &sync.WaitGroup{}
+	wg.Add(s.workerNumber)
+	for i := 0; i < s.workerNumber; i++ {
+		go func() {
+			defer wg.Done()
+			defer utilruntime.HandleCrash()
+			// Run scheduleOnce forever.
+			s.scheduleOnce(ctx)
+		}()
+	}
 
 	// Wait for the context to be canceled.
 	<-ctx.Done()
-
+	// The loop starts in a dedicated goroutine; it exits when the context is canceled.
+	wg.Wait()
 	// Stopping the scheduling queue; drain if necessary.
 	//
 	// Note that if a scheduling cycle is in progress; this will only return when the

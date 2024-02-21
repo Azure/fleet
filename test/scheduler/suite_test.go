@@ -335,7 +335,7 @@ func beforeSuiteForProcess1() []byte {
 
 	// Set up the scheduler.
 	fw := buildSchedulerFramework(ctrlMgr, clusterEligibilityChecker)
-	sched := scheduler.NewScheduler(defaultSchedulerName, fw, schedulerWorkQueue, ctrlMgr)
+	sched := scheduler.NewScheduler(defaultSchedulerName, fw, schedulerWorkQueue, ctrlMgr, 1)
 
 	// Run the controller manager.
 	go func() {

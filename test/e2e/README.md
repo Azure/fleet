@@ -14,7 +14,7 @@ test suites, follow the steps below:
     # Use a different path if the local set up is different.
     export KUBECONFIG=~/.kube/config
     export OUTPUT_TYPE=type=docker
-    ./setup.sh
+    ./setup.sh ${number of member clusers}
     ```
 
     The setup script will perform the following tasks:
@@ -65,5 +65,5 @@ To stop the `Kind` clusters, run the script `stop.sh`:
 
     ```sh
     chmod +x ./stop.sh
-    ./stop.sh
+    ./stop.sh ${number of member clusers}
     ```

@@ -230,7 +230,8 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue(
 			queue.WithName(schedulerQueueName),
 		)
-		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr)
+		// we use one scheduler for every 10 concurrent placement
+		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr, int(math.Ceil(float64(opts.ConcurrentClusterPlacementSyncs)/10)))
 		klog.Info("Starting the scheduler")
 		// Scheduler must run in a separate goroutine as Run() is a blocking call.
 		wg.Add(1)
@@ -284,7 +285,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		InformerManager:                            dynamicInformerManager,
 		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
-		ConcurrentClusterPlacementWorker:           opts.ConcurrentClusterPlacementSyncs,
+		ConcurrentClusterPlacementWorker:           int(math.Ceil(float64(opts.ConcurrentClusterPlacementSyncs) / 10)),
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,
 	}
 
