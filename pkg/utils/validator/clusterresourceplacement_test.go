@@ -1048,7 +1048,7 @@ func TestValidateToleration(t *testing.T) {
 			tolerations: []placementv1beta1.Toleration{
 				{
 					Key:      "key1",
-					Operator: corev1.TolerationOpExists,
+					Operator: corev1.TolerationOpEqual,
 					Value:    "value1",
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1083,11 +1083,22 @@ func TestValidateToleration(t *testing.T) {
 			},
 			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Effect: corev1.TaintEffectNoSchedule}, "toleration value cannot be empty, when operator is Equal"),
 		},
-		"invalid toleration, non-unique toleration": {
+		"invalid toleration, value is not empty, operator is Exists": {
 			tolerations: []placementv1beta1.Toleration{
 				{
 					Key:      "key1",
 					Operator: corev1.TolerationOpExists,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpExists, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "toleration value needs to be empty, when operator is Exists"),
+		},
+		"invalid toleration, non-unique toleration": {
+			tolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
 					Value:    "value1",
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
@@ -1098,12 +1109,12 @@ func TestValidateToleration(t *testing.T) {
 				},
 				{
 					Key:      "key1",
-					Operator: corev1.TolerationOpExists,
+					Operator: corev1.TolerationOpEqual,
 					Value:    "value1",
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(uniqueTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpExists, Value: "value1", Effect: corev1.TaintEffectNoSchedule}),
+			wantErr: fmt.Errorf(uniqueTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}),
 		},
 	}
 	for testName, testCase := range tests {

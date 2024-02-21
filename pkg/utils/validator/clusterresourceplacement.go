@@ -232,7 +232,9 @@ func validateTolerations(tolerations []placementv1beta1.Toleration) error {
 		if toleration.Value == "" && toleration.Operator == corev1.TolerationOpEqual {
 			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal")
 		}
-
+		if toleration.Value != "" && toleration.Operator == corev1.TolerationOpExists {
+			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value needs to be empty, when operator is Exists")
+		}
 		if _, exists := tolerationMap[toleration]; exists {
 			return fmt.Errorf(uniqueTolerationErrFmt, toleration)
 		}
