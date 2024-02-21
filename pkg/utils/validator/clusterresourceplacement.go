@@ -8,7 +8,6 @@ package validator
 
 import (
 	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -24,8 +23,10 @@ import (
 var ResourceInformer informer.Manager
 
 var (
-	invalidTolerationErrFmt = "invalid toleration %+v: %s"
-	uniqueTolerationErrFmt  = "toleration %+v already exists, tolerations must be unique"
+	invalidTolerationErrFmt      = "invalid toleration %+v: %s"
+	invalidTolerationKeyErrFmt   = "invalid toleration key %+v: %s"
+	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
+	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
 )
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
@@ -224,23 +225,41 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 }
 
 func validateTolerations(tolerations []placementv1beta1.Toleration) error {
+	allErr := make([]error, 0)
 	tolerationMap := make(map[placementv1beta1.Toleration]bool)
 	for _, toleration := range tolerations {
-		if toleration.Key == "" && toleration.Operator != corev1.TolerationOpExists {
-			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is not Exists")
-		}
-		if toleration.Value == "" && toleration.Operator == corev1.TolerationOpEqual {
-			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal")
-		}
-		if toleration.Value != "" && toleration.Operator == corev1.TolerationOpExists {
-			return fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value needs to be empty, when operator is Exists")
+		switch toleration.Operator {
+		case corev1.TolerationOpExists:
+			if toleration.Key != "" {
+				for _, msg := range validation.IsQualifiedName(toleration.Key) {
+					allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
+				}
+			}
+			if toleration.Value != "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value needs to be empty, when operator is Exists"))
+			}
+		case corev1.TolerationOpEqual:
+			if toleration.Key == "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is Equal"))
+			} else {
+				for _, msg := range validation.IsQualifiedName(toleration.Key) {
+					allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
+				}
+			}
+			if toleration.Value == "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal"))
+			} else {
+				for _, msg := range validation.IsValidLabelValue(toleration.Value) {
+					allErr = append(allErr, fmt.Errorf(invalidTolerationValueErrFmt, toleration, msg))
+				}
+			}
 		}
 		if _, exists := tolerationMap[toleration]; exists {
-			return fmt.Errorf(uniqueTolerationErrFmt, toleration)
+			allErr = append(allErr, fmt.Errorf(uniqueTolerationErrFmt, toleration))
 		}
 		tolerationMap[toleration] = true
 	}
-	return nil
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {

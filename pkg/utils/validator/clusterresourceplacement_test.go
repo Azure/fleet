@@ -1039,7 +1039,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 	}
 }
 
-func TestValidateToleration(t *testing.T) {
+func TestValidateTolerations(t *testing.T) {
 	tests := map[string]struct {
 		tolerations []placementv1beta1.Toleration
 		wantErr     error
@@ -1071,7 +1071,7 @@ func TestValidateToleration(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "toleration key cannot be empty, when operator is not Exists"),
+			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "toleration key cannot be empty, when operator is Equal"),
 		},
 		"invalid toleration, value is empty, operator is not Exists": {
 			tolerations: []placementv1beta1.Toleration{
