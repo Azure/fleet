@@ -73,7 +73,7 @@ func NewResourceConfig(isAllowList bool) *ResourceConfig {
 	r.AddGroup(fleetv1alpha1.GroupVersion.Group)
 	r.AddGroup(placementv1beta1.GroupVersion.Group)
 	r.AddGroup(clusterv1beta1.GroupVersion.Group)
-	r.AddGroupVersionKind(WorkGVK)
+	r.AddGroupVersionKind(WorkV1Alpha1GVK)
 
 	// disable the below built-in resources
 	r.AddGroup(eventsv1.GroupName)

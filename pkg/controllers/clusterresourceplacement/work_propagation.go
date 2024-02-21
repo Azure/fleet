@@ -219,7 +219,7 @@ func (r *Reconciler) collectAllManifestsStatus(placement *fleetv1alpha1.ClusterR
 
 // getResourceBinding retrieves a work object by its name and namespace, this will hit the informer cache.
 func (r *Reconciler) getResourceBinding(namespace, name string) (*workv1alpha1.Work, error) {
-	obj, err := r.InformerManager.Lister(utils.WorkGVR).ByNamespace(namespace).Get(name)
+	obj, err := r.InformerManager.Lister(utils.WorkV1Alpha1GVR).ByNamespace(namespace).Get(name)
 	if err != nil {
 		return nil, err
 	}

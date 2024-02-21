@@ -102,8 +102,8 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		workEventHandler := newHandlerOnEvents(nil, d.onWorkUpdated, d.onWorkDeleted)
 		d.InformerManager.AddStaticResource(
 			informer.APIResourceMeta{
-				GroupVersionKind:     utils.WorkGVK,
-				GroupVersionResource: utils.WorkGVR,
+				GroupVersionKind:     utils.WorkV1Alpha1GVK,
+				GroupVersionResource: utils.WorkV1Alpha1GVR,
 				IsClusterScoped:      false,
 			}, workEventHandler)
 	}
