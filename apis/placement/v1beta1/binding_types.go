@@ -43,6 +43,13 @@ type ResourceBindingSpec struct {
 	// it points to the name of the leading snapshot of the index group.
 	ResourceSnapshotName string `json:"resourceSnapshotName"`
 
+	// ResourceOverrideSnapshots is a list of ResourceOverride snapshots associated with the selected resources.
+	ResourceOverrideSnapshots []NamespacedName `json:"resourceOverrideSnapshots,omitempty"`
+
+	// ClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshot names associated with the
+	// selected resources.
+	ClusterResourceOverrideSnapshots []string `json:"clusterResourceOverrideSnapshots,omitempty"`
+
 	// SchedulingPolicySnapshotName is the name of the scheduling policy snapshot that this resource binding
 	// points to; more specifically, the scheduler creates this bindings in accordance with this
 	// scheduling policy snapshot.
@@ -53,6 +60,11 @@ type ResourceBindingSpec struct {
 
 	// ClusterDecision explains why the scheduler selected this cluster.
 	ClusterDecision ClusterDecision `json:"clusterDecision"`
+
+	// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
+	// and is owned by other appliers.
+	// +optional
+	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
 }
 
 // BindingState is the state of the binding.
@@ -87,12 +99,37 @@ type ResourceBindingStatus struct {
 type ResourceBindingConditionType string
 
 const (
+	// ResourceBindingRolloutStarted indicates whether the binding can roll out the latest changes of the given resources.
+	// Its condition status can be one of the following:
+	// - "True" means the spec of the binding is updated to the latest resource snapshots and their overrides and rollout
+	// has been started.
+	// - "False" means the spec of the binding cannot be updated to the latest resource snapshots and their overrides because
+	// of the rollout strategy.
+	// - "Unknown" means it is unknown.
+	ResourceBindingRolloutStarted ResourceBindingConditionType = "RolloutStarted"
+
+	// ResourceBindingOverridden indicates the overridden condition of the given resources.
+	// Its condition status can be one of the following:
+	// - "True" means the resources are overridden successfully or there are no overrides associated before applying
+	// to the target cluster.
+	// - "False" means the resources fail to be overridden before applying to the target cluster.
+	// - "Unknown" means it is unknown.
+	ResourceBindingOverridden ResourceBindingConditionType = "Overridden"
+
 	// ResourceBindingBound indicates the bound condition of the given resources.
 	// Its condition status can be one of the following:
 	// - "True" means the corresponding work CR is created in the target cluster's namespace.
 	// - "False" means the corresponding work CR is not created yet.
 	// - "Unknown" means it is unknown.
+	// TODO, will be replaced by "WorkCreated"
 	ResourceBindingBound ResourceBindingConditionType = "Bound"
+
+	// ResourceBindingWorkCreated indicates the work created condition of the given resources.
+	// Its condition status can be one of the following:
+	// - "True" means all corresponding works are created in the target cluster's namespace.
+	// - "False" means not all corresponding works are created in the target cluster's namespace yet.
+	// - "Unknown" means it is unknown.
+	ResourceBindingWorkCreated ResourceBindingConditionType = "WorkCreated"
 
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
