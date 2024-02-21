@@ -10,16 +10,20 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/metrics"
 )
 
 const (
@@ -270,5 +274,52 @@ func TestAddSchedulerCleanUpFinalizer(t *testing.T) {
 	}
 	if diff := cmp.Diff(crp, wantCRP, ignoreObjectMetaResourceVersionField, ignoreTypeMetaAPIVersionKindFields); diff != "" {
 		t.Errorf("updated CRP diff (-got, +want): %s", diff)
+	}
+}
+
+func TestObserveSchedulingCycleMetrics(t *testing.T) {
+	metricMetadata := `
+		# HELP scheduling_cycle_duration_milliseconds The duration of a scheduling cycle run in milliseconds
+		# TYPE scheduling_cycle_duration_milliseconds histogram
+	`
+
+	testCases := []struct {
+		name            string
+		cycleStartTime  time.Time
+		wantMetricCount int
+		wantHistogram   string
+	}{
+		{
+			name:            "should observe a data point",
+			cycleStartTime:  time.Now(),
+			wantMetricCount: 1,
+			wantHistogram: `
+			scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="10"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="50"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="100"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="500"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="1000"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="5000"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="10000"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="50000"} 1
+            scheduling_cycle_duration_milliseconds_bucket{is_failed="false",needs_requeue="false",le="+Inf"} 1
+            scheduling_cycle_duration_milliseconds_sum{is_failed="false",needs_requeue="false"} 0
+            scheduling_cycle_duration_milliseconds_count{is_failed="false",needs_requeue="false"} 1
+			`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			observeSchedulingCycleMetrics(tc.cycleStartTime, false, false)
+
+			if c := testutil.CollectAndCount(metrics.SchedulingCycleDurationMilliseconds); c != tc.wantMetricCount {
+				t.Fatalf("metric counts, got %d, want %d", c, tc.wantMetricCount)
+			}
+
+			if err := testutil.CollectAndCompare(metrics.SchedulingCycleDurationMilliseconds, strings.NewReader(metricMetadata+tc.wantHistogram)); err != nil {
+				t.Errorf("%s", err)
+			}
+		})
 	}
 }

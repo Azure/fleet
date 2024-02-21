@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 	"go.goms.io/fleet/pkg/scheduler/queue"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -80,8 +81,6 @@ func NewScheduler(
 }
 
 // ScheduleOnce performs scheduling for one single item pulled from the work queue.
-//
-// TO-DO (chenyu1): add scheduler related metrics.
 func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	// Retrieve the next item (name of a CRP) from the work queue.
 	//
@@ -177,11 +176,13 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	//
 	// Note that the scheduler will enter this cycle as long as the CRP is active and an active
 	// policy snapshot has been produced.
+	cycleStartTime := time.Now()
 	res, err := s.framework.RunSchedulingCycleFor(ctx, crp.Name, latestPolicySnapshot)
 	if err != nil {
 		klog.ErrorS(err, "Failed to run scheduling cycle", "clusterResourcePlacement", crpRef)
 		// Requeue for later processing.
 		s.queue.AddRateLimited(crpName)
+		observeSchedulingCycleMetrics(cycleStartTime, true, false)
 		return
 	}
 
@@ -189,6 +190,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	if res.Requeue {
 		if res.RequeueAfter > 0 {
 			s.queue.AddAfter(crpName, res.RequeueAfter)
+			observeSchedulingCycleMetrics(cycleStartTime, false, true)
 			return
 		}
 		// Untrack the key from the rate limiter.
@@ -202,7 +204,9 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 		// finish the scheduling in multiple cycles); in such cases, rate limiter should not add
 		// any delay to the requeues.
 		s.queue.Add(crpName)
+		observeSchedulingCycleMetrics(cycleStartTime, false, true)
 	}
+	observeSchedulingCycleMetrics(cycleStartTime, false, false)
 }
 
 // Run starts the scheduler.
@@ -341,4 +345,11 @@ func (s *Scheduler) addSchedulerCleanUpFinalizer(ctx context.Context, crp *fleet
 	}
 
 	return nil
+}
+
+// observeSchedulingCycleMetrics adds a data point to the scheduling cycle duration metric.
+func observeSchedulingCycleMetrics(startTime time.Time, isFailed, needsRequeue bool) {
+	metrics.SchedulingCycleDurationMilliseconds.
+		WithLabelValues(fmt.Sprintf("%t", isFailed), fmt.Sprintf("%t", needsRequeue)).
+		Observe(float64(time.Since(startTime).Milliseconds()))
 }
