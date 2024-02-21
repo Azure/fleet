@@ -182,13 +182,13 @@ var (
 		Kind:    "MemberCluster",
 	}
 
-	MemberClusterGVK = schema.GroupVersionKind{
+	MCV1Alpha1GVK = schema.GroupVersionKind{
 		Group:   fleetv1alpha1.GroupVersion.Group,
 		Version: fleetv1alpha1.GroupVersion.Version,
 		Kind:    fleetv1alpha1.MemberClusterKind,
 	}
 
-	MemberClusterGVR = schema.GroupVersionResource{
+	MCV1Alpha1GVR = schema.GroupVersionResource{
 		Group:    fleetv1alpha1.GroupVersion.Group,
 		Version:  fleetv1alpha1.GroupVersion.Version,
 		Resource: fleetv1alpha1.MemberClusterResource,
@@ -200,13 +200,13 @@ var (
 		Kind:    "MemberCluster",
 	}
 
-	NamespaceGVK = schema.GroupVersionKind{
+	NamespaceMetaGVK = metav1.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "Namespace",
 	}
 
-	NamespaceMetaGVK = metav1.GroupVersionKind{
+	NamespaceGVK = schema.GroupVersionKind{
 		Group:   corev1.GroupName,
 		Version: corev1.SchemeGroupVersion.Version,
 		Kind:    "Namespace",
@@ -242,16 +242,16 @@ var (
 		Resource: "services",
 	}
 
-	WorkV1Alpha1GVK = schema.GroupVersionKind{
-		Group:   workv1alpha1.GroupVersion.Group,
-		Version: workv1alpha1.GroupVersion.Version,
-		Kind:    workv1alpha1.WorkKind,
-	}
-
 	WorkV1Alpha1MetaGVK = metav1.GroupVersionKind{
 		Group:   workv1alpha1.GroupVersion.Group,
 		Version: workv1alpha1.GroupVersion.Version,
 		Kind:    "Work",
+	}
+
+	WorkV1Alpha1GVK = schema.GroupVersionKind{
+		Group:   workv1alpha1.GroupVersion.Group,
+		Version: workv1alpha1.GroupVersion.Version,
+		Kind:    workv1alpha1.WorkKind,
 	}
 
 	WorkV1Alpha1GVR = schema.GroupVersionResource{

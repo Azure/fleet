@@ -114,8 +114,8 @@ func (d *ChangeDetector) Start(ctx context.Context) error {
 		memberClusterEventHandler := newHandlerOnEvents(nil, d.onMemberClusterUpdated, nil)
 		d.InformerManager.AddStaticResource(
 			informer.APIResourceMeta{
-				GroupVersionKind:     utils.MemberClusterGVK,
-				GroupVersionResource: utils.MemberClusterGVR,
+				GroupVersionKind:     utils.MCV1Alpha1GVK,
+				GroupVersionResource: utils.MCV1Alpha1GVR,
 				IsClusterScoped:      true,
 			}, memberClusterEventHandler)
 	}
