@@ -229,23 +229,19 @@ func validateTolerations(tolerations []placementv1beta1.Toleration) error {
 	allErr := make([]error, 0)
 	tolerationMap := make(map[placementv1beta1.Toleration]bool)
 	for _, toleration := range tolerations {
+		if toleration.Key != "" {
+			for _, msg := range validation.IsQualifiedName(toleration.Key) {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
+			}
+		}
 		switch toleration.Operator {
 		case corev1.TolerationOpExists:
-			if toleration.Key != "" {
-				for _, msg := range validation.IsQualifiedName(toleration.Key) {
-					allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
-				}
-			}
 			if toleration.Value != "" {
 				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value needs to be empty, when operator is Exists"))
 			}
 		case corev1.TolerationOpEqual:
 			if toleration.Key == "" {
 				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is Equal"))
-			} else {
-				for _, msg := range validation.IsQualifiedName(toleration.Key) {
-					allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
-				}
 			}
 			if toleration.Value == "" {
 				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal"))
