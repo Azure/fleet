@@ -8,7 +8,6 @@ package validator
 
 import (
 	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -257,6 +256,19 @@ func validateTolerations(tolerations []placementv1beta1.Toleration) error {
 		tolerationMap[toleration] = true
 	}
 	return apiErrors.NewAggregate(allErr)
+}
+
+func IsTolerationsUpdatedOrDeleted(oldTolerations []placementv1beta1.Toleration, newTolerations []placementv1beta1.Toleration) bool {
+	newTolerationsMap := make(map[placementv1beta1.Toleration]bool)
+	for _, newToleration := range newTolerations {
+		newTolerationsMap[newToleration] = true
+	}
+	for _, oldToleration := range oldTolerations {
+		if !newTolerationsMap[oldToleration] {
+			return true
+		}
+	}
+	return false
 }
 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {

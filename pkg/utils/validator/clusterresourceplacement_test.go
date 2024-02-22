@@ -1175,3 +1175,165 @@ func TestValidateTolerations(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
+	tests := map[string]struct {
+		oldTolerations []placementv1beta1.Toleration
+		newTolerations []placementv1beta1.Toleration
+		wantResult     bool
+	}{
+		"old tolerations is empty": {
+			newTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantResult: false,
+		},
+		"new tolerations is empty": {
+			oldTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantResult: true,
+		},
+		"one toleration was updated in new tolerations": {
+			oldTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			newTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key3",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantResult: true,
+		},
+		"one toleration was deleted in new tolerations": {
+			oldTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			newTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantResult: true,
+		},
+		"old tolerations, new tolerations are same": {
+			oldTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			newTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantResult: false,
+		},
+		"a toleration was added to new tolerations": {
+			oldTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			newTolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key2",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Operator: corev1.TolerationOpExists,
+				},
+			},
+			wantResult: false,
+		},
+	}
+	for testName, testCase := range tests {
+		t.Run(testName, func(t *testing.T) {
+			if actualResult := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); actualResult != testCase.wantResult {
+				t.Errorf("IsTolerationsUpdatedOrDeleted() actualResult = %v, wantResult %v", actualResult, testCase.wantResult)
+			}
+		})
+	}
+}

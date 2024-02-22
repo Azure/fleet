@@ -285,4 +285,48 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
+
+	It("should deny update on CRP with update to existing toleration", func() {
+		Eventually(func(g Gomega) error {
+			var crp placementv1beta1.ClusterResourcePlacement
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
+			newTolerations := []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "value1",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "key3",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+			crp.Spec.Policy.Tolerations = newTolerations
+			err := hubClient.Update(ctx, &crp)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("tolerations have been updated/deleted, only additions to tolerations are allowed"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should allow update on CRP with adding a new toleration", func() {
+		Eventually(func(g Gomega) error {
+			var crp placementv1beta1.ClusterResourcePlacement
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
+			newToleration := placementv1beta1.Toleration{
+				Key:      "key3",
+				Operator: corev1.TolerationOpEqual,
+				Value:    "value3",
+				Effect:   corev1.TaintEffectNoSchedule,
+			}
+			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, newToleration)
+			return hubClient.Update(ctx, &crp)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
 })
