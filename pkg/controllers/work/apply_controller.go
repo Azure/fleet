@@ -23,8 +23,6 @@ package work
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -51,6 +49,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 const (
@@ -585,11 +584,7 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 	unstructured.RemoveNestedField(manifest.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(manifest.Object, "status")
 	// compute the sha256 hash of the remaining data
-	jsonBytes, err := json.Marshal(manifest.Object)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes)), nil
+	return resource.HashOf(manifest.Object)
 }
 
 // isManifestManagedByWork determines if an object is managed by the work controller.
