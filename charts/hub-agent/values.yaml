@@ -39,5 +39,5 @@ hubAPIQPS: 20
 hubAPIBurst: 100
 concurrentClusterPlacementSyncs: 10
 ConcurrentResourceChangeSyncs: 20
-logFileMaxSize: 1800
+logFileMaxSize: 1000000
 MaxFleetSizeSupported: 100
