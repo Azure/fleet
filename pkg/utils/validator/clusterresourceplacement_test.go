@@ -1085,7 +1085,7 @@ func TestValidateTolerations(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "name part must consist of alphanumeric characters",
+			wantErrMsg: "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
 		},
 		"invalid toleration, value is empty, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1108,7 +1108,7 @@ func TestValidateTolerations(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "a valid label must be an empty string or consist of alphanumeric characters",
+			wantErrMsg: "a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
 		},
 		"invalid toleration, key is invalid, operator is Exists": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1119,7 +1119,7 @@ func TestValidateTolerations(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "name part must consist of alphanumeric characters",
+			wantErrMsg: "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
 		},
 		"invalid toleration, value is not empty, operator is Exists": {
 			tolerations: []placementv1beta1.Toleration{
