@@ -6,7 +6,7 @@ Licensed under the MIT license.
 package validator
 
 import (
-	"fmt"
+	"regexp"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -1042,7 +1042,8 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 func TestValidateTolerations(t *testing.T) {
 	tests := map[string]struct {
 		tolerations []placementv1beta1.Toleration
-		wantErr     error
+		wantErr     bool
+		wantErrMsg  string
 	}{
 		"valid tolerations": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1061,7 +1062,7 @@ func TestValidateTolerations(t *testing.T) {
 					Operator: corev1.TolerationOpExists,
 				},
 			},
-			wantErr: nil,
+			wantErr: false,
 		},
 		"invalid toleration, key is empty, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1071,7 +1072,8 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "toleration key cannot be empty, when operator is Equal"),
+			wantErr:    true,
+			wantErrMsg: "toleration key cannot be empty, when operator is Equal",
 		},
 		"invalid toleration, key is invalid, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1082,7 +1084,8 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationKeyErrFmt, placementv1beta1.Toleration{Key: "key:123*", Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')"),
+			wantErr:    true,
+			wantErrMsg: "name part must consist of alphanumeric characters",
 		},
 		"invalid toleration, value is empty, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1092,7 +1095,8 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Effect: corev1.TaintEffectNoSchedule}, "toleration value cannot be empty, when operator is Equal"),
+			wantErr:    true,
+			wantErrMsg: "toleration value cannot be empty, when operator is Equal",
 		},
 		"invalid toleration, value is invalid, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1103,7 +1107,8 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationValueErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Value: "val#%/-123", Effect: corev1.TaintEffectNoSchedule}, "a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')"),
+			wantErr:    true,
+			wantErrMsg: "a valid label must be an empty string or consist of alphanumeric characters",
 		},
 		"invalid toleration, key is invalid, operator is Exists": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1113,7 +1118,8 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationKeyErrFmt, placementv1beta1.Toleration{Key: "key:123*", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule}, "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')"),
+			wantErr:    true,
+			wantErrMsg: "name part must consist of alphanumeric characters",
 		},
 		"invalid toleration, value is not empty, operator is Exists": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1124,7 +1130,8 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(invalidTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpExists, Value: "value1", Effect: corev1.TaintEffectNoSchedule}, "toleration value needs to be empty, when operator is Exists"),
+			wantErr:    true,
+			wantErrMsg: "toleration value needs to be empty, when operator is Exists",
 		},
 		"invalid toleration, non-unique toleration": {
 			tolerations: []placementv1beta1.Toleration{
@@ -1146,13 +1153,24 @@ func TestValidateTolerations(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantErr: fmt.Errorf(uniqueTolerationErrFmt, placementv1beta1.Toleration{Key: "key1", Operator: corev1.TolerationOpEqual, Value: "value1", Effect: corev1.TaintEffectNoSchedule}),
+			wantErr:    true,
+			wantErrMsg: "tolerations must be unique",
 		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if actualErr := validateTolerations(testCase.tolerations); actualErr != nil && actualErr.Error() != testCase.wantErr.Error() {
-				t.Errorf("validateTolerations() actualErr = %s, wantErr %s", actualErr.Error(), testCase.wantErr.Error())
+			gotErr := validateTolerations(testCase.tolerations)
+			if (gotErr != nil) != testCase.wantErr {
+				t.Errorf("validateTolerations() error = %v, wantErr %v", gotErr, testCase.wantErr)
+			}
+			if testCase.wantErr {
+				match, err := regexp.MatchString(testCase.wantErrMsg, gotErr.Error())
+				if err != nil {
+					t.Errorf("validateTolerations() failed to compile pattern: %s", testCase.wantErrMsg)
+				}
+				if !match {
+					t.Errorf("validateTolerations() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				}
 			}
 		})
 	}
