@@ -1176,7 +1176,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 		newTolerations []placementv1beta1.Toleration
 		wantResult     bool
 	}{
-		"old tolerations is empty": {
+		"old tolerations is nil": {
 			newTolerations: []placementv1beta1.Toleration{
 				{
 					Key:      "key1",
@@ -1192,7 +1192,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 			},
 			wantResult: false,
 		},
-		"new tolerations is empty": {
+		"new tolerations is nil": {
 			oldTolerations: []placementv1beta1.Toleration{
 				{
 					Key:      "key1",
@@ -1325,8 +1325,8 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if actualResult := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); actualResult != testCase.wantResult {
-				t.Errorf("IsTolerationsUpdatedOrDeleted() actualResult = %v, wantResult %v", actualResult, testCase.wantResult)
+			if gotResult := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); gotResult != testCase.wantResult {
+				t.Errorf("IsTolerationsUpdatedOrDeleted() gotResult = %v, wantResult %v", gotResult, testCase.wantResult)
 			}
 		})
 	}
