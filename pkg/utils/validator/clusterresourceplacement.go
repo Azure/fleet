@@ -9,6 +9,7 @@ package validator
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -21,6 +22,13 @@ import (
 )
 
 var ResourceInformer informer.Manager
+
+var (
+	invalidTolerationErrFmt      = "invalid toleration %+v: %s"
+	invalidTolerationKeyErrFmt   = "invalid toleration key %+v: %s"
+	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
+	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
+)
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
 func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
@@ -113,22 +121,26 @@ func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.Pla
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
 	switch policy.PlacementType {
 	case placementv1beta1.PickFixedPlacementType:
 		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	case placementv1beta1.PickAllPlacementType:
 		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	case placementv1beta1.PickNPlacementType:
 		if err := validatePolicyForPickNPolicyType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	}
+	if err := validateTolerations(policy.Tolerations); err != nil {
+		allErr = append(allErr, err)
+	}
 
-	return nil
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
@@ -209,6 +221,40 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 		if len(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) > 0 {
 			allErr = append(allErr, validatePreferredClusterSelectors(clusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution))
 		}
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func validateTolerations(tolerations []placementv1beta1.Toleration) error {
+	allErr := make([]error, 0)
+	tolerationMap := make(map[placementv1beta1.Toleration]bool)
+	for _, toleration := range tolerations {
+		if toleration.Key != "" {
+			for _, msg := range validation.IsQualifiedName(toleration.Key) {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
+			}
+		}
+		switch toleration.Operator {
+		case corev1.TolerationOpExists:
+			if toleration.Value != "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value needs to be empty, when operator is Exists"))
+			}
+		case corev1.TolerationOpEqual:
+			if toleration.Key == "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is Equal"))
+			}
+			if toleration.Value == "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal"))
+			} else {
+				for _, msg := range validation.IsValidLabelValue(toleration.Value) {
+					allErr = append(allErr, fmt.Errorf(invalidTolerationValueErrFmt, toleration, msg))
+				}
+			}
+		}
+		if _, exists := tolerationMap[toleration]; exists {
+			allErr = append(allErr, fmt.Errorf(uniqueTolerationErrFmt, toleration))
+		}
+		tolerationMap[toleration] = true
 	}
 	return apiErrors.NewAggregate(allErr)
 }

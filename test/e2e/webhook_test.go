@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -216,6 +217,71 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 			var statusErr *k8sErrors.StatusError
 			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("placement type is immutable"))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+})
+
+var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		// Create the CRP with tolerations.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				ResourceSelectors: workResourceSelector(),
+				Policy: &placementv1beta1.PlacementPolicy{
+					Tolerations: []placementv1beta1.Toleration{
+						{
+							Key:      "key1",
+							Operator: corev1.TolerationOpEqual,
+							Value:    "value1",
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+						{
+							Key:      "key2",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+		}
+		By(fmt.Sprintf("creating placement %s", crpName))
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
+	})
+
+	AfterAll(func() {
+		By(fmt.Sprintf("deleting placement %s", crpName))
+		cleanupCRP(crpName)
+
+		By("deleting created work resources")
+		cleanupWorkResources()
+	})
+
+	It("should deny update on CRP with invalid toleration", func() {
+		Eventually(func(g Gomega) error {
+			var crp placementv1beta1.ClusterResourcePlacement
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)).Should(Succeed())
+			invalidToleration := placementv1beta1.Toleration{
+				Operator: corev1.TolerationOpEqual,
+				Value:    "test-value",
+				Effect:   corev1.TaintEffectNoSchedule,
+			}
+			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, invalidToleration)
+			err := hubClient.Update(ctx, &crp)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(fmt.Sprintf("invalid toleration %+v: %s", invalidToleration, "toleration key cannot be empty, when operator is Equal")))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})

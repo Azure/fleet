@@ -42,6 +42,10 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			klog.ErrorS(err, "failed to decode v1beta1 CRP object for create/update operation", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 			return admission.Errored(http.StatusBadRequest, err)
 		}
+		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
+			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
+			return admission.Denied(err.Error())
+		}
 		if req.Operation == admissionv1.Update {
 			var oldCRP placementv1beta1.ClusterResourcePlacement
 			if err := v.decoder.DecodeRaw(req.OldObject, &oldCRP); err != nil {
@@ -51,10 +55,6 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 			if validator.IsPlacementPolicyTypeUpdated(oldCRP.Spec.Policy, crp.Spec.Policy) {
 				return admission.Denied("placement type is immutable")
 			}
-		}
-		if err := validator.ValidateClusterResourcePlacement(&crp); err != nil {
-			klog.V(2).InfoS("v1beta1 cluster resource placement has invalid fields, request is denied", "operation", req.Operation, "namespacedName", types.NamespacedName{Name: crp.Name})
-			return admission.Denied(err.Error())
 		}
 	}
 	klog.V(2).InfoS("user is allowed to modify v1beta1 cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})
