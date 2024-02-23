@@ -251,12 +251,25 @@ func validateTolerations(tolerations []placementv1beta1.Toleration) error {
 				}
 			}
 		}
-		if _, exists := tolerationMap[toleration]; exists {
+		if tolerationMap[toleration] {
 			allErr = append(allErr, fmt.Errorf(uniqueTolerationErrFmt, toleration))
 		}
 		tolerationMap[toleration] = true
 	}
 	return apiErrors.NewAggregate(allErr)
+}
+
+func IsTolerationsUpdatedOrDeleted(oldTolerations []placementv1beta1.Toleration, newTolerations []placementv1beta1.Toleration) bool {
+	newTolerationsMap := make(map[placementv1beta1.Toleration]bool)
+	for _, newToleration := range newTolerations {
+		newTolerationsMap[newToleration] = true
+	}
+	for _, oldToleration := range oldTolerations {
+		if !newTolerationsMap[oldToleration] {
+			return true
+		}
+	}
+	return false
 }
 
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
