@@ -7,7 +7,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -17,23 +16,18 @@ import (
 )
 
 const (
-	// V1Alpha1CRPValidationPath is the webhook service path which admission requests are routed to for validating ReplicaSet resources.
+	// V1Alpha1CRPValidationPath is the webhook service path which admission requests are routed to for v1alpha1 CRP resources.
 	V1Alpha1CRPValidationPath = "/validate-fleet.azure.com-v1alpha1-clusterresourceplacement"
 )
 
 type v1alpha1ClusterResourcePlacementValidator struct {
-	Client  client.Client
 	decoder *admission.Decoder
 }
 
 // AddV1Alpha1 registers the webhook for K8s bulit-in object types.
 func AddV1Alpha1(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hander := &v1alpha1ClusterResourcePlacementValidator{
-		Client:  mgr.GetClient(),
-		decoder: admission.NewDecoder(mgr.GetScheme()),
-	}
-	hookServer.Register(V1Alpha1CRPValidationPath, &webhook.Admission{Handler: hander})
+	hookServer.Register(V1Alpha1CRPValidationPath, &webhook.Admission{Handler: &v1alpha1ClusterResourcePlacementValidator{admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 

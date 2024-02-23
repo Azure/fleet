@@ -12,7 +12,6 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/apps/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -26,18 +25,13 @@ const (
 )
 
 type replicaSetValidator struct {
-	Client  client.Client
 	decoder *admission.Decoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	handler := &replicaSetValidator{
-		Client:  mgr.GetClient(),
-		decoder: admission.NewDecoder(mgr.GetScheme()),
-	}
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &replicaSetValidator{admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 

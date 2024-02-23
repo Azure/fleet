@@ -7,7 +7,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -17,23 +16,18 @@ import (
 )
 
 const (
-	// ValidationPath is the webhook service path which admission requests are routed to for validating ReplicaSet resources.
+	// ValidationPath is the webhook service path which admission requests are routed to for validating v1beta1 CRP resources.
 	ValidationPath = "/validate-fleet.azure.com-v1beta1-clusterresourceplacement"
 )
 
 type clusterResourcePlacementValidator struct {
-	Client  client.Client
 	decoder *admission.Decoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	handler := &clusterResourcePlacementValidator{
-		Client:  mgr.GetClient(),
-		decoder: admission.NewDecoder(mgr.GetScheme()),
-	}
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourcePlacementValidator{admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 

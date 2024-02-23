@@ -48,6 +48,7 @@ import (
 	"go.goms.io/fleet/cmd/hubagent/options"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
+	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
 )
@@ -289,6 +290,23 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 			},
 			TimeoutSeconds: fiveSecondWebhookTimeout,
 		},
+		{
+			Name:                    "fleet.membercluster.validating",
+			ClientConfig:            w.createClientConfig(membercluster.ValidationPath),
+			FailurePolicy:           &failFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update,
+					},
+					Rule: createRule([]string{clusterv1beta1.GroupVersion.Group}, []string{clusterv1beta1.GroupVersion.Version}, []string{memberClusterResourceName}, &clusterScope),
+				},
+			},
+			TimeoutSeconds: fiveSecondWebhookTimeout,
+		},
 	}
 
 	return webHooks
@@ -409,7 +427,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 	}
 	guardRailWebhookConfigurations := []admv1.ValidatingWebhook{
 		{
-			Name:                    "fleet.customresourcedefinition.validating",
+			Name:                    "fleet.customresourcedefinition.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
@@ -423,7 +441,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 		{
-			Name:                    "fleet.membercluster.validating",
+			Name:                    "fleet.membercluster.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
@@ -437,7 +455,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 		{
-			Name:                    "fleet.v1alpha1.membercluster.validating",
+			Name:                    "fleet.v1alpha1.membercluster.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
@@ -451,7 +469,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			TimeoutSeconds: oneSecondWebhookTimeout,
 		},
 		{
-			Name:                    "fleet.fleetmembernamespacedresources.validating",
+			Name:                    "fleet.fleetmembernamespacedresources.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
@@ -461,7 +479,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			TimeoutSeconds:          oneSecondWebhookTimeout,
 		},
 		{
-			Name:                    "fleet.fleetsystemnamespacedresources.validating",
+			Name:                    "fleet.fleetsystemnamespacedresources.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
@@ -471,7 +489,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			TimeoutSeconds:          oneSecondWebhookTimeout,
 		},
 		{
-			Name:                    "fleet.kubenamespacedresources.validating",
+			Name:                    "fleet.kubenamespacedresources.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
@@ -481,7 +499,7 @@ func (w *Config) buildFleetGuardRailValidatingWebhooks() []admv1.ValidatingWebho
 			TimeoutSeconds:          oneSecondWebhookTimeout,
 		},
 		{
-			Name:                    "fleet.namespace.validating",
+			Name:                    "fleet.namespace.guardrail.validating",
 			ClientConfig:            w.createClientConfig(fleetresourcehandler.ValidationPath),
 			FailurePolicy:           &ignoreFailurePolicy,
 			SideEffects:             &sideEffortsNone,
