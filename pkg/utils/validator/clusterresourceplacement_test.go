@@ -1174,7 +1174,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 	tests := map[string]struct {
 		oldTolerations []placementv1beta1.Toleration
 		newTolerations []placementv1beta1.Toleration
-		wantResult     bool
+		want           bool
 	}{
 		"old tolerations is nil": {
 			newTolerations: []placementv1beta1.Toleration{
@@ -1190,7 +1190,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantResult: false,
+			want: false,
 		},
 		"new tolerations is nil": {
 			oldTolerations: []placementv1beta1.Toleration{
@@ -1206,7 +1206,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantResult: true,
+			want: true,
 		},
 		"one toleration was updated in new tolerations": {
 			oldTolerations: []placementv1beta1.Toleration{
@@ -1235,7 +1235,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantResult: true,
+			want: true,
 		},
 		"one toleration was deleted in new tolerations": {
 			oldTolerations: []placementv1beta1.Toleration{
@@ -1259,7 +1259,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantResult: true,
+			want: true,
 		},
 		"old tolerations, new tolerations are same": {
 			oldTolerations: []placementv1beta1.Toleration{
@@ -1288,7 +1288,7 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			wantResult: false,
+			want: false,
 		},
 		"a toleration was added to new tolerations": {
 			oldTolerations: []placementv1beta1.Toleration{
@@ -1320,13 +1320,13 @@ func TestIsTolerationsUpdatedOrDeleted(t *testing.T) {
 					Operator: corev1.TolerationOpExists,
 				},
 			},
-			wantResult: false,
+			want: false,
 		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if gotResult := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); gotResult != testCase.wantResult {
-				t.Errorf("IsTolerationsUpdatedOrDeleted() gotResult = %v, wantResult %v", gotResult, testCase.wantResult)
+			if got := IsTolerationsUpdatedOrDeleted(testCase.oldTolerations, testCase.newTolerations); got != testCase.want {
+				t.Errorf("IsTolerationsUpdatedOrDeleted() got = %v, want = %v", got, testCase.want)
 			}
 		})
 	}
