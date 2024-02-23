@@ -26,6 +26,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 // Reconciler reconciles a clusterResourceOverride object.
@@ -78,7 +79,7 @@ func (r *ClusterResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *ClusterResourceReconciler) ensureClusterResourceOverrideSnapshot(ctx context.Context, cro *placementv1alpha1.ClusterResourceOverride, revisionHistoryLimit int) error {
 	croKObj := klog.KObj(cro)
 	overridePolicy := cro.Spec
-	overrideSpecHash, err := utils.GenerateSpecHash(overridePolicy)
+	overrideSpecHash, err := resource.HashOf(overridePolicy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to generate policy hash of clusterResourceOverride", "clusterResourceOverride", croKObj)
 		return controller.NewUnexpectedBehaviorError(err)
@@ -94,7 +95,7 @@ func (r *ClusterResourceReconciler) ensureClusterResourceOverrideSnapshot(ctx co
 		return err
 	}
 
-	latestSnapshotIndex := 0
+	latestSnapshotIndex := -1 //so index start at 0
 	if len(snapshotList.Items) != 0 {
 		// convert the last unstructured snapshot to the typed object
 		latestSnapshot := &placementv1alpha1.ClusterResourceOverrideSnapshot{}

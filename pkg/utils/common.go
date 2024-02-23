@@ -7,8 +7,6 @@ package utils
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -29,6 +27,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -407,14 +406,4 @@ func GenerateGroupString(groups []string) string {
 		groupString = fmt.Sprintf(lessGroupsStringFormat, groups)
 	}
 	return groupString
-}
-
-// GenerateSpecHash Generates a hash value of a spec
-func GenerateSpecHash(spec any) (string, error) {
-	jsonBytes, err := json.Marshal(spec)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes)), nil
 }

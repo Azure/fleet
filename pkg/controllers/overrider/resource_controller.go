@@ -25,6 +25,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/labels"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 // Reconciler reconciles a ResourceOverride object.
@@ -76,7 +77,7 @@ func (r *ResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context, ro *placementv1alpha1.ResourceOverride, revisionHistoryLimit int) error {
 	croKObj := klog.KObj(ro)
 	overridePolicy := ro.Spec
-	overrideSpecHash, err := utils.GenerateSpecHash(overridePolicy)
+	overrideSpecHash, err := resource.HashOf(overridePolicy)
 	if err != nil {
 		klog.ErrorS(err, "Failed to generate policy hash of ResourceOverride", "ResourceOverride", croKObj)
 		return controller.NewUnexpectedBehaviorError(err)

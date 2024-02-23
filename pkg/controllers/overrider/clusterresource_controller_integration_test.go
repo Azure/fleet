@@ -51,13 +51,13 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should have finalizer")
 
 		By("Checking if a new snapshot is created")
-		snapshot := getClusterResourceOverrideSnapshot(testCROName, 1) //index start from 1
+		snapshot := getClusterResourceOverrideSnapshot(testCROName, 0) //index starts from 0
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Checking if the label is correct")
 		diff := cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(1),
+			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
 			fleetv1beta1.IsLatestSnapshotLabel:  "true",
 			fleetv1alpha1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
@@ -66,7 +66,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		diff = cmp.Diff(cro.Spec, snapshot.Spec.OverrideSpec)
 		Expect(diff).Should(BeEmpty(), diff)
 		By("Make sure no other snapshot is created")
-		snapshot = getClusterResourceOverrideSnapshot(testCROName, 2)
+		snapshot = getClusterResourceOverrideSnapshot(testCROName, 1)
 		Consistently(func() bool {
 			return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot))
 		}, consistentlyDuration, interval).Should(BeTrue(), "snapshot should not exist")
@@ -77,7 +77,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		Expect(k8sClient.Create(ctx, cro)).Should(Succeed())
 
 		By("Waiting for a new snapshot is created")
-		snapshot := getClusterResourceOverrideSnapshot(testCROName, 1)
+		snapshot := getClusterResourceOverrideSnapshot(testCROName, 0)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -97,13 +97,13 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}
 		Expect(k8sClient.Update(ctx, cro)).Should(Succeed())
 		By("Checking if a new snapshot is created")
-		snapshot = getClusterResourceOverrideSnapshot(testCROName, 2)
+		snapshot = getClusterResourceOverrideSnapshot(testCROName, 1)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Checking if the label is correct")
 		diff := cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(2),
+			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(1),
 			fleetv1beta1.IsLatestSnapshotLabel:  "true",
 			fleetv1alpha1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
@@ -112,11 +112,11 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		diff = cmp.Diff(cro.Spec, snapshot.Spec.OverrideSpec)
 		Expect(diff).Should(BeEmpty(), diff)
 		By("Checking if the old snapshot is updated")
-		snapshot = getClusterResourceOverrideSnapshot(testCROName, 1)
+		snapshot = getClusterResourceOverrideSnapshot(testCROName, 0)
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)).Should(Succeed())
 		By("Make sure the old snapshot is correctly marked as not latest")
 		diff = cmp.Diff(map[string]string{
-			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(1),
+			fleetv1alpha1.OverrideIndexLabel:    strconv.Itoa(0),
 			fleetv1beta1.IsLatestSnapshotLabel:  "false",
 			fleetv1alpha1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
@@ -130,7 +130,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		By("Creating a new CRO")
 		Expect(k8sClient.Create(ctx, cro)).Should(Succeed())
 		By("Waiting for a new snapshot is created")
-		snapshot := getClusterResourceOverrideSnapshot(testCROName, 1)
+		snapshot := getClusterResourceOverrideSnapshot(testCROName, 0)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -149,7 +149,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}
 		Expect(k8sClient.Update(ctx, cro)).Should(Succeed())
 		By("Checking if a new snapshot is created")
-		snapshot = getClusterResourceOverrideSnapshot(testCROName, 2)
+		snapshot = getClusterResourceOverrideSnapshot(testCROName, 1)
 		Eventually(func() error {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
@@ -160,7 +160,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 			return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: cro.Name}, cro))
 		}, eventuallyTimeout, interval).Should(BeTrue(), "cro should be deleted")
 		By("Make sure all snapshots are deleted")
-		for i := 1; i < 3; i++ {
+		for i := 0; i < 2; i++ {
 			snapshot := getClusterResourceOverrideSnapshot(testCROName, i)
 			Consistently(func() bool {
 				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot))
