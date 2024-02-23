@@ -7,6 +7,8 @@ package utils
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -28,6 +30,7 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -52,8 +55,9 @@ const (
 )
 
 const (
-	PlacementFieldManagerName    = "cluster-placement-controller"
-	MCControllerFieldManagerName = "member-cluster-controller"
+	PlacementFieldManagerName          = "cluster-placement-controller"
+	MCControllerFieldManagerName       = "member-cluster-controller"
+	OverrideControllerFieldManagerName = "override-controller"
 )
 
 // TODO(ryanzhang): move this to the api directory
@@ -266,6 +270,18 @@ var (
 		Version: placementv1beta1.GroupVersion.Version,
 		Kind:    "Work",
 	}
+
+	ClusterResourceOverrideSnapshotKind = schema.GroupVersionKind{
+		Group:   placementv1alpha1.GroupVersion.Group,
+		Version: placementv1alpha1.GroupVersion.Version,
+		Kind:    placementv1alpha1.ClusterResourceOverrideSnapshotKind,
+	}
+
+	ResourceOverrideSnapshotKind = schema.GroupVersionKind{
+		Group:   placementv1alpha1.GroupVersion.Group,
+		Version: placementv1alpha1.GroupVersion.Version,
+		Kind:    placementv1alpha1.ResourceOverrideSnapshotKind,
+	}
 )
 
 // RandSecureInt returns a uniform random value in [1, max] or panic.
@@ -391,4 +407,14 @@ func GenerateGroupString(groups []string) string {
 		groupString = fmt.Sprintf(lessGroupsStringFormat, groups)
 	}
 	return groupString
+}
+
+// GenerateSpecHash Generates a hash value of a spec
+func GenerateSpecHash(spec any) (string, error) {
+	jsonBytes, err := json.Marshal(spec)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes)), nil
 }
