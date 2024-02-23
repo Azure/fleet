@@ -34,7 +34,13 @@ const (
 // Add registers the webhook for K8s built-in object types.
 func Add(mgr manager.Manager, whiteListedUsers []string, isFleetV1Beta1API bool) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &fleetResourceValidator{client: mgr.GetClient(), whiteListedUsers: whiteListedUsers, isFleetV1Beta1API: isFleetV1Beta1API}})
+	hander := &fleetResourceValidator{
+		client:            mgr.GetClient(),
+		whiteListedUsers:  whiteListedUsers,
+		isFleetV1Beta1API: isFleetV1Beta1API,
+		decoder:           admission.NewDecoder(mgr.GetScheme()),
+	}
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: hander})
 	return nil
 }
 
@@ -179,12 +185,6 @@ func (v *fleetResourceValidator) decodeRequestObject(req admission.Request, obj 
 			return err
 		}
 	}
-	return nil
-}
-
-// InjectDecoder injects the decoder into fleetResourceValidator.
-func (v *fleetResourceValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
 	return nil
 }
 

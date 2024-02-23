@@ -33,7 +33,11 @@ type replicaSetValidator struct {
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &replicaSetValidator{Client: mgr.GetClient()}})
+	handler := &replicaSetValidator{
+		Client:  mgr.GetClient(),
+		decoder: admission.NewDecoder(mgr.GetScheme()),
+	}
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
 	return nil
 }
 
@@ -49,10 +53,4 @@ func (v *replicaSetValidator) Handle(_ context.Context, req admission.Request) a
 		}
 	}
 	return admission.Allowed("")
-}
-
-// InjectDecoder injects the decoder.
-func (v *replicaSetValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
 }
