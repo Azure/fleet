@@ -6,7 +6,7 @@ Licensed under the MIT license.
 package validator
 
 import (
-	"regexp"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -1163,14 +1163,8 @@ func TestValidateTolerations(t *testing.T) {
 			if (gotErr != nil) != testCase.wantErr {
 				t.Errorf("validateTolerations() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
-			if testCase.wantErr {
-				match, err := regexp.MatchString(testCase.wantErrMsg, gotErr.Error())
-				if err != nil {
-					t.Errorf("validateTolerations() failed to compile pattern: %s", testCase.wantErrMsg)
-				}
-				if !match {
-					t.Errorf("validateTolerations() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
-				}
+			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
+				t.Errorf("validateTolerations() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}

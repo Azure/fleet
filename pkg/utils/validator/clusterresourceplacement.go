@@ -251,7 +251,7 @@ func validateTolerations(tolerations []placementv1beta1.Toleration) error {
 				}
 			}
 		}
-		if _, exists := tolerationMap[toleration]; exists {
+		if tolerationMap[toleration] {
 			allErr = append(allErr, fmt.Errorf(uniqueTolerationErrFmt, toleration))
 		}
 		tolerationMap[toleration] = true
