@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -264,7 +264,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 								Kind:               "ClusterResourceBinding",
 								Name:               binding.Name,
 								UID:                binding.UID,
-								BlockOwnerDeletion: pointer.Bool(true),
+								BlockOwnerDeletion: ptr.To(true),
 							},
 						},
 						Labels: map[string]string{
@@ -417,7 +417,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 								Kind:               "ClusterResourceBinding",
 								Name:               binding.Name,
 								UID:                binding.UID,
-								BlockOwnerDeletion: pointer.Bool(true),
+								BlockOwnerDeletion: ptr.To(true),
 							},
 						},
 						Labels: map[string]string{
@@ -453,7 +453,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 								Kind:               "ClusterResourceBinding",
 								Name:               binding.Name,
 								UID:                binding.UID,
-								BlockOwnerDeletion: pointer.Bool(true),
+								BlockOwnerDeletion: ptr.To(true),
 							},
 						},
 						Labels: map[string]string{
@@ -523,7 +523,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 								Kind:               "ClusterResourceBinding",
 								Name:               binding.Name,
 								UID:                binding.UID,
-								BlockOwnerDeletion: pointer.Bool(true),
+								BlockOwnerDeletion: ptr.To(true),
 							},
 						},
 						Labels: map[string]string{
@@ -558,7 +558,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 								Kind:               "ClusterResourceBinding",
 								Name:               binding.Name,
 								UID:                binding.UID,
-								BlockOwnerDeletion: pointer.Bool(true),
+								BlockOwnerDeletion: ptr.To(true),
 							},
 						},
 						Labels: map[string]string{
@@ -697,7 +697,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 								Kind:               "ClusterResourceBinding",
 								Name:               binding.Name,
 								UID:                binding.UID,
-								BlockOwnerDeletion: pointer.Bool(true),
+								BlockOwnerDeletion: ptr.To(true),
 							},
 						},
 						Labels: map[string]string{

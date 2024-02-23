@@ -17,7 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -86,8 +86,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -108,8 +108,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -163,8 +163,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -199,8 +199,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -262,8 +262,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -298,8 +298,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -354,8 +354,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -390,8 +390,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -446,8 +446,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -502,8 +502,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -639,8 +639,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -684,8 +684,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -740,8 +740,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -792,8 +792,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -888,7 +888,7 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "the placement scheduling succeeded when numberOfClusters is 0",
 			policy: &fleetv1beta1.PlacementPolicy{
 				PlacementType:    fleetv1beta1.PickNPlacementType,
-				NumberOfClusters: pointer.Int32(0),
+				NumberOfClusters: ptr.To(int32(0)),
 				Affinity: &fleetv1beta1.Affinity{
 					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
@@ -916,8 +916,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -963,8 +963,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1009,7 +1009,7 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "the placement status has not been changed from the last update, validating the lastTransitionTime",
 			policy: &fleetv1beta1.PlacementPolicy{
 				PlacementType:    fleetv1beta1.PickNPlacementType,
-				NumberOfClusters: pointer.Int32(0),
+				NumberOfClusters: ptr.To(int32(0)),
 				Affinity: &fleetv1beta1.Affinity{
 					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
@@ -1065,8 +1065,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1112,8 +1112,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1158,7 +1158,7 @@ func TestSetPlacementStatus(t *testing.T) {
 			name: "the placement status has been changed from the last update, validating the lastTransitionTime",
 			policy: &fleetv1beta1.PlacementPolicy{
 				PlacementType:    fleetv1beta1.PickNPlacementType,
-				NumberOfClusters: pointer.Int32(0),
+				NumberOfClusters: ptr.To(int32(0)),
 				Affinity: &fleetv1beta1.Affinity{
 					ClusterAffinity: &fleetv1beta1.ClusterAffinity{
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
@@ -1214,8 +1214,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1261,8 +1261,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1317,8 +1317,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1364,8 +1364,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1657,8 +1657,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1704,8 +1704,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1925,8 +1925,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},
@@ -1972,8 +1972,8 @@ func TestSetPlacementStatus(t *testing.T) {
 					OwnerReferences: []metav1.OwnerReference{
 						{
 							Name:               testName,
-							BlockOwnerDeletion: pointer.Bool(true),
-							Controller:         pointer.Bool(true),
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(true),
 							APIVersion:         fleetAPIVersion,
 							Kind:               "ClusterResourcePlacement",
 						},

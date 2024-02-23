@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/webhook/validation"
@@ -295,7 +295,7 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 					Labels:    map[string]string{"app": "busybox"},
 				},
 				Spec: appsv1.DeploymentSpec{
-					Replicas: pointer.Int32(1),
+					Replicas: ptr.To(int32(1)),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"app": "busybox"},
 					},
@@ -338,7 +338,7 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 					Labels:    map[string]string{"app": "busybox"},
 				},
 				Spec: appsv1.DeploymentSpec{
-					Replicas: pointer.Int32(1),
+					Replicas: ptr.To(int32(1)),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"app": "busybox"},
 					},
@@ -627,8 +627,8 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 					Namespace: kubeSystemNS,
 				},
 				Spec: coordinationv1.LeaseSpec{
-					HolderIdentity:       pointer.String("test-holder-identity"),
-					LeaseDurationSeconds: pointer.Int32(3600),
+					HolderIdentity:       ptr.To("test-holder-identity"),
+					LeaseDurationSeconds: ptr.To(int32(3600)),
 					RenewTime:            &metav1.MicroTime{Time: metav1.Now().Time},
 				},
 			}
@@ -655,8 +655,8 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 					Namespace: kubeSystemNS,
 				},
 				Spec: coordinationv1.LeaseSpec{
-					HolderIdentity:       pointer.String("test-holder-identity"),
-					LeaseDurationSeconds: pointer.Int32(3600),
+					HolderIdentity:       ptr.To("test-holder-identity"),
+					LeaseDurationSeconds: ptr.To(int32(3600)),
 					RenewTime:            &metav1.MicroTime{Time: metav1.Now().Time},
 				},
 			}
@@ -701,20 +701,20 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 				AddressType: discoveryv1.AddressTypeIPv4,
 				Ports: []discoveryv1.EndpointPort{
 					{
-						Name:     pointer.String("http"),
+						Name:     ptr.To("http"),
 						Protocol: &protocol,
-						Port:     pointer.Int32(80),
+						Port:     ptr.To(int32(80)),
 					},
 				},
 				Endpoints: []discoveryv1.Endpoint{
 					{
 						Addresses: []string{"10.1.2.3"},
 						Conditions: discoveryv1.EndpointConditions{
-							Ready: pointer.Bool(true),
+							Ready: ptr.To(true),
 						},
-						Hostname: pointer.String("pod-1"),
-						NodeName: pointer.String("node-1"),
-						Zone:     pointer.String("us-west2-a"),
+						Hostname: ptr.To("pod-1"),
+						NodeName: ptr.To("node-1"),
+						Zone:     ptr.To("us-west2-a"),
 					},
 				},
 			}
@@ -743,20 +743,20 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 				AddressType: discoveryv1.AddressTypeIPv4,
 				Ports: []discoveryv1.EndpointPort{
 					{
-						Name:     pointer.String("http"),
+						Name:     ptr.To("http"),
 						Protocol: &protocol,
-						Port:     pointer.Int32(80),
+						Port:     ptr.To(int32(80)),
 					},
 				},
 				Endpoints: []discoveryv1.Endpoint{
 					{
 						Addresses: []string{"10.1.2.3"},
 						Conditions: discoveryv1.EndpointConditions{
-							Ready: pointer.Bool(true),
+							Ready: ptr.To(true),
 						},
-						Hostname: pointer.String("pod-1"),
-						NodeName: pointer.String("node-1"),
-						Zone:     pointer.String("us-west2-a"),
+						Hostname: ptr.To("pod-1"),
+						NodeName: ptr.To("node-1"),
+						Zone:     ptr.To("us-west2-a"),
 					},
 				},
 			}
@@ -821,7 +821,7 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 					Namespace: memberNamespace.Name,
 				},
 				Spec: networkingv1.IngressSpec{
-					IngressClassName: pointer.String("test-ingress-class"),
+					IngressClassName: ptr.To("test-ingress-class"),
 					Rules: []networkingv1.IngressRule{
 						{
 							Host: "http",
@@ -870,7 +870,7 @@ var _ = Describe("Fleet's Reserved Namespaced Resources Handler webhook tests", 
 					Namespace: memberNamespace.Name,
 				},
 				Spec: networkingv1.IngressSpec{
-					IngressClassName: pointer.String("test-ingress-class"),
+					IngressClassName: ptr.To("test-ingress-class"),
 					Rules: []networkingv1.IngressRule{
 						{
 							Host: "http",

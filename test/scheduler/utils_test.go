@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -64,8 +64,8 @@ var (
 
 	nilScoreByCluster = map[string]*placementv1beta1.ClusterScore{}
 	zeroScore         = placementv1beta1.ClusterScore{
-		AffinityScore:       pointer.Int32(0),
-		TopologySpreadScore: pointer.Int32(0),
+		AffinityScore:       ptr.To(int32(0)),
+		TopologySpreadScore: ptr.To(int32(0)),
 	}
 	zeroScoreByCluster = map[string]*placementv1beta1.ClusterScore{
 		memberCluster1EastProd:          &zeroScore,

@@ -36,7 +36,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
@@ -105,8 +105,8 @@ var (
 	sideEffortsNone          = admv1.SideEffectClassNone
 	namespacedScope          = admv1.NamespacedScope
 	clusterScope             = admv1.ClusterScope
-	oneSecondWebhookTimeout  = pointer.Int32(1)
-	fiveSecondWebhookTimeout = pointer.Int32(5)
+	oneSecondWebhookTimeout  = ptr.To(int32(1))
+	fiveSecondWebhookTimeout = ptr.To(int32(5))
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
@@ -504,10 +504,10 @@ func (w *Config) createClientConfig(validationPath string) admv1.WebhookClientCo
 	serviceRef := admv1.ServiceReference{
 		Namespace: w.serviceNamespace,
 		Name:      w.serviceName,
-		Port:      pointer.Int32(w.servicePort),
+		Port:      ptr.To(w.servicePort),
 	}
 	serviceEndpoint := w.serviceURL + validationPath
-	serviceRef.Path = pointer.String(validationPath)
+	serviceRef.Path = ptr.To(validationPath)
 	config := admv1.WebhookClientConfig{
 		CABundle: w.caPEM,
 	}
@@ -515,7 +515,7 @@ func (w *Config) createClientConfig(validationPath string) admv1.WebhookClientCo
 	case options.Service:
 		config.Service = &serviceRef
 	case options.URL:
-		config.URL = pointer.String(serviceEndpoint)
+		config.URL = ptr.To(serviceEndpoint)
 	}
 	return config
 }
@@ -687,7 +687,7 @@ func bindWebhookConfigToFleetSystem(ctx context.Context, k8Client client.Client,
 		Kind:               fleetNs.Kind,
 		Name:               fleetNs.GetName(),
 		UID:                fleetNs.GetUID(),
-		BlockOwnerDeletion: pointer.Bool(false),
+		BlockOwnerDeletion: ptr.To(false),
 	}
 
 	validatingWebhookConfig.OwnerReferences = []metav1.OwnerReference{ownerRef}

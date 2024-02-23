@@ -38,7 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -410,7 +410,7 @@ var _ = Describe("Work Controller", func() {
 					Values:   []string{"us", "asia", "eu"},
 				},
 			}
-			cloneSet.Spec.Replicas = pointer.Int32(10)
+			cloneSet.Spec.Replicas = ptr.To(int32(10))
 			cloneSet.Spec.MinReadySeconds = 1
 			maxuavail := intstr.FromInt(10)
 			cloneSet.Spec.ScaleStrategy.MaxUnavailable = &maxuavail
@@ -432,7 +432,7 @@ var _ = Describe("Work Controller", func() {
 			}
 			Expect(cmp.Diff(appliedCloneSet.Spec.ScaleStrategy, expectStrategy)).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.Selector, cloneSet.Spec.Selector)).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, pointer.Int32(10))).Should(BeEmpty())
+			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, ptr.To(int32(10)))).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.MinReadySeconds, int32(1))).Should(BeEmpty())
 		})
 

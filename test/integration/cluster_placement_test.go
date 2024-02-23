@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
@@ -115,8 +115,8 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 				AddressType: discoveryv1.AddressTypeIPv4,
 				Ports: []discoveryv1.EndpointPort{
 					{
-						Name: pointer.String("https"),
-						Port: pointer.Int32(443),
+						Name: ptr.To("https"),
+						Port: ptr.To(int32(443)),
 					},
 				},
 			}
@@ -1346,7 +1346,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 							},
 						},
 						ClientConfig: adminv1.WebhookClientConfig{
-							URL: pointer.String("https://test.azure.com/test-crp"),
+							URL: ptr.To("https://test.azure.com/test-crp"),
 						},
 						AdmissionReviewVersions: []string{"v1"},
 						SideEffects:             &sideEffect,
@@ -1627,7 +1627,7 @@ var _ = Describe("Test Cluster Resource Placement Controller", func() {
 					Namespace: ns.Name,
 				},
 				Spec: kruisev1alpha1.CloneSetSpec{
-					Replicas: pointer.Int32(20),
+					Replicas: ptr.To(int32(20)),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"app.kubernetes.io/name": "test-clone-set"},
 					},

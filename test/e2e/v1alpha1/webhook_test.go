@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
@@ -425,7 +425,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 						Namespace: ns.Name,
 					},
 					Spec: appsv1.ReplicaSetSpec{
-						Replicas:        pointer.Int32(1),
+						Replicas:        ptr.To(int32(1)),
 						MinReadySeconds: 1,
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{},
@@ -482,7 +482,7 @@ var _ = Describe("Fleet's Hub cluster webhook tests", func() {
 					Namespace: "default",
 				},
 				Spec: appsv1.ReplicaSetSpec{
-					Replicas:        pointer.Int32(1),
+					Replicas:        ptr.To(int32(1)),
 					MinReadySeconds: 1,
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{},

@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -48,7 +48,7 @@ func TestGenerateManifest(t *testing.T) {
 						Generation:                 int64(utilrand.Int()),
 						CreationTimestamp:          metav1.Time{Time: time.Date(utilrand.IntnRange(0, 999), time.January, 1, 1, 1, 1, 1, time.UTC)},
 						DeletionTimestamp:          &metav1.Time{Time: time.Date(utilrand.IntnRange(1000, 1999), time.January, 1, 1, 1, 1, 1, time.UTC)},
-						DeletionGracePeriodSeconds: pointer.Int64(9999),
+						DeletionGracePeriodSeconds: ptr.To(int64(9999)),
 						Labels: map[string]string{
 							"label-key": "label-value",
 						},
@@ -92,7 +92,7 @@ func TestGenerateManifest(t *testing.T) {
 						Name:                       "object-name",
 						GenerateName:               "object-generateName",
 						Namespace:                  "object-namespace",
-						DeletionGracePeriodSeconds: pointer.Int64(9999),
+						DeletionGracePeriodSeconds: ptr.To(int64(9999)),
 						Labels: map[string]string{
 							"label-key": "label-value",
 						},
@@ -169,7 +169,7 @@ func TestGenerateManifest(t *testing.T) {
 							{
 								Name:        "svc-port",
 								Protocol:    corev1.ProtocolTCP,
-								AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+								AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 								Port:        9001,
 								NodePort:    int32(utilrand.Int()),
 							},
@@ -182,14 +182,14 @@ func TestGenerateManifest(t *testing.T) {
 						ExternalName:             "svc-spec-externalName",
 						ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
 						PublishNotReadyAddresses: false,
-						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: ptr.To(int32(60))}},
 						IPFamilies: []corev1.IPFamily{
 							corev1.IPv4Protocol,
 							corev1.IPv6Protocol,
 						},
 						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
-						AllocateLoadBalancerNodePorts: pointer.Bool(false),
-						LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+						AllocateLoadBalancerNodePorts: ptr.To(false),
+						LoadBalancerClass:             ptr.To("svc-spec-loadBalancerClass"),
 						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 					},
 					Status: corev1.ServiceStatus{
@@ -236,7 +236,7 @@ func TestGenerateManifest(t *testing.T) {
 							{
 								Name:        "svc-port",
 								Protocol:    corev1.ProtocolTCP,
-								AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+								AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 								Port:        9001,
 							},
 						},
@@ -248,14 +248,14 @@ func TestGenerateManifest(t *testing.T) {
 						ExternalName:             "svc-spec-externalName",
 						ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
 						PublishNotReadyAddresses: false,
-						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+						SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: ptr.To(int32(60))}},
 						IPFamilies: []corev1.IPFamily{
 							corev1.IPv4Protocol,
 							corev1.IPv6Protocol,
 						},
 						IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
-						AllocateLoadBalancerNodePorts: pointer.Bool(false),
-						LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+						AllocateLoadBalancerNodePorts: ptr.To(false),
+						LoadBalancerClass:             ptr.To("svc-spec-loadBalancerClass"),
 						InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 					},
 				}
@@ -319,7 +319,7 @@ func TestGenerateManifest(t *testing.T) {
 						UID:               types.UID(utilrand.String(10)),
 					},
 					Spec: batchv1.JobSpec{
-						BackoffLimit:   pointer.Int32(5),
+						BackoffLimit:   ptr.To(int32(5)),
 						CompletionMode: &indexedCompletion,
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
@@ -374,7 +374,7 @@ func TestGenerateManifest(t *testing.T) {
 						},
 					},
 					Spec: batchv1.JobSpec{
-						BackoffLimit:   pointer.Int32(5),
+						BackoffLimit:   ptr.To(int32(5)),
 						CompletionMode: &indexedCompletion,
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
@@ -439,9 +439,9 @@ func TestGenerateManifest(t *testing.T) {
 						UID:               types.UID(utilrand.String(10)),
 					},
 					Spec: batchv1.JobSpec{
-						BackoffLimit:   pointer.Int32(5),
+						BackoffLimit:   ptr.To(int32(5)),
 						CompletionMode: &indexedCompletion,
-						ManualSelector: pointer.Bool(true),
+						ManualSelector: ptr.To(true),
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"foo":            "bar",
@@ -490,9 +490,9 @@ func TestGenerateManifest(t *testing.T) {
 						Namespace: "ryan-namespace",
 					},
 					Spec: batchv1.JobSpec{
-						BackoffLimit:   pointer.Int32(5),
+						BackoffLimit:   ptr.To(int32(5)),
 						CompletionMode: &indexedCompletion,
-						ManualSelector: pointer.Bool(true),
+						ManualSelector: ptr.To(true),
 						Selector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"foo":            "bar",
@@ -583,7 +583,7 @@ func TestGenerateResourceContent(t *testing.T) {
 					Generation:                 int64(utilrand.Int()),
 					CreationTimestamp:          metav1.Time{Time: time.Date(utilrand.IntnRange(0, 999), time.January, 1, 1, 1, 1, 1, time.UTC)},
 					DeletionTimestamp:          &metav1.Time{Time: time.Date(utilrand.IntnRange(1000, 1999), time.January, 1, 1, 1, 1, 1, time.UTC)},
-					DeletionGracePeriodSeconds: pointer.Int64(9999),
+					DeletionGracePeriodSeconds: ptr.To(int64(9999)),
 					Labels: map[string]string{
 						"label-key": "label-value",
 					},
@@ -618,7 +618,7 @@ func TestGenerateResourceContent(t *testing.T) {
 					Name:                       "object-name",
 					GenerateName:               "object-generateName",
 					Namespace:                  "object-namespace",
-					DeletionGracePeriodSeconds: pointer.Int64(9999),
+					DeletionGracePeriodSeconds: ptr.To(int64(9999)),
 					Labels: map[string]string{
 						"label-key": "label-value",
 					},
@@ -673,7 +673,7 @@ func TestGenerateResourceContent(t *testing.T) {
 						{
 							Name:        "svc-port",
 							Protocol:    corev1.ProtocolTCP,
-							AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+							AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 							Port:        9001,
 							NodePort:    int32(utilrand.Int()),
 						},
@@ -686,14 +686,14 @@ func TestGenerateResourceContent(t *testing.T) {
 					ExternalName:             "svc-spec-externalName",
 					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
 					PublishNotReadyAddresses: false,
-					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: ptr.To(int32(60))}},
 					IPFamilies: []corev1.IPFamily{
 						corev1.IPv4Protocol,
 						corev1.IPv6Protocol,
 					},
 					IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
-					AllocateLoadBalancerNodePorts: pointer.Bool(false),
-					LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+					AllocateLoadBalancerNodePorts: ptr.To(false),
+					LoadBalancerClass:             ptr.To("svc-spec-loadBalancerClass"),
 					InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 				},
 				Status: corev1.ServiceStatus{
@@ -731,7 +731,7 @@ func TestGenerateResourceContent(t *testing.T) {
 						{
 							Name:        "svc-port",
 							Protocol:    corev1.ProtocolTCP,
-							AppProtocol: pointer.String("svc.com/my-custom-protocol"),
+							AppProtocol: ptr.To("svc.com/my-custom-protocol"),
 							Port:        9001,
 						},
 					},
@@ -743,14 +743,14 @@ func TestGenerateResourceContent(t *testing.T) {
 					ExternalName:             "svc-spec-externalName",
 					ExternalTrafficPolicy:    corev1.ServiceExternalTrafficPolicyType("svc-spec-externalTrafficPolicy"),
 					PublishNotReadyAddresses: false,
-					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: pointer.Int32(60)}},
+					SessionAffinityConfig:    &corev1.SessionAffinityConfig{ClientIP: &corev1.ClientIPConfig{TimeoutSeconds: ptr.To(int32(60))}},
 					IPFamilies: []corev1.IPFamily{
 						corev1.IPv4Protocol,
 						corev1.IPv6Protocol,
 					},
 					IPFamilyPolicy:                makeIPFamilyPolicyTypePointer(corev1.IPFamilyPolicySingleStack),
-					AllocateLoadBalancerNodePorts: pointer.Bool(false),
-					LoadBalancerClass:             pointer.String("svc-spec-loadBalancerClass"),
+					AllocateLoadBalancerNodePorts: ptr.To(false),
+					LoadBalancerClass:             ptr.To("svc-spec-loadBalancerClass"),
 					InternalTrafficPolicy:         makeServiceInternalTrafficPolicyPointer(corev1.ServiceInternalTrafficPolicyCluster),
 				},
 			},

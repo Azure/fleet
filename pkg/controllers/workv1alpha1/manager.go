@@ -63,7 +63,12 @@ func CreateControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		os.Exit(1)
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, apiutil.WithLazyDiscovery)
+	httpClient, err := rest.HTTPClientFor(spokeCfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create spoke HTTP client")
+		os.Exit(1)
+	}
+	restMapper, err := apiutil.NewDynamicRESTMapper(spokeCfg, httpClient)
 	if err != nil {
 		setupLog.Error(err, "unable to create spoke rest mapper")
 		os.Exit(1)
@@ -77,6 +82,17 @@ func CreateControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		os.Exit(1)
 	}
 
+	// In a recent refresh, the cache in use by the controller runtime has been upgraded to
+	// support multiple default namespaces (originally the number of default namespaces is
+	// limited to 1); however, the Fleet controllers still assume that only one default
+	// namespace is used, and for compatibility reasons, here we simply retrieve the first
+	// default namespace set (there should only be one set up anyway) and pass it to the
+	// Fleet controllers.
+	var targetNS string
+	for ns := range opts.Cache.DefaultNamespaces {
+		targetNS = ns
+		break
+	}
 	workController := NewApplyWorkReconciler(
 		hubMgr.GetClient(),
 		spokeDynamicClient,
@@ -84,7 +100,7 @@ func CreateControllers(ctx context.Context, hubCfg, spokeCfg *rest.Config, setup
 		restMapper,
 		hubMgr.GetEventRecorderFor("work_controller"),
 		maxWorkConcurrency,
-		opts.Namespace,
+		targetNS,
 	)
 
 	if err = workController.SetupWithManager(hubMgr); err != nil {

@@ -12,7 +12,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -300,8 +300,8 @@ func newSchedulingDecisionsFromBindings(
 			ClusterName: sc.Cluster.Name,
 			Selected:    false,
 			ClusterScore: &placementv1beta1.ClusterScore{
-				AffinityScore:       pointer.Int32(int32(sc.Score.AffinityScore)),
-				TopologySpreadScore: pointer.Int32(int32(sc.Score.TopologySpreadScore)),
+				AffinityScore:       ptr.To(int32(sc.Score.AffinityScore)),
+				TopologySpreadScore: ptr.To(int32(sc.Score.TopologySpreadScore)),
 			},
 			Reason: notPickedByScoreReason,
 		})
