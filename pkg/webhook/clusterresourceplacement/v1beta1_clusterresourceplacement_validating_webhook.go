@@ -68,7 +68,6 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 	klog.V(2).InfoS("user is allowed to modify v1beta1 cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})
 	return admission.Allowed("any user is allowed to modify v1beta1 CRP")
 }
-<<<<<<< HEAD
 
 func getTolerations(policy *placementv1beta1.PlacementPolicy) []placementv1beta1.Toleration {
 	if policy != nil {
@@ -76,11 +75,3 @@ func getTolerations(policy *placementv1beta1.PlacementPolicy) []placementv1beta1
 	}
 	return nil
 }
-
-// InjectDecoder injects the decoder.
-func (v *clusterResourcePlacementValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
-}
-=======
->>>>>>> 4bd8bea (Minor fixes)
