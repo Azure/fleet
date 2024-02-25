@@ -39,7 +39,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 		err := hubClient.Create(ctx, crp)
 		var statusErr *k8sErrors.StatusError
 		Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-		Expect(string(statusErr.Status().Message)).Should(ContainSubstring(fmt.Sprintf("the labelSelector and name fields are mutually exclusive in selector %+v", selector[0])))
+		Expect(statusErr.Status().Message).Should(ContainSubstring(fmt.Sprintf("the labelSelector and name fields are mutually exclusive in selector %+v", selector[0])))
 	})
 
 	It("should deny create on CRP with invalid placement policy for PickFixed", func() {
