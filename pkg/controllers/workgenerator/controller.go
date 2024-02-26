@@ -29,7 +29,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -440,7 +439,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 						Kind:               resourceBinding.Kind,
 						Name:               resourceBinding.Name,
 						UID:                resourceBinding.UID,
-						BlockOwnerDeletion: pointer.Bool(true), // make sure that the k8s will call work delete when the binding is deleted
+						BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
 					},
 				},
 			},
@@ -481,7 +480,7 @@ func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.Clus
 					Kind:               resourceBinding.Kind,
 					Name:               resourceBinding.Name,
 					UID:                resourceBinding.UID,
-					BlockOwnerDeletion: pointer.Bool(true), // make sure that the k8s will call work delete when the binding is deleted
+					BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
 				},
 			},
 		},
@@ -611,10 +610,10 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &fleetv1beta1.Work{}}, &handler.Funcs{
+		Watches(&fleetv1beta1.Work{}, &handler.Funcs{
 			// we care about work delete event as we want to know when a work is deleted so that we can
 			// delete the corresponding resource binding fast.
-			DeleteFunc: func(evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
 				if evt.Object == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("deleteEvent %v received with no matadata", evt)),
 						"Failed to process a delete event for work object")
@@ -634,7 +633,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 			},
 			// we care about work update event as we want to know when a work is applied so that we can
 			// update the corresponding resource binding status fast.
-			UpdateFunc: func(evt event.UpdateEvent, queue workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, queue workqueue.RateLimitingInterface) {
 				if evt.ObjectOld == nil || evt.ObjectNew == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateEvent %v received with no matadata", evt)),
 						"Failed to process an update event for work object")

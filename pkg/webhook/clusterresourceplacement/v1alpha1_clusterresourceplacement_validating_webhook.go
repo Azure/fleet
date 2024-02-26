@@ -29,7 +29,11 @@ type v1alpha1ClusterResourcePlacementValidator struct {
 // AddV1Alpha1 registers the webhook for K8s bulit-in object types.
 func AddV1Alpha1(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(V1Alpha1CRPValidationPath, &webhook.Admission{Handler: &v1alpha1ClusterResourcePlacementValidator{Client: mgr.GetClient()}})
+	hander := &v1alpha1ClusterResourcePlacementValidator{
+		Client:  mgr.GetClient(),
+		decoder: admission.NewDecoder(mgr.GetScheme()),
+	}
+	hookServer.Register(V1Alpha1CRPValidationPath, &webhook.Admission{Handler: hander})
 	return nil
 }
 
@@ -49,10 +53,4 @@ func (v *v1alpha1ClusterResourcePlacementValidator) Handle(_ context.Context, re
 	}
 	klog.V(2).InfoS("user is allowed to modify v1alpha1 cluster resource placement", "operation", req.Operation, "user", req.UserInfo.Username, "group", req.UserInfo.Groups, "namespacedName", types.NamespacedName{Name: crp.Name})
 	return admission.Allowed("any user is allowed to modify v1alpha1 CRP")
-}
-
-// InjectDecoder injects the decoder.
-func (v *v1alpha1ClusterResourcePlacementValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
 }

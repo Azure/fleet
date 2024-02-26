@@ -345,7 +345,7 @@ func (r *Reconciler) deleteRedundantSchedulingPolicySnapshots(ctx context.Contex
 	if len(sortedList.Items)-revisionHistoryLimit > 0 {
 		// We always delete before creating a new snapshot, the snapshot size should never exceed the limit as there is
 		// no finalizer added and object should be deleted immediately.
-		klog.Warningf("The number of clusterSchedulingPolicySnapshots exceeds the revisionHistoryLimit and it should never happen", "clusterResourcePlacement", klog.KObj(crp), "numberOfSnapshots", len(sortedList.Items), "revisionHistoryLimit", revisionHistoryLimit)
+		klog.Warning("The number of clusterSchedulingPolicySnapshots exceeds the revisionHistoryLimit and it should never happen", "clusterResourcePlacement", klog.KObj(crp), "numberOfSnapshots", len(sortedList.Items), "revisionHistoryLimit", revisionHistoryLimit)
 	}
 
 	// In normal situation, The max of len(sortedList) should be revisionHistoryLimit.
@@ -403,7 +403,7 @@ func (r *Reconciler) deleteRedundantResourceSnapshots(ctx context.Context, crp *
 	if groupCounter-revisionHistoryLimit > 0 {
 		// We always delete before creating a new snapshot, the snapshot group size should never exceed the limit
 		// as there is no finalizer added and the object should be deleted immediately.
-		klog.Warningf("The number of clusterResourceSnapshot groups exceeds the revisionHistoryLimit and it should never happen", "clusterResourcePlacement", klog.KObj(crp), "numberOfSnapshotGroups", groupCounter, "revisionHistoryLimit", revisionHistoryLimit)
+		klog.Warning("The number of clusterResourceSnapshot groups exceeds the revisionHistoryLimit and it should never happen", "clusterResourcePlacement", klog.KObj(crp), "numberOfSnapshotGroups", groupCounter, "revisionHistoryLimit", revisionHistoryLimit)
 	}
 	return nil
 }

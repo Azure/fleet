@@ -47,7 +47,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	testingclient "k8s.io/client-go/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -213,7 +213,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 		"manifest has a different spec, need update": {
 			manifestObj: func() *appsv1.Deployment {
 				alterObj := manifestObj.DeepCopy()
-				alterObj.Spec.Replicas = pointer.Int32(100)
+				alterObj.Spec.Replicas = ptr.To(int32(100))
 				return alterObj
 			}(),
 			isSame: false,

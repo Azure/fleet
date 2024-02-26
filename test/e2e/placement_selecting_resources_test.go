@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -187,7 +187,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -276,7 +276,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -352,7 +352,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -446,7 +446,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -534,7 +534,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -707,7 +707,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -1070,10 +1070,10 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
-				RevisionHistoryLimit: pointer.Int32(1),
+				RevisionHistoryLimit: ptr.To(int32(1)),
 			},
 		}
 		By(fmt.Sprintf("creating placement %s", crpName))
@@ -1167,7 +1167,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},

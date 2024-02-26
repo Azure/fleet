@@ -14,7 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -142,9 +142,9 @@ func endpointSliceExport(name, namespace string) fleetnetworkingv1alpha1.Endpoin
 			},
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Name:     pointer.String("http"),
+					Name:     ptr.To("http"),
 					Protocol: &protocol,
-					Port:     pointer.Int32(80),
+					Port:     ptr.To(int32(80)),
 				},
 			},
 			EndpointSliceReference: fleetnetworkingv1alpha1.ExportedObjectReference{

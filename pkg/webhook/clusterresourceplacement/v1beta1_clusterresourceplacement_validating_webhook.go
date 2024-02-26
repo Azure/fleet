@@ -29,7 +29,11 @@ type clusterResourcePlacementValidator struct {
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourcePlacementValidator{Client: mgr.GetClient()}})
+	handler := &clusterResourcePlacementValidator{
+		Client:  mgr.GetClient(),
+		decoder: admission.NewDecoder(mgr.GetScheme()),
+	}
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
 	return nil
 }
 
@@ -69,11 +73,5 @@ func getTolerations(policy *placementv1beta1.PlacementPolicy) []placementv1beta1
 	if policy != nil {
 		return policy.Tolerations
 	}
-	return nil
-}
-
-// InjectDecoder injects the decoder.
-func (v *clusterResourcePlacementValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
 	return nil
 }

@@ -28,7 +28,11 @@ const (
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &podValidator{Client: mgr.GetClient()}})
+	handler := &podValidator{
+		Client:  mgr.GetClient(),
+		decoder: admission.NewDecoder(mgr.GetScheme()),
+	}
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
 	return nil
 }
 
@@ -50,10 +54,4 @@ func (v *podValidator) Handle(_ context.Context, req admission.Request) admissio
 		}
 	}
 	return admission.Allowed("")
-}
-
-// InjectDecoder injects the decoder.
-func (v *podValidator) InjectDecoder(d *admission.Decoder) error {
-	v.decoder = d
-	return nil
 }

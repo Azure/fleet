@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	runtime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -436,7 +436,7 @@ func (r *Reconciler) syncInternalMemberCluster(ctx context.Context, mc *clusterv
 
 func toOwnerReference(memberCluster *clusterv1beta1.MemberCluster) *metav1.OwnerReference {
 	return &metav1.OwnerReference{APIVersion: clusterv1beta1.GroupVersion.String(), Kind: clusterv1beta1.MemberClusterKind,
-		Name: memberCluster.Name, UID: memberCluster.UID, Controller: pointer.Bool(true)}
+		Name: memberCluster.Name, UID: memberCluster.UID, Controller: ptr.To(true)}
 }
 
 // syncInternalMemberClusterStatus is used to sync status from InternalMemberCluster to MemberCluster & aggregate join conditions from all agents.
