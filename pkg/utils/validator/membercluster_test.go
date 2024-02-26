@@ -55,6 +55,25 @@ func TestValidateTaints(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "taints must be unique",
 		},
+		"valid taints": {
+			taints: []clusterv1beta1.Taint{
+				{
+					Key:    "key1",
+					Value:  "value1",
+					Effect: "NoSchedule",
+				},
+				{
+					Key:    "key2",
+					Value:  "value2",
+					Effect: "NoSchedule",
+				},
+				{
+					Key:    "key3",
+					Effect: "NoSchedule",
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
