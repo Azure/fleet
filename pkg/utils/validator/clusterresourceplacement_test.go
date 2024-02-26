@@ -16,6 +16,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
+	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
 var (
@@ -52,7 +53,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          false,
 		},
 		"invalid Resource Selector with name & label selector": {
@@ -74,7 +75,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          true,
 		},
 		"invalid Resource Selector with invalid label selector": {
@@ -97,7 +98,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          true,
 		},
 		"invalid Resource Selector with invalid cluster resource selector": {
@@ -116,7 +117,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: true},
 			wantErr:          true,
 		},
 		"nil resource informer": {
@@ -172,7 +173,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          true,
 		},
 	}

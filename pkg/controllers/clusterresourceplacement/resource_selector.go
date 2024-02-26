@@ -102,7 +102,7 @@ func (r *Reconciler) gatherSelectedResource(placement string, selectors []fleetv
 	return resources, nil
 }
 func sortResources(resources []runtime.Object) {
-	sort.Slice(resources, func(i, j int) bool {
+	sort.SliceStable(resources, func(i, j int) bool {
 		obj1 := resources[i].DeepCopyObject().(*unstructured.Unstructured)
 		obj2 := resources[j].DeepCopyObject().(*unstructured.Unstructured)
 		if obj1.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() || obj2.GetObjectKind().GroupVersionKind().String() == utils.NamespaceMetaGVK.String() {
