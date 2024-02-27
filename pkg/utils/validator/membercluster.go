@@ -24,11 +24,8 @@ func validateTaints(taints []clusterv1beta1.Taint) error {
 	allErr := make([]error, 0)
 	taintMap := make(map[clusterv1beta1.Taint]bool)
 	for _, taint := range taints {
-		// taint key is a required field in the API, defensive check.
-		if taint.Key != "" {
-			for _, msg := range validation.IsQualifiedName(taint.Key) {
-				allErr = append(allErr, fmt.Errorf(invalidTaintKeyErrFmt, taint, msg))
-			}
+		for _, msg := range validation.IsQualifiedName(taint.Key) {
+			allErr = append(allErr, fmt.Errorf(invalidTaintKeyErrFmt, taint, msg))
 		}
 		if taint.Value != "" {
 			for _, msg := range validation.IsValidLabelValue(taint.Value) {

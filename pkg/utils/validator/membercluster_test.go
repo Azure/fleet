@@ -23,6 +23,17 @@ func TestValidateTaints(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
 		},
+		"invalid taint, empty key": {
+			taints: []clusterv1beta1.Taint{
+				{
+					Key:    "",
+					Value:  "value1",
+					Effect: "NoSchedule",
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "name part must be non-empty",
+		},
 		"invalid taint, value is invalid": {
 			taints: []clusterv1beta1.Taint{
 				{
