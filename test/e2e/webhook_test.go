@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
 )
@@ -327,6 +328,39 @@ var _ = Describe("webhook tests for CRP tolerations", Ordered, func() {
 			}
 			crp.Spec.Policy.Tolerations = append(crp.Spec.Policy.Tolerations, newToleration)
 			return hubClient.Update(ctx, &crp)
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+})
+
+var _ = Describe("webhook tests for MC taints", Ordered, func() {
+	mcName := fmt.Sprintf(mcNameTemplate, GinkgoParallelProcess())
+
+	BeforeAll(func() {
+		createMemberCluster(mcName, testUser, nil)
+	})
+
+	AfterAll(func() {
+		ensureMemberClusterAndRelatedResourcesDeletion(mcName)
+	})
+
+	It("should deny update on MC with invalid taint", func() {
+		Eventually(func(g Gomega) error {
+			var mc clusterv1beta1.MemberCluster
+			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: mcName}, &mc)).Should(Succeed())
+			invalidTaint := clusterv1beta1.Taint{
+				Key:    "key@1234:",
+				Value:  "value1",
+				Effect: "NoSchedule",
+			}
+			mc.Spec.Taints = append(mc.Spec.Taints, invalidTaint)
+			err := hubClient.Update(ctx, &mc)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update MC call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp("name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character"))
+			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 })

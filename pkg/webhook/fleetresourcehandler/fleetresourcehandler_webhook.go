@@ -24,7 +24,7 @@ import (
 
 const (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating custom resource definition resources.
-	ValidationPath             = "/validate-v1-fleetresourcehandler"
+	ValidationPath             = "/validate-fleetresourcehandler"
 	groupMatch                 = `^[^.]*\.(.*)`
 	fleetMemberNamespacePrefix = "fleet-member"
 	fleetNamespacePrefix       = "fleet"

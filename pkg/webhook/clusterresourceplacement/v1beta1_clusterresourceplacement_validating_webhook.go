@@ -2,38 +2,34 @@ package clusterresourceplacement
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
-const (
-	// ValidationPath is the webhook service path which admission requests are routed to for validating ReplicaSet resources.
-	ValidationPath = "/validate-fleet.azure.com-v1beta1-clusterresourceplacement"
+var (
+	// ValidationPath is the webhook service path which admission requests are routed to for validating v1beta1 CRP resources.
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1beta1.GroupVersion.Group, placementv1beta1.GroupVersion.Version, "clusterresourceplacement")
 )
 
 type clusterResourcePlacementValidator struct {
-	Client  client.Client
 	decoder *admission.Decoder
 }
 
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	handler := &clusterResourcePlacementValidator{
-		Client:  mgr.GetClient(),
-		decoder: admission.NewDecoder(mgr.GetScheme()),
-	}
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &clusterResourcePlacementValidator{admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 

@@ -12,7 +12,6 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -20,24 +19,19 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-const (
+var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating Pod resources.
-	ValidationPath = "/validate-v1-pod"
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, corev1.SchemeGroupVersion.Group, corev1.SchemeGroupVersion.Version, "pod")
 )
 
 // Add registers the webhook for K8s bulit-in object types.
 func Add(mgr manager.Manager) error {
 	hookServer := mgr.GetWebhookServer()
-	handler := &podValidator{
-		Client:  mgr.GetClient(),
-		decoder: admission.NewDecoder(mgr.GetScheme()),
-	}
-	hookServer.Register(ValidationPath, &webhook.Admission{Handler: handler})
+	hookServer.Register(ValidationPath, &webhook.Admission{Handler: &podValidator{admission.NewDecoder(mgr.GetScheme())}})
 	return nil
 }
 
 type podValidator struct {
-	Client  client.Client
 	decoder *admission.Decoder
 }
 
