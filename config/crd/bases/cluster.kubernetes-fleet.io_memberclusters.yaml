@@ -304,9 +304,6 @@ spec:
                       are observed.
                     format: date-time
                     type: string
-                required:
-                - data
-                - observationTime
                 type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.

@@ -66,9 +66,11 @@ type MetricValue string
 
 type MetricObserveration struct {
 	// Data is the collection of observed non-resource metrics.
+	// +optional
 	Data map[MetricName]MetricValue `json:"data"`
 
 	// ObservationTime is when the non-resource metrics are observed.
+	// +optional
 	ObservationTime metav1.Time `json:"observationTime"`
 }
 
@@ -84,6 +86,7 @@ type MemberClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Metrics is an array of non-resource metrics observed for the member cluster.
+	// +optional
 	Metrics MetricObserveration `json:"metrics,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
