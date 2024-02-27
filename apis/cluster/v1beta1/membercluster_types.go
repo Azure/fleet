@@ -55,13 +55,21 @@ type MemberClusterSpec struct {
 	Taints []Taint `json:"taints,omitempty"`
 }
 
-// Metric is the observed value of a non-resource metric.
-type Metric struct {
-	// The name of the metric; it should be a valid Kubernetes label name.
-	Name string `json:"name"`
+// MetricName is the name of a non-resource metric; it should be a Kubernetes label name.
+type MetricName string
 
-	// The observed value of the metric; it should be a sortable numeric.
-	Value string `json:"value"`
+// MetricValue is the value of a non-resource metric; it should be a sortable numeric.
+//
+// As different platforms might support float values in different manners; on the API
+// the values are kept as strings.
+type MetricValue string
+
+type MetricObserveration struct {
+	// Data is the collection of observed non-resource metrics.
+	Data map[MetricName]MetricValue `json:"data"`
+
+	// ObservationTime is when the non-resource metrics are observed.
+	ObservationTime metav1.Time `json:"observationTime"`
 }
 
 // MemberClusterStatus defines the observed status of MemberCluster.
@@ -76,7 +84,7 @@ type MemberClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Metrics is an array of non-resource metrics observed for the member cluster.
-	Metrics []Metric `json:"metrics,omitempty"`
+	Metrics MetricObserveration `json:"metrics,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional

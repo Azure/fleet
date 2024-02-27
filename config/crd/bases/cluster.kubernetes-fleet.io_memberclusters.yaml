@@ -289,22 +289,25 @@ spec:
               metrics:
                 description: Metrics is an array of non-resource metrics observed
                   for the member cluster.
-                items:
-                  description: Metric is the observed value of a non-resource metric.
-                  properties:
-                    name:
-                      description: The name of the metric; it should be a valid Kubernetes
-                        label name.
+                properties:
+                  data:
+                    additionalProperties:
+                      description: "MetricValue is the value of a non-resource metric;
+                        it should be a sortable numeric. \n As different platforms
+                        might support float values in different manners; on the API
+                        the values are kept as strings."
                       type: string
-                    value:
-                      description: The observed value of the metric; it should be
-                        a sortable numeric.
-                      type: string
-                  required:
-                  - name
-                  - value
-                  type: object
-                type: array
+                    description: Data is the collection of observed non-resource metrics.
+                    type: object
+                  observationTime:
+                    description: ObservationTime is when the non-resource metrics
+                      are observed.
+                    format: date-time
+                    type: string
+                required:
+                - data
+                - observationTime
+                type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
                   It is copied from the corresponding InternalMemberCluster object.
@@ -316,8 +319,18 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Allocatable represents the total resources of all
-                      the nodes on a member cluster that are available for scheduling.
+                    description: Allocatable represents the total allocatable resources
+                      of all the nodes on a member cluster.
+                    type: object
+                  available:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: Available represents the total available resources
+                      of all the nodes on a member cluster.
                     type: object
                   capacity:
                     additionalProperties:
