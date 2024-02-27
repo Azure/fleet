@@ -19,9 +19,9 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-const (
+var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating Pod resources.
-	ValidationPath = "/validate-v1-pod"
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, corev1.SchemeGroupVersion.Group, corev1.SchemeGroupVersion.Version, "pod")
 )
 
 // Add registers the webhook for K8s bulit-in object types.

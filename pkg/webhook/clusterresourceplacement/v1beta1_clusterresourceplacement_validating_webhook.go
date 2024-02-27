@@ -2,6 +2,7 @@ package clusterresourceplacement
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -12,12 +13,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
-const (
+var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating v1beta1 CRP resources.
-	ValidationPath = "/validate-fleet.azure.com-v1beta1-clusterresourceplacement"
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1beta1.GroupVersion.Group, placementv1beta1.GroupVersion.Version, "clusterresourceplacement")
 )
 
 type clusterResourcePlacementValidator struct {

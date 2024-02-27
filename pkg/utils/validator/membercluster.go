@@ -15,7 +15,8 @@ var (
 	uniqueTaintErrFmt       = "taint %+v already exists, taints must be unique"
 )
 
-func ValidateMC(mc clusterv1beta1.MemberCluster) error {
+// ValidateMemberCluster validates member cluster fields and returns error.
+func ValidateMemberCluster(mc clusterv1beta1.MemberCluster) error {
 	return validateTaints(mc.Spec.Taints)
 }
 

@@ -41,6 +41,7 @@ const (
 	NamespaceNameFormat    = fleetPrefix + "member-%s"
 	RoleNameFormat         = fleetPrefix + "role-%s"
 	RoleBindingNameFormat  = fleetPrefix + "rolebinding-%s"
+	ValidationPathFmt      = "/validate-%s-%s-%s"
 	lessGroupsStringFormat = "groups: %v"
 	moreGroupsStringFormat = "groups: [%s, %s, %s,......]"
 )
