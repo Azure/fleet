@@ -229,7 +229,7 @@ type PreferredClusterSelector struct {
 type MetricSortOrder string
 
 const (
-	// Minimum instructs Fleet to sort in descending order, that is, the clusters with lower
+	// Descending instructs Fleet to sort in descending order, that is, the clusters with lower
 	// observed values are most preferred and should have higher weights.
 	//
 	// For example, with this order, if Fleet sorts all clusters by a specific metric where the
@@ -242,7 +242,7 @@ const (
 	//
 	//   It is calculated using the formula below:
 	//   (1 - ((20 - 10) / (100 - 10))) * 100 = 89
-	Minimum MetricSortOrder = "Minimum"
+	Descending MetricSortOrder = "Descending"
 
 	// Maximum instructs Fleet to sort in ascending order, that is, the clusters with higher
 	// observed values are most preferred and should have higher weights.
@@ -257,7 +257,7 @@ const (
 	//
 	//   It is calculated using the formula below:
 	//   ((20 - 10)) / (100 - 10)) * 100 = 11
-	Maximum MetricSortOrder = "Maximum"
+	Ascending MetricSortOrder = "Ascending"
 )
 
 // MetricSelectorOperator is the operator that can be used with MetricSelectorRequirements.
@@ -302,10 +302,8 @@ type MetricSelectorRequirement struct {
 	// operator.
 	//
 	// If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
-	// or `Le` (less than or equal to), exactly one value must be specified in the list.
-	//
-	// If the operator is Eq (equal to), or Ne (ne), at least one value must be specified
-	// in the list.
+	// or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
+	// specified in the list.
 	// +required
 	Values []string `json:"values"`
 }
@@ -324,16 +322,15 @@ type MetricSortPreference struct {
 
 	// Prefer explains how Fleet should perform the sort; specifically, whether Fleet should
 	// sort in ascending or descending order.
-	Prefer MetricSortOrder `json:"prefer"`
+	SortOrder MetricSortOrder `json:"sortOrder"`
 }
 
 type MetricSorter struct {
 	// SortByMetric is an array of MetricSortPreference. At most one sort preference can be
 	// specified in each term.
 	//
-	// +kubebuilder:validation:MaxItems:1
 	// +optional
-	SortByMetric []MetricSortPreference `json:"sortByMetric"`
+	SortByMetric *MetricSortPreference `json:"sortByMetric"`
 }
 
 type ClusterSelectorTerm struct {
@@ -342,7 +339,7 @@ type ClusterSelectorTerm struct {
 	//
 	// If you specify both label and metric selectors in the same term, the results are AND'd.
 	// +optional
-	LabelSelector metav1.LabelSelector `json:"labelSelector"`
+	LabelSelector *metav1.LabelSelector `json:"labelSelector"`
 
 	// MetricSelector is a metric query over all joined member clusters. Clusters matching
 	// the query are selected.
@@ -352,7 +349,7 @@ type ClusterSelectorTerm struct {
 	// At this moment, MetricSelector can only be used with
 	// `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
 	// +optional
-	MetricSelector MetricSelector `json:"metricSelector"`
+	MetricSelector *MetricSelector `json:"metricSelector"`
 
 	// MetricSorter sorts all matching clusters by a specific metric and assigns different weights
 	// to each cluster based on their observed metric values.
@@ -360,7 +357,7 @@ type ClusterSelectorTerm struct {
 	// At this moment, MetricSorter can only be used with
 	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
 	// +optional
-	MetricSorter MetricSorter `json:"metricSorter"`
+	MetricSorter *MetricSorter `json:"metricSorter"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.

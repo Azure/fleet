@@ -180,10 +180,8 @@ spec:
                                                   \n If the operator is Gt (greater
                                                   than), Ge (greater than or equal
                                                   to), Lt (less than), or `Le` (less
-                                                  than or equal to), exactly one value
-                                                  must be specified in the list. \n
-                                                  If the operator is Eq (equal to),
-                                                  or Ne (ne), at least one value must
+                                                  than or equal to), Eq (equal to),
+                                                  or Ne (ne), exactly one value must
                                                   be specified in the list."
                                                 items:
                                                   type: string
@@ -207,24 +205,22 @@ spec:
                                           description: SortByMetric is an array of
                                             MetricSortPreference. At most one sort
                                             preference can be specified in each term.
-                                          items:
-                                            properties:
-                                              name:
-                                                description: Name is the name of the
-                                                  metric which Fleet sorts clusters
-                                                  by.
-                                                type: string
-                                              prefer:
-                                                description: Prefer explains how Fleet
-                                                  should perform the sort; specifically,
-                                                  whether Fleet should sort in ascending
-                                                  or descending order.
-                                                type: string
-                                            required:
-                                            - name
-                                            - prefer
-                                            type: object
-                                          type: array
+                                          properties:
+                                            name:
+                                              description: Name is the name of the
+                                                metric which Fleet sorts clusters
+                                                by.
+                                              type: string
+                                            sortOrder:
+                                              description: Prefer explains how Fleet
+                                                should perform the sort; specifically,
+                                                whether Fleet should sort in ascending
+                                                or descending order.
+                                              type: string
+                                          required:
+                                          - name
+                                          - sortOrder
+                                          type: object
                                       type: object
                                   type: object
                                 weight:
@@ -350,10 +346,8 @@ spec:
                                                   \n If the operator is Gt (greater
                                                   than), Ge (greater than or equal
                                                   to), Lt (less than), or `Le` (less
-                                                  than or equal to), exactly one value
-                                                  must be specified in the list. \n
-                                                  If the operator is Eq (equal to),
-                                                  or Ne (ne), at least one value must
+                                                  than or equal to), Eq (equal to),
+                                                  or Ne (ne), exactly one value must
                                                   be specified in the list."
                                                 items:
                                                   type: string
@@ -377,24 +371,22 @@ spec:
                                           description: SortByMetric is an array of
                                             MetricSortPreference. At most one sort
                                             preference can be specified in each term.
-                                          items:
-                                            properties:
-                                              name:
-                                                description: Name is the name of the
-                                                  metric which Fleet sorts clusters
-                                                  by.
-                                                type: string
-                                              prefer:
-                                                description: Prefer explains how Fleet
-                                                  should perform the sort; specifically,
-                                                  whether Fleet should sort in ascending
-                                                  or descending order.
-                                                type: string
-                                            required:
-                                            - name
-                                            - prefer
-                                            type: object
-                                          type: array
+                                          properties:
+                                            name:
+                                              description: Name is the name of the
+                                                metric which Fleet sorts clusters
+                                                by.
+                                              type: string
+                                            sortOrder:
+                                              description: Prefer explains how Fleet
+                                                should perform the sort; specifically,
+                                                whether Fleet should sort in ascending
+                                                or descending order.
+                                              type: string
+                                          required:
+                                          - name
+                                          - sortOrder
+                                          type: object
                                       type: object
                                   type: object
                                 maxItems: 10

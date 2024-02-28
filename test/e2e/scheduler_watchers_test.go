@@ -135,7 +135,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
@@ -292,7 +292,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
@@ -831,7 +831,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
@@ -920,7 +920,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
@@ -1212,7 +1212,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													labelNameForWatcherTests: labelValueForWatcherTests,
 												},
@@ -1299,7 +1299,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													labelNameForWatcherTests: labelValueForWatcherTests,
 												},

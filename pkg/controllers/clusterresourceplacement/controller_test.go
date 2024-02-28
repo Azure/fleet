@@ -70,7 +70,7 @@ func placementPolicyForTest() *fleetv1beta1.PlacementPolicy {
 				RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 						{
-							LabelSelector: metav1.LabelSelector{
+							LabelSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									"key1": "value1",
 								},

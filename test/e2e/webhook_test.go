@@ -81,7 +81,7 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 									{
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      "test-key",
@@ -170,7 +170,7 @@ var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      "test-key",

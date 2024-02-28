@@ -215,7 +215,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "east",
 									},
@@ -298,7 +298,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "east",
 									},
@@ -314,7 +314,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 								},
 							},
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "west",
 									},
@@ -415,7 +415,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 10,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "central",
 									},
@@ -519,7 +519,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 10,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "central",
 									},
@@ -538,7 +538,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 20,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "east",
 									},
@@ -1095,7 +1095,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchExpressions: []metav1.LabelSelectorRequirement{
 										{
 											Key:      regionLabel,
@@ -1237,7 +1237,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 30,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "east",
 									},
@@ -1363,7 +1363,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 40,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "east",
 									},
@@ -1374,7 +1374,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "prod",
 									},
@@ -1737,7 +1737,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 40,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "east",
 									},
@@ -1748,7 +1748,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "prod",
 									},
@@ -1788,7 +1788,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						{
 							Weight: 50,
 							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										regionLabel: "central",
 									},

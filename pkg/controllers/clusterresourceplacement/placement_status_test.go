@@ -894,7 +894,7 @@ func TestSetPlacementStatus(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key1": "value1",
 										},
@@ -1015,7 +1015,7 @@ func TestSetPlacementStatus(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key1": "value1",
 										},
@@ -1164,7 +1164,7 @@ func TestSetPlacementStatus(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key1": "value1",
 										},
