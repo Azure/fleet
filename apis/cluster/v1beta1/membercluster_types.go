@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -60,16 +61,12 @@ type MetricName string
 
 // MetricValue is the value of a non-resource metric;
 type MetricValue struct {
-	// Value is the value of the non-resource metric. It should be a sortable numeric. Fleet
-	// will attempt to cast this value to a float (in the case of Go implementation, a float64).
+	// Value is the value of the non-resource metric, which is a Kubernetes quantity.
+	// For more information, see
+	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
 	//
-	// In most cases, this value is retrieved via the Fleet Metric Provider interface, which is
-	// of the form of a float value (float64 in Go implementation).
-	//
-	// As different platforms might support float values in different manners; on the API
-	// the values are kept as strings.
 	// +required
-	Value string `json:"value"`
+	Value resource.Quantity `json:"value"`
 
 	// ObservationTime is when the non-resource metric is observed.
 	// +required

@@ -8,6 +8,7 @@ package v1beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -301,11 +302,7 @@ type MetricSelectorRequirement struct {
 	// the observed values of individual member clusters in accordance with the given
 	// operator.
 	//
-	// For non-resource metrics, each value should be a numeric, which Fleet will interpret
-	// as a float value (in the case of Go implementation, a float64).
-	//
-	// For resource metrics, a value should be a string that can be interpreted as a Kubernetes
-	// resource quantity. For more information, see
+	// Each value should be a Kubernetes quantity. For more information, see
 	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
 	//
 	// If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
@@ -314,7 +311,7 @@ type MetricSelectorRequirement struct {
 	//
 	// +kubebuilder:validation:MaxItems=1
 	// +required
-	Values []string `json:"values"`
+	Values []resource.Quantity `json:"values"`
 }
 
 // MetricSelector helps user specify metric requirements when picking clusters for resource

@@ -193,14 +193,8 @@ spec:
                                                   Fleet will compare against the observed
                                                   values of individual member clusters
                                                   in accordance with the given operator.
-                                                  \n For non-resource metrics, each
-                                                  value should be a numeric, which
-                                                  Fleet will interpret as a float
-                                                  value (in the case of Go implementation,
-                                                  a float64). \n For resource metrics,
-                                                  a value should be a string that
-                                                  can be interpreted as a Kubernetes
-                                                  resource quantity. For more information,
+                                                  \n Each value should be a Kubernetes
+                                                  quantity. For more information,
                                                   see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
                                                   \n If the operator is Gt (greater
                                                   than), Ge (greater than or equal
@@ -209,7 +203,11 @@ spec:
                                                   or Ne (ne), exactly one value must
                                                   be specified in the list."
                                                 items:
-                                                  type: string
+                                                  anyOf:
+                                                  - type: integer
+                                                  - type: string
+                                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                  x-kubernetes-int-or-string: true
                                                 maxItems: 1
                                                 type: array
                                             required:
@@ -371,14 +369,8 @@ spec:
                                                   Fleet will compare against the observed
                                                   values of individual member clusters
                                                   in accordance with the given operator.
-                                                  \n For non-resource metrics, each
-                                                  value should be a numeric, which
-                                                  Fleet will interpret as a float
-                                                  value (in the case of Go implementation,
-                                                  a float64). \n For resource metrics,
-                                                  a value should be a string that
-                                                  can be interpreted as a Kubernetes
-                                                  resource quantity. For more information,
+                                                  \n Each value should be a Kubernetes
+                                                  quantity. For more information,
                                                   see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
                                                   \n If the operator is Gt (greater
                                                   than), Ge (greater than or equal
@@ -387,7 +379,11 @@ spec:
                                                   or Ne (ne), exactly one value must
                                                   be specified in the list."
                                                 items:
-                                                  type: string
+                                                  anyOf:
+                                                  - type: integer
+                                                  - type: string
+                                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                  x-kubernetes-int-or-string: true
                                                 maxItems: 1
                                                 type: array
                                             required:
