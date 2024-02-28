@@ -321,24 +321,24 @@ type MetricSelectorRequirement struct {
 // placement.
 type MetricSelector struct {
 	// MatchExpressions is an array of MetricSelectorRequirements. The requirements are AND'd.
-	// +optional
+	// +required
 	MatchExpressions []MetricSelectorRequirement `json:"matchMetrics"`
 }
 
 type MetricSortPreference struct {
 	// Name is the name of the metric which Fleet sorts clusters by.
+	// +required
 	Name string `json:"name"`
 
 	// SortOrder explains how Fleet should perform the sort; specifically, whether Fleet should
 	// sort in ascending or descending order.
+	// +required
 	SortOrder MetricSortOrder `json:"sortOrder"`
 }
 
 type MetricSorter struct {
-	// SortByMetric is an array of MetricSortPreference. At most one sort preference can be
-	// specified in each term.
-	//
-	// +optional
+	// SortByMetric is a MetricSortPreference.
+	// +required
 	SortByMetric *MetricSortPreference `json:"sortByMetric"`
 }
 

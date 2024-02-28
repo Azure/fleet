@@ -281,6 +281,8 @@ spec:
                                               - values
                                               type: object
                                             type: array
+                                        required:
+                                        - matchMetrics
                                         type: object
                                       metricSorter:
                                         description: "MetricSorter sorts all matching
@@ -292,10 +294,7 @@ spec:
                                           affinity terms."
                                         properties:
                                           sortByMetric:
-                                            description: SortByMetric is an array
-                                              of MetricSortPreference. At most one
-                                              sort preference can be specified in
-                                              each term.
+                                            description: SortByMetric is a MetricSortPreference.
                                             properties:
                                               name:
                                                 description: Name is the name of the
@@ -312,6 +311,8 @@ spec:
                                             - name
                                             - sortOrder
                                             type: object
+                                        required:
+                                        - sortByMetric
                                         type: object
                                     type: object
                                   maxItems: 10
