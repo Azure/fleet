@@ -177,6 +177,15 @@ spec:
                                                   Fleet will compare against the observed
                                                   values of individual member clusters
                                                   in accordance with the given operator.
+                                                  \n For non-resource metrics, each
+                                                  value should be a numeric, which
+                                                  Fleet will interpret as a float
+                                                  value (in the case of Go implementation,
+                                                  a float64). \n For resource metrics,
+                                                  a value should be a string that
+                                                  can be interpreted as a Kubernetes
+                                                  resource quantity. For more information,
+                                                  see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
                                                   \n If the operator is Gt (greater
                                                   than), Ge (greater than or equal
                                                   to), Lt (less than), or `Le` (less
@@ -185,6 +194,7 @@ spec:
                                                   be specified in the list."
                                                 items:
                                                   type: string
+                                                maxItems: 1
                                                 type: array
                                             required:
                                             - name
@@ -212,8 +222,8 @@ spec:
                                                 by.
                                               type: string
                                             sortOrder:
-                                              description: Prefer explains how Fleet
-                                                should perform the sort; specifically,
+                                              description: SortOrder explains how
+                                                Fleet should perform the sort; specifically,
                                                 whether Fleet should sort in ascending
                                                 or descending order.
                                               type: string
@@ -343,6 +353,15 @@ spec:
                                                   Fleet will compare against the observed
                                                   values of individual member clusters
                                                   in accordance with the given operator.
+                                                  \n For non-resource metrics, each
+                                                  value should be a numeric, which
+                                                  Fleet will interpret as a float
+                                                  value (in the case of Go implementation,
+                                                  a float64). \n For resource metrics,
+                                                  a value should be a string that
+                                                  can be interpreted as a Kubernetes
+                                                  resource quantity. For more information,
+                                                  see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
                                                   \n If the operator is Gt (greater
                                                   than), Ge (greater than or equal
                                                   to), Lt (less than), or `Le` (less
@@ -351,6 +370,7 @@ spec:
                                                   be specified in the list."
                                                 items:
                                                   type: string
+                                                maxItems: 1
                                                 type: array
                                             required:
                                             - name
@@ -378,8 +398,8 @@ spec:
                                                 by.
                                               type: string
                                             sortOrder:
-                                              description: Prefer explains how Fleet
-                                                should perform the sort; specifically,
+                                              description: SortOrder explains how
+                                                Fleet should perform the sort; specifically,
                                                 whether Fleet should sort in ascending
                                                 or descending order.
                                               type: string

@@ -53,7 +53,7 @@ type InternalMemberClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Metrics is an array of non-resource metrics observed for the member cluster.
-	Metrics MetricObserveration `json:"metrics,omitempty"`
+	Metrics map[MetricName]MetricValue `json:"metrics,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is populated by the member agent.
 	// +optional

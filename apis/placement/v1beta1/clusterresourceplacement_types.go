@@ -301,9 +301,18 @@ type MetricSelectorRequirement struct {
 	// the observed values of individual member clusters in accordance with the given
 	// operator.
 	//
+	// For non-resource metrics, each value should be a numeric, which Fleet will interpret
+	// as a float value (in the case of Go implementation, a float64).
+	//
+	// For resource metrics, a value should be a string that can be interpreted as a Kubernetes
+	// resource quantity. For more information, see
+	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
+	//
 	// If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
 	// or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
 	// specified in the list.
+	//
+	// +kubebuilder:validation:MaxItems=1
 	// +required
 	Values []string `json:"values"`
 }
@@ -320,7 +329,7 @@ type MetricSortPreference struct {
 	// Name is the name of the metric which Fleet sorts clusters by.
 	Name string `json:"name"`
 
-	// Prefer explains how Fleet should perform the sort; specifically, whether Fleet should
+	// SortOrder explains how Fleet should perform the sort; specifically, whether Fleet should
 	// sort in ascending or descending order.
 	SortOrder MetricSortOrder `json:"sortOrder"`
 }

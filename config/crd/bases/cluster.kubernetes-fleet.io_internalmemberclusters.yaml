@@ -232,23 +232,30 @@ spec:
                   type: object
                 type: array
               metrics:
+                additionalProperties:
+                  description: MetricValue is the value of a non-resource metric;
+                  properties:
+                    observationTime:
+                      description: ObservationTime is when the non-resource metric
+                        is observed.
+                      format: date-time
+                      type: string
+                    value:
+                      description: "Value is the value of the non-resource metric.
+                        It should be a sortable numeric. Fleet will attempt to cast
+                        this value to a float (in the case of Go implementation, a
+                        float64). \n In most cases, this value is retrieved via the
+                        Fleet Metric Provider interface, which is of the form of a
+                        float value (float64 in Go implementation). \n As different
+                        platforms might support float values in different manners;
+                        on the API the values are kept as strings."
+                      type: string
+                  required:
+                  - observationTime
+                  - value
+                  type: object
                 description: Metrics is an array of non-resource metrics observed
                   for the member cluster.
-                properties:
-                  data:
-                    additionalProperties:
-                      description: "MetricValue is the value of a non-resource metric;
-                        it should be a sortable numeric. \n As different platforms
-                        might support float values in different manners; on the API
-                        the values are kept as strings."
-                      type: string
-                    description: Data is the collection of observed non-resource metrics.
-                    type: object
-                  observationTime:
-                    description: ObservationTime is when the non-resource metrics
-                      are observed.
-                    format: date-time
-                    type: string
                 type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.

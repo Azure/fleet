@@ -58,19 +58,21 @@ type MemberClusterSpec struct {
 // MetricName is the name of a non-resource metric; it should be a Kubernetes label name.
 type MetricName string
 
-// MetricValue is the value of a non-resource metric; it should be a sortable numeric.
-//
-// As different platforms might support float values in different manners; on the API
-// the values are kept as strings.
-type MetricValue string
+// MetricValue is the value of a non-resource metric;
+type MetricValue struct {
+	// Value is the value of the non-resource metric. It should be a sortable numeric. Fleet
+	// will attempt to cast this value to a float (in the case of Go implementation, a float64).
+	//
+	// In most cases, this value is retrieved via the Fleet Metric Provider interface, which is
+	// of the form of a float value (float64 in Go implementation).
+	//
+	// As different platforms might support float values in different manners; on the API
+	// the values are kept as strings.
+	// +required
+	Value string `json:"value"`
 
-type MetricObserveration struct {
-	// Data is the collection of observed non-resource metrics.
-	// +optional
-	Data map[MetricName]MetricValue `json:"data"`
-
-	// ObservationTime is when the non-resource metrics are observed.
-	// +optional
+	// ObservationTime is when the non-resource metric is observed.
+	// +required
 	ObservationTime metav1.Time `json:"observationTime"`
 }
 
@@ -87,7 +89,7 @@ type MemberClusterStatus struct {
 
 	// Metrics is an array of non-resource metrics observed for the member cluster.
 	// +optional
-	Metrics MetricObserveration `json:"metrics,omitempty"`
+	Metrics map[MetricName]MetricValue `json:"metrics,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional
