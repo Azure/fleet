@@ -86,6 +86,28 @@ func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
 	return &resultWork
 }
 
+// waitForWorkToAvailable waits for a work to have an available condition to be true
+func waitForWorkToBeAvailable(workName, workNS string) *fleetv1beta1.Work {
+	var resultWork fleetv1beta1.Work
+	Eventually(func() bool {
+		err := k8sClient.Get(context.Background(), types.NamespacedName{Name: workName, Namespace: workNS}, &resultWork)
+		if err != nil {
+			return false
+		}
+		applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		if applyCond == nil || applyCond.Status != metav1.ConditionTrue || applyCond.ObservedGeneration != resultWork.Generation {
+			return false
+		}
+		for _, manifestCondition := range resultWork.Status.ManifestConditions {
+			if !meta.IsStatusConditionTrue(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable) {
+				return false
+			}
+		}
+		return true
+	}, timeout, interval).Should(BeTrue())
+	return &resultWork
+}
+
 // waitForWorkToBeHandled waits for a work to have a finalizer
 func waitForWorkToBeHandled(workName, workNS string) *fleetv1beta1.Work {
 	var resultWork fleetv1beta1.Work

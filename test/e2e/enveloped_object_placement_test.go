@@ -42,7 +42,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	var wantSelectedResources []placementv1beta1.ResourceIdentifier
 	BeforeAll(func() {
 		// Create the test resources.
-		readTestManifests()
+		readEnvelopTestManifests()
 		wantSelectedResources = []placementv1beta1.ResourceIdentifier{
 			{
 				Kind:    "Namespace",
@@ -65,7 +65,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	})
 
 	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
-		It("Create the test resources in the namespace", createWrappedWorkResources)
+		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
 
 		It("Create the CRP that select the name space", func() {
 			crp := &placementv1beta1.ClusterResourcePlacement{
@@ -96,7 +96,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should place the resources on all member clusters", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkEnvelopResourcePlacement(memberCluster)
+				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
@@ -138,7 +138,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should place the resources on all member clusters again", func() {
 			for idx := range allMemberClusters {
 				memberCluster := allMemberClusters[idx]
-				workResourcesPlacedActual := checkEnvelopResourcePlacement(memberCluster)
+				workResourcesPlacedActual := checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster)
 				Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work resources on member cluster %s", memberCluster.ClusterName)
 			}
 		})
@@ -169,8 +169,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 	})
 })
 
-func checkEnvelopResourcePlacement(memberCluster *framework.Cluster) func() error {
-	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+func checkEnvelopQuotaAndMutationWebhookPlacement(memberCluster *framework.Cluster) func() error {
+	workNamespaceName := appNamespace().Name
 	return func() error {
 		if err := validateWorkNamespaceOnCluster(memberCluster, types.NamespacedName{Name: workNamespaceName}); err != nil {
 			return err
@@ -238,9 +238,9 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 				},
 			},
 			Condition: metav1.Condition{
-				Type:   string(placementv1beta1.WorkConditionTypeApplied),
+				Type:   placementv1beta1.WorkConditionTypeApplied,
 				Status: metav1.ConditionFalse,
-				Reason: work.AppliedManifestFailedReason,
+				Reason: work.ManifestApplyFailedReason,
 			},
 		},
 	}
@@ -292,7 +292,7 @@ func checkForOneClusterFailedToApplyStatus(wantSelectedResources []placementv1be
 	}
 }
 
-func readTestManifests() {
+func readEnvelopTestManifests() {
 	By("Read the testConfigMap resources")
 	err := utils.GetObjectFromManifest("resources/test-configmap.yaml", &testConfigMap)
 	Expect(err).Should(Succeed())
@@ -314,9 +314,9 @@ func readTestManifests() {
 	Expect(err).Should(Succeed())
 }
 
-// createWrappedWorkResources creates some enveloped resources on the hub cluster for testing purposes.
-func createWrappedWorkResources() {
-	ns := workNamespace()
+// createWrappedResourcesForEnvelopTest creates some enveloped resources on the hub cluster for testing purposes.
+func createWrappedResourcesForEnvelopTest() {
+	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 	// modify the configMap according to the namespace
 	testConfigMap.Namespace = ns.Name

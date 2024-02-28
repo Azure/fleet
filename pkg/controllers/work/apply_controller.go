@@ -27,11 +27,14 @@ import (
 	"time"
 
 	"go.uber.org/atomic"
+	appv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -42,13 +45,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrloption "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/metrics"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/resource"
 )
 
@@ -58,12 +63,18 @@ const (
 
 // WorkCondition condition reasons
 const (
-	// AppliedWorkFailedReason is the reason string of work condition when it failed to apply the work.
-	AppliedWorkFailedReason = "AppliedWorkFailed"
-	// AppliedWorkCompleteReason is the reason string of work condition when it finished applying work.
-	AppliedWorkCompleteReason = "AppliedWorkComplete"
-	// AppliedManifestFailedReason is the reason string of condition when it failed to apply manifest.
-	AppliedManifestFailedReason = "AppliedManifestFailedReason"
+	workAppliedFailedReason       = "WorkAppliedFailed"
+	workAppliedCompleteReason     = "WorkAppliedComplete"
+	workNotAvailableYetReason     = "WorkNotAvailableYet"
+	workAvailabilityUnknownReason = "WorkAvailabilityUnknown"
+	workAvailableReason           = "WorkAvailable"
+	workNotTrackableReason        = "WorkNotTrackable"
+	// ManifestApplyFailedReason is the reason string of condition when it failed to apply manifest.
+	ManifestApplyFailedReason = "ManifestApplyFailedReason"
+	// ManifestAlreadyUpToDateReason is the reason string of condition when the manifest is already up to date.
+	ManifestAlreadyUpToDateReason = "ManifestAlreadyUpToDate"
+	// ManifestNeedsUpdateReason is the reason string of condition when the manifest needs to be updated.
+	ManifestNeedsUpdateReason = "ManifestNeedsUpdate"
 )
 
 // ApplyWorkReconciler reconciles a Work object
@@ -92,22 +103,32 @@ func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.
 	}
 }
 
-// applyAction represents the action we take to apply the manifest
+// applyAction represents the action we take to apply the manifest.
+// It is used only internally to track the result of the apply function.
 // +enum
 type applyAction string
 
 const (
-	// ManifestCreatedAction indicates that we created the manifest for the first time.
-	ManifestCreatedAction applyAction = "ManifestCreated"
+	// manifestCreatedAction indicates that we created the manifest for the first time.
+	manifestCreatedAction applyAction = "ManifestCreated"
 
-	// ManifestThreeWayMergePatchAction indicates that we updated the manifest using three-way merge patch.
-	ManifestThreeWayMergePatchAction applyAction = "ManifestThreeWayMergePatched"
+	// manifestThreeWayMergePatchAction indicates that we updated the manifest using three-way merge patch.
+	manifestThreeWayMergePatchAction applyAction = "ManifestThreeWayMergePatched"
 
-	// ManifestServerSideAppliedAction indicates that we updated the manifest using server side apply.
-	ManifestServerSideAppliedAction applyAction = "ManifestServerSideApplied"
+	// manifestServerSideAppliedAction indicates that we updated the manifest using server side apply.
+	manifestServerSideAppliedAction applyAction = "ManifestServerSideApplied"
 
-	// ManifestNoChangeAction indicates that we don't need to change the manifest.
-	ManifestNoChangeAction applyAction = "ManifestNoChange"
+	// errorApplyAction indicates that there was an error during the apply action.
+	errorApplyAction applyAction = "ErrorApply"
+
+	// manifestNotAvailableYetAction indicates that we still need to wait for the manifest to be available.
+	manifestNotAvailableYetAction applyAction = "ManifestNotAvailableYet"
+
+	// manifestNotTrackableAction indicates that the manifest is already up to date but we don't have a way to track its availabilities.
+	manifestNotTrackableAction applyAction = "ManifestNotTrackable"
+
+	// manifestAvailableAction indicates that the manifest is available.
+	manifestAvailableAction applyAction = "ManifestAvailable"
 )
 
 // applyResult contains the result of a manifest being applied.
@@ -115,7 +136,7 @@ type applyResult struct {
 	identifier fleetv1beta1.WorkResourceIdentifier
 	generation int64
 	action     applyAction
-	err        error
+	applyErr   error
 }
 
 // Reconcile implement the control loop logic for Work object.
@@ -140,7 +161,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	case err != nil:
 		klog.ErrorS(err, "failed to retrieve the work", "work", req.NamespacedName)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, controller.NewAPIServerError(true, err)
 	}
 	logObjRef := klog.KObj(work)
 
@@ -164,7 +185,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// apply the manifests to the member cluster
-	results := r.applyManifests(ctx, work.Spec.Workload.Manifests, owner)
+	results := r.applyManifests(ctx, work.Spec.Workload.Manifests, owner, work.Spec.ApplyStrategy)
 
 	// collect the latency from the work update time to now.
 	lastUpdateTime, ok := work.GetAnnotations()[utils.LastWorkUpdateTimeAnnotationKey]
@@ -182,7 +203,7 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// generate the work condition based on the manifest apply result
-	errs := r.generateWorkCondition(results, work)
+	errs := constructWorkCondition(results, work)
 
 	// update the work status
 	if err = r.client.Status().Update(ctx, work, &client.SubResourceUpdateOptions{}); err != nil {
@@ -224,8 +245,13 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"work", logObjRef)
 	}
 
-	// we periodically reconcile the work to make sure the member cluster state is in sync with the work
-	// even if the reconciling succeeds in case the resources on the member cluster is removed/changed.
+	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+	if !condition.IsConditionStatusTrue(availableCond, work.Generation) {
+		klog.V(2).InfoS("work is not available yet, check again", "work", logObjRef, "availableCond", availableCond)
+		return ctrl.Result{RequeueAfter: time.Second * 3}, err
+	}
+	// the work is available (might due to not trackable) but we still periodically reconcile to make sure the
+	// member cluster state is in sync with the work in case the resources on the member cluster is removed/changed.
 	return ctrl.Result{RequeueAfter: time.Minute * 5}, err
 }
 
@@ -267,7 +293,7 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleet
 			klog.ErrorS(err, "appliedWork finalizer resource does not exist even with the finalizer, it will be recreated", "appliedWork", workRef.Name)
 		case err != nil:
 			klog.ErrorS(err, "failed to retrieve the appliedWork ", "appliedWork", workRef.Name)
-			return nil, err
+			return nil, controller.NewAPIServerError(true, err)
 		default:
 			return appliedWork, nil
 		}
@@ -297,7 +323,7 @@ func (r *ApplyWorkReconciler) ensureAppliedWork(ctx context.Context, work *fleet
 }
 
 // applyManifests processes a given set of Manifests by: setting ownership, validating the manifest, and passing it on for application to the cluster.
-func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fleetv1beta1.Manifest, owner metav1.OwnerReference) []applyResult {
+func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fleetv1beta1.Manifest, owner metav1.OwnerReference, applyStrategy *fleetv1beta1.ApplyStrategy) []applyResult {
 	var appliedObj *unstructured.Unstructured
 
 	results := make([]applyResult, len(manifests))
@@ -306,7 +332,7 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fl
 		gvr, rawObj, err := r.decodeManifest(manifest)
 		switch {
 		case err != nil:
-			result.err = err
+			result.applyErr = err
 			result.identifier = fleetv1beta1.WorkResourceIdentifier{
 				Ordinal: index,
 			}
@@ -320,18 +346,18 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fl
 
 		default:
 			addOwnerRef(owner, rawObj)
-			appliedObj, result.action, result.err = r.applyUnstructured(ctx, gvr, rawObj)
+			appliedObj, result.action, result.applyErr = r.applyUnstructured(ctx, gvr, rawObj)
 			result.identifier = buildResourceIdentifier(index, rawObj, gvr)
 			logObjRef := klog.ObjectRef{
 				Name:      result.identifier.Name,
 				Namespace: result.identifier.Namespace,
 			}
-			if result.err == nil {
+			if result.applyErr == nil {
 				result.generation = appliedObj.GetGeneration()
 				klog.V(2).InfoS("apply manifest succeeded", "gvr", gvr, "manifest", logObjRef,
-					"apply action", result.action, "new ObservedGeneration", result.generation)
+					"action", result.action, "applyStrategy", applyStrategy, "new ObservedGeneration", result.generation)
 			} else {
-				klog.ErrorS(result.err, "manifest upsert failed", "gvr", gvr, "manifest", logObjRef)
+				klog.ErrorS(result.applyErr, "manifest upsert failed", "gvr", gvr, "manifest", logObjRef)
 			}
 		}
 		results[index] = result
@@ -367,22 +393,22 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 
 	// compute the hash without taking into consider the last applied annotation
 	if err := setManifestHashAnnotation(manifestObj); err != nil {
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, err
 	}
 
 	// extract the common create procedure to reuse
 	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
 		// record the raw manifest with the hash annotation in the manifest
 		if _, err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-			return nil, ManifestNoChangeAction, err
+			return nil, errorApplyAction, err
 		}
 		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
 			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
 		if err == nil {
 			klog.V(2).InfoS("successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
-			return actual, ManifestCreatedAction, nil
+			return actual, manifestCreatedAction, nil
 		}
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, err
 	}
 
 	// support resources with generated name
@@ -397,14 +423,15 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 	case apierrors.IsNotFound(err):
 		return createFunc()
 	case err != nil:
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, controller.NewAPIServerError(false, err)
 	}
 
 	// check if the existing manifest is managed by the work
 	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
+		// TODO: honer the applyStrategy to decide if we should overwrite the existing resource
 		err = fmt.Errorf("resource is not managed by the work controller")
 		klog.ErrorS(err, "skip applying a not managed manifest", "gvr", gvr, "obj", manifestRef)
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, controller.NewExpectedBehaviorError(err)
 	}
 
 	// We only try to update the object if its spec hash value has changed.
@@ -415,21 +442,121 @@ func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.
 		// record the raw manifest with the hash annotation in the manifest.
 		isModifiedConfigAnnotationNotEmpty, err := setModifiedConfigurationAnnotation(manifestObj)
 		if err != nil {
-			return nil, ManifestNoChangeAction, err
+			return nil, errorApplyAction, err
 		}
 		if !isModifiedConfigAnnotationNotEmpty {
 			klog.V(2).InfoS("using server side apply for manifest", "gvr", gvr, "manifest", manifestRef)
-			return r.applyObject(ctx, gvr, manifestObj)
+			return r.serversideApplyObject(ctx, gvr, manifestObj)
 		}
 		klog.V(2).InfoS("using three way merge for manifest", "gvr", gvr, "manifest", manifestRef)
 		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
 	}
-
-	return curObj, ManifestNoChangeAction, nil
+	// the manifest is already up to date, we just need to track its availability
+	applyAction, err := trackResourceAvailability(gvr, curObj)
+	return curObj, applyAction, err
 }
 
-// applyObject uses server side apply to apply the manifest.
-func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupVersionResource,
+func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstructured.Unstructured) (applyAction, error) {
+	switch gvr {
+	case utils.DeploymentGVR:
+		return trackDeploymentAvailability(curObj)
+
+	case utils.StatefulSettGVR:
+		return trackStatefulSetAvailability(curObj)
+
+	case utils.DaemonSettGVR:
+		return trackDaemonSetAvailability(curObj)
+
+	case utils.JobGVR:
+		return trackJobAvailability(curObj)
+
+	default:
+		klog.V(2).InfoS("we don't know how to track the availability of the resource", "gvr", gvr, "resource", klog.KObj(curObj))
+		return manifestNotTrackableAction, nil
+	}
+}
+
+func trackDeploymentAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+	var deployment appv1.Deployment
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &deployment); err != nil {
+		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
+	}
+	// see if the DeploymentAvailable condition is true
+	var depCond *appv1.DeploymentCondition
+	for i := range deployment.Status.Conditions {
+		if deployment.Status.Conditions[i].Type == appv1.DeploymentAvailable {
+			depCond = &deployment.Status.Conditions[i]
+			break
+		}
+	}
+	// a deployment is available if the observedGeneration is equal to the generation and the Available condition is true
+	if deployment.Status.ObservedGeneration == deployment.Generation && depCond != nil && depCond.Status == v1.ConditionTrue {
+		klog.V(2).InfoS("deployment is available", "deployment", klog.KObj(curObj))
+		return manifestAvailableAction, nil
+	}
+	klog.V(2).InfoS("still need to wait for deployment to be available", "deployment", klog.KObj(curObj))
+	return manifestNotAvailableYetAction, nil
+}
+
+func trackStatefulSetAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+	var statefulSet appv1.StatefulSet
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &statefulSet); err != nil {
+		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
+	}
+	// a statefulSet is available if all the replicas are available and the currentReplicas is equal to the updatedReplicas
+	// which means there is no more update in progress.
+	if statefulSet.Status.ObservedGeneration == statefulSet.Generation &&
+		statefulSet.Status.AvailableReplicas == *statefulSet.Spec.Replicas &&
+		statefulSet.Status.CurrentReplicas == statefulSet.Status.UpdatedReplicas {
+		klog.V(2).InfoS("statefulSet is available", "statefulSet", klog.KObj(curObj))
+		return manifestAvailableAction, nil
+	}
+	klog.V(2).InfoS("still need to wait for statefulSet to be available", "statefulSet", klog.KObj(curObj))
+	return manifestNotAvailableYetAction, nil
+}
+
+func trackDaemonSetAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+	var daemonSet appv1.DaemonSet
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &daemonSet); err != nil {
+		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
+	}
+	// a daemonSet is available if all the desired replicas (equal to all node suit for this Daemonset)
+	// are available and the currentReplicas is equal to the updatedReplicas which means there is no more update in progress.
+	if daemonSet.Status.ObservedGeneration == daemonSet.Generation &&
+		daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled &&
+		daemonSet.Status.CurrentNumberScheduled == daemonSet.Status.UpdatedNumberScheduled {
+		klog.V(2).InfoS("daemonSet is available", "daemonSet", klog.KObj(curObj))
+		return manifestAvailableAction, nil
+	}
+	klog.V(2).InfoS("still need to wait for daemonSet to be available", "daemonSet", klog.KObj(curObj))
+	return manifestNotAvailableYetAction, nil
+}
+
+func trackJobAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+	var job batchv1.Job
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &job); err != nil {
+		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
+	}
+	if job.Status.Succeeded > 0 {
+		klog.V(2).InfoS("job is available with at least one succeeded pod", "job", klog.KObj(curObj))
+		return manifestAvailableAction, nil
+	}
+	if job.Status.Ready != nil {
+		// we consider a job available if there is at least one pod ready
+		if *job.Status.Ready > 0 {
+			klog.V(2).InfoS("job is available with at least one ready pod", "job", klog.KObj(curObj))
+			return manifestAvailableAction, nil
+		}
+		klog.V(2).InfoS("still need to wait for job to be available", "job", klog.KObj(curObj))
+		return manifestNotAvailableYetAction, nil
+	}
+	// this field only exists in k8s 1.24+ by default, so we can't track the availability of the job without it
+	klog.V(2).InfoS("job does not have ready status, we can't track its availability", "job", klog.KObj(curObj))
+	return manifestNotTrackableAction, nil
+}
+
+// serversideApplyObject uses server side apply to apply the manifest.
+func (r *ApplyWorkReconciler) serversideApplyObject(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
 	manifestRef := klog.ObjectRef{
 		Name:      manifestObj.GetName(),
@@ -442,10 +569,10 @@ func (r *ApplyWorkReconciler) applyObject(ctx context.Context, gvr schema.GroupV
 	manifestObj, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Apply(ctx, manifestObj.GetName(), manifestObj, options)
 	if err != nil {
 		klog.ErrorS(err, "failed to apply object", "gvr", gvr, "manifest", manifestRef)
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, err
 	}
 	klog.V(2).InfoS("manifest apply succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, ManifestServerSideAppliedAction, nil
+	return manifestObj, manifestServerSideAppliedAction, nil
 }
 
 // patchCurrentResource uses three-way merge to patch the current resource with the new manifest we get from the work.
@@ -462,49 +589,56 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 	patch, err := threeWayMergePatch(curObj, manifestObj)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, err
 	}
 	data, err := patch.Data(manifestObj)
 	if err != nil {
 		klog.ErrorS(err, "failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, ManifestNoChangeAction, err
+		return nil, errorApplyAction, err
 	}
 	// Use client side apply the patch to the member cluster
 	manifestObj, patchErr := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).
 		Patch(ctx, manifestObj.GetName(), patch.Type(), data, metav1.PatchOptions{FieldManager: workFieldManagerName})
 	if patchErr != nil {
 		klog.ErrorS(patchErr, "failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
-		return nil, ManifestNoChangeAction, patchErr
+		return nil, errorApplyAction, patchErr
 	}
 	klog.V(2).InfoS("manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, ManifestThreeWayMergePatchAction, nil
+	return manifestObj, manifestThreeWayMergePatchAction, nil
 }
 
-// generateWorkCondition constructs the work condition based on the apply result
-func (r *ApplyWorkReconciler) generateWorkCondition(results []applyResult, work *fleetv1beta1.Work) []error {
+// constructWorkCondition constructs the work condition based on the apply result
+func constructWorkCondition(results []applyResult, work *fleetv1beta1.Work) []error {
 	var errs []error
 	// Update manifestCondition based on the results.
 	manifestConditions := make([]fleetv1beta1.ManifestCondition, len(results))
 	for index, result := range results {
-		if result.err != nil {
-			errs = append(errs, result.err)
+		if result.applyErr != nil {
+			errs = append(errs, result.applyErr)
 		}
-		appliedCondition := buildManifestAppliedCondition(result.err, result.action, result.generation)
+		newConditions := buildManifestCondition(result.applyErr, result.action, result.generation)
 		manifestCondition := fleetv1beta1.ManifestCondition{
 			Identifier: result.identifier,
-			Conditions: []metav1.Condition{appliedCondition},
 		}
-		foundmanifestCondition := findManifestConditionByIdentifier(result.identifier, work.Status.ManifestConditions)
-		if foundmanifestCondition != nil {
-			manifestCondition.Conditions = foundmanifestCondition.Conditions
-			meta.SetStatusCondition(&manifestCondition.Conditions, appliedCondition)
+		existingManifestCondition := findManifestConditionByIdentifier(result.identifier, work.Status.ManifestConditions)
+		if existingManifestCondition != nil {
+			// merge the status of the manifest condition
+			manifestCondition.Conditions = existingManifestCondition.Conditions
+			for _, condition := range newConditions {
+				meta.SetStatusCondition(&manifestCondition.Conditions, condition)
+			}
+		} else {
+			manifestCondition.Conditions = newConditions
 		}
 		manifestConditions[index] = manifestCondition
 	}
 
 	work.Status.ManifestConditions = manifestConditions
-	workCond := generateWorkAppliedCondition(manifestConditions, work.Generation)
-	work.Status.Conditions = []metav1.Condition{workCond}
+	// merge the status of the work condition
+	newWorkConditions := buildWorkCondition(manifestConditions, work.Generation)
+	for _, condition := range newWorkConditions {
+		meta.SetStatusCondition(&work.Status.Conditions, condition)
+	}
 	return errs
 }
 
@@ -552,7 +686,7 @@ func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 // SetupWithManager wires up the controller.
 func (r *ApplyWorkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		WithOptions(controller.Options{
+		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: r.concurrency,
 		}).
 		For(&fleetv1beta1.Work{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -653,50 +787,132 @@ func buildResourceIdentifier(index int, object *unstructured.Unstructured, gvr s
 	}
 }
 
-func buildManifestAppliedCondition(err error, action applyAction, observedGeneration int64) metav1.Condition {
+func buildManifestCondition(err error, action applyAction, observedGeneration int64) []metav1.Condition {
+	applyCondition := metav1.Condition{
+		Type:               fleetv1beta1.WorkConditionTypeApplied,
+		LastTransitionTime: metav1.Now(),
+		ObservedGeneration: observedGeneration,
+	}
+
+	availableCondition := metav1.Condition{
+		Type:               fleetv1beta1.WorkConditionTypeAvailable,
+		LastTransitionTime: metav1.Now(),
+		ObservedGeneration: observedGeneration,
+	}
+
 	if err != nil {
-		return metav1.Condition{
-			Type:               fleetv1beta1.WorkConditionTypeApplied,
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: observedGeneration,
-			LastTransitionTime: metav1.Now(),
-			Reason:             AppliedManifestFailedReason,
-			Message:            fmt.Sprintf("Failed to apply manifest: %v", err),
+		applyCondition.Status = metav1.ConditionFalse
+		applyCondition.Reason = ManifestApplyFailedReason
+		applyCondition.Message = fmt.Sprintf("Failed to apply manifest: %v", err)
+		availableCondition.Status = metav1.ConditionUnknown
+		availableCondition.Reason = ManifestApplyFailedReason
+	} else {
+		applyCondition.Status = metav1.ConditionTrue
+		// the first three actions types means we did write to the cluster thus the availability is unknown
+		// the last three actions types means we start to track the resources
+		switch action {
+		case manifestCreatedAction:
+			applyCondition.Reason = string(manifestCreatedAction)
+			availableCondition.Status = metav1.ConditionUnknown
+			availableCondition.Reason = ManifestNeedsUpdateReason
+
+		case manifestThreeWayMergePatchAction:
+			applyCondition.Reason = string(manifestThreeWayMergePatchAction)
+			availableCondition.Status = metav1.ConditionUnknown
+			availableCondition.Reason = ManifestNeedsUpdateReason
+
+		case manifestServerSideAppliedAction:
+			applyCondition.Reason = string(manifestServerSideAppliedAction)
+			availableCondition.Status = metav1.ConditionUnknown
+			availableCondition.Reason = ManifestNeedsUpdateReason
+
+		case manifestAvailableAction:
+			applyCondition.Reason = ManifestAlreadyUpToDateReason
+			availableCondition.Status = metav1.ConditionTrue
+			availableCondition.Reason = string(manifestAvailableAction)
+
+		case manifestNotAvailableYetAction:
+			applyCondition.Reason = ManifestAlreadyUpToDateReason
+			availableCondition.Status = metav1.ConditionFalse
+			availableCondition.Reason = string(manifestNotAvailableYetAction)
+		// we cannot stuck at unknown so we have to mark it as true
+		case manifestNotTrackableAction:
+			applyCondition.Reason = ManifestAlreadyUpToDateReason
+			availableCondition.Status = metav1.ConditionTrue
+			availableCondition.Reason = string(manifestNotTrackableAction)
+
+		default:
 		}
 	}
 
-	return metav1.Condition{
-		Type:               fleetv1beta1.WorkConditionTypeApplied,
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		ObservedGeneration: observedGeneration,
-		Reason:             string(action),
-		Message:            string(action),
-	}
+	return []metav1.Condition{applyCondition, availableCondition}
 }
 
-// generateWorkAppliedCondition generate applied status condition for work.
+// buildWorkCondition generate applied and available status condition for work.
 // If one of the manifests is applied failed on the spoke, the applied status condition of the work is false.
-func generateWorkAppliedCondition(manifestConditions []fleetv1beta1.ManifestCondition, observedGeneration int64) metav1.Condition {
-	for _, manifestCond := range manifestConditions {
-		if meta.IsStatusConditionFalse(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied) {
-			return metav1.Condition{
-				Type:               fleetv1beta1.WorkConditionTypeApplied,
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-				Reason:             AppliedWorkFailedReason,
-				Message:            "Failed to apply work",
-				ObservedGeneration: observedGeneration,
-			}
-		}
-	}
-
-	return metav1.Condition{
+// If one of the manifests is not available yet on the spoke, the available status condition of the work is false.
+// If all the manifests are available, the available status condition of the work is true.
+// Otherwise, the available status condition of the work is unknown as we can't track some of them.
+func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, observedGeneration int64) []metav1.Condition {
+	applyCondition := metav1.Condition{
 		Type:               fleetv1beta1.WorkConditionTypeApplied,
-		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
-		Reason:             AppliedWorkCompleteReason,
-		Message:            "Apply work complete",
 		ObservedGeneration: observedGeneration,
 	}
+	availableCondition := metav1.Condition{
+		Type:               fleetv1beta1.WorkConditionTypeAvailable,
+		LastTransitionTime: metav1.Now(),
+		ObservedGeneration: observedGeneration,
+	}
+	// the manifest condition should not be an empty list
+	for _, manifestCond := range manifestConditions {
+		if meta.IsStatusConditionFalse(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeApplied) {
+			// we mark the entire work applied condition to false if one of the manifests is applied failed
+			applyCondition.Status = metav1.ConditionFalse
+			applyCondition.Reason = workAppliedFailedReason
+			applyCondition.Message = fmt.Sprintf("Apply manifest %+v failed", manifestCond.Identifier)
+			availableCondition.Status = metav1.ConditionUnknown
+			availableCondition.Reason = workAppliedFailedReason
+			return []metav1.Condition{applyCondition, availableCondition}
+		}
+	}
+	applyCondition.Status = metav1.ConditionTrue
+	applyCondition.Reason = workAppliedCompleteReason
+	applyCondition.Message = "Apply work complete"
+	// we mark the entire work available condition to unknown if one of the manifests is not known yet
+	for _, manifestCond := range manifestConditions {
+		cond := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		if cond.Status == metav1.ConditionUnknown {
+			availableCondition.Status = metav1.ConditionUnknown
+			availableCondition.Reason = workAvailabilityUnknownReason
+			availableCondition.Message = fmt.Sprintf("Manifest %+v availability is not known yet", manifestCond.Identifier)
+			return []metav1.Condition{applyCondition, availableCondition}
+		}
+	}
+	// now that there is no unknown, we mark the entire work available condition to false if one of the manifests is not applied yet
+	for _, manifestCond := range manifestConditions {
+		cond := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		if cond.Status == metav1.ConditionFalse {
+			availableCondition.Status = metav1.ConditionFalse
+			availableCondition.Reason = workNotAvailableYetReason
+			availableCondition.Message = fmt.Sprintf("Manifest %+v is not available yet", manifestCond.Identifier)
+			return []metav1.Condition{applyCondition, availableCondition}
+		}
+	}
+	// now that all the conditions are true, we mark the entire work available condition reason to be not trackable if one of the manifests is not trackable
+	trackable := true
+	for _, manifestCond := range manifestConditions {
+		cond := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		if cond.Reason == string(manifestNotTrackableAction) {
+			trackable = false
+			break
+		}
+	}
+	availableCondition.Status = metav1.ConditionTrue
+	if trackable {
+		availableCondition.Reason = workAvailableReason
+	} else {
+		availableCondition.Reason = workNotTrackableReason
+	}
+	return []metav1.Condition{applyCondition, availableCondition}
 }

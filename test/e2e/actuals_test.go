@@ -309,10 +309,10 @@ func crpStatusUpdatedActual(
 func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() error {
 	client := cluster.KubeClient
 
-	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	ns := appNamespace()
 	return func() error {
-		if err := client.Get(ctx, types.NamespacedName{Name: workNamespaceName}, &corev1.Namespace{}); !errors.IsNotFound(err) {
-			return fmt.Errorf("work namespace %s still exists or an unexpected error occurred: %w", workNamespaceName, err)
+		if err := client.Get(ctx, types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); !errors.IsNotFound(err) {
+			return fmt.Errorf("work namespace %s still exists or an unexpected error occurred: %w", ns.Name, err)
 		}
 		return nil
 	}
@@ -324,6 +324,9 @@ func allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual() func() er
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
+			if errors.IsNotFound(err) {
+				return nil
+			}
 			return err
 		}
 

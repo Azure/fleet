@@ -267,12 +267,10 @@ func cleanupInvalidClusters() {
 				Name: name,
 			},
 		}
-		Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to delete member cluster object")
-
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj)).To(Succeed(), "Failed to get member cluster object")
 		mcObj.Finalizers = []string{}
 		Expect(hubClient.Update(ctx, mcObj)).To(Succeed(), "Failed to update member cluster object")
-
+		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !apierrors.IsNotFound(err) {
@@ -332,14 +330,14 @@ func deleteResourcesForFleetGuardRail() {
 			Name: "test-cluster-role-binding",
 		},
 	}
-	Expect(hubClient.Delete(ctx, &crb)).Should(Succeed())
+	Expect(hubClient.Delete(ctx, &crb)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-cluster-role",
 		},
 	}
-	Expect(hubClient.Delete(ctx, &cr)).Should(Succeed())
+	Expect(hubClient.Delete(ctx, &cr)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 }
 
 // cleanupMemberCluster removes finalizers (if any) from the member cluster, and
@@ -447,7 +445,7 @@ func createWorkResource(name, namespace string) {
 
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources() {
-	ns := workNamespace()
+	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 
 	configMap := appConfigMap()
@@ -460,7 +458,7 @@ func cleanupWorkResources() {
 }
 
 func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
-	ns := workNamespace()
+	ns := appNamespace()
 	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
 
 	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
@@ -559,7 +557,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 			Name: crpName,
 		},
 	}
-	Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
+	Expect(hubClient.Delete(ctx, crp)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete CRP")
 
 	// Verify that all resources placed have been removed from specified member clusters.
 	for idx := range memberClusters {

@@ -7,6 +7,10 @@ Licensed under the MIT license.
 package condition
 
 import (
+	"sort"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -100,4 +104,17 @@ func IsConditionStatusTrue(cond *metav1.Condition, latestGeneration int64) bool 
 // IsConditionStatusFalse returns true if the condition is false and the observed generation matches the latest generation.
 func IsConditionStatusFalse(cond *metav1.Condition, latestGeneration int64) bool {
 	return cond != nil && cond.Status == metav1.ConditionFalse && cond.ObservedGeneration == latestGeneration
+}
+
+// CompareConditions compares two condition slices and returns a string with the differences.
+func CompareConditions(wantConditions, gotConditions []metav1.Condition) string {
+	ignoreOption := cmpopts.IgnoreFields(metav1.Condition{}, "LastTransitionTime", "ObservedGeneration", "Message")
+	// we need to sort each condition slice by type before comparing
+	sort.SliceStable(wantConditions, func(i, j int) bool {
+		return wantConditions[i].Type < wantConditions[j].Type
+	})
+	sort.SliceStable(gotConditions, func(i, j int) bool {
+		return gotConditions[i].Type < gotConditions[j].Type
+	})
+	return cmp.Diff(wantConditions, gotConditions, ignoreOption)
 }
