@@ -40,31 +40,20 @@ import (
 
 var _ = Describe("Work Status Reconciler", func() {
 	var resourceNamespace string
-	var workNamespace string
 	var work *fleetv1beta1.Work
 	var cm, cm2 *corev1.ConfigMap
-
-	var wns corev1.Namespace
 	var rns corev1.Namespace
 
+	workNamespace := testWorkNamespace
+
 	BeforeEach(func() {
-		workNamespace = "cluster-" + utilrand.String(5)
 		resourceNamespace = utilrand.String(5)
-
-		wns = corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: workNamespace,
-			},
-		}
-		err := k8sClient.Create(context.Background(), &wns)
-		Expect(err).ToNot(HaveOccurred())
-
 		rns = corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: resourceNamespace,
 			},
 		}
-		err = k8sClient.Create(context.Background(), &rns)
+		err := k8sClient.Create(context.Background(), &rns)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Create the Work object with some type of Manifest resource.
@@ -119,7 +108,6 @@ var _ = Describe("Work Status Reconciler", func() {
 	AfterEach(func() {
 		// TODO: Ensure that all resources are being deleted.
 		Expect(k8sClient.Delete(context.Background(), work)).Should(Succeed())
-		Expect(k8sClient.Delete(context.Background(), &wns)).Should(Succeed())
 		Expect(k8sClient.Delete(context.Background(), &rns)).Should(Succeed())
 	})
 
