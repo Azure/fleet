@@ -760,10 +760,10 @@ spec:
                       type: array
                     failedPlacements:
                       description: FailedPlacements is a list of all the resources
-                        failed to be placed to the given cluster. Note that we only
-                        include 100 failed resource placements even if there are more
-                        than 100. This field is only meaningful if the `ClusterName`
-                        is not empty.
+                        failed to be placed to the given cluster or the resource is
+                        unavailable. Note that we only include 100 failed resource
+                        placements even if there are more than 100. This field is
+                        only meaningful if the `ClusterName` is not empty.
                       items:
                         description: FailedResourcePlacement contains the failure
                           details of a failed resource placement.

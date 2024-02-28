@@ -501,7 +501,7 @@ type ResourcePlacementStatus struct {
 
 	// +kubebuilder:validation:MaxItems=100
 
-	// FailedPlacements is a list of all the resources failed to be placed to the given cluster.
+	// FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
 	// Note that we only include 100 failed resource placements even if there are more than 100.
 	// This field is only meaningful if the `ClusterName` is not empty.
 	// +optional
@@ -609,6 +609,15 @@ const (
 	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
 	// - "Unknown" means we haven't finished the apply yet.
 	ClusterResourcePlacementAppliedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementApplied"
+
+	// ClusterResourcePlacementAvailableConditionType indicates whether the selected resources are available on all the
+	// selected member clusters.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are available on all the selected member clusters.
+	// - "False" means some of them are not available yet. We will place some of the detailed failure in the FailedResourcePlacement
+	// array.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ClusterResourcePlacementAvailableConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementAvailable"
 )
 
 // ResourcePlacementConditionType defines a specific condition of a resource placement.
@@ -675,6 +684,13 @@ const (
 	// - "Unknown" means we haven't finished the apply yet.
 	// TODO: use "Applied" instead.
 	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
+
+	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are available on the target cluster.
+	// - "False" means some of them are not available yet.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ResourcesAvailableConditionType ResourcePlacementConditionType = "Available"
 )
 
 // PlacementType identifies the type of placement.

@@ -36,7 +36,8 @@ const (
 
 	// WorkConditionTypeApplied represents workload in Work is applied successfully on the spoke cluster.
 	WorkConditionTypeApplied = "Applied"
-	// WorkConditionTypeAvailable represents workload in Work exists on the spoke cluster.
+
+	// WorkConditionTypeAvailable represents workload in Work is available on the spoke cluster.
 	WorkConditionTypeAvailable = "Available"
 )
 
