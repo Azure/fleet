@@ -18,7 +18,7 @@ func (m MockResourceInformer) AddDynamicResources(_ []informer.APIResourceMeta, 
 func (m MockResourceInformer) AddStaticResource(_ informer.APIResourceMeta, _ cache.ResourceEventHandler) {
 }
 
-func (m MockResourceInformer) IsInformerSynced(_ schema.GroupVersionResource) bool {
+func (m MockResourceInformer) IsInformerSynced(_ schema.GroupVersionKind) bool {
 	return false
 }
 

@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"k8s.io/klog/v2"
 	"math"
 	"os"
 	"strings"
@@ -16,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -65,6 +66,7 @@ func init() {
 	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(fleetnetworkingv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(apiregistrationv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
@@ -155,7 +157,7 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	if err := workload.SetupControllers(ctx, &wg, mgr, config, opts); err != nil {
+	if err := workload.SetupControllers(ctx, scheme, &wg, mgr, config, opts); err != nil {
 		klog.ErrorS(err, "unable to set up ready check")
 		exitWithErrorFunc()
 	}
