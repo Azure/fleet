@@ -263,8 +263,12 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Allocatable represents the total allocatable resources
-                      of all the nodes on a member cluster.
+                    description: "Allocatable represents the total allocatable resources
+                      of all the nodes on a member cluster. \n A node's allocatable
+                      capacity is the amount of resource that can actually be used
+                      for user workloads, i.e., allocatable capacity = total capacity
+                      - capacities reserved for the OS, kubelet, etc. \n For more
+                      information, see https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/."
                     type: object
                   available:
                     additionalProperties:
@@ -273,8 +277,11 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Available represents the total available resources
-                      of all the nodes on a member cluster.
+                    description: "Available represents the total available resources
+                      of all the nodes on a member cluster. \n A node's available
+                      capacity is the amount of resource that has not been used yet,
+                      i.e., available capacity = allocatable capacity - capacity that
+                      has been requested by workloads."
                     type: object
                   capacity:
                     additionalProperties:
@@ -283,8 +290,9 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Capacity represents the total resource capacity of
-                      all the nodes on a member cluster.
+                    description: "Capacity represents the total resource capacity
+                      of all the nodes on a member cluster. \n A node's total capacity
+                      is the amount of resource installed on the node."
                     type: object
                   observationTime:
                     description: When the resource usage is observed.

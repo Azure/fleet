@@ -21,14 +21,26 @@ const (
 // ResourceUsage contains the observed resource usage of a member cluster.
 type ResourceUsage struct {
 	// Capacity represents the total resource capacity of all the nodes on a member cluster.
+	//
+	// A node's total capacity is the amount of resource installed on the node.
 	// +optional
 	Capacity corev1.ResourceList `json:"capacity,omitempty"`
 
 	// Allocatable represents the total allocatable resources of all the nodes on a member cluster.
+	//
+	// A node's allocatable capacity is the amount of resource that can actually be used
+	// for user workloads, i.e.,
+	// allocatable capacity = total capacity - capacities reserved for the OS, kubelet, etc.
+	//
+	// For more information, see
+	// https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/.
 	// +optional
 	Allocatable corev1.ResourceList `json:"allocatable,omitempty"`
 
 	// Available represents the total available resources of all the nodes on a member cluster.
+	//
+	// A node's available capacity is the amount of resource that has not been used yet, i.e.,
+	// available capacity = allocatable capacity - capacity that has been requested by workloads.
 	// +optional
 	Available corev1.ResourceList `json:"available,omitempty"`
 
