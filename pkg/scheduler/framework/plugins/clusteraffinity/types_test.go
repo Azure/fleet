@@ -333,15 +333,15 @@ func TestNewAffinityTerms(t *testing.T) {
 			name: "nonempty terms have empty term",
 			terms: []placementv1beta1.ClusterSelectorTerm{
 				{
-					LabelSelector: metav1.LabelSelector{},
+					LabelSelector: &metav1.LabelSelector{},
 				},
 				{
-					LabelSelector: metav1.LabelSelector{
+					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{},
 					},
 				},
 				{
-					LabelSelector: metav1.LabelSelector{
+					LabelSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{},
 					},
 				},
@@ -352,7 +352,7 @@ func TestNewAffinityTerms(t *testing.T) {
 			name: "nonempty terms",
 			terms: []placementv1beta1.ClusterSelectorTerm{
 				{
-					LabelSelector: metav1.LabelSelector{
+					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"region": "us-west",
 						},
@@ -399,7 +399,7 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 			terms: []placementv1beta1.PreferredClusterSelector{
 				{
 					Preference: placementv1beta1.ClusterSelectorTerm{
-						LabelSelector: metav1.LabelSelector{
+						LabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{},
 						},
 					},
@@ -407,7 +407,7 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 				},
 				{
 					Preference: placementv1beta1.ClusterSelectorTerm{
-						LabelSelector: metav1.LabelSelector{
+						LabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"region": "us-west",
 							},
@@ -423,7 +423,7 @@ func TestNewPreferredAffinityTerms(t *testing.T) {
 			terms: []placementv1beta1.PreferredClusterSelector{
 				{
 					Preference: placementv1beta1.ClusterSelectorTerm{
-						LabelSelector: metav1.LabelSelector{
+						LabelSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"region": "us-west",
 							},

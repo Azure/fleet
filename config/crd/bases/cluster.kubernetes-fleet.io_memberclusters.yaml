@@ -286,6 +286,27 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              properties:
+                additionalProperties:
+                  description: PropertyValue is the value of a cluster property.
+                  properties:
+                    observationTime:
+                      description: ObservationTime is when the cluster property is
+                        observed.
+                      format: date-time
+                      type: string
+                    value:
+                      description: "Value is the value of the cluster property. \n
+                        Currently, it should be a valid Kubernetes quantity. For more
+                        information, see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity."
+                      type: string
+                  required:
+                  - observationTime
+                  - value
+                  type: object
+                description: Properties is an array of properties observed for the
+                  member cluster.
+                type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
                   It is copied from the corresponding InternalMemberCluster object.
@@ -297,8 +318,25 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Allocatable represents the total resources of all
-                      the nodes on a member cluster that are available for scheduling.
+                    description: "Allocatable represents the total allocatable resources
+                      of all the nodes on a member cluster. \n A node's allocatable
+                      capacity is the amount of resource that can actually be used
+                      for user workloads, i.e., allocatable capacity = total capacity
+                      - capacities reserved for the OS, kubelet, etc. \n For more
+                      information, see https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/."
+                    type: object
+                  available:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: "Available represents the total available resources
+                      of all the nodes on a member cluster. \n A node's available
+                      capacity is the amount of resource that has not been used yet,
+                      i.e., available capacity = allocatable capacity - capacity that
+                      has been requested by workloads."
                     type: object
                   capacity:
                     additionalProperties:
@@ -307,8 +345,9 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: Capacity represents the total resource capacity of
-                      all the nodes on a member cluster.
+                    description: "Capacity represents the total resource capacity
+                      of all the nodes on a member cluster. \n A node's total capacity
+                      is the amount of resource installed on the node."
                     type: object
                   observationTime:
                     description: When the resource usage is observed.

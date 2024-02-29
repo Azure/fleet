@@ -236,7 +236,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "prod",
 									},
@@ -314,14 +314,14 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "canary",
 									},
 								},
 							},
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchExpressions: []metav1.LabelSelectorRequirement{
 										{
 											Key:      regionLabel,
@@ -411,7 +411,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "canary",
 									},
@@ -447,14 +447,14 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "canary",
 									},
 								},
 							},
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchExpressions: []metav1.LabelSelectorRequirement{
 										{
 											Key:      regionLabel,
@@ -535,14 +535,14 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "wonderland",
 									},
 								},
 							},
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchExpressions: []metav1.LabelSelectorRequirement{
 										{
 											Key:      regionLabel,

@@ -77,7 +77,7 @@ func TestPreFilter(t *testing.T) {
 							{
 								Weight: 0,
 								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"region": "us-west",
 										},
@@ -104,7 +104,7 @@ func TestPreFilter(t *testing.T) {
 							{
 								Weight: 5,
 								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"region": "us-west",
 										},
@@ -114,7 +114,7 @@ func TestPreFilter(t *testing.T) {
 							{
 								Weight: 1,
 								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{},
 									},
 								},
@@ -144,7 +144,7 @@ func TestPreFilter(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{},
 									},
 								},
@@ -167,12 +167,12 @@ func TestPreFilter(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"region": "us-west"},
 									},
 								},
 								{
-									LabelSelector: metav1.LabelSelector{},
+									LabelSelector: &metav1.LabelSelector{},
 								},
 							},
 						},
@@ -197,7 +197,7 @@ func TestPreFilter(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"region": "us-west"},
 									},
 								},
@@ -207,7 +207,7 @@ func TestPreFilter(t *testing.T) {
 							{
 								Weight: 5,
 								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"region": "us-west",
 										},
@@ -217,7 +217,7 @@ func TestPreFilter(t *testing.T) {
 							{
 								Weight: 1,
 								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{},
 									},
 								},

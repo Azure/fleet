@@ -286,7 +286,7 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	allErr := make([]error, 0)
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
-		allErr = append(allErr, validateLabelSelector(&clusterSelectorTerm.LabelSelector, "cluster selector"))
+		allErr = append(allErr, validateLabelSelector(clusterSelectorTerm.LabelSelector, "cluster selector"))
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -295,7 +295,7 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 	allErr := make([]error, 0)
 	for _, preferredClusterSelector := range preferredClusterSelectors {
 		// API server validation on object occurs before webhook is triggered hence not validating weight.
-		allErr = append(allErr, validateLabelSelector(&preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
+		allErr = append(allErr, validateLabelSelector(preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
 	}
 	return apiErrors.NewAggregate(allErr)
 }

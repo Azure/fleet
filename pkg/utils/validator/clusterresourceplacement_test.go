@@ -464,7 +464,7 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{"test-key": "test-value"},
 											},
 										},
@@ -562,7 +562,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      "test-key",
@@ -595,7 +595,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 									{
 										Weight: 1,
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{"test-key": "test-value"},
 											},
 										},
@@ -641,7 +641,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{"test-key": "test-value"},
 											},
 										},
@@ -741,7 +741,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      "test-key",
@@ -774,7 +774,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 									{
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchExpressions: []metav1.LabelSelectorRequirement{
 													{
 														Key:      "test-key",
@@ -828,7 +828,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{"test-key1": "test-value1"},
 											},
 										},
@@ -837,7 +837,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 									{
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{"test-key2": "test-value2"},
 											},
 										},
@@ -888,7 +888,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key1": "test-value1"},
 									},
 								},
@@ -908,7 +908,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key1": "test-value1"},
 									},
 								},
@@ -927,7 +927,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key1": "test-value1"},
 									},
 								},
@@ -947,7 +947,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key1": "test-value1"},
 									},
 								},
@@ -967,7 +967,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key1": "test-value1"},
 									},
 								},
@@ -983,7 +983,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key2": "test-value2"},
 									},
 								},
@@ -1002,7 +1002,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key1": "test-value1"},
 									},
 								},
@@ -1018,7 +1018,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"test-key2": "test-value2"},
 									},
 								},

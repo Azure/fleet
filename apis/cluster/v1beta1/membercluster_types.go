@@ -55,6 +55,25 @@ type MemberClusterSpec struct {
 	Taints []Taint `json:"taints,omitempty"`
 }
 
+// PropertyName is the name of a cluster property; it should be a Kubernetes label name.
+type PropertyName string
+
+// PropertyValue is the value of a cluster property.
+type PropertyValue struct {
+	// Value is the value of the cluster property.
+	//
+	// Currently, it should be a valid Kubernetes quantity.
+	// For more information, see
+	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
+	//
+	// +required
+	Value string `json:"value"`
+
+	// ObservationTime is when the cluster property is observed.
+	// +required
+	ObservationTime metav1.Time `json:"observationTime"`
+}
+
 // MemberClusterStatus defines the observed status of MemberCluster.
 type MemberClusterStatus struct {
 	// +patchMergeKey=type
@@ -65,6 +84,10 @@ type MemberClusterStatus struct {
 	// Conditions is an array of current observed conditions for the member cluster.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
+
+	// Properties is an array of properties observed for the member cluster.
+	// +optional
+	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional
