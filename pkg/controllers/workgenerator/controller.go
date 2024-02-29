@@ -607,7 +607,7 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 // It watches binding events and also update/delete events for work.
 func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("work generator")
-	return controllerruntime.NewControllerManagedBy(mgr).
+	return controllerruntime.NewControllerManagedBy(mgr).Named("work-generator").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&fleetv1beta1.Work{}, &handler.Funcs{

@@ -218,7 +218,6 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) {
 		observeSchedulingCycleMetrics(cycleStartTime, false, true)
 	}
 	observeSchedulingCycleMetrics(cycleStartTime, false, false)
-	return
 }
 
 // Run starts the scheduler.
