@@ -701,6 +701,24 @@ type ClusterResourcePlacementList struct {
 	Items           []ClusterResourcePlacement `json:"items"`
 }
 
+// GetTolerations returns tolerations for ClusterResourcePlacement.
+func (m *ClusterResourcePlacement) GetTolerations() []Toleration {
+	if m.Spec.Policy != nil {
+		return m.Spec.Policy.Tolerations
+	}
+	return nil
+}
+
+// SetTolerations sets tolerations on ClusterResourcePlacement.
+func (m *ClusterResourcePlacement) SetTolerations(tolerations []Toleration) {
+	if m.Spec.Policy == nil {
+		m.Spec.Policy = &PlacementPolicy{
+			Tolerations: tolerations,
+		}
+	}
+	m.Spec.Policy.Tolerations = tolerations
+}
+
 // SetConditions sets the conditions of the ClusterResourcePlacement.
 func (m *ClusterResourcePlacement) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {

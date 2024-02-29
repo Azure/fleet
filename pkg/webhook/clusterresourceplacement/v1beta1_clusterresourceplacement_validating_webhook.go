@@ -56,7 +56,7 @@ func (v *clusterResourcePlacementValidator) Handle(_ context.Context, req admiss
 				return admission.Denied("placement type is immutable")
 			}
 			// handle update case where existing tolerations were updated/deleted
-			if validator.IsTolerationsUpdatedOrDeleted(utils.GetTolerations(oldCRP.Spec.Policy), utils.GetTolerations(crp.Spec.Policy)) {
+			if validator.IsTolerationsUpdatedOrDeleted(oldCRP.GetTolerations(), crp.GetTolerations()) {
 				return admission.Denied("tolerations have been updated/deleted, only additions to tolerations are allowed")
 			}
 		}

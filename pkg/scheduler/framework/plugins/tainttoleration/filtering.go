@@ -9,7 +9,6 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
-	"go.goms.io/fleet/pkg/utils"
 )
 
 var (
@@ -23,7 +22,7 @@ func (p *Plugin) Filter(
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
-	taint, isUntolerated := findUntoleratedTaint(cluster.Spec.Taints, utils.GetTolerations(policy.Spec.Policy))
+	taint, isUntolerated := findUntoleratedTaint(cluster.Spec.Taints, policy.GetTolerations())
 	if !isUntolerated {
 		return nil
 	}
