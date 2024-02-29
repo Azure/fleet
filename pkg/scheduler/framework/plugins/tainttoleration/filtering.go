@@ -22,7 +22,7 @@ func (p *Plugin) Filter(
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
-	taint, isUntolerated := findUntoleratedTaint(cluster.Spec.Taints, policy.GetTolerations())
+	taint, isUntolerated := findUntoleratedTaint(cluster.Spec.Taints, policy.Tolerations())
 	if !isUntolerated {
 		return nil
 	}
