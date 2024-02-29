@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,7 @@ import (
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clusteraffinity"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/clustereligibility"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/sameplacementaffinity"
+	"go.goms.io/fleet/pkg/scheduler/framework/plugins/tainttoleration"
 	"go.goms.io/fleet/pkg/scheduler/framework/plugins/topologyspreadconstraints"
 )
 
@@ -112,6 +114,7 @@ func buildSchedulerFramework(ctrlMgr manager.Manager, clusterEligibilityChecker 
 	// Register the plugins.
 	clusterAffinityPlugin := clusteraffinity.New()
 	clustereligibilityPlugin := clustereligibility.New()
+	taintTolerationPlugin := tainttoleration.New()
 	samePlacementAffinityPlugin := sameplacementaffinity.New()
 	topologyspreadconstraintsPlugin := topologyspreadconstraints.New()
 	profile.
@@ -122,6 +125,8 @@ func buildSchedulerFramework(ctrlMgr manager.Manager, clusterEligibilityChecker 
 		WithScorePlugin(&clusterAffinityPlugin).
 		// Register cluster eligibility plugin.
 		WithFilterPlugin(&clustereligibilityPlugin).
+		// Register taint toleration plugin.
+		WithFilterPlugin(&taintTolerationPlugin).
 		// Register same placement affinity plugin.
 		WithFilterPlugin(&samePlacementAffinityPlugin).
 		WithScorePlugin(&samePlacementAffinityPlugin).
@@ -183,7 +188,7 @@ func loadRestConfigFrom(apiCfgBytes []byte) *rest.Config {
 	return restCfg
 }
 
-func createMemberCluster(name string) {
+func createMemberCluster(name string, taints []clusterv1beta1.Taint) {
 	memberCluster := clusterv1beta1.MemberCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -194,6 +199,7 @@ func createMemberCluster(name string) {
 				APIGroup: "",
 				Name:     "admin",
 			},
+			Taints: taints,
 		},
 	}
 	Expect(hubClient.Create(ctx, &memberCluster)).To(Succeed(), "Failed to create member cluster")
@@ -292,7 +298,7 @@ func createPickFixedCRPWithPolicySnapshot(crpName string, targetClusters []strin
 	Expect(hubClient.Create(ctx, policySnapshot)).To(Succeed(), "Failed to create policy snapshot")
 }
 
-func createNilSchedulingPolicyCRPWithPolicySnapshot(crpName string, policySnapshotName string) {
+func createNilSchedulingPolicyCRPWithPolicySnapshot(crpName string, policySnapshotName string, tolerations []placementv1beta1.Toleration) {
 	// Create a CRP with no scheduling policy specified.
 	crp := placementv1beta1.ClusterResourcePlacement{
 		ObjectMeta: metav1.ObjectMeta{
@@ -301,7 +307,9 @@ func createNilSchedulingPolicyCRPWithPolicySnapshot(crpName string, policySnapsh
 		},
 		Spec: placementv1beta1.ClusterResourcePlacementSpec{
 			ResourceSelectors: defaultResourceSelectors,
-			Policy:            nil,
+			Policy: &placementv1beta1.PlacementPolicy{
+				Tolerations: tolerations,
+			},
 		},
 	}
 	Expect(hubClient.Create(ctx, &crp)).Should(Succeed(), "Failed to create CRP")
@@ -321,7 +329,9 @@ func createNilSchedulingPolicyCRPWithPolicySnapshot(crpName string, policySnapsh
 			},
 		},
 		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-			Policy:     nil,
+			Policy: &placementv1beta1.PlacementPolicy{
+				Tolerations: tolerations,
+			},
 			PolicyHash: []byte(policyHash),
 		},
 	}
@@ -465,10 +475,11 @@ func ensureProvisionalClusterDeletion(clusterName string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete member cluster")
 }
 
-func createPickAllCRPWithPolicySnapshot(crpName string, affinity *placementv1beta1.Affinity, policySnapshotName string) {
+func createPickAllCRPWithPolicySnapshot(crpName string, affinity *placementv1beta1.Affinity, policySnapshotName string, tolerations []placementv1beta1.Toleration) {
 	policy := &placementv1beta1.PlacementPolicy{
 		PlacementType: placementv1beta1.PickAllPlacementType,
 		Affinity:      affinity,
+		Tolerations:   tolerations,
 	}
 
 	// Create a CRP of the PickAll placement type.
@@ -550,12 +561,14 @@ func createPickNCRPWithPolicySnapshot(
 	affinity *placementv1beta1.Affinity,
 	topologySpreadConstraints []placementv1beta1.TopologySpreadConstraint,
 	policySnapshotName string,
+	tolerations []placementv1beta1.Toleration,
 ) {
 	policy := &placementv1beta1.PlacementPolicy{
 		PlacementType:             placementv1beta1.PickNPlacementType,
 		NumberOfClusters:          &numOfClusters,
 		Affinity:                  affinity,
 		TopologySpreadConstraints: topologySpreadConstraints,
+		Tolerations:               tolerations,
 	}
 
 	// Create a CRP of the PickAll placement type.
@@ -638,4 +651,102 @@ func updatePickNCRPWithNewAffinityAndTopologySpreadConstraints(
 		},
 	}
 	Expect(hubClient.Create(ctx, policySnapshot)).To(Succeed(), "Failed to create policy snapshot")
+}
+
+func updatePickNCRPWithTolerations(crpName string, tolerations []placementv1beta1.Toleration, oldPolicySnapshotName, newPolicySnapshotName string) {
+	// Update the CRP.
+	crp := &placementv1beta1.ClusterResourcePlacement{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
+
+	policy := crp.Spec.Policy.DeepCopy()
+	policy.Tolerations = tolerations
+	numOfClusters := policy.NumberOfClusters
+	Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
+
+	crpGeneration := crp.Generation
+
+	// Mark the old policy snapshot as inactive.
+	policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: oldPolicySnapshotName}, policySnapshot)).To(Succeed(), "Failed to get policy snapshot")
+	policySnapshot.Labels[placementv1beta1.IsLatestSnapshotLabel] = strconv.FormatBool(false)
+	Expect(hubClient.Update(ctx, policySnapshot)).To(Succeed(), "Failed to update policy snapshot")
+
+	// Create the associated policy snapshot.
+	policySnapshot = &placementv1beta1.ClusterSchedulingPolicySnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: newPolicySnapshotName,
+			Labels: map[string]string{
+				placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+				placementv1beta1.CRPTrackingLabel:      crpName,
+			},
+			Annotations: map[string]string{
+				placementv1beta1.CRPGenerationAnnotation:    strconv.FormatInt(crpGeneration, 10),
+				placementv1beta1.NumberOfClustersAnnotation: strconv.FormatInt(int64(*numOfClusters), 10),
+			},
+		},
+		Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+			Policy:     policy,
+			PolicyHash: []byte(policyHash),
+		},
+	}
+	Expect(hubClient.Create(ctx, policySnapshot)).Should(Succeed(), "Failed to create policy snapshot")
+}
+
+func buildTaints(memberClusterNames []string) []clusterv1beta1.Taint {
+	var labels map[string]string
+	taints := make([]clusterv1beta1.Taint, len(memberClusterNames))
+	for i, name := range memberClusterNames {
+		if labelsByCluster[name] != nil {
+			labels = labelsByCluster[name]
+		} else {
+			// for new member clusters added.
+			labels = map[string]string{
+				regionLabel: "north",
+				envLabel:    "prod",
+			}
+		}
+		taints[i].Key = labels[regionLabel]
+		taints[i].Value = labels[envLabel]
+		taints[i].Effect = corev1.TaintEffectNoSchedule
+	}
+	return taints
+}
+
+func buildTolerations(memberClusterNames []string) []placementv1beta1.Toleration {
+	var labels map[string]string
+	tolerations := make([]placementv1beta1.Toleration, len(memberClusterNames))
+	for i, name := range memberClusterNames {
+		if labelsByCluster[name] != nil {
+			labels = labelsByCluster[name]
+		} else {
+			// for new member clusters added.
+			labels = map[string]string{
+				regionLabel: "north",
+				envLabel:    "prod",
+			}
+		}
+		tolerations[i].Key = labels[regionLabel]
+		tolerations[i].Operator = corev1.TolerationOpEqual
+		tolerations[i].Value = labels[envLabel]
+		tolerations[i].Effect = corev1.TaintEffectNoSchedule
+	}
+	return tolerations
+}
+
+func addTaintsToMemberClusters(memberClusterNames []string, taints []clusterv1beta1.Taint) {
+	for i, clusterName := range memberClusterNames {
+		var mc clusterv1beta1.MemberCluster
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)).Should(Succeed(), "Failed to get MC")
+		mc.Spec.Taints = []clusterv1beta1.Taint{taints[i]}
+		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update MC")
+	}
+}
+
+func removeTaintsFromMemberClusters(memberClusterNames []string) {
+	for _, clusterName := range memberClusterNames {
+		var mc clusterv1beta1.MemberCluster
+		Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)).Should(Succeed(), "Failed to get MC")
+		mc.Spec.Taints = nil
+		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update MC")
+	}
 }

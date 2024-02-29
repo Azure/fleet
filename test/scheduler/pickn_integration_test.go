@@ -53,7 +53,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -114,7 +114,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -158,7 +158,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -234,7 +234,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -333,7 +333,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -434,7 +434,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -557,7 +557,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -650,7 +650,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -774,7 +774,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -870,7 +870,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1003,7 +1003,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1118,7 +1118,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1254,7 +1254,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1396,7 +1396,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1464,7 +1464,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName, nil)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
@@ -1551,7 +1551,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName, nil)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
@@ -1770,7 +1770,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinityBefore, topologySpreadConstraintsBefore, policySnapshotNameBefore)
+			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinityBefore, topologySpreadConstraintsBefore, policySnapshotNameBefore, nil)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClustersBefore))

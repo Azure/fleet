@@ -29,7 +29,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName)
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -84,10 +84,10 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName)
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 
 			// Create a new member cluster.
-			createMemberCluster(newUnhealthyMemberClusterName)
+			createMemberCluster(newUnhealthyMemberClusterName, nil)
 
 			// Mark this cluster as healthy.
 			markClusterAsHealthy(newUnhealthyMemberClusterName)
@@ -131,10 +131,10 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName)
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 
 			// Create a new member cluster.
-			createMemberCluster(newUnhealthyMemberClusterName)
+			createMemberCluster(newUnhealthyMemberClusterName, nil)
 
 			// Mark this cluster as healthy.
 			markClusterAsHealthy(newUnhealthyMemberClusterName)
@@ -175,7 +175,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
-			createPickAllCRPWithPolicySnapshot(crpName, nil, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, nil, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -253,7 +253,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -338,7 +338,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -431,7 +431,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName1)
+			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName1, nil)
 
 			// Verify that bindings have been created as expected.
 			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantTargetClusters1, zeroScoreByCluster, crpName, policySnapshotName1)
@@ -560,7 +560,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
