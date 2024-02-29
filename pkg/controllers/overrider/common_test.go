@@ -93,6 +93,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 	)
 
 	BeforeEach(func() {
+		// we cannot apply the CRO to the cluster as it will trigger the real reconcile loop.
 		cro = getClusterResourceOverride(testCROName)
 		By("Creating five clusterResourceOverrideSnapshot")
 		for i := 0; i < 5; i++ {
@@ -116,22 +117,23 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 			Expect(commonReconciler.handleOverrideDeleting(ctx, nil, cro)).Should(Succeed())
 		})
 
-		It("Should not fail if there is no snapshots yet", func() {
+		It("Should not fail if there is no snapshots associated with the cro yet", func() {
 			By("verifying that it handles no snapshot cases")
-			cro.Name = "non-existing-cro" //there is no snapshot associated with this CRO
-			// we don't persist the CRO as it will trigger the real reconcile loop so the update can only return APIServerError
+			cro.Name = "another-cro" //there is no snapshot associated with this CRO
+			// we cannot apply the CRO to the cluster as it will trigger the real reconcile loop so the update can only return APIServerError
 			Expect(errors.Is(commonReconciler.handleOverrideDeleting(context.Background(), getClusterResourceOverrideSnapshot(testCROName, 0), cro), controller.ErrAPIServerError)).Should(BeTrue())
+			// make sure that we don't delete other CRO's snapshot
 			for i := 0; i < 5; i++ {
 				snapshot := getClusterResourceOverrideSnapshot(testCROName, i)
 				Consistently(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
-				}, consistentlyDuration, interval).Should(Succeed(), "snapshot should be deleted")
+				}, consistentlyDuration, interval).Should(Succeed(), "snapshot should not be deleted")
 			}
 		})
 
 		It("Should delete all the snapshots if there is finalizer", func() {
 			By("verifying that all snapshots are deleted")
-			// we don't persist the CRO as it will trigger the real reconcile loop so the update can only return APIServerError
+			// we cannot apply the CRO to the cluster as it will trigger the real reconcile loop so the update can only return APIServerError
 			Expect(errors.Is(commonReconciler.handleOverrideDeleting(context.Background(), getClusterResourceOverrideSnapshot(testCROName, 0), cro), controller.ErrAPIServerError)).Should(BeTrue())
 			for i := 0; i < 5; i++ {
 				snapshot := getClusterResourceOverrideSnapshot(testCROName, i)
@@ -153,7 +155,7 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 				snapshot := snapshotList.Items[i]
 				newIndex, err := labels.ExtractIndex(&snapshot, fleetv1alpha1.OverrideIndexLabel)
 				Expect(err).Should(Succeed())
-				Expect(newIndex > index).Should(BeTrue())
+				Expect(newIndex == index+1).Should(BeTrue())
 				index = newIndex
 			}
 		})

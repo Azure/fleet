@@ -64,11 +64,9 @@ func (r *ClusterResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Ensure that we have the finalizer so we can delete all the related snapshots on cleanup
-	needUpdate, err := r.ensureFinalizer(ctx, &clusterOverride)
-	if needUpdate {
-		if err != nil {
-			klog.ErrorS(err, "Failed to ensure the finalizer", "clusterResourceOverride", overrideRef)
-		}
+	err := r.ensureFinalizer(ctx, &clusterOverride)
+	if err != nil {
+		klog.ErrorS(err, "Failed to ensure the finalizer", "clusterResourceOverride", overrideRef)
 		return ctrl.Result{}, err
 	}
 

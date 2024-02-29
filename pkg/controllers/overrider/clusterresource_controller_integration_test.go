@@ -61,10 +61,10 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 			fleetv1beta1.IsLatestSnapshotLabel:  "true",
 			fleetv1alpha1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
 		diff = cmp.Diff(cro.Spec, snapshot.Spec.OverrideSpec)
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), "Snapshot spec mismatch (-want, +got)")
 		By("Make sure no other snapshot is created")
 		snapshot = getClusterResourceOverrideSnapshot(testCROName, 1)
 		Consistently(func() bool {

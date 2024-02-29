@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -54,13 +55,13 @@ func (r *Reconciler) handleOverrideDeleting(ctx context.Context, overrideSnapsho
 }
 
 // ensureFinalizer ensures that the finalizer is added to the override object.
-func (r *Reconciler) ensureFinalizer(ctx context.Context, parentOverrideObj client.Object) (bool, error) {
+func (r *Reconciler) ensureFinalizer(ctx context.Context, parentOverrideObj client.Object) error {
 	if !controllerutil.ContainsFinalizer(parentOverrideObj, placementv1alpha1.OverrideFinalizer) {
 		klog.V(4).InfoS("add the override finalizer", "override", klog.KObj(parentOverrideObj))
 		controllerutil.AddFinalizer(parentOverrideObj, placementv1alpha1.OverrideFinalizer)
-		return true, controller.NewUpdateIgnoreConflictError(r.Update(ctx, parentOverrideObj, client.FieldOwner(utils.OverrideControllerFieldManagerName)))
+		return controller.NewUpdateIgnoreConflictError(r.Update(ctx, parentOverrideObj, client.FieldOwner(utils.OverrideControllerFieldManagerName)))
 	}
-	return false, nil
+	return nil
 }
 
 // listSortedOverrideSnapshots returns the override snapshots sorted by the override index. This is only needed if we can't find any latest snapshot.
@@ -97,10 +98,12 @@ func (r *Reconciler) removeExtraSnapshot(ctx context.Context, sortedSnapshotList
 	// the list is sorted by the override index, so we can just remove from the beginning
 	for i := 0; i <= len(sortedSnapshotList.Items)-limit; i++ {
 		if err := r.Client.Delete(ctx, &sortedSnapshotList.Items[i]); err != nil {
-			klog.ErrorS(err, "Failed to delete the extra override snapshot", "overrideSnapshot", klog.KObj(&sortedSnapshotList.Items[i]))
-			return controller.NewDeleteIgnoreNotFoundError(err)
+			if !apierrors.IsNotFound(err) {
+				klog.ErrorS(err, "Failed to delete the extra override snapshot", "overrideSnapshot", klog.KObj(&sortedSnapshotList.Items[i]))
+				return controller.NewAPIServerError(false, err)
+			}
 		}
-		klog.V(2).InfoS("deleted the extra override snapshot", "overrideSnapshot", klog.KObj(&sortedSnapshotList.Items[i]))
+		klog.V(2).InfoS("Deleted the extra override snapshot", "overrideSnapshot", klog.KObj(&sortedSnapshotList.Items[i]))
 	}
 	return nil
 }

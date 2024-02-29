@@ -62,11 +62,9 @@ func (r *ResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Ensure that we have the finalizer so we can delete all the related snapshots on cleanup
-	needUpdate, err := r.ensureFinalizer(ctx, &resourceOverride)
-	if needUpdate {
-		if err != nil {
-			klog.ErrorS(err, "Failed to ensure the finalizer", "resourceOverride", overrideRef)
-		}
+	err := r.ensureFinalizer(ctx, &resourceOverride)
+	if err != nil {
+		klog.ErrorS(err, "Failed to ensure the finalizer", "resourceOverride", overrideRef)
 		return ctrl.Result{}, err
 	}
 
@@ -92,7 +90,7 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 		return err
 	}
 
-	latestSnapshotIndex := 0
+	latestSnapshotIndex := -1
 	if len(snapshotList.Items) != 0 {
 		// convert the last unstructured snapshot to the typed object
 		latestSnapshot := &placementv1alpha1.ResourceOverrideSnapshot{}
