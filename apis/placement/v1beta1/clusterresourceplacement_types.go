@@ -230,30 +230,32 @@ type PreferredClusterSelector struct {
 type MetricSortOrder string
 
 const (
-	// Descending instructs Fleet to sort in descending order, that is, the clusters with lower
-	// observed values are most preferred and should have higher weights.
+	// Descending instructs Fleet to sort in descending order, that is, the clusters with higher
+	// observed values are most preferred and should have higher weights. We will use linear scaling
+	// to calculate the weight for each cluster based on the observed metric values.
 	//
 	// For example, with this order, if Fleet sorts all clusters by a specific metric where the
 	// observed values are in the range [10, 100], and a weight of 100 is specified;
 	// Fleet will assign:
 	//
-	// * a weight of 100 to the cluster with the minimum observed value (10); and
-	// * a weight of 0 to the cluster with the maximum observed value (100); and
+	// * a weight of 100 to the cluster with the maximum observed value (100); and
+	// * a weight of 0 to the cluster with the minimum observed value (10); and
 	// * a weight of 89 to the cluster with an observed value of 20.
 	//
 	//   It is calculated using the formula below:
 	//   (1 - ((20 - 10) / (100 - 10))) * 100 = 89
 	Descending MetricSortOrder = "Descending"
 
-	// Maximum instructs Fleet to sort in ascending order, that is, the clusters with higher
-	// observed values are most preferred and should have higher weights.
+	// Ascending instructs Fleet to sort in ascending order, that is, the clusters with lower
+	// observed values are most preferred and should have higher weights. We will use linear scaling
+	// to calculate the weight for each cluster based on the observed metric values.
 	//
 	// For example, with this order, if Fleet sorts all clusters by a specific metric where
 	// the observed values are in the range [10, 100], and a weight of 100 is specified;
 	// Fleet will assign:
 	//
-	// * a weight of 0 to the cluster with the minimum observed value (10); and
-	// * a weight of 100 to the cluster with the maximum observed value (100); and
+	// * a weight of 0 to the cluster with the  maximum observed value (100); and
+	// * a weight of 100 to the cluster with the minimum observed value (10); and
 	// * a weight of 11 to the cluster with an observed value of 20.
 	//
 	//   It is calculated using the formula below:
