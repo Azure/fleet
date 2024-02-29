@@ -239,10 +239,10 @@ const (
 	//
 	// * a weight of 100 to the cluster with the maximum observed value (100); and
 	// * a weight of 0 to the cluster with the minimum observed value (10); and
-	// * a weight of 89 to the cluster with an observed value of 20.
+	// * a weight of 11 to the cluster with an observed value of 20.
 	//
 	//   It is calculated using the formula below:
-	//   (1 - ((20 - 10) / (100 - 10))) * 100 = 89
+	//   ((20 - 10)) / (100 - 10)) * 100 = 11
 	Descending PropertySortOrder = "Descending"
 
 	// Ascending instructs Fleet to sort in ascending order, that is, the clusters with lower
@@ -255,10 +255,10 @@ const (
 	//
 	// * a weight of 0 to the cluster with the  maximum observed value (100); and
 	// * a weight of 100 to the cluster with the minimum observed value (10); and
-	// * a weight of 11 to the cluster with an observed value of 20.
+	// * a weight of 89 to the cluster with an observed value of 20.
 	//
 	//   It is calculated using the formula below:
-	//   ((20 - 10)) / (100 - 10)) * 100 = 11
+	//   (1 - ((20 - 10) / (100 - 10))) * 100 = 89
 	Ascending PropertySortOrder = "Ascending"
 )
 
