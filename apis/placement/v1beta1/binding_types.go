@@ -137,6 +137,13 @@ const (
 	// - "False" means not all the resources are created in the target cluster yet.
 	// - "Unknown" means it is unknown.
 	ResourceBindingApplied ResourceBindingConditionType = "Applied"
+
+	// ResourceBindingAvailable indicates the available condition of the given resources.
+	// Its condition status can be one of the following:
+	// - "True" means all the resources are available in the target cluster.
+	// - "False" means not all the resources are available in the target cluster yet.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ResourceBindingAvailable ResourceBindingConditionType = "Available"
 )
 
 // ClusterResourceBindingList is a collection of ClusterResourceBinding.
