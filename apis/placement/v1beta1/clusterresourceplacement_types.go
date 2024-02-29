@@ -8,7 +8,6 @@ package v1beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -227,14 +226,14 @@ type PreferredClusterSelector struct {
 }
 
 // +enum
-type MetricSortOrder string
+type PropertySortOrder string
 
 const (
 	// Descending instructs Fleet to sort in descending order, that is, the clusters with higher
-	// observed values are most preferred and should have higher weights. We will use linear scaling
-	// to calculate the weight for each cluster based on the observed metric values.
+	// observed values of a property are most preferred and should have higher weights. We will
+	// use linear scaling to calculate the weight for each cluster based on the observed values.
 	//
-	// For example, with this order, if Fleet sorts all clusters by a specific metric where the
+	// For example, with this order, if Fleet sorts all clusters by a specific property where the
 	// observed values are in the range [10, 100], and a weight of 100 is specified;
 	// Fleet will assign:
 	//
@@ -244,13 +243,13 @@ const (
 	//
 	//   It is calculated using the formula below:
 	//   (1 - ((20 - 10) / (100 - 10))) * 100 = 89
-	Descending MetricSortOrder = "Descending"
+	Descending PropertySortOrder = "Descending"
 
 	// Ascending instructs Fleet to sort in ascending order, that is, the clusters with lower
 	// observed values are most preferred and should have higher weights. We will use linear scaling
-	// to calculate the weight for each cluster based on the observed metric values.
+	// to calculate the weight for each cluster based on the observed values.
 	//
-	// For example, with this order, if Fleet sorts all clusters by a specific metric where
+	// For example, with this order, if Fleet sorts all clusters by a specific property where
 	// the observed values are in the range [10, 100], and a weight of 100 is specified;
 	// Fleet will assign:
 	//
@@ -260,51 +259,51 @@ const (
 	//
 	//   It is calculated using the formula below:
 	//   ((20 - 10)) / (100 - 10)) * 100 = 11
-	Ascending MetricSortOrder = "Ascending"
+	Ascending PropertySortOrder = "Ascending"
 )
 
-// MetricSelectorOperator is the operator that can be used with MetricSelectorRequirements.
+// PropertySelectorOperator is the operator that can be used with PropertySelectorRequirements.
 // +enum
-type MetricSelectorOperator string
+type PropertySelectorOperator string
 
 const (
-	// MetricSelectorGreaterThan dictates Fleet to select cluster if its observed value of a given
-	// metric is greater than the value specified in the requirement.
-	MetricSelectorGreaterThan MetricSelectorOperator = "Gt"
-	// MetricSelectorGreaterThanOrEqualTo dictates Fleet to select cluster if its observed value
-	// of a given metric is greater than or equal to the value specified in the requirement.
-	MetricSelectorGreaterThanOrEqualTo MetricSelectorOperator = "Ge"
-	// MetricSelectorEqualTo dictates Fleet to select cluster if its observed value of a given
-	// metric is equal to the values specified in the requirement.
-	MetricSelectorEqualTo MetricSelectorOperator = "Eq"
-	// MetricSelectorNotEqualTo dictates Fleet to select cluster if its observed value of a given
-	// metric is not equal to the values specified in the requirement.
-	MetricSelectorNotEqualTo MetricSelectorOperator = "Ne"
-	// MetricSelectorLessThan dictates Fleet to select cluster if its observed value of a given
-	// metric is less than the value specified in the requirement.
-	MetricSelectorLessThan MetricSelectorOperator = "Lt"
-	// MetricSelectorLessThanOrEqualTo dictates Fleet to select cluster if its observed value of a
-	// given metric is less than or equal to the value specified in the requirement.
-	MetricSelectorLessThanOrEqualTo MetricSelectorOperator = "Le"
+	// PropertySelectorGreaterThan dictates Fleet to select cluster if its observed value of a given
+	// property is greater than the value specified in the requirement.
+	PropertySelectorGreaterThan PropertySelectorOperator = "Gt"
+	// PropertySelectorGreaterThanOrEqualTo dictates Fleet to select cluster if its observed value
+	// of a given property is greater than or equal to the value specified in the requirement.
+	PropertySelectorGreaterThanOrEqualTo PropertySelectorOperator = "Ge"
+	// PropertySelectorEqualTo dictates Fleet to select cluster if its observed value of a given
+	// property is equal to the values specified in the requirement.
+	PropertySelectorEqualTo PropertySelectorOperator = "Eq"
+	// PropertySelectorNotEqualTo dictates Fleet to select cluster if its observed value of a given
+	// property is not equal to the values specified in the requirement.
+	PropertySelectorNotEqualTo PropertySelectorOperator = "Ne"
+	// PropertySelectorLessThan dictates Fleet to select cluster if its observed value of a given
+	// property is less than the value specified in the requirement.
+	PropertySelectorLessThan PropertySelectorOperator = "Lt"
+	// PropertySelectorLessThanOrEqualTo dictates Fleet to select cluster if its observed value of a
+	// given property is less than or equal to the value specified in the requirement.
+	PropertySelectorLessThanOrEqualTo PropertySelectorOperator = "Le"
 )
 
-// MetricSelectorRequirement is a specific metric requirement when picking clusters for
+// PropertySelectorRequirement is a specific property requirement when picking clusters for
 // resource placement.
-type MetricSelectorRequirement struct {
-	// Name is the name of the metric; it should be a Kubernetes label name.
+type PropertySelectorRequirement struct {
+	// Name is the name of the property; it should be a Kubernetes label name.
 	// +required
 	Name string `json:"name"`
 
 	// Operator specifies the relationship between a cluster's observed value of the specified
-	// metric and the values given in the requirement.
+	// property and the values given in the requirement.
 	// +required
-	Operator MetricSelectorOperator `json:"operator"`
+	Operator PropertySelectorOperator `json:"operator"`
 
-	// Values are a list of values of the specified metric which Fleet will compare against
+	// Values are a list of values of the specified property which Fleet will compare against
 	// the observed values of individual member clusters in accordance with the given
 	// operator.
 	//
-	// Each value should be a Kubernetes quantity. For more information, see
+	// At this moment, each value should be a Kubernetes quantity. For more information, see
 	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
 	//
 	// If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
@@ -313,59 +312,53 @@ type MetricSelectorRequirement struct {
 	//
 	// +kubebuilder:validation:MaxItems=1
 	// +required
-	Values []resource.Quantity `json:"values"`
+	Values []string `json:"values"`
 }
 
-// MetricSelector helps user specify metric requirements when picking clusters for resource
+// PropertySelector helps user specify property requirements when picking clusters for resource
 // placement.
-type MetricSelector struct {
-	// MatchExpressions is an array of MetricSelectorRequirements. The requirements are AND'd.
+type PropertySelector struct {
+	// MatchExpressions is an array of PropertySelectorRequirements. The requirements are AND'd.
 	// +required
-	MatchExpressions []MetricSelectorRequirement `json:"matchMetrics"`
+	MatchExpressions []PropertySelectorRequirement `json:"matchExpressions"`
 }
 
-type MetricSortPreference struct {
-	// Name is the name of the metric which Fleet sorts clusters by.
+type PropertySortPreference struct {
+	// Name is the name of the property which Fleet sorts clusters by.
 	// +required
 	Name string `json:"name"`
 
 	// SortOrder explains how Fleet should perform the sort; specifically, whether Fleet should
 	// sort in ascending or descending order.
 	// +required
-	SortOrder MetricSortOrder `json:"sortOrder"`
-}
-
-type MetricSorter struct {
-	// SortByMetric is a MetricSortPreference.
-	// +required
-	SortByMetric *MetricSortPreference `json:"sortByMetric"`
+	SortOrder PropertySortOrder `json:"sortOrder"`
 }
 
 type ClusterSelectorTerm struct {
 	// LabelSelector is a label query over all the joined member clusters. Clusters matching
 	// the query are selected.
 	//
-	// If you specify both label and metric selectors in the same term, the results are AND'd.
+	// If you specify both label and property selectors in the same term, the results are AND'd.
 	// +optional
-	LabelSelector *metav1.LabelSelector `json:"labelSelector"`
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 
-	// MetricSelector is a metric query over all joined member clusters. Clusters matching
+	// PropertySelector is a property query over all joined member clusters. Clusters matching
 	// the query are selected.
 	//
-	// If you specify both label and metric selectors in the same term, the results are AND'd.
+	// If you specify both label and property selectors in the same term, the results are AND'd.
 	//
-	// At this moment, MetricSelector can only be used with
+	// At this moment, PropertySelector can only be used with
 	// `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
 	// +optional
-	MetricSelector *MetricSelector `json:"metricSelector"`
+	PropertySelector *PropertySelector `json:"propertySelector,omitempty"`
 
-	// MetricSorter sorts all matching clusters by a specific metric and assigns different weights
-	// to each cluster based on their observed metric values.
+	// PropertySorter sorts all matching clusters by a specific property and assigns different weights
+	// to each cluster based on their observed property values.
 	//
-	// At this moment, MetricSorter can only be used with
+	// At this moment, PropertySorter can only be used with
 	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
 	// +optional
-	MetricSorter *MetricSorter `json:"metricSorter"`
+	PropertySorter *PropertySortPreference `json:"propertySorter,omitempty"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.

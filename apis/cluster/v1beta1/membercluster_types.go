@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -56,19 +55,21 @@ type MemberClusterSpec struct {
 	Taints []Taint `json:"taints,omitempty"`
 }
 
-// MetricName is the name of a non-resource metric; it should be a Kubernetes label name.
-type MetricName string
+// PropertyName is the name of a cluster property; it should be a Kubernetes label name.
+type PropertyName string
 
-// MetricValue is the value of a non-resource metric;
-type MetricValue struct {
-	// Value is the value of the non-resource metric, which is a Kubernetes quantity.
+// PropertyValue is the value of a cluster property.
+type PropertyValue struct {
+	// Value is the value of the cluster property.
+	//
+	// Currently, it should be a valid Kubernetes quantity.
 	// For more information, see
 	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
 	//
 	// +required
-	Value resource.Quantity `json:"value"`
+	Value string `json:"value"`
 
-	// ObservationTime is when the non-resource metric is observed.
+	// ObservationTime is when the cluster property is observed.
 	// +required
 	ObservationTime metav1.Time `json:"observationTime"`
 }
@@ -84,9 +85,9 @@ type MemberClusterStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions"`
 
-	// Metrics is an array of non-resource metrics observed for the member cluster.
+	// Properties is an array of properties observed for the member cluster.
 	// +optional
-	Metrics map[MetricName]MetricValue `json:"metrics,omitempty"`
+	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
 
 	// The current observed resource usage of the member cluster. It is copied from the corresponding InternalMemberCluster object.
 	// +optional

@@ -286,30 +286,26 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              metrics:
+              properties:
                 additionalProperties:
-                  description: MetricValue is the value of a non-resource metric;
+                  description: PropertyValue is the value of a cluster property.
                   properties:
                     observationTime:
-                      description: ObservationTime is when the non-resource metric
-                        is observed.
+                      description: ObservationTime is when the cluster property is
+                        observed.
                       format: date-time
                       type: string
                     value:
-                      anyOf:
-                      - type: integer
-                      - type: string
-                      description: Value is the value of the non-resource metric,
-                        which is a Kubernetes quantity. For more information, see
-                        https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
-                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                      x-kubernetes-int-or-string: true
+                      description: "Value is the value of the cluster property. \n
+                        Currently, it should be a valid Kubernetes quantity. For more
+                        information, see https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity."
+                      type: string
                   required:
                   - observationTime
                   - value
                   type: object
-                description: Metrics is an array of non-resource metrics observed
-                  for the member cluster.
+                description: Properties is an array of properties observed for the
+                  member cluster.
                 type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
