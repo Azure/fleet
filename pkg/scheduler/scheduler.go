@@ -88,7 +88,7 @@ func NewScheduler(
 
 // ScheduleOnce performs scheduling for one single item pulled from the work queue.
 // it returns true if the context is not canceled, false otherwise.
-func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
+func (s *Scheduler) scheduleOnce(ctx context.Context) {
 	// Retrieve the next item (name of a CRP) from the work queue.
 	//
 	// Note that this will block if no item is available.
@@ -96,7 +96,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 	if closed {
 		// End the run immediately if the work queue has been closed.
 		klog.InfoS("Work queue has been closed")
-		return false
+		return
 	}
 
 	defer func() {
@@ -106,6 +106,10 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 		// during the call, it will be added to the queue after this call returns.
 		s.queue.Done(crpName)
 	}()
+
+	// keep track of the number of active scheduling loop
+	metrics.SchedulerActiveWorkers.WithLabelValues().Add(1)
+	defer metrics.SchedulerActiveWorkers.WithLabelValues().Add(-1)
 
 	startTime := time.Now()
 	crpRef := klog.KRef("", string(crpName))
@@ -131,12 +135,12 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 			// has been marked for deletion but does not have the scheduler cleanup finalizer to
 			// the work queue. Such CRPs needs no further processing any way though, as the absence
 			// of the cleanup finalizer implies that bindings derived from the CRP are no longer present.
-			return true
+			return
 		}
 
 		// Requeue for later processing.
 		s.queue.AddRateLimited(crpName)
-		return true
+		return
 	}
 
 	// Check if the CRP has been marked for deletion, and if it has the scheduler cleanup finalizer.
@@ -146,7 +150,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 				klog.ErrorS(err, "Failed to clean up all bindings for cluster resource placement", "clusterResourcePlacement", crpRef)
 				// Requeue for later processing.
 				s.queue.AddRateLimited(crpName)
-				return true
+				return
 			}
 		}
 		// The CRP has been marked for deletion but no longer has the scheduler cleanup finalizer; no
@@ -154,7 +158,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 
 		// Untrack the key from the rate limiter.
 		s.queue.Forget(crpName)
-		return true
+		return
 	}
 
 	// The CRP has not been marked for deletion; run the scheduling cycle for it.
@@ -168,7 +172,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 
 		// Untrack the key for quicker reprocessing.
 		s.queue.Forget(crpName)
-		return true
+		return
 	}
 
 	// Add the scheduler cleanup finalizer to the CRP (if it does not have one yet).
@@ -176,7 +180,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 		klog.ErrorS(err, "Failed to add scheduler cleanup finalizer", "clusterResourcePlacement", crpRef)
 		// Requeue for later processing.
 		s.queue.AddRateLimited(crpName)
-		return true
+		return
 	}
 
 	// Run the scheduling cycle.
@@ -190,7 +194,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 		// Requeue for later processing.
 		s.queue.AddRateLimited(crpName)
 		observeSchedulingCycleMetrics(cycleStartTime, true, false)
-		return true
+		return
 	}
 
 	// Requeue if the scheduling cycle suggests so.
@@ -198,7 +202,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 		if res.RequeueAfter > 0 {
 			s.queue.AddAfter(crpName, res.RequeueAfter)
 			observeSchedulingCycleMetrics(cycleStartTime, false, true)
-			return true
+			return
 		}
 		// Untrack the key from the rate limiter.
 		s.queue.Forget(crpName)
@@ -214,7 +218,7 @@ func (s *Scheduler) scheduleOnce(ctx context.Context) bool {
 		observeSchedulingCycleMetrics(cycleStartTime, false, true)
 	}
 	observeSchedulingCycleMetrics(cycleStartTime, false, false)
-	return true
+	return
 }
 
 // Run starts the scheduler.
@@ -235,9 +239,14 @@ func (s *Scheduler) Run(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			defer utilruntime.HandleCrash()
-			// Run scheduleOnce forever.
-			//revive:disable:empty-block
-			for s.scheduleOnce(ctx) {
+			// Run scheduleOnce forever until context is cancelled
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					s.scheduleOnce(ctx)
+				}
 			}
 		}()
 	}
