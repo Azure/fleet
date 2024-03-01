@@ -8,6 +8,8 @@ Licensed under the MIT license.
 package metricprovider
 
 import (
+	"context"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
@@ -17,13 +19,11 @@ import (
 // MetricCollectionResponse is returned by a Fleet metric provider to report metrics and
 // metric collection status.
 type MetricCollectionResponse struct {
-	// Metrics is an array of non-resource metrics and their values. The key should be the
-	// name of the metric, which is a Kubernetes label name; the value is the metric data.
-	Metrics map[string]float64
+	// Properties is an array of non-resource metrics and their values. The key should be the
+	// name of the property, which is a Kubernetes label name; the value is the property data.
+	Properties map[string]clusterv1beta1.PropertyValue
 	// Resources is a group of resources, described by their allocatable capacity and
 	// available capacity.
-	//
-	// TO-DO (chenyu1): update the ResourceUsage API to include the right set of capacities.
 	Resources clusterv1beta1.ResourceUsage
 	// Conditions is an array of conditions that explains the metric collection status.
 	Conditions []metav1.Condition
@@ -32,8 +32,13 @@ type MetricCollectionResponse struct {
 // MetricProvider is the interface that every metric provider must implement.
 type MetricProvider interface {
 	// Collect is called periodically by the Fleet member agent to collect metrics.
-	Collect() MetricCollectionResponse
+	//
+	// Note that this call should complete promptly. Fleet member agent will cancel the
+	// context if the call does not complete in time.
+	Collect(ctx context.Context) MetricCollectionResponse
 	// Start is called when the Fleet member agent starts up to initialize the metric provider.
 	// This call should not block.
-	Start(config *rest.Config) error
+	//
+	// Note that Fleet member agent will cancel the context when it exits.
+	Start(ctx context.Context, config *rest.Config) error
 }
