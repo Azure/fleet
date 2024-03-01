@@ -7,81 +7,48 @@ package clusteraffinity
 
 import (
 	"context"
-	"fmt"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/scheduler/framework"
 )
 
-const (
-	requiredAffinityViolationReasonTemplate = "none of the nonempty required cluster affinity term (total number: %d) is matched"
-)
-
-// PreFilter allows the plugin to connect to the PreFilter extension point in the scheduling
-// framework.
-//
-// Note that the scheduler will not run this extension point in parallel.
-func (p *Plugin) PreFilter(
-	_ context.Context,
-	state framework.CycleStatePluginReadWriter,
-	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
-) (status *framework.Status) {
-	noClusterAffinity := policy.Spec.Policy == nil ||
-		policy.Spec.Policy.Affinity == nil ||
-		policy.Spec.Policy.Affinity.ClusterAffinity == nil
-
-	if noClusterAffinity {
-		// There are no cluster affinity terms filter to enforce; skip.
-		//
-		// Note that this will lead the scheduler to skip this plugin in the next stage
-		// (Filter).
-		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no cluster affinity term is present")
-	}
-
-	// Prepare some common states for future use. This helps avoid the cost of repeatedly
-	// calculating the same states at each extension point.
-	ps, err := preparePluginState(policy)
-	if err != nil {
-		return framework.FromError(err, p.Name(), "failed to prepare plugin state")
-	}
-
-	// Save the plugin state.
-	state.Write(framework.StateKey(p.Name()), ps)
-
-	if len(ps.requiredAffinityTerms) == 0 {
-		// There are no required affinity terms to enforce; skip.
-		//
-		// Note that this will lead the scheduler to skip this plugin in the next stage
-		// (Filter).
-		return framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity term is present or all of the terms are empty")
-	}
-
-	// All done.
-	return nil
-}
-
 // Filter allows the plugin to connect to the Filter extension point in the scheduling framework.
 func (p *Plugin) Filter(
 	_ context.Context,
-	state framework.CycleStatePluginReadWriter,
-	_ *placementv1beta1.ClusterSchedulingPolicySnapshot,
+	_ framework.CycleStatePluginReadWriter,
+	ps *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
-	// Read the plugin state.
-	ps, err := p.readPluginState(state)
-	if err != nil {
-		// This branch should never be reached, as for any policy with present required cluster affinity terms, a common
-		// plugin state has been set at the PreFilter extension point.
-		return framework.FromError(err, p.Name(), "failed to read plugin state")
-	}
-
-	if ps.requiredAffinityTerms.Matches(cluster) {
-		// all done.
+	noRequiredClusterAffinityTerms := (ps.Spec.Policy == nil ||
+		ps.Spec.Policy.Affinity == nil ||
+		ps.Spec.Policy.Affinity.ClusterAffinity == nil ||
+		ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil ||
+		len(ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) == 0)
+	if noRequiredClusterAffinityTerms {
+		// There are no required cluster affinity terms to enforce; consider all cluster
+		// eligible for resource placement in the scope of this plugin.
 		return nil
 	}
-	// If the requiredAffinityTerms is 0, the prefilter should skip the filter state.
-	// When it reaches to this step, it means the cluster does not match any requiredAffinityTerm.
-	reason := fmt.Sprintf(requiredAffinityViolationReasonTemplate, len(ps.requiredAffinityTerms))
-	return framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), reason)
+
+	for idx := range ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms {
+		t := &ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[idx]
+		r := clusterRequirement(*t)
+		isMatched, err := r.Matches(cluster)
+		if err != nil {
+			// An error has occurred when matching the cluster against a required affinity term.
+			return framework.FromError(err, p.Name(), "failed to match the cluster against a required affinity term")
+		}
+		if isMatched {
+			// The cluster matches with the required affinity term; mark it as eligible for
+			// resource placement.
+			//
+			// Note that when there are mulitiple cluster selector terms, the results are OR'd.
+			return nil
+		}
+	}
+
+	// The cluster does not match any of the required affinity terms; consider it ineligible for resource
+	// placement in the scope of this plugin.
+	return framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms")
 }

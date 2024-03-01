@@ -116,7 +116,6 @@ func buildSchedulerFramework(ctrlMgr manager.Manager, clusterEligibilityChecker 
 	topologyspreadconstraintsPlugin := topologyspreadconstraints.New()
 	profile.
 		// Register cluster affinity plugin.
-		WithPreFilterPlugin(&clusterAffinityPlugin).
 		WithFilterPlugin(&clusterAffinityPlugin).
 		WithPreScorePlugin(&clusterAffinityPlugin).
 		WithScorePlugin(&clusterAffinityPlugin).

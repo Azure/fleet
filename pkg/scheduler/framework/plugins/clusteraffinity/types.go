@@ -6,6 +6,12 @@ Licensed under the MIT license.
 package clusteraffinity
 
 import (
+	"fmt"
+	"math"
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -13,94 +19,285 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-// affinityTerm is a processed version of ClusterSelectorTerm.
-type affinityTerm struct {
-	selector labels.Selector
+const (
+	// resourcePropertyNamePrefix is the prefix (also known as the subdomain) of the label name
+	// associated with all resource properties.
+	resourcePropertyNamePrefix = "resources.kubernetes-fleet.io/"
+
+	// Below are a list of supported capacity types.
+	totalCapacityName       = "total"
+	allocatableCapacityName = "allocatable"
+	availableCapacityName   = "available"
+)
+
+// clusterRequirement is a type alias for ClusterSelectorTerm in the API, which allows
+// easy method extension.
+type clusterRequirement placementv1beta1.ClusterSelectorTerm
+
+// retrieveResourcePropertyValueFrom retrieves a resource property value from a member cluster.
+//
+// Note that it will return nil if the property is not available for the cluster;
+// the zero value of resource.Quantity, i.e., resource.Quantity{}, is a valid
+// quantity.
+func retrieveResourcePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name string) (*resource.Quantity, error) {
+	// Split the name into two segments, the capacity type, and the resource name.
+	//
+	// As a pre-defined rule, all the resource properties are assigned a label name of the format
+	// `[PREFIX]/[CAPACITY_TYPE]-[RESOURCE_NAME]`; for example, the allocatable CPU capacity of a
+	// a cluster has the label name, `resources.kubernetes-fleet.io/allocatable-cpu`.
+	segs := strings.Split(name, "-")
+	if len(segs) != 2 || len(segs[0]) == 0 || len(segs[1]) == 0 {
+		return nil, fmt.Errorf("invalid resource property name: %s", name)
+	}
+	cn, tn := segs[0], segs[1]
+
+	// Query the resource usage data.
+	var q resource.Quantity
+	var found bool
+	switch cn {
+	case totalCapacityName:
+		// The property concerns the total capacity of a resource.
+		q, found = cluster.Status.ResourceUsage.Capacity[corev1.ResourceName(tn)]
+	case allocatableCapacityName:
+		// The property concerns the allocatable capacity of a resource.
+		q, found = cluster.Status.ResourceUsage.Allocatable[corev1.ResourceName(tn)]
+	case availableCapacityName:
+		// The property concerns the available capacity of a resource.
+		q, found = cluster.Status.ResourceUsage.Available[corev1.ResourceName(tn)]
+	default:
+		// The property concerns a capacity type that cannot be recognized.
+		return nil, fmt.Errorf("invalid capacity type %s in resource property name %s", cn, name)
+	}
+
+	if !found {
+		// The property concerns a resource that is not present in the resource usage data.
+		//
+		// It cound be that the resource is not available in the cluster; consequently Fleet
+		// does not consider this as an error.
+		return nil, nil
+	}
+	return &q, nil
 }
 
-// Matches returns true if the cluster matches the label selector.
-func (at *affinityTerm) Matches(cluster *clusterv1beta1.MemberCluster) bool {
-	return at.selector.Matches(labels.Set(cluster.Labels))
+// retrievePropertyValueFrom retrieves a property value, resource or non-resource,
+// from a member cluster.
+//
+// Note that it will return nil if the property is not available for the cluster;
+// the zero value of resource.Quantity, i.e., resource.Quantity{}, is a valid
+// quantity.
+func retrievePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name string) (*resource.Quantity, error) {
+	// Check if the expression concerns a resource property.
+	var q *resource.Quantity
+	var err error
+	if strings.Contains(name, resourcePropertyNamePrefix) {
+		name, _ := strings.CutPrefix(name, resourcePropertyNamePrefix)
+
+		// Retrieve the property value from the cluster resource usage data.
+		q, err = retrieveResourcePropertyValueFrom(cluster, name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve resource property value for %s from cluster %s: %w", name, cluster.Name, err)
+		}
+	} else {
+		v, found := cluster.Status.Properties[clusterv1beta1.PropertyName(name)]
+		if !found {
+			// The property is not available for the cluster.
+			//
+			// Note that this is not considered an error.
+			return nil, nil
+		}
+		qv, err := resource.ParseQuantity(v.Value)
+		if err != nil {
+			return nil, fmt.Errorf("value %s of property %s from cluster %s is not a valid quantity: %w", v.Value, name, cluster.Name, err)
+		}
+		q = &qv
+	}
+	return q, nil
 }
 
-// AffinityTerms is a "processed" representation of []ClusterSelectorTerms.
-// The terms are `ORed`.
-type AffinityTerms []affinityTerm
-
-// Matches returns true if the cluster matches one of the terms.
-func (at AffinityTerms) Matches(cluster *clusterv1beta1.MemberCluster) bool {
-	for _, term := range at {
-		if term.Matches(cluster) {
-			return true
+// Matches checks if the cluster matches a cluster requirement.
+//
+// This is an extended method for the ClusterSelectorTerm API.
+func (c *clusterRequirement) Matches(cluster *clusterv1beta1.MemberCluster) (bool, error) {
+	// Match the cluster against the label selector.
+	if c.LabelSelector != nil {
+		ls, err := metav1.LabelSelectorAsSelector(c.LabelSelector)
+		if err != nil {
+			return false, fmt.Errorf("failed to parse label selector: %w", err)
+		}
+		if !ls.Matches(labels.Set(cluster.Labels)) {
+			// The cluster does not match with the label selector; it is ineligible for resource
+			// placement.
+			return false, nil
 		}
 	}
-	return false
-}
 
-// preferredAffinityTerm is a "processed" representation of PreferredClusterSelector.
-type preferredAffinityTerm struct {
-	affinityTerm
-	weight int32
-}
+	// Match the cluster against the property selector.
+	if c.PropertySelector == nil || len(c.PropertySelector.MatchExpressions) == 0 {
+		// The term does not feature a property selector; no check is needed.
+		return true, nil
+	}
 
-// PreferredAffinityTerms is a "processed" representation of []PreferredClusterSelector.
-type PreferredAffinityTerms []preferredAffinityTerm
+	for _, exp := range c.PropertySelector.MatchExpressions {
+		// Compare the observed value with the expected one using the specified operator.
+		q, err := retrievePropertyValueFrom(cluster, exp.Name)
+		if err != nil {
+			return false, err
+		}
+		if q == nil {
+			// The property is not available for the cluster.
+			return false, nil
+		}
 
-// Score returns a score for a cluster: the sum of the weights of the terms that match the cluster.
-func (t PreferredAffinityTerms) Score(cluster *clusterv1beta1.MemberCluster) int32 {
-	var score int32
-	for _, term := range t {
-		if term.affinityTerm.Matches(cluster) {
-			score += term.weight
+		// With the current set of operators, only one expected value can be specified.
+		if len(exp.Values) != 1 {
+			// The property selector expression is invalid, as there are too many expected
+			// values.
+			//
+			// Normally this should never happen.
+			return false, fmt.Errorf("more than one value in the property selector expression")
+		}
+		expectedQ, err := resource.ParseQuantity(exp.Values[0])
+		if err != nil {
+			return false, fmt.Errorf("value specified in property selector %s is not a valid resource quantity: %w", exp.Values[0], err)
+		}
+
+		switch exp.Operator {
+		case placementv1beta1.PropertySelectorEqualTo:
+			if !q.Equal(expectedQ) {
+				// The observed value is not equal to the expected one (equality is expected)
+				return false, nil
+			}
+		case placementv1beta1.PropertySelectorNotEqualTo:
+			if q.Equal(expectedQ) {
+				// The observed value is equal to the expected one (inequality is expected).
+				return false, nil
+			}
+		case placementv1beta1.PropertySelectorGreaterThan:
+			if q.Cmp(expectedQ) <= 0 {
+				// The observed value is less than or equal to the expected one (expected to be
+				// greater than the value).
+				return false, nil
+			}
+		case placementv1beta1.PropertySelectorGreaterThanOrEqualTo:
+			if q.Cmp(expectedQ) < 0 {
+				// The observed value is less than the expected one (expected to be greater
+				// than or equal to the value).
+				return false, nil
+			}
+		case placementv1beta1.PropertySelectorLessThan:
+			if q.Cmp(expectedQ) >= 0 {
+				// The observed value is greater than or equal to the expected one (expected to be
+				// less than the value).
+				return false, nil
+			}
+		case placementv1beta1.PropertySelectorLessThanOrEqualTo:
+			if q.Cmp(expectedQ) > 0 {
+				// The observed value is greater than the expected one (expected to be less than
+				// or equal to the value).
+				return false, nil
+			}
+		default:
+			// The operator is not recognized; normally this should never happen.
+			return false, fmt.Errorf("invalid operator: %s", exp.Operator)
 		}
 	}
-	return score
+	// The cluster matches the property selector.
+	return true, nil
 }
 
-func newAffinityTerm(term *placementv1beta1.ClusterSelectorTerm) (*affinityTerm, error) {
-	selector, err := metav1.LabelSelectorAsSelector(term.LabelSelector)
+// clusterPreference is a type alias for PreferredClusterSelector in the API, which allows
+// easy method extension.
+type clusterPreference placementv1beta1.PreferredClusterSelector
+
+// interpolateWeightFor interpolates weight based on the observed value of a property.
+func interpolateWeightFor(cluster *clusterv1beta1.MemberCluster, property string, sortOrder placementv1beta1.PropertySortOrder, weight int32, state *pluginState) (int32, error) {
+	q, err := retrievePropertyValueFrom(cluster, property)
 	if err != nil {
-		return nil, err
+		return 0, fmt.Errorf("failed to perform weight interpolation based on %s for cluster %s: %w", property, cluster.Name, err)
 	}
-	return &affinityTerm{selector: selector}, nil
+	if q == nil {
+		// The property is not available for the cluster.
+		return 0, nil
+	}
+
+	// Read the pre-prepared min/max values from the state, calculated in the PreScore stage.
+	mm, ok := state.minMaxValuesByProperty[property]
+	if !ok {
+		return 0, fmt.Errorf("failed to look up extremums for property %s, no state is prepared", property)
+	}
+	if mm.min == nil || mm.max == nil {
+		// The extremums are not available; this can happen when none of the clusters support
+		// the property.
+		//
+		// Normally this will never occur as the check before has guaranteed that at least
+		// observation has been made.
+		return 0, fmt.Errorf("extremums for property %s are not available, yet a reading can be found from cluster %s", property, cluster.Name)
+	}
+	minQ, maxQ := mm.min, mm.max
+
+	// Cast the quantities as floats to allow ratio estimation.
+	//
+	// This conversion will incur precision loss, though in most cases such loss has very limited
+	// impact.
+	f := q.AsApproximateFloat64()
+	minF := minQ.AsApproximateFloat64()
+	maxF := maxQ.AsApproximateFloat64()
+
+	// Do a sanity check to ensure correctness.
+	//
+	// Normally this check would never fail.
+	isInvalid := (math.IsInf(minF, 0) ||
+		math.IsInf(maxF, 0) ||
+		minF > maxF ||
+		f < minF ||
+		f > maxF)
+	if isInvalid {
+		return 0, fmt.Errorf("cannot interpolate weight, observed value %v, observed min %v, observed max %v", f, minF, maxF)
+	}
+
+	switch sortOrder {
+	case placementv1beta1.Descending:
+		w := ((f - minF) / (maxF - minF)) * float64(weight)
+		// Round the value.
+		return int32(math.Round(w)), nil
+	case placementv1beta1.Ascending:
+		w := (1 - (f-minF)/(maxF-minF)) * float64(weight)
+		// Round the value.
+		return int32(math.Round(w)), nil
+	default:
+		// An invalid sort order is present. Normally this should never occur.
+		return 0, fmt.Errorf("cannot interpolate weight as sort order %s is invalid", sortOrder)
+	}
 }
 
-// NewAffinityTerms returns the list of processed affinity terms.
-func NewAffinityTerms(terms []placementv1beta1.ClusterSelectorTerm) (AffinityTerms, error) {
-	res := make([]affinityTerm, 0, len(terms))
-	for i := range terms {
-		// skipping for empty terms
-		if isEmptyClusterSelectorTerm(terms[i]) {
-			continue
-		}
-		t, err := newAffinityTerm(&terms[i])
+// Scores calculates the score of a cluster based on the cluster preference.
+//
+// This is an extended method for the PreferredClusterSelector API.
+func (c *clusterPreference) Scores(state *pluginState, cluster *clusterv1beta1.MemberCluster) (int32, error) {
+	matched := true
+	if c.Preference.LabelSelector != nil {
+		ls, err := metav1.LabelSelectorAsSelector(c.Preference.LabelSelector)
 		if err != nil {
-			// We get here if the label selector failed to process
-			return nil, err
+			return 0, fmt.Errorf("failed to parse label selector: %w", err)
 		}
-		res = append(res, *t)
+		matched = ls.Matches(labels.Set(cluster.Labels))
 	}
-	return res, nil
-}
 
-// NewPreferredAffinityTerms returns the list of processed preferred affinity terms.
-func NewPreferredAffinityTerms(terms []placementv1beta1.PreferredClusterSelector) (PreferredAffinityTerms, error) {
-	res := make([]preferredAffinityTerm, 0, len(terms))
-	for i, term := range terms {
-		// skipping for weight == 0 or empty terms
-		if term.Weight == 0 || isEmptyClusterSelectorTerm(term.Preference) {
-			continue
-		}
-		t, err := newAffinityTerm(&term.Preference)
+	switch {
+	case c.Preference.PropertySorter == nil && matched:
+		// No sorting is needed; if the cluster can be selected by the label selector,
+		// assign the full weight.
+		return c.Weight, nil
+	case !matched:
+		// Regardless of whether sorting is needed; if the cluster cannot be selected
+		// by the label selector, it will receive no weight.
+		return 0, nil
+	default:
+		// Interpolate the weight based on the sorting result.
+		w, err := interpolateWeightFor(cluster, c.Preference.PropertySorter.Name, c.Preference.PropertySorter.SortOrder, c.Weight, state)
 		if err != nil {
-			// We get here if the label selector failed to process
-			return nil, err
+			return 0, err
 		}
-		res = append(res, preferredAffinityTerm{affinityTerm: *t, weight: terms[i].Weight})
+		return w, nil
 	}
-	return res, nil
-}
-
-func isEmptyClusterSelectorTerm(term placementv1beta1.ClusterSelectorTerm) bool {
-	return len(term.LabelSelector.MatchLabels) == 0 && len(term.LabelSelector.MatchExpressions) == 0
 }

@@ -6,450 +6,1197 @@ Licensed under the MIT license.
 package clusteraffinity
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-const (
-	clusterName = "cluster-1"
-)
-
-func TestMatches(t *testing.T) {
-	tests := []struct {
-		name    string
-		term    *affinityTerm
-		cluster *clusterv1beta1.MemberCluster
-		want    bool
+// TestRetrieveResourcePropertyValueFrom tests the retrieveResourcePropertyValueFrom function.
+func TestRetrieveResourcePropertyValueFrom(t *testing.T) {
+	testCases := []struct {
+		name             string
+		cluster          *clusterv1beta1.MemberCluster
+		propertyName     string
+		wantQuantity     *resource.Quantity
+		wantErrStrPrefix string
 	}{
 		{
-			name: "matched cluster",
-			term: &affinityTerm{
-				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-			},
-			cluster: &clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-west",
-					},
-				},
-			},
-			want: true,
+			name:             "invalid property name (incorrect seg count, too little)",
+			propertyName:     "total",
+			wantErrStrPrefix: "invalid resource property name",
 		},
 		{
-			name: "label value mismatched cluster",
-			term: &affinityTerm{
-				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-			},
-			cluster: &clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-east",
-					},
-				},
-			},
-			want: false,
+			name:             "invalid property name (incorrect seg count, too many)",
+			propertyName:     "total-super-cpu",
+			wantErrStrPrefix: "invalid resource property name",
 		},
 		{
-			name: "empty terms which does not restrict the selection space",
-			term: &affinityTerm{
-				selector: labels.SelectorFromSet(map[string]string{}),
-			},
-			cluster: &clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-west",
-					},
-				},
-			},
-			want: true,
+			name:             "invalid property name (no capacity type)",
+			propertyName:     "-cpu",
+			wantErrStrPrefix: "invalid resource property name",
 		},
 		{
-			name: "label does not exist in cluster",
-			term: &affinityTerm{
-				selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-			},
+			name:             "invalid property name (no resource type)",
+			propertyName:     "total-",
+			wantErrStrPrefix: "invalid resource property name",
+		},
+		{
+			name:         "query total CPU capacity",
+			propertyName: "total-cpu",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"regions": "us-west",
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							"cpu": resource.MustParse("10"),
+						},
 					},
 				},
 			},
-			want: false,
+			wantQuantity: ptr.To(resource.MustParse("10")),
+		},
+		{
+			name:         "query allocatable memory capacity",
+			propertyName: "allocatable-memory",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("100Gi"),
+						},
+					},
+				},
+			},
+			wantQuantity: ptr.To(resource.MustParse("100Gi")),
+		},
+		{
+			// GPU is not a currently supported resource type.
+			name:         "query available GPU capacity",
+			propertyName: "available-gpu",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							"gpu": resource.MustParse("2"),
+						},
+					},
+				},
+			},
+			wantQuantity: ptr.To(resource.MustParse("2")),
+		},
+		{
+			name:             "query an non-existent capacity type",
+			propertyName:     "capacity-cpu",
+			wantErrStrPrefix: "invalid capacity type",
+		},
+		{
+			name:         "query an non-existent resource type",
+			propertyName: "total-foo",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Capacity: corev1.ResourceList{
+							"cpu": resource.MustParse("2"),
+						},
+					},
+				},
+			},
+			wantQuantity: nil,
+		},
+		{
+			// GPU is not a currently supported resource type.
+			name:         "query available GPU capacity (zero value)",
+			propertyName: "available-gpu",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							"gpu": resource.MustParse("0"),
+						},
+					},
+				},
+			},
+			wantQuantity: &resource.Quantity{},
 		},
 	}
-	for _, tc := range tests {
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.term.Matches(tc.cluster)
-			if got != tc.want {
-				t.Fatalf("Matches()=%v, want %v", got, tc.want)
+			q, err := retrieveResourcePropertyValueFrom(tc.cluster, tc.propertyName)
+			if tc.wantErrStrPrefix != "" {
+				if err == nil {
+					t.Fatalf("retrieveResourcePropertyValueFrom(), got no error, want error with prefix %s", tc.wantErrStrPrefix)
+				}
+
+				if !strings.HasPrefix(err.Error(), tc.wantErrStrPrefix) {
+					t.Fatalf("retrieveResourcePropertyValueFrom(), got error %v, expected error with prefix %s", err, tc.wantErrStrPrefix)
+				}
+				return
+			}
+
+			if q == nil {
+				if tc.wantQuantity != nil {
+					t.Fatalf("retrieveResourcePropertyValueFrom() = nil, expected %+v", tc.wantQuantity)
+				}
+				return
+			}
+
+			if q.Cmp(*tc.wantQuantity) != 0 {
+				t.Fatalf("retrieveResourcePropertyValueFrom() = %+v, expected %+v", q, tc.wantQuantity)
 			}
 		})
 	}
 }
 
-func TestAffinityTermsMatches(t *testing.T) {
-	tests := []struct {
-		name    string
-		terms   AffinityTerms
-		cluster *clusterv1beta1.MemberCluster
-		want    bool
+// TestRetrievePropertyValueFrom tests the retrievePropertyValueFrom function.
+func TestRetrievePropertyValueFrom(t *testing.T) {
+	testCases := []struct {
+		name             string
+		cluster          *clusterv1beta1.MemberCluster
+		propertyName     string
+		wantQuantity     *resource.Quantity
+		wantErrStrPrefix string
 	}{
 		{
-			name: "matched cluster with single term",
-			terms: []affinityTerm{
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-				},
-			},
+			name:         "retrieve resource metric",
+			propertyName: availableCPUPropertyName,
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-west",
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							"cpu": resource.MustParse("20"),
+						},
 					},
 				},
 			},
-			want: true,
+			wantQuantity: ptr.To(resource.MustParse("20")),
 		},
 		{
-			name: "matched cluster with multiple terms",
-			terms: []affinityTerm{
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-				},
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-				},
-			},
+			name:         "retrieve non-resource metric",
+			propertyName: nodeCountPropertyName,
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-east",
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "2",
+						},
 					},
 				},
 			},
-			want: false,
+			wantQuantity: ptr.To(resource.MustParse("2")),
 		},
 		{
-			name: "matched cluster with empty terms which does not restrict the selection space",
-			terms: []affinityTerm{
-				{
-					selector: labels.SelectorFromSet(map[string]string{}),
-				},
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-east"}),
-				},
-			},
+			name:         "retrieve non-resource metric (not found)",
+			propertyName: nodeCountPropertyName,
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-west",
-					},
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{},
 				},
 			},
-			want: true,
 		},
 		{
-			name: "not matched cluster",
-			terms: []affinityTerm{
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-east"}),
-				},
-			},
+			name:         "retrieve non-resource metric (zero value)",
+			propertyName: nodeCountPropertyName,
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"regions": "us-west",
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "0",
+						},
 					},
 				},
 			},
-			want: false,
-		},
-		{
-			name:  "empty terms",
-			terms: []affinityTerm{},
-			cluster: &clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"regions": "us-west",
-					},
-				},
-			},
-			want: false,
+			wantQuantity: &resource.Quantity{},
 		},
 	}
-	for _, tc := range tests {
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.terms.Matches(tc.cluster)
-			if got != tc.want {
-				t.Fatalf("Matches()=%v, want %v", got, tc.want)
+			q, err := retrievePropertyValueFrom(tc.cluster, tc.propertyName)
+			if tc.wantErrStrPrefix != "" {
+				if err == nil {
+					t.Fatalf("retrievePropertyValueFrom(), got no error, want error with prefix %s", tc.wantErrStrPrefix)
+				}
+
+				if !strings.HasPrefix(err.Error(), tc.wantErrStrPrefix) {
+					t.Fatalf("retrievePropertyValueFrom(), got error %v, expected error with prefix %s", err, tc.wantErrStrPrefix)
+				}
+				return
+			}
+
+			if q == nil {
+				if tc.wantQuantity != nil {
+					t.Fatalf("retrievePropertyValueFrom() = nil, expected %+v", tc.wantQuantity)
+				}
+				return
+			}
+
+			if q.Cmp(*tc.wantQuantity) != 0 {
+				t.Fatalf("retrievePropertyValueFrom() = %+v, expected %+v", q, tc.wantQuantity)
 			}
 		})
 	}
 }
 
-func TestScore(t *testing.T) {
-	tests := []struct {
-		name    string
-		terms   PreferredAffinityTerms
-		cluster *clusterv1beta1.MemberCluster
-		want    int32
+// TestClusterRequirementMatches tests the Matches method of the clusterRequirement type.
+func TestClusterRequirementMatches(t *testing.T) {
+	testCases := []struct {
+		name             string
+		r                clusterRequirement
+		cluster          *clusterv1beta1.MemberCluster
+		wantRes          bool
+		wantErrStrPrefix string
 	}{
 		{
-			name:  "empty terms",
-			terms: []preferredAffinityTerm{},
+			name: "with label selector only, matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+			}),
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
+					Name: clusterName1,
 					Labels: map[string]string{
-						"region": "us-west",
+						regionLabelName: regionLabelValue1,
 					},
 				},
 			},
-			want: 0,
+			wantRes: true,
 		},
 		{
-			name: "multiple terms (all matched)",
-			terms: []preferredAffinityTerm{
-				{
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "with label selector only, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						regionLabelName: regionLabelValue1,
 					},
-					weight: 5,
 				},
-				{
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{}),
-					},
-					weight: -8,
-				},
-			},
+			}),
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
+					Name: clusterName1,
 					Labels: map[string]string{
-						"region": "us-west",
+						regionLabelName: regionLabelValue2,
 					},
 				},
 			},
-			want: -3,
 		},
 		{
-			name: "multiple terms (partial matched)",
-			terms: []preferredAffinityTerm{
-				{
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "with property expression, lt",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorLessThan,
+							Values: []string{
+								"3",
+							},
+						},
 					},
-					weight: 5,
 				},
-				{
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{"zone": "zone1"}),
-					},
-					weight: -8,
-				},
-			},
+			}),
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-west",
-						"zone":   "zone2",
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "1",
+						},
 					},
 				},
 			},
-			want: 5,
+			wantRes: true,
 		},
 		{
-			name: "multiple terms (all mismatched)",
-			terms: []preferredAffinityTerm{
-				{
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			name: "with property expression, lt, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorLessThan,
+							Values: []string{
+								"3",
+							},
+						},
 					},
-					weight: 5,
 				},
-				{
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{"zone": "zone1"}),
-					},
-					weight: -8,
-				},
-			},
+			}),
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-					Labels: map[string]string{
-						"region": "us-east",
-						"zone":   "zone2",
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
 					},
 				},
 			},
-			want: 0,
+		},
+		{
+			name: "with property expression, gt",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThan,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+				},
+			},
+			wantRes: true,
+		},
+		{
+			name: "with property expression, gt, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThan,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "1",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with property expression, le",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "3",
+						},
+					},
+				},
+			},
+			wantRes: true,
+		},
+		{
+			name: "with property expression, le, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorLessThanOrEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with property expression, ge",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "3",
+						},
+					},
+				},
+			},
+			wantRes: true,
+		},
+		{
+			name: "with property expression, ge, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "1",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with property expression, eq",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "3",
+						},
+					},
+				},
+			},
+			wantRes: true,
+		},
+		{
+			name: "with property expression, eq, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with property expression, ne",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorNotEqualTo,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "1",
+						},
+					},
+				},
+			},
+			wantRes: true,
+		},
+		{
+			name: "with property expression, ne, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThan,
+							Values: []string{
+								"3",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "3",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "multple expressions",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThan,
+							Values: []string{
+								"3",
+							},
+						},
+						{
+							Name:     availableCPUPropertyName,
+							Operator: placementv1beta1.PropertySelectorLessThan,
+							Values: []string{
+								"20",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("10"),
+						},
+					},
+				},
+			},
+			wantRes: true,
+		},
+		{
+			name: "multple expressions, not matched",
+			r: clusterRequirement(placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     nodeCountPropertyName,
+							Operator: placementv1beta1.PropertySelectorLessThan,
+							Values: []string{
+								"3",
+							},
+						},
+						{
+							Name:     availableCPUPropertyName,
+							Operator: placementv1beta1.PropertySelectorGreaterThan,
+							Values: []string{
+								"20",
+							},
+						},
+					},
+				},
+			}),
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "1",
+						},
+					},
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("10"),
+						},
+					},
+				},
+			},
 		},
 	}
-	for _, tc := range tests {
+
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tc.terms.Score(tc.cluster)
-			if got != tc.want {
-				t.Fatalf("Score()=%v, want %v", got, tc.want)
+			res, err := tc.r.Matches(tc.cluster)
+			if tc.wantErrStrPrefix != "" {
+				if err == nil {
+					t.Fatalf("Matches(), got no error, want error with prefix %s", tc.wantErrStrPrefix)
+				}
+
+				if !strings.HasPrefix(err.Error(), tc.wantErrStrPrefix) {
+					t.Fatalf("Matches(), got error %v, expected error with prefix %s", err, tc.wantErrStrPrefix)
+				}
+				return
+			}
+
+			if res != tc.wantRes {
+				t.Fatalf("Matches() = %t, expected %t", res, tc.wantRes)
 			}
 		})
 	}
 }
 
-func TestNewAffinityTerms(t *testing.T) {
-	tests := []struct {
-		name  string
-		terms []placementv1beta1.ClusterSelectorTerm
-		want  AffinityTerms
+// TestInterpolateWeightFrom tests the interpolateWeightFrom function.
+func TestInterpolateWeightFrom(t *testing.T) {
+	testCases := []struct {
+		name             string
+		cluster          *clusterv1beta1.MemberCluster
+		propertyName     string
+		sortOrder        placementv1beta1.PropertySortOrder
+		weight           int32
+		ps               *pluginState
+		wantWeight       int32
+		wantErrStrPrefix string
 	}{
 		{
-			name: "nil terms",
-			want: []affinityTerm{},
-		},
-		{
-			name:  "empty terms",
-			terms: []placementv1beta1.ClusterSelectorTerm{},
-			want:  []affinityTerm{},
-		},
-		{
-			name: "nonempty terms have empty term",
-			terms: []placementv1beta1.ClusterSelectorTerm{
-				{
-					LabelSelector: &metav1.LabelSelector{},
-				},
-				{
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{},
-					},
-				},
-				{
-					LabelSelector: &metav1.LabelSelector{
-						MatchExpressions: []metav1.LabelSelectorRequirement{},
+			name:         "interpolate weight in ascending order (non-resource property)",
+			propertyName: nodeCountPropertyName,
+			sortOrder:    placementv1beta1.Ascending,
+			weight:       100,
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("1")),
+						max: ptr.To(resource.MustParse("10")),
 					},
 				},
 			},
-			want: []affinityTerm{},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "2",
+						},
+					},
+				},
+			},
+			wantWeight: 89,
 		},
 		{
-			name: "nonempty terms",
-			terms: []placementv1beta1.ClusterSelectorTerm{
-				{
+			name:         "interpolate weight in descending order (non-resource property)",
+			propertyName: nodeCountPropertyName,
+			sortOrder:    placementv1beta1.Descending,
+			weight:       100,
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("1")),
+						max: ptr.To(resource.MustParse("10")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "2",
+						},
+					},
+				},
+			},
+			wantWeight: 11,
+		},
+		{
+			name:         "interpolate weight in ascending order (resource property)",
+			propertyName: availableCPUPropertyName,
+			sortOrder:    placementv1beta1.Ascending,
+			weight:       100,
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					availableCPUPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("50")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							"cpu": resource.MustParse("20"),
+						},
+					},
+				},
+			},
+			wantWeight: 75,
+		},
+		{
+			name:         "interpolate weight in descending order (resource property)",
+			propertyName: availableCPUPropertyName,
+			sortOrder:    placementv1beta1.Descending,
+			weight:       100,
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					availableCPUPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("50")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					ResourceUsage: clusterv1beta1.ResourceUsage{
+						Available: corev1.ResourceList{
+							"cpu": resource.MustParse("20"),
+						},
+					},
+				},
+			},
+			wantWeight: 25,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := interpolateWeightFor(tc.cluster, tc.propertyName, tc.sortOrder, tc.weight, tc.ps)
+			if tc.wantErrStrPrefix != "" {
+				if err == nil {
+					t.Fatalf("interpolateWeightFor(), got no error, want error with prefix %s", tc.wantErrStrPrefix)
+				}
+
+				if !strings.HasPrefix(err.Error(), tc.wantErrStrPrefix) {
+					t.Fatalf("interpolateWeightFor(), got error %v, expected error with prefix %s", err, tc.wantErrStrPrefix)
+				}
+				return
+			}
+
+			if w != tc.wantWeight {
+				t.Fatalf("interpolateWeightFor() = %d, expected %d", w, tc.wantWeight)
+			}
+		})
+	}
+}
+
+// TestClusterPreferenceScores tests the Scores method of the clusterPreference type.
+func TestClusterPreferenceScores(t *testing.T) {
+	testCases := []struct {
+		name             string
+		preference       clusterPreference
+		ps               *pluginState
+		cluster          *clusterv1beta1.MemberCluster
+		wantWeight       int32
+		wantErrStrPrefix string
+	}{
+		{
+			name: "preference with no sorting, matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"region": "us-west",
+							regionLabelName: regionLabelValue1,
+						},
+					},
+				},
+			}),
+			ps: &pluginState{},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec:   clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{},
+			},
+			wantWeight: 100,
+		},
+		{
+			name: "preferece with sorting in ascending order, matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
+					PropertySorter: &placementv1beta1.PropertySortPreference{
+						Name:      nodeCountPropertyName,
+						SortOrder: placementv1beta1.Ascending,
+					},
+				},
+			}),
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("5")),
+						max: ptr.To(resource.MustParse("10")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "5",
 						},
 					},
 				},
 			},
-			want: []affinityTerm{
-				{
-					selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
+			wantWeight: 100,
+		},
+		{
+			name: "preference with sorting in descending order, matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
+					PropertySorter: &placementv1beta1.PropertySortPreference{
+						Name:      nodeCountPropertyName,
+						SortOrder: placementv1beta1.Descending,
+					},
+				},
+			}),
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("5")),
+						max: ptr.To(resource.MustParse("10")),
+					},
 				},
 			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "10",
+						},
+					},
+				},
+			},
+			wantWeight: 100,
+		},
+		{
+			name: "preference with no sorting, not matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							regionLabelName: regionLabelValue1,
+						},
+					},
+				},
+			}),
+			ps: &pluginState{},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+					},
+				},
+				Spec:   clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{},
+			},
+			wantWeight: 0,
+		},
+		{
+			name: "preference with sorting, not matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
+					PropertySorter: &placementv1beta1.PropertySortPreference{
+						Name:      nodeCountPropertyName,
+						SortOrder: placementv1beta1.Descending,
+					},
+				},
+			}),
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("5")),
+						max: ptr.To(resource.MustParse("10")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "10",
+						},
+					},
+				},
+			},
+			wantWeight: 100,
+		},
+		{
+			name: "preference with label selector and sorting, matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							regionLabelName: regionLabelValue1,
+						},
+					},
+					PropertySorter: &placementv1beta1.PropertySortPreference{
+						Name:      nodeCountPropertyName,
+						SortOrder: placementv1beta1.Descending,
+					},
+				},
+			}),
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("5")),
+						max: ptr.To(resource.MustParse("10")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "10",
+						},
+					},
+				},
+			},
+			wantWeight: 100,
+		},
+		{
+			name: "preference with label selector and sorting, not matched",
+			preference: clusterPreference(placementv1beta1.PreferredClusterSelector{
+				Weight: 100,
+				Preference: placementv1beta1.ClusterSelectorTerm{
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							regionLabelName: regionLabelValue2,
+						},
+					},
+					PropertySorter: &placementv1beta1.PropertySortPreference{
+						Name:      nodeCountPropertyName,
+						SortOrder: placementv1beta1.Descending,
+					},
+				},
+			}),
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("5")),
+						max: ptr.To(resource.MustParse("10")),
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "10",
+						},
+					},
+				},
+			},
+			wantWeight: 0,
 		},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := NewAffinityTerms(tc.terms)
-			if err != nil {
-				t.Fatalf("NewAffinityTerms() got error %v, want nil", err)
-			}
-			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(affinityTerm{})); diff != "" {
-				t.Errorf("NewAffinityTerms() affinityTerms mismatch (-want, +got):\n%s", diff)
-			}
-		})
-	}
-}
 
-func TestNewPreferredAffinityTerms(t *testing.T) {
-	tests := []struct {
-		name  string
-		terms []placementv1beta1.PreferredClusterSelector
-		want  PreferredAffinityTerms
-	}{
-		{
-			name: "nil terms",
-			want: []preferredAffinityTerm{},
-		},
-		{
-			name:  "empty terms",
-			terms: []placementv1beta1.PreferredClusterSelector{},
-			want:  []preferredAffinityTerm{},
-		},
-		{
-			name: "nonempty terms have empty term",
-			terms: []placementv1beta1.PreferredClusterSelector{
-				{
-					Preference: placementv1beta1.ClusterSelectorTerm{
-						LabelSelector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{},
-						},
-					},
-					Weight: 5,
-				},
-				{
-					Preference: placementv1beta1.ClusterSelectorTerm{
-						LabelSelector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
-								"region": "us-west",
-							},
-						},
-					},
-					Weight: 0,
-				},
-			},
-			want: []preferredAffinityTerm{},
-		},
-		{
-			name: "nonempty terms",
-			terms: []placementv1beta1.PreferredClusterSelector{
-				{
-					Preference: placementv1beta1.ClusterSelectorTerm{
-						LabelSelector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
-								"region": "us-west",
-							},
-						},
-					},
-					Weight: 5,
-				},
-			},
-			want: []preferredAffinityTerm{
-				{
-					weight: 5,
-					affinityTerm: affinityTerm{
-						selector: labels.SelectorFromSet(map[string]string{"region": "us-west"}),
-					},
-				},
-			},
-		},
-	}
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := NewPreferredAffinityTerms(tc.terms)
-			if err != nil {
-				t.Fatalf("NewPreferredAffinityTerms() got error %v, want nil", err)
+			w, err := tc.preference.Scores(tc.ps, tc.cluster)
+			if tc.wantErrStrPrefix != "" {
+				if err == nil {
+					t.Fatalf("Scores(), got no error, want error with prefix %s", tc.wantErrStrPrefix)
+				}
+
+				if !strings.HasPrefix(err.Error(), tc.wantErrStrPrefix) {
+					t.Fatalf("Scores(), got error %v, expected error with prefix %s", err, tc.wantErrStrPrefix)
+				}
+				return
 			}
-			if diff := cmp.Diff(tc.want, got, cmp.AllowUnexported(preferredAffinityTerm{}, affinityTerm{})); diff != "" {
-				t.Errorf("NewPreferredAffinityTerms() preferredAffinityTerm mismatch (-want, +got):\n%s", diff)
+
+			if w != tc.wantWeight {
+				t.Fatalf("Scores() = %d, expected %d", w, tc.wantWeight)
 			}
 		})
 	}

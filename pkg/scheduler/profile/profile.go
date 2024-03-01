@@ -30,7 +30,7 @@ func NewDefaultProfile() *framework.Profile {
 	topologySpreadConstraintsPlugin := topologyspreadconstraints.New()
 
 	p.WithPostBatchPlugin(&topologySpreadConstraintsPlugin).
-		WithPreFilterPlugin(&clusterAffinityPlugin).WithPreFilterPlugin(&topologySpreadConstraintsPlugin).
+		WithPreFilterPlugin(&topologySpreadConstraintsPlugin).
 		WithFilterPlugin(&clusterAffinityPlugin).WithFilterPlugin(&clusterEligibilityPlugin).WithFilterPlugin(&samePlacementAffinityPlugin).WithFilterPlugin(&topologySpreadConstraintsPlugin).
 		WithPreScorePlugin(&clusterAffinityPlugin).WithPreScorePlugin(&topologySpreadConstraintsPlugin).
 		WithScorePlugin(&clusterAffinityPlugin).WithScorePlugin(&samePlacementAffinityPlugin).WithScorePlugin(&topologySpreadConstraintsPlugin)
