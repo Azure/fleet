@@ -66,7 +66,7 @@ func (d *dummyPricingProvider) LastUpdated() time.Time {
 }
 
 var (
-	ignoreNodeTrackerFields    = cmpopts.IgnoreFields(NodeTracker{}, "mu", "pp", "costLastUpdated")
+	ignoreNodeTrackerFields    = cmpopts.IgnoreFields(NodeTracker{}, "mu", "pricingProvider", "costLastUpdated")
 	ignorePodTrackerMutexField = cmpopts.IgnoreFields(PodTracker{}, "mu")
 
 	// This variable should only work with test cases that do not mutate the tracker.
