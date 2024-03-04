@@ -351,7 +351,119 @@ func TestFilter(t *testing.T) {
 			wantStatus: nil,
 		},
 		{
-			name: "taints cannot be tolerated based on key, value & effect - ClusterUnschedulable status",
+			name: "taint with key, value, effect cannot be tolerated, values don't match, operator is equal - ClusterUnschedulable status",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{
+						{
+							Key:    "key1",
+							Value:  "value1",
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "csp-1",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Tolerations: []placementv1beta1.Toleration{
+							{
+								Key:      "key1",
+								Operator: corev1.TolerationOpEqual,
+								Value:    "value2",
+								Effect:   corev1.TaintEffectNoSchedule,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule})),
+		},
+		{
+			name: "taint with key, value, effect cannot be tolerated, keys don't match, operator is equal - ClusterUnschedulable status",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{
+						{
+							Key:    "key1",
+							Value:  "value1",
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "csp-1",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Tolerations: []placementv1beta1.Toleration{
+							{
+								Key:      "key2",
+								Operator: corev1.TolerationOpEqual,
+								Value:    "value1",
+								Effect:   corev1.TaintEffectNoSchedule,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule})),
+		},
+		{
+			name: "taint with key, effect cannot be tolerated, keys don't match, values don't match, operator is equal - ClusterUnSchedulable status",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{
+						{
+							Key:    "key1",
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "csp-1",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Tolerations: []placementv1beta1.Toleration{
+							{
+								Key:      "key1",
+								Operator: corev1.TolerationOpEqual,
+								Value:    "value1",
+								Effect:   corev1.TaintEffectNoSchedule,
+							},
+							{
+								Key:      "key2",
+								Operator: corev1.TolerationOpEqual,
+								Effect:   corev1.TaintEffectNoSchedule,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key1", Effect: corev1.TaintEffectNoSchedule})),
+		},
+		{
+			name: "one of multiple taints cannot be tolerated, missing toleration, operator is equal - ClusterUnSchedulable status",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-mc",
@@ -382,7 +494,6 @@ func TestFilter(t *testing.T) {
 								Key:      "key1",
 								Operator: corev1.TolerationOpEqual,
 								Value:    "value1",
-								Effect:   corev1.TaintEffectNoSchedule,
 							},
 						},
 					},
@@ -391,7 +502,7 @@ func TestFilter(t *testing.T) {
 			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key2", Effect: corev1.TaintEffectNoSchedule})),
 		},
 		{
-			name: "taints cannot be tolerated based on key & effect - ClusterUnschedulable status",
+			name: "taints with key, value, effect cannot be tolerated, keys don't match, operator is exists - ClusterUnschedulable status",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-mc",
@@ -401,15 +512,6 @@ func TestFilter(t *testing.T) {
 						{
 							Key:    "key1",
 							Value:  "value1",
-							Effect: corev1.TaintEffectNoSchedule,
-						},
-						{
-							Key:    "key2",
-							Value:  "value2",
-							Effect: corev1.TaintEffectNoSchedule,
-						},
-						{
-							Key:    "key3",
 							Effect: corev1.TaintEffectNoSchedule,
 						},
 					},
@@ -424,7 +526,7 @@ func TestFilter(t *testing.T) {
 						PlacementType: placementv1beta1.PickAllPlacementType,
 						Tolerations: []placementv1beta1.Toleration{
 							{
-								Key:      "key3",
+								Key:      "key2",
 								Operator: corev1.TolerationOpExists,
 								Effect:   corev1.TaintEffectNoSchedule,
 							},
@@ -433,6 +535,78 @@ func TestFilter(t *testing.T) {
 				},
 			},
 			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule})),
+		},
+		{
+			name: "taints with key, effect cannot be tolerated, keys don't match, operator is exists - ClusterUnschedulable status",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{
+						{
+							Key:    "key1",
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "csp-1",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Tolerations: []placementv1beta1.Toleration{
+							{
+								Key:      "key2",
+								Operator: corev1.TolerationOpExists,
+								Effect:   corev1.TaintEffectNoSchedule,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key1", Effect: corev1.TaintEffectNoSchedule})),
+		},
+		{
+			name: "one of multiple taints cannot be tolerated, missing toleration, operator is exists - ClusterUnSchedulable status",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-mc",
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{
+					Taints: []clusterv1beta1.Taint{
+						{
+							Key:    "key1",
+							Value:  "value1",
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+						{
+							Key:    "key2",
+							Effect: corev1.TaintEffectNoSchedule,
+						},
+					},
+				},
+			},
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "csp-1",
+				},
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						PlacementType: placementv1beta1.PickAllPlacementType,
+						Tolerations: []placementv1beta1.Toleration{
+							{
+								Key:      "key1",
+								Operator: corev1.TolerationOpExists,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), fmt.Sprintf(reasonFmt, &clusterv1beta1.Taint{Key: "key2", Effect: corev1.TaintEffectNoSchedule})),
 		},
 	}
 	for _, tc := range tests {
