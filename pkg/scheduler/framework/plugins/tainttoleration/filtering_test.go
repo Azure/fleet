@@ -25,10 +25,10 @@ var (
 func TestFilter(t *testing.T) {
 	p := New()
 	tests := []struct {
-		name       string
-		cluster    *clusterv1beta1.MemberCluster
-		placement  *placementv1beta1.ClusterSchedulingPolicySnapshot
-		wantStatus *framework.Status
+		name           string
+		cluster        *clusterv1beta1.MemberCluster
+		policySnapshot *placementv1beta1.ClusterSchedulingPolicySnapshot
+		wantStatus     *framework.Status
 	}{
 		{
 			name: "empty taints",
@@ -38,7 +38,7 @@ func TestFilter(t *testing.T) {
 				},
 				Spec: clusterv1beta1.MemberClusterSpec{},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -66,7 +66,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -99,7 +99,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -146,7 +146,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -189,7 +189,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -236,7 +236,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -290,7 +290,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -333,7 +333,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -370,7 +370,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -415,7 +415,7 @@ func TestFilter(t *testing.T) {
 					},
 				},
 			},
-			placement: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+			policySnapshot: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "csp-1",
 				},
@@ -437,7 +437,7 @@ func TestFilter(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := p.Filter(context.TODO(), nil, tc.placement, tc.cluster)
+			got := p.Filter(context.TODO(), nil, tc.policySnapshot, tc.cluster)
 			if diff := cmp.Diff(tc.wantStatus, got, cmpStatusOptions); diff != "" {
 				t.Errorf("Filter() status mismatch (-want, +got):\n%s", diff)
 			}
