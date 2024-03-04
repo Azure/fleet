@@ -21,7 +21,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 )
 
-var _ = Describe("Test Internal Member Cluster Controller", func() {
+var _ = Describe("Test Internal Member Cluster Controller", Serial, func() {
 	var (
 		ctx                         context.Context
 		HBPeriod                    int
@@ -60,8 +60,10 @@ var _ = Describe("Test Internal Member Cluster Controller", func() {
 		By("create the internalMemberCluster reconciler")
 		workController := work.NewApplyWorkReconciler(
 			k8sClient, nil, k8sClient, nil, nil, 5, memberClusterNamespace)
-		r = NewReconciler(k8sClient, k8sClient, workController)
-		err := r.SetupWithManager(mgr)
+		var err error
+		r, err = NewReconciler(k8sClient, mgr.GetConfig(), k8sClient, workController, nil)
+		Expect(err).ToNot(HaveOccurred())
+		err = r.SetupWithManager(mgr)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

@@ -8,13 +8,18 @@ package v1beta1
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -26,23 +31,66 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/propertyprovider"
 	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
-	hubClient    client.Client
-	memberClient client.Client
+	hubClient          client.Client
+	memberConfig       *rest.Config
+	memberClient       client.Client
+	rawMemberClientSet *kubernetes.Clientset
 
 	// the join/leave agent maintains the list of controllers in the member cluster
 	// so that it can make sure that all the agents on the member cluster have joined/left
 	// before updating the internal member cluster CR status
 	workController *work.ApplyWorkReconciler
 
+	// propertyProvider is the provider that collects and exposes cluster properties.
+	//
+	// Note that this can be set to nil; in that case, the controller will fall back to the
+	// built-in default behavior, which retrieve a few limited properties themselves,
+	// in consistency with the earlier Fleet versions.
+	propertyProvider propertyprovider.PropertyProvider
+	// queuedPropertyCollectionCalls is the number of on-going calls to the
+	// property provider code in an attempt to collect the latest cluster properties.
+	//
+	// Normally a call to the property provider should complete swiftly; however,
+	// there is no guarantee about this, and to avoid corner cases where calls to the
+	// property provider code pile up without getting a response, Fleet will limit
+	// the number of calls.
+	//
+	// This limit does not apply to the built-in default behavior when no property
+	// provider is set up.
+	queuedPropertyCollectionCalls atomic.Int32
+	// isPropertyProviderStarted is true if the property provider has been started.
+	isPropertyProviderStarted bool
+	// startPropertyProviderOnce is used to start the property provider exactly once.
+	startPropertyProviderOnce sync.Once
+
 	recorder record.EventRecorder
 }
 
 const (
+	// The condition information for reporting if a property provider has started.
+	ClusterPropertyProviderStartedConditionType   = "ClusterPropertyProviderStarted"
+	ClusterPropertyProviderStartedTimedOutReason  = "TimedOut"
+	ClusterPropertyProviderStartedTimedOutMessage = "The property provider does not start up in time"
+	ClusterPropertyProviderStartedFailedReason    = "FailedToStart"
+	ClusterPropertyProviderStartedFailedMessage   = "Failed to start the property provider: %v"
+	ClusterPropertyProviderStartedReason          = "Started"
+	ClusterPropertyProviderStartedMessage         = "The property provider has started successfully"
+
+	// The condition information for reporting if the latest cluster properties have been collected.
+	ClusterPropertyCollectionSucceededConditionType    = "ClusterPropertyCollectionSucceeded"
+	ClusterPropertyCollectionFailedTooManyCallsReason  = "TooManyCalls"
+	ClusterPropertyCollectionFailedTooManyCallsMessage = "There are too many on-going calls to the property provider; will retry if some calls return"
+	ClusterPropertyCollectionTimedOutReason            = "TimedOut"
+	ClusterPropertyCollectionTimedOutMessage           = "The property provider does not respond in time"
+	ClusterPropertyCollectionSucceededReason           = "PropertiesCollected"
+	ClusterPropertyCollectionSucceededMessage          = "The property provider has returned the latest cluster properties"
+
 	// EventReasonInternalMemberClusterHealthy is the event type and reason string when the agent is healthy.
 	EventReasonInternalMemberClusterHealthy = "InternalMemberClusterHealthy"
 	// EventReasonInternalMemberClusterUnhealthy is the event type and reason string when the agent is unhealthy.
@@ -58,15 +106,49 @@ const (
 
 	// we add +-5% jitter
 	jitterPercent = 10
+
+	// propertyProviderStartupDeadline is the deadline for the property provider to spin up.
+	//
+	// If the given property provider fails to start within the amount of time, the controller
+	// will fall back to the built-in default behavior, which retrieve a few limited properties
+	// themselves, in consistency with the earlier Fleet versions.
+	propertyProviderStartupDeadline = time.Second * 10
+	// propertyProviderCollectionDeadline is the deadline for the property provider to return
+	// the latest cluster properties to the Fleet member agent.
+	propertyProviderCollectionDeadline = time.Second * 10
+
+	// maxedQueuedPropertyCollectionCalls is the maximum count of on-going calls to the
+	// property provider.
+	maxedQueuedPropertyCollectionCalls = 3
+
+	// healthProbePath is the path to the member cluster API server which the Fleet member agent
+	// will perform health probes against.
+	//
+	// The `/healthz` endpoint has been deprecated since Kubernetes v1.16; here Fleet will
+	// probe the readiness check endpoint instead.
+	healthProbePath = "/readyz"
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
-func NewReconciler(hubClient client.Client, memberClient client.Client, workController *work.ApplyWorkReconciler) *Reconciler {
-	return &Reconciler{
-		hubClient:      hubClient,
-		memberClient:   memberClient,
-		workController: workController,
+func NewReconciler(hubClient client.Client,
+	memberCfg *rest.Config,
+	memberClient client.Client,
+	workController *work.ApplyWorkReconciler,
+	propertyProvider propertyprovider.PropertyProvider,
+) (*Reconciler, error) {
+	rawMemberClientSet, err := kubernetes.NewForConfig(memberCfg)
+	if err != nil {
+		return nil, err
 	}
+
+	return &Reconciler{
+		hubClient:          hubClient,
+		memberConfig:       memberCfg,
+		memberClient:       memberClient,
+		rawMemberClientSet: rawMemberClientSet,
+		workController:     workController,
+		propertyProvider:   propertyProvider,
+	}, nil
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -90,6 +172,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		updateMemberAgentHeartBeat(&imc)
 		updateHealthErr := r.updateHealth(ctx, &imc)
+		clusterPropertyCollectionErr := r.connectToPropertyProvider(ctx, &imc)
 		r.markInternalMemberClusterJoined(&imc)
 		if err := r.updateInternalMemberClusterWithRetry(ctx, &imc); err != nil {
 			if apierrors.IsConflict(err) {
@@ -103,12 +186,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			klog.ErrorS(updateHealthErr, "failed to update health", "imc", klog.KObj(&imc))
 			return ctrl.Result{}, updateHealthErr
 		}
+		if clusterPropertyCollectionErr != nil {
+			klog.ErrorS(clusterPropertyCollectionErr, "failed to collect cluster properties", "imc", klog.KObj(&imc))
+			return ctrl.Result{}, clusterPropertyCollectionErr
+		}
 		// add jitter to the heart beat to mitigate the herding of multiple agents
 		hbinterval := 1000 * imc.Spec.HeartbeatPeriodSeconds
 		jitterRange := int64(hbinterval*jitterPercent) / 100
 		return ctrl.Result{RequeueAfter: time.Millisecond *
 			(time.Duration(hbinterval) + time.Duration(utilrand.Int63nRange(0, jitterRange)-jitterRange/2))}, nil
-
 	case clusterv1beta1.ClusterStateLeave:
 		if err := r.stopAgents(ctx, &imc); err != nil {
 			return ctrl.Result{}, err
@@ -158,13 +244,166 @@ func (r *Reconciler) stopAgents(ctx context.Context, imc *clusterv1beta1.Interna
 func (r *Reconciler) updateHealth(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
 	klog.V(2).InfoS("updateHealth", "InternalMemberCluster", klog.KObj(imc))
 
-	if err := r.updateResourceStats(ctx, imc); err != nil {
-		r.markInternalMemberClusterUnhealthy(imc, fmt.Errorf("failed to update resource stats %s: %w", klog.KObj(imc), err))
+	probeRes := r.rawMemberClientSet.Discovery().RESTClient().Get().AbsPath(healthProbePath).Do(ctx)
+	var statusCode int
+	if probeRes.StatusCode(&statusCode); statusCode != 200 {
+		err := fmt.Errorf("health probe failed with status code %d", statusCode)
+		klog.ErrorS(err, "failed to probe health", "InternalMemberCluster", klog.KObj(imc))
+		r.markInternalMemberClusterUnhealthy(imc, err)
 		return err
 	}
 
+	klog.V(2).InfoS("health probe succeeded", "InternalMemberCluster", klog.KObj(imc))
 	r.markInternalMemberClusterHealthy(imc)
 	return nil
+}
+
+// connectToPropertyProvider connects to the property provider to collect the latest cluster properties.
+func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
+	r.startPropertyProviderOnce.Do(func() {
+		if r.propertyProvider == nil {
+			// No property provider is set up; fall back to the built-in default behavior.
+			return
+		}
+
+		childCtx, childCancelFunc := context.WithDeadline(ctx, time.Now().Add(propertyProviderStartupDeadline))
+		// Cancel the context any way to avoid leaks.
+		defer childCancelFunc()
+		startedCh := make(chan error)
+
+		// Attempt to start the property provider.
+		go func() {
+			defer close(startedCh)
+			if err := r.propertyProvider.Start(childCtx, r.memberConfig); err != nil {
+				klog.ErrorS(err, "failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
+				startedCh <- err
+			}
+		}()
+
+		// Wait for the property provider to start; if it doesn't start within the deadline,
+		// fall back to the built-in default behavior.
+		select {
+		case <-childCtx.Done():
+			err := fmt.Errorf("property provider startup deadline exceeded")
+			klog.ErrorS(err, "InternalMemberCluster", klog.KObj(imc))
+			reportPropertyProviderStartedCondition(imc, metav1.ConditionFalse, ClusterPropertyProviderStartedTimedOutReason, ClusterPropertyProviderStartedTimedOutMessage)
+		case err := <-startedCh:
+			if err != nil {
+				klog.ErrorS(err, "failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
+				reportPropertyProviderStartedCondition(imc, metav1.ConditionFalse, ClusterPropertyProviderStartedFailedReason, fmt.Sprintf(ClusterPropertyProviderStartedFailedMessage, err))
+			} else {
+				klog.V(2).InfoS("property provider started", "InternalMemberCluster", klog.KObj(imc))
+				reportPropertyProviderStartedCondition(imc, metav1.ConditionTrue, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
+				r.isPropertyProviderStarted = true
+			}
+		}
+	})
+
+	if r.propertyProvider != nil && r.isPropertyProviderStarted {
+		// Attempt to collect latest cluster properties via the property provider.
+		klog.V(2).InfoS("calling property provider for latest cluster properties", "InternalMemberCluster", klog.KObj(imc))
+		return r.reportClusterPropertiesWithPropertyProvider(ctx, imc)
+	}
+
+	// Fall back to the built-in default behavior.
+	klog.V(2).InfoS("falling back to the built-in default behavior for cluster property collection",
+		"InternalMemberCluster", klog.KObj(imc),
+		"IsPropertyProviderInstalled", r.propertyProvider != nil,
+		"IsPropertyProviderStarted", r.isPropertyProviderStarted,
+	)
+	if err := r.updateResourceStats(ctx, imc); err != nil {
+		klog.ErrorS(err, "failed to report cluster properties using built-in mechanism", "InternalMemberCluster", klog.KObj(imc))
+		return err
+	}
+	return nil
+}
+
+// reportPropertyProviderCollectionCondition reports the condition of whether a properity
+// collection attempt has been successful.
+func reportPropertyProviderCollectionCondition(imc *clusterv1beta1.InternalMemberCluster, status metav1.ConditionStatus, reason, message string) {
+	meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+		Type:               ClusterPropertyCollectionSucceededConditionType,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: imc.GetGeneration(),
+	})
+}
+
+// reportPropertyProviderStartedCondition reports the condition of whether a property provider
+// has been started successfully.
+func reportPropertyProviderStartedCondition(imc *clusterv1beta1.InternalMemberCluster, status metav1.ConditionStatus, reason, message string) {
+	meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+		Type:               ClusterPropertyProviderStartedConditionType,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: imc.GetGeneration(),
+	})
+}
+
+// reportClusterPropertiesWithPropertyProvider collects the latest cluster properties from the property provider.
+func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
+	// Check if there are queued calls that have not returned yet.
+	ticket := r.queuedPropertyCollectionCalls.Add(1)
+	defer r.queuedPropertyCollectionCalls.Add(-1)
+	if ticket > int32(maxedQueuedPropertyCollectionCalls) {
+		// There are too many on-going calls to the property provider; report the failure
+		// and skip this collection attempt.
+		reportPropertyProviderCollectionCondition(imc,
+			metav1.ConditionFalse,
+			ClusterPropertyCollectionFailedTooManyCallsReason,
+			ClusterPropertyCollectionFailedTooManyCallsMessage,
+		)
+		err := fmt.Errorf("too many on-going calls to the property provider; skipping this collection attempt")
+		klog.ErrorS(err, "failed to collect cluster properties", "InternalMemberCluster", klog.KObj(imc))
+		return err
+	}
+
+	// Collect the latest cluster properties from the property provider.
+	//
+	// If the property provider fails to return the latest cluster properties within the deadline,
+	// report the failure as a condition.
+	childCtx, childCancelFunc := context.WithDeadline(ctx, time.Now().Add(propertyProviderCollectionDeadline))
+	// Cancel the context any way to avoid leaks.
+	defer childCancelFunc()
+	collectedCh := make(chan struct{})
+
+	var res propertyprovider.PropertyCollectionResponse
+	go func() {
+		defer close(collectedCh)
+		res = r.propertyProvider.Collect(childCtx)
+	}()
+
+	select {
+	case <-childCtx.Done():
+		reportPropertyProviderCollectionCondition(imc,
+			metav1.ConditionFalse,
+			ClusterPropertyCollectionTimedOutReason,
+			ClusterPropertyCollectionTimedOutMessage,
+		)
+		err := fmt.Errorf("property provider collection deadline exceeded")
+		klog.ErrorS(err, "failed to collect cluster properties", "InternalMemberCluster", klog.KObj(imc))
+		return err
+	case <-collectedCh:
+		// The property provider has returned the latest cluster properties; update the
+		// internal member cluster object with the collected properties.
+		klog.V(2).InfoS("property provider cluster property collection completed", "InternalMemberCluster", klog.KObj(imc))
+		reportPropertyProviderCollectionCondition(imc,
+			metav1.ConditionTrue,
+			ClusterPropertyCollectionSucceededReason,
+			ClusterPropertyCollectionSucceededMessage,
+		)
+		imc.Status.Properties = res.Properties
+		imc.Status.ResourceUsage = res.Resources
+		for idx := range res.Conditions {
+			cond := res.Conditions[idx]
+			// Reset the observed generation, as the property provider is not be aware of it.
+			cond.ObservedGeneration = imc.GetGeneration()
+			meta.SetStatusCondition(&imc.Status.Conditions, cond)
+		}
+		return nil
+	}
 }
 
 // updateResourceStats collects and updates resource usage stats of the member cluster.
