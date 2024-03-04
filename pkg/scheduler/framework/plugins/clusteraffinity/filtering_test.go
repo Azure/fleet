@@ -46,6 +46,132 @@ var (
 	ignoreStatusErrorField = cmpopts.IgnoreFields(framework.Status{}, "err")
 )
 
+// TestPreFilter tests the PreFilter extension point of the plugin.
+func TestPreFilter(t *testing.T) {
+	testCases := []struct {
+		name       string
+		ps         *placementv1beta1.ClusterSchedulingPolicySnapshot
+		wantStatus *framework.Status
+	}{
+		{
+			name: "has no scheduling policy",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: nil,
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no affinity",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: nil,
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no cluster affinity",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: nil,
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no required cluster affinity terms",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: nil,
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has no cluster selectors",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.Skip, p.Name(), "no required cluster affinity terms to enforce"),
+		},
+		{
+			name: "has required cluster selector term",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue1,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			state := framework.NewCycleState(nil, nil, nil)
+			status := p.PreFilter(ctx, state, tc.ps)
+
+			if diff := cmp.Diff(
+				status, tc.wantStatus,
+				cmp.AllowUnexported(framework.Status{}),
+				ignoreStatusErrorField,
+			); diff != "" {
+				t.Errorf("Filter() unexpected status (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 // TestFilter tests the Filter extension point of the plugin.
 func TestFilter(t *testing.T) {
 	testCases := []struct {
