@@ -170,8 +170,8 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		ns := nt.nodeSetBySKU[sku]
 		if ns == nil {
 			ns = make(NodeSet)
-			ns[node.Name] = true
 		}
+		ns[node.Name] = true
 		nt.nodeSetBySKU[sku] = ns
 		return true
 	case registeredSKU != sku:
@@ -185,8 +185,8 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		ns := nt.nodeSetBySKU[sku]
 		if ns == nil {
 			ns = make(NodeSet)
-			ns[node.Name] = true
 		}
+		ns[node.Name] = true
 		nt.nodeSetBySKU[sku] = ns
 		return true
 	default:
