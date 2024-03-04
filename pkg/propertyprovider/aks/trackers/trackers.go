@@ -4,7 +4,7 @@ Licensed under the MIT license.
 */
 
 // Package trackers feature implementations that help track specific stats about
-// Kubernetes resources, e.g., nodes and pods in the AKS metric provider.
+// Kubernetes resources, e.g., nodes and pods in the AKS property provider.
 package trackers
 
 import (
@@ -23,7 +23,7 @@ const (
 	AKSClusterNodeSKULabelName = "beta.kubernetes.io/instance-type"
 )
 
-// supportedResourceNames is a list of resource names that the AKS metric provider supports.
+// supportedResourceNames is a list of resource names that the AKS property provider supports.
 //
 // Currently the supported resources are CPU and memory.
 var supportedResourceNames []corev1.ResourceName = []corev1.ResourceName{
@@ -56,15 +56,15 @@ type NodeTracker struct {
 	// costErr tracks any error that occurs during cost calculation.
 	costErr error
 
-	// pp is a pricing provider that facilitates cost calculation.
-	pp PricingProvider
+	// pricingProvider facilitates cost calculation.
+	pricingProvider PricingProvider
 
 	// mu is a RWMutex that protects the tracker against concurrent access.
 	mu sync.RWMutex
 }
 
 // NewNodeTracker returns a node tracker.
-func NewNodeTracker(pp PricingProvider) *NodeTracker {
+func NewNodeTracker(pricingProvider PricingProvider) *NodeTracker {
 	nt := &NodeTracker{
 		totalCapacity:     make(corev1.ResourceList),
 		totalAllocatable:  make(corev1.ResourceList),
@@ -72,7 +72,7 @@ func NewNodeTracker(pp PricingProvider) *NodeTracker {
 		allocatableByNode: make(map[string]corev1.ResourceList),
 		nodeSetBySKU:      make(map[string]NodeSet),
 		skuByNode:         make(map[string]string),
-		pp:                pp,
+		pricingProvider:   pricingProvider,
 		costErr:           fmt.Errorf("costs have not been calculated yet"),
 	}
 
@@ -87,7 +87,7 @@ func NewNodeTracker(pp PricingProvider) *NodeTracker {
 // calculateCosts calculates the per CPU core and per GB memory cost in the cluster. This method
 // is called every time a capacity or SKU change has been detected.
 //
-// At this moment the AKS metric provider calculates costs using a simplified logic (average costs);
+// At this moment the AKS property provider calculates costs using a simplified logic (average costs);
 // it runs under the assumption that:
 //
 // a) all the nodes in the cluster are AKS on-demand nodes; discounts from spot instances,
@@ -105,7 +105,7 @@ func (nt *NodeTracker) calculateCosts() {
 	// Sum up the total costs.
 	totalHourlyRate := 0.0
 	for sku, ns := range nt.nodeSetBySKU {
-		hourlyRate, found := nt.pp.OnDemandPrice(sku)
+		hourlyRate, found := nt.pricingProvider.OnDemandPrice(sku)
 		if !found {
 			// The SKU is not found in the pricing data.
 			continue
@@ -125,7 +125,7 @@ func (nt *NodeTracker) calculateCosts() {
 	if math.IsInf(cpuCores, 0) || cpuCores <= 0.001 {
 		// Report an error if the total CPU resource quantity is of an invalid value.
 		//
-		// This will stop all reportings of cost related metrics until the issue is resolved.
+		// This will stop all reportings of cost related properties until the issue is resolved.
 		nt.costErr = fmt.Errorf("failed to calculate costs: cpu quantity is of an invalid value: %v", cpuCores)
 
 		// Reset the cost data.
@@ -143,7 +143,7 @@ func (nt *NodeTracker) calculateCosts() {
 	if math.IsInf(memoryBytes, 0) || memoryBytes <= 1 {
 		// Report an error if the total memory resource quantity is of an invalid value.
 		//
-		// This will stop all reportings of cost related metrics until the issue is resolved.
+		// This will stop all reportings of cost related properties until the issue is resolved.
 		nt.costErr = fmt.Errorf("failed to calculate costs: memory quantity is of an invalid value: %v", memoryBytes)
 
 		// Reset the cost data.
@@ -418,7 +418,7 @@ func (nt *NodeTracker) TotalAllocatable() corev1.ResourceList {
 func (nt *NodeTracker) Costs() (perCPUCoreCost, perGBMemoryCost float64, err error) {
 	nt.mu.Lock()
 	defer nt.mu.Unlock()
-	if nt.costLastUpdated.Before(nt.pp.LastUpdated()) {
+	if nt.costLastUpdated.Before(nt.pricingProvider.LastUpdated()) {
 		nt.calculateCosts()
 	}
 	return nt.perCPUCoreHourlyCost, nt.perGBMemoryHourlyCost, nt.costErr

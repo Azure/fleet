@@ -107,7 +107,7 @@ var (
 				corev1.ResourceMemory: resource.MustParse("1.8Gi"),
 			},
 		},
-		pp: &dummyPricingProvider{},
+		pricingProvider: &dummyPricingProvider{},
 	}
 
 	// This variable should only work with test cases that do not mutate the tracker.
@@ -350,7 +350,7 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
 				},
-				pp: &dummyPricingProvider{},
+				pricingProvider: &dummyPricingProvider{},
 			},
 			nodes: []*corev1.Node{
 				{
@@ -439,7 +439,7 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
 				},
-				pp: &dummyPricingProvider{},
+				pricingProvider: &dummyPricingProvider{},
 			},
 			nodes: []*corev1.Node{
 				{
@@ -577,7 +577,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 					nodeName2: nodeSKU2,
 					nodeName3: nodeSKU1,
 				},
-				pp: &dummyPricingProvider{},
+				pricingProvider: &dummyPricingProvider{},
 			},
 			nodeNames: []string{nodeName2},
 			wantNT: &NodeTracker{
@@ -663,7 +663,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("1.8Gi"),
 					},
 				},
-				pp: &dummyPricingProvider{},
+				pricingProvider: &dummyPricingProvider{},
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -729,7 +729,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
 				},
-				pp: &dummyPricingProvider{},
+				pricingProvider: &dummyPricingProvider{},
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -763,7 +763,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
 				},
-				pp: &dummyPricingProvider{},
+				pricingProvider: &dummyPricingProvider{},
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
