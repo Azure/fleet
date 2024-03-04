@@ -41,7 +41,8 @@ jobs:
           # from AZURE_REGISTRY secret is not exported from here.
 
   publish-images:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-fleet-pool-ubuntu"]
     needs: prepare-variables
     steps:
       - uses: actions/checkout@v4
@@ -54,19 +55,21 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: 'Login the ACR'
-        run: az acr login -n ${{ secrets.AZURE_REGISTRY }}
+        run: |
+          az login --identity 
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: Build and publish hub-agent
         run: |
           make docker-build-hub-agent
         env:
           HUB_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY}}/${{ env.REGISTRY_REPO}}
       - name: Build and publish member-agent
         run: |
           make docker-build-member-agent
         env:
           MEMBER_AGENT_IMAGE_VERSION: ${{ needs.prepare-variables.outputs.release_tag }}
-          REGISTRY: ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO}}
+          REGISTRY: ${{ secrets.AZURE_REGISTRY}}/${{ env.REGISTRY_REPO}}
       - name: Build and publish refresh-token
         run: |
           make docker-build-refresh-token
