@@ -29,6 +29,26 @@ const (
 	TotalCondition
 )
 
+func (c resourceCondition) EventReasonForTrue() string {
+	return []string{
+		"PlacementRolloutStarted",
+		"PlacementOverriddenSucceeded",
+		"PlacementWorkCreated",
+		"PlacementApplied",
+		"PlacementAvailable",
+	}[c]
+}
+
+func (c resourceCondition) EventMessageForTrue() string {
+	return []string{
+		"Started rolling out the latest resources",
+		"Placement has been successfully overridden",
+		"Work(s) have been created successfully for the selected cluster(s)",
+		"Resources have been applied to the selected cluster(s)",
+		"Resources are available on the selected cluster(s)",
+	}[c]
+}
+
 // ResourcePlacementConditionType returns the resource condition type per cluster used by cluster resource placement.
 func (c resourceCondition) ResourcePlacementConditionType() fleetv1beta1.ResourcePlacementConditionType {
 	return []fleetv1beta1.ResourcePlacementConditionType{
@@ -48,6 +68,17 @@ func (c resourceCondition) ResourceBindingConditionType() fleetv1beta1.ResourceB
 		fleetv1beta1.ResourceBindingWorkCreated,
 		fleetv1beta1.ResourceBindingApplied,
 		fleetv1beta1.ResourceBindingAvailable,
+	}[c]
+}
+
+// ClusterResourcePlacementConditionType returns the CRP condition type used by CRP.
+func (c resourceCondition) ClusterResourcePlacementConditionType() fleetv1beta1.ClusterResourcePlacementConditionType {
+	return []fleetv1beta1.ClusterResourcePlacementConditionType{
+		fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType,
+		fleetv1beta1.ClusterResourcePlacementOverriddenConditionType,
+		fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType,
+		fleetv1beta1.ClusterResourcePlacementAppliedConditionType,
+		fleetv1beta1.ClusterResourcePlacementAvailableConditionType,
 	}[c]
 }
 
@@ -147,7 +178,7 @@ func (c resourceCondition) FalseClusterResourcePlacementCondition(generation int
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
 			Reason:             condition.OverriddenFailedReason,
-			Message:            fmt.Sprintf("Failed to override resources in %d clusters, please check the `failedPlacements` status", clusterCount),
+			Message:            fmt.Sprintf("Failed to override resources in %d clusters", clusterCount),
 			ObservedGeneration: generation,
 		},
 		{

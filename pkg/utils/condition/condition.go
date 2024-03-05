@@ -12,6 +12,9 @@ import (
 
 // A group of condition reason string which is used to populate the placement condition.
 const (
+	// ScheduleSucceededReason is the reason string of placement condition if scheduling succeeded.
+	ScheduleSucceededReason = "Scheduled"
+
 	// RolloutStartedUnknownReason is the reason string of placement condition if rollout status is
 	// unknown.
 	RolloutStartedUnknownReason = "RolloutStartedUnknown"

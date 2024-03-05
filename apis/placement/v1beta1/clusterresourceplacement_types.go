@@ -719,7 +719,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
 	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
-	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
+	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the override yet.
 	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
 
