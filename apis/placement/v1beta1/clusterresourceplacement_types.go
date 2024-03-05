@@ -323,7 +323,7 @@ type PropertySelector struct {
 	MatchExpressions []PropertySelectorRequirement `json:"matchExpressions"`
 }
 
-// PropertySorter heps user specify how to sort clusters based on a specific property.
+// PropertySorter helps user specify how to sort clusters based on a specific property.
 type PropertySorter struct {
 	// Name is the name of the property which Fleet sorts clusters by.
 	// +required
