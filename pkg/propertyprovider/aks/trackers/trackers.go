@@ -15,6 +15,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -64,7 +65,7 @@ type NodeTracker struct {
 }
 
 // NewNodeTracker returns a node tracker.
-func NewNodeTracker(pricingProvider PricingProvider) *NodeTracker {
+func NewNodeTracker(pp PricingProvider) *NodeTracker {
 	nt := &NodeTracker{
 		totalCapacity:     make(corev1.ResourceList),
 		totalAllocatable:  make(corev1.ResourceList),
@@ -72,7 +73,7 @@ func NewNodeTracker(pricingProvider PricingProvider) *NodeTracker {
 		allocatableByNode: make(map[string]corev1.ResourceList),
 		nodeSetBySKU:      make(map[string]NodeSet),
 		skuByNode:         make(map[string]string),
-		pricingProvider:   pricingProvider,
+		pricingProvider:   pp,
 		costErr:           fmt.Errorf("costs have not been calculated yet"),
 	}
 
@@ -111,6 +112,7 @@ func (nt *NodeTracker) calculateCosts() {
 			continue
 		}
 		totalHourlyRate += hourlyRate * float64(len(ns))
+		klog.V(4).InfoS("Tallying total hourly rate of the cluster", "sku", sku, "hourlyRate", hourlyRate, "nodeCount", len(ns))
 	}
 	// TO-DO (chenyu1): add a cap on the total hourly rate to ensure safe division.
 
@@ -126,7 +128,9 @@ func (nt *NodeTracker) calculateCosts() {
 		// Report an error if the total CPU resource quantity is of an invalid value.
 		//
 		// This will stop all reportings of cost related properties until the issue is resolved.
-		nt.costErr = fmt.Errorf("failed to calculate costs: cpu quantity is of an invalid value: %v", cpuCores)
+		costErr := fmt.Errorf("failed to calculate costs: cpu quantity is of an invalid value: %v", cpuCores)
+		klog.Error(costErr)
+		nt.costErr = costErr
 
 		// Reset the cost data.
 		nt.perCPUCoreHourlyCost = 0.0
@@ -134,6 +138,7 @@ func (nt *NodeTracker) calculateCosts() {
 		return
 	}
 	nt.perCPUCoreHourlyCost = totalHourlyRate / cpuCores
+	klog.V(4).InfoS("Calculated per CPU core hourly cost", "perCPUCoreHourlyCost", nt.perCPUCoreHourlyCost)
 
 	// Cast the memory resource quantitu into a float64 value. Precision might suffer a bit of
 	// loss, but it should be mostly acceptable in the case of cost calculation.
@@ -144,7 +149,9 @@ func (nt *NodeTracker) calculateCosts() {
 		// Report an error if the total memory resource quantity is of an invalid value.
 		//
 		// This will stop all reportings of cost related properties until the issue is resolved.
-		nt.costErr = fmt.Errorf("failed to calculate costs: memory quantity is of an invalid value: %v", memoryBytes)
+		costErr := fmt.Errorf("failed to calculate costs: memory quantity is of an invalid value: %v", memoryBytes)
+		klog.Error(costErr)
+		nt.costErr = costErr
 
 		// Reset the cost data.
 		nt.perCPUCoreHourlyCost = 0.0
@@ -152,6 +159,8 @@ func (nt *NodeTracker) calculateCosts() {
 		return
 	}
 	nt.perGBMemoryHourlyCost = totalHourlyRate / (memoryBytes / (1024.0 * 1024.0 * 1024.0))
+	klog.V(4).InfoS("Calculated per GB memory hourly cost", "perGBMemoryHourlyCost", nt.perGBMemoryHourlyCost)
+
 	nt.costLastUpdated = time.Now()
 	nt.costErr = nil
 }
@@ -173,6 +182,7 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		}
 		ns[node.Name] = true
 		nt.nodeSetBySKU[sku] = ns
+		klog.V(4).InfoS("The node's SKU has not been tracked", "sku", sku, "node", klog.KObj(node))
 		return true
 	case registeredSKU != sku:
 		// The node's SKU has changed.
@@ -188,9 +198,11 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		}
 		ns[node.Name] = true
 		nt.nodeSetBySKU[sku] = ns
+		klog.V(4).InfoS("The node's SKU has changed", "oldSKU", registeredSKU, "newSKU", sku, "node", klog.KObj(node))
 		return true
 	default:
-		// No further action is needed if the node's SKU and spot instance status remain the same.
+		// No further action is needed if the node's SKU remains the same.
+		klog.V(4).InfoS("The node's SKU has not changed", "sku", sku, "node", klog.KObj(node))
 		return false
 	}
 }
@@ -206,6 +218,7 @@ func (nt *NodeTracker) trackAllocatableCapacity(node *corev1.Node) {
 		// Typically, a node's allocatable capacity is immutable after the node
 		// is created; here, the provider still performs a sanity check to avoid
 		// any inconsistencies.
+		klog.V(4).InfoS("Node's allocatable capacity has been tracked", "node", klog.KObj(node))
 		for _, rn := range supportedResourceNames {
 			c1 := ra[rn]
 			c2 := node.Status.Allocatable[rn]
@@ -221,6 +234,7 @@ func (nt *NodeTracker) trackAllocatableCapacity(node *corev1.Node) {
 				// Update the tracked total capacity of the node.
 				ra[rn] = c2
 			}
+			klog.V(4).InfoS("Found an allocatable capacity change", "resource", rn, "node", klog.KObj(node), "oldCapacity", c1, "newCapacity", c2)
 		}
 	} else {
 		ra = make(corev1.ResourceList)
@@ -233,6 +247,7 @@ func (nt *NodeTracker) trackAllocatableCapacity(node *corev1.Node) {
 			ta := nt.totalAllocatable[rn]
 			ta.Add(a)
 			nt.totalAllocatable[rn] = ta
+			klog.V(4).InfoS("Added allocatable capacity", "resource", rn, "node", klog.KObj(node), "capacity", a)
 		}
 
 		nt.allocatableByNode[node.Name] = ra
@@ -252,6 +267,7 @@ func (nt *NodeTracker) trackTotalCapacity(node *corev1.Node) bool {
 		// Typically, a node's total capacity is immutable after the node
 		// is created; here, the provider still performs a sanity check to avoid
 		// any inconsistencies.
+		klog.V(4).InfoS("Node's total capacity has been tracked", "node", klog.KObj(node))
 		for _, rn := range supportedResourceNames {
 			c1 := rc[rn]
 			c2 := node.Status.Capacity[rn]
@@ -268,10 +284,12 @@ func (nt *NodeTracker) trackTotalCapacity(node *corev1.Node) bool {
 				rc[rn] = c2
 
 				isCapacityChanged = true
+				klog.V(4).InfoS("Found a total capacity change", "resource", rn, "node", klog.KObj(node), "oldCapacity", c1, "newCapacity", c2)
 			}
 		}
 	} else {
 		// The node's total capacity has not been tracked.
+		klog.V(4).InfoS("Node's total capacity has not been tracked yet", "node", klog.KObj(node))
 		rc = make(corev1.ResourceList)
 
 		for _, rn := range supportedResourceNames {
@@ -281,6 +299,7 @@ func (nt *NodeTracker) trackTotalCapacity(node *corev1.Node) bool {
 			tc := nt.totalCapacity[rn]
 			tc.Add(c)
 			nt.totalCapacity[rn] = tc
+			klog.V(4).InfoS("Added total capacity", "resource", rn, "node", klog.KObj(node), "capacity", c)
 		}
 
 		nt.capacityByNode[node.Name] = rc
@@ -317,6 +336,7 @@ func (nt *NodeTracker) untrackSKU(nodeName string) {
 	if found {
 		delete(nt.skuByNode, nodeName)
 		delete(nt.nodeSetBySKU[sku], nodeName)
+		klog.V(4).InfoS("Untracked the node's SKU", "sku", sku, "node", nodeName)
 	}
 }
 
@@ -333,6 +353,7 @@ func (nt *NodeTracker) untrackTotalCapacity(nodeName string) {
 			nt.totalCapacity[rn] = tc
 		}
 		delete(nt.capacityByNode, nodeName)
+		klog.V(4).InfoS("Untracked the node's total capacity", "node", nodeName)
 	}
 }
 
@@ -348,6 +369,7 @@ func (nt *NodeTracker) untrackAllocatableCapacity(nodeName string) {
 		}
 
 		delete(nt.allocatableByNode, nodeName)
+		klog.V(4).InfoS("Untracked the node's allocatable capacity", "node", nodeName)
 	}
 }
 
@@ -472,6 +494,7 @@ func (pt *PodTracker) AddOrUpdate(pod *corev1.Pod) {
 		// At this moment, a pod's requested resources are immutable after the pod
 		// is created; in-place vertical scaling is not yet possible. However, the provider
 		// here still performs a sanity check to avoid any inconsistencies.
+		klog.V(4).InfoS("Pod's requested resources have been tracked", "pod", klog.KObj(pod))
 		for _, rn := range supportedResourceNames {
 			r1 := rp[rn]
 			r2 := requestsAcrossAllContainers[rn]
@@ -486,9 +509,11 @@ func (pt *PodTracker) AddOrUpdate(pod *corev1.Pod) {
 
 				// Update the tracked requested resources of the pod.
 				rp[rn] = r2
+				klog.V(4).InfoS("Found a requested resource change", "resource", rn, "pod", klog.KObj(pod), "oldRequest", r1, "newRequest", r2)
 			}
 		}
 	} else {
+		klog.V(4).InfoS("Pod's requested resources have not been tracked yet", "pod", klog.KObj(pod))
 		rp = make(corev1.ResourceList)
 
 		// The pod's requested resources have not been tracked.
@@ -499,6 +524,7 @@ func (pt *PodTracker) AddOrUpdate(pod *corev1.Pod) {
 			tr := pt.totalRequested[rn]
 			tr.Add(r)
 			pt.totalRequested[rn] = tr
+			klog.V(4).InfoS("Added requested resource", "resource", rn, "pod", klog.KObj(pod), "request", r)
 		}
 
 		pt.requestedByPod[podIdentifier] = rp
@@ -521,6 +547,7 @@ func (pt *PodTracker) Remove(podIdentifier string) {
 		}
 
 		delete(pt.requestedByPod, podIdentifier)
+		klog.V(4).InfoS("Untracked the pod's requested resources", "pod", podIdentifier)
 	}
 }
 
