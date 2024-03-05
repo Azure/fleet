@@ -138,7 +138,7 @@ func TestPreScore(t *testing.T) {
 									{
 										Weight: 100,
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name: nodeCountPropertyName,
 											},
 										},
@@ -225,7 +225,7 @@ func TestPreScore(t *testing.T) {
 									{
 										Weight: 100,
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name: nodeCountPropertyName,
 											},
 										},
@@ -233,7 +233,7 @@ func TestPreScore(t *testing.T) {
 									{
 										Weight: 100,
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name: availableCPUPropertyName,
 											},
 										},
@@ -397,7 +397,7 @@ func TestPluginScore(t *testing.T) {
 									{
 										Weight: 50,
 										Preference: placementv1beta1.ClusterSelectorTerm{
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name:      nodeCountPropertyName,
 												SortOrder: placementv1beta1.Ascending,
 											},
@@ -450,7 +450,7 @@ func TestPluginScore(t *testing.T) {
 													regionLabelName: regionLabelValue2,
 												},
 											},
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name:      nodeCountPropertyName,
 												SortOrder: placementv1beta1.Descending,
 											},
@@ -510,7 +510,7 @@ func TestPluginScore(t *testing.T) {
 													regionLabelName: regionLabelValue2,
 												},
 											},
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name:      nodeCountPropertyName,
 												SortOrder: placementv1beta1.Descending,
 											},
@@ -530,7 +530,7 @@ func TestPluginScore(t *testing.T) {
 													},
 												},
 											},
-											PropertySorter: &placementv1beta1.PropertySortPreference{
+											PropertySorter: &placementv1beta1.PropertySorter{
 												Name:      availableCPUPropertyName,
 												SortOrder: placementv1beta1.Ascending,
 											},
