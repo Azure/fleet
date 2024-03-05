@@ -48,7 +48,7 @@ jobs:
         with:
           ref: ${{ needs.prepare-variables.outputs.release_tag }}
       - name: 'OIDC Login to Azure Public Cloud'
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
