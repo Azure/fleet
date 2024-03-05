@@ -47,6 +47,9 @@ type Reconciler struct {
 	// before updating the internal member cluster CR status
 	workController *work.ApplyWorkReconciler
 
+	// The context in which the reconciler runs in, i.e., the context that cancels
+	// when the member agent ends.
+	globalCtx context.Context
 	// propertyProvider is the provider that collects and exposes cluster properties.
 	//
 	// Note that this can be set to nil; in that case, the controller will fall back to the
@@ -130,7 +133,8 @@ const (
 )
 
 // NewReconciler creates a new reconciler for the internalMemberCluster CR
-func NewReconciler(hubClient client.Client,
+func NewReconciler(globalCtx context.Context,
+	hubClient client.Client,
 	memberCfg *rest.Config,
 	memberClient client.Client,
 	workController *work.ApplyWorkReconciler,
@@ -142,6 +146,7 @@ func NewReconciler(hubClient client.Client,
 	}
 
 	return &Reconciler{
+		globalCtx:          globalCtx,
 		hubClient:          hubClient,
 		memberConfig:       memberCfg,
 		memberClient:       memberClient,
@@ -274,7 +279,7 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 		// Attempt to start the property provider.
 		go func() {
 			defer close(startedCh)
-			if err := r.propertyProvider.Start(childCtx, r.memberConfig); err != nil {
+			if err := r.propertyProvider.Start(r.globalCtx, r.memberConfig); err != nil {
 				klog.ErrorS(err, "failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
 				startedCh <- err
 			}

@@ -339,7 +339,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		}
 
 		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
-		imcReconciler, err := imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetConfig(), memberMgr.GetClient(), workController, nil)
+		imcReconciler, err := imcv1beta1.NewReconciler(ctx, hubMgr.GetClient(), memberMgr.GetConfig(), memberMgr.GetClient(), workController, nil)
 		if err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "internalMemberCluster")
 			return fmt.Errorf("unable to create internalMemberCluster v1beta1 controller: %w", err)
