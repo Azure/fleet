@@ -243,12 +243,8 @@ func validateTolerations(tolerations []placementv1beta1.Toleration) error {
 			if toleration.Key == "" {
 				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is Equal"))
 			}
-			if toleration.Value == "" {
-				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value cannot be empty, when operator is Equal"))
-			} else {
-				for _, msg := range validation.IsValidLabelValue(toleration.Value) {
-					allErr = append(allErr, fmt.Errorf(invalidTolerationValueErrFmt, toleration, msg))
-				}
+			for _, msg := range validation.IsValidLabelValue(toleration.Value) {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationValueErrFmt, toleration, msg))
 			}
 		}
 		if tolerationMap[toleration] {

@@ -1064,6 +1064,16 @@ func TestValidateTolerations(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		"valid toleration, value is empty, operator is Equal": {
+			tolerations: []placementv1beta1.Toleration{
+				{
+					Key:      "key1",
+					Operator: corev1.TolerationOpEqual,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
+			wantErr: false,
+		},
 		"invalid toleration, key is empty, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
 				{
@@ -1086,17 +1096,6 @@ func TestValidateTolerations(t *testing.T) {
 			},
 			wantErr:    true,
 			wantErrMsg: "name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
-		},
-		"invalid toleration, value is empty, operator is Equal": {
-			tolerations: []placementv1beta1.Toleration{
-				{
-					Key:      "key1",
-					Operator: corev1.TolerationOpEqual,
-					Effect:   corev1.TaintEffectNoSchedule,
-				},
-			},
-			wantErr:    true,
-			wantErrMsg: "toleration value cannot be empty, when operator is Equal",
 		},
 		"invalid toleration, value is invalid, operator is Equal": {
 			tolerations: []placementv1beta1.Toleration{
