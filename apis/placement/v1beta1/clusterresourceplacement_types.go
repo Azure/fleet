@@ -323,7 +323,8 @@ type PropertySelector struct {
 	MatchExpressions []PropertySelectorRequirement `json:"matchExpressions"`
 }
 
-type PropertySortPreference struct {
+// PropertySorter helps user specify how to sort clusters based on a specific property.
+type PropertySorter struct {
 	// Name is the name of the property which Fleet sorts clusters by.
 	// +required
 	Name string `json:"name"`
@@ -358,7 +359,7 @@ type ClusterSelectorTerm struct {
 	// At this moment, PropertySorter can only be used with
 	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
 	// +optional
-	PropertySorter *PropertySortPreference `json:"propertySorter,omitempty"`
+	PropertySorter *PropertySorter `json:"propertySorter,omitempty"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.
@@ -844,6 +845,14 @@ type ClusterResourcePlacementList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacement `json:"items"`
+}
+
+// Tolerations returns tolerations for ClusterResourcePlacement.
+func (m *ClusterResourcePlacement) Tolerations() []Toleration {
+	if m.Spec.Policy != nil {
+		return m.Spec.Policy.Tolerations
+	}
+	return nil
 }
 
 // SetConditions sets the conditions of the ClusterResourcePlacement.

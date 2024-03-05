@@ -107,6 +107,15 @@ func NewUpdateIgnoreConflictError(err error) error {
 	return NewExpectedBehaviorError(err)
 }
 
+// NewDeleteIgnoreNotFoundError returns nil if the error is not found.
+// Otherwise, returns ErrAPIServerError type error if err is not nil
+func NewDeleteIgnoreNotFoundError(err error) error {
+	if !apierrors.IsNotFound(err) {
+		return NewAPIServerError(false, err)
+	}
+	return nil
+}
+
 // Controller maintains a rate limiting queue and the items in the queue will be reconciled by a "ReconcileFunc".
 // The item will be re-queued if "ReconcileFunc" returns an error, maximum re-queue times defined by "maxRetries" above,
 // after that the item will be discarded from the queue.
