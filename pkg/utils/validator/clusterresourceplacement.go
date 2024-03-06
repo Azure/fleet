@@ -136,8 +136,12 @@ func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 			allErr = append(allErr, err)
 		}
 	}
-	if err := validateTolerations(policy.Tolerations); err != nil {
-		allErr = append(allErr, err)
+	if policy.PlacementType != placementv1beta1.PickFixedPlacementType {
+		if err := validateTolerations(policy.Tolerations); err != nil {
+			allErr = append(allErr, err)
+		}
+	} else if policy.Tolerations != nil {
+		allErr = append(allErr, fmt.Errorf("tolerations needs to be empty for policy type %s, only valid for PickAll/PickN", placementv1beta1.PickFixedPlacementType))
 	}
 
 	return apiErrors.NewAggregate(allErr)
@@ -152,7 +156,7 @@ func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementP
 		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
 	}
 	if policy.Affinity != nil {
-		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement poliy types", placementv1beta1.PickFixedPlacementType))
+		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement policy types", placementv1beta1.PickFixedPlacementType))
 	}
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickFixedPlacementType))
@@ -272,7 +276,7 @@ func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.To
 	allErr := make([]error, 0)
 	for _, tc := range topologyConstraints {
 		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule && tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
-			allErr = append(allErr, fmt.Errorf("unknown when unsatisfiable type %s", tc.WhenUnsatisfiable))
+			allErr = append(allErr, fmt.Errorf("unknown unsatisfiable type %s", tc.WhenUnsatisfiable))
 		}
 	}
 	return apiErrors.NewAggregate(allErr)
