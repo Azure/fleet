@@ -118,9 +118,9 @@ const (
 	// the latest cluster properties to the Fleet member agent.
 	propertyProviderCollectionDeadline = time.Second * 10
 
-	// maxedQueuedPropertyCollectionCalls is the maximum count of on-going calls to the
+	// maxQueuedPropertyCollectionCalls is the maximum count of on-going calls to the
 	// property provider.
-	maxedQueuedPropertyCollectionCalls = 3
+	maxQueuedPropertyCollectionCalls = 3
 
 	// healthProbePath is the path to the member cluster API server which the Fleet member agent
 	// will perform health probes against.
@@ -353,7 +353,7 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 	// Check if there are queued calls that have not returned yet.
 	ticket := r.queuedPropertyCollectionCalls.Add(1)
 	defer r.queuedPropertyCollectionCalls.Add(-1)
-	if ticket > int32(maxedQueuedPropertyCollectionCalls) {
+	if ticket > int32(maxQueuedPropertyCollectionCalls) {
 		// There are too many on-going calls to the property provider; report the failure
 		// and skip this collection attempt.
 		reportPropertyProviderCollectionCondition(imc,
