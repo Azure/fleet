@@ -14,6 +14,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -32,6 +34,9 @@ const (
 	dummyReason     = "dummyReason"
 	dummyLabel      = "dummy-label"
 	dummyLabelValue = "dummy-label-value"
+
+	dummyNonResourcePropertyName  = "dummy-non-resource-property"
+	dummyNonResourcePropertyValue = "0"
 )
 
 var (
@@ -138,6 +143,112 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 				dummyLabel: dummyLabelValue,
 			}
 			Expect(hubClient.Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster labels")
+		})
+
+		It("should enqueue CRPs (case 1a)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("ready cluster has a non-resource property change", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the list of non-resource properties.
+			memberCluster.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				dummyNonResourcePropertyName: {
+					Value:           dummyNonResourcePropertyValue,
+					ObservationTime: metav1.NewTime(time.Now()),
+				},
+			}
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster non-resource properties")
+		})
+
+		It("should enqueue CRPs (case 1a)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("ready cluster has a total capacity change", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the list of non-resource properties.
+			memberCluster.Status.ResourceUsage.Capacity = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1000m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			}
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster non-resource properties")
+		})
+
+		It("should enqueue CRPs (case 1a)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("ready cluster has an allocatable capacity change", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the list of non-resource properties.
+			memberCluster.Status.ResourceUsage.Allocatable = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1000m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			}
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster non-resource properties")
+		})
+
+		It("should enqueue CRPs (case 1a)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+		})
+
+		AfterAll(func() {
+			keyCollector.Reset()
+		})
+	})
+
+	Context("ready cluster has an available capacity change", func() {
+		BeforeAll(func() {
+			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
+
+			// Retrieve the cluster.
+			memberCluster := &clusterv1beta1.MemberCluster{}
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update the list of non-resource properties.
+			memberCluster.Status.ResourceUsage.Available = corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1000m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			}
+			Expect(hubClient.Status().Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster non-resource properties")
 		})
 
 		It("should enqueue CRPs (case 1a)", func() {

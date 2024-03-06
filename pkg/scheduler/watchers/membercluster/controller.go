@@ -55,7 +55,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//
 	//     It may happen for 2 reasons:
 	//
-	//     a) the cluster setting, specifically its labels, has changed; and/or
+	//     a) the cluster's setup (e.g., its labels) or status (e.g., resource/non-resource properties),
+	//        has changed; and/or
 	//     b) an unexpected development which originally leads the scheduler to disregard the cluster
 	//     (e.g., agents not joining, network partition, etc.) has been resolved.
 	//
@@ -63,7 +64,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//
 	//     Similarly, it may happen for 2 reasons:
 	//
-	//     a) the cluster setting, specifically its labels, has changed; and/or
+	//     a) the cluster's setup (e.g., its labels) or status (e.g., resource/non-resource properties),
+	//        has changed; and/or
 	//     b) an unexpected development (e.g., agents failing, network partition, etc.) has occurred.
 	//     c) the cluster, which may or may not have resources placed on it, has left the fleet (deleting).
 	//
@@ -190,18 +192,71 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return false
 			}
 
-			// Capture label changes.
-			//
 			clusterKObj := klog.KObj(newCluster)
 			// The cluster is being deleted.
 			if oldCluster.GetDeletionTimestamp().IsZero() && !newCluster.GetDeletionTimestamp().IsZero() {
 				klog.V(2).InfoS("A member cluster is leaving the fleet", "memberCluster", clusterKObj)
 				return true
 			}
+
+			// Capture label changes.
+			//
 			// Note that the controller runs only when label changes happen on joined clusters.
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				klog.V(2).InfoS("A member cluster label change has been detected", "memberCluster", clusterKObj)
 				return true
+			}
+
+			// Capture non-resource property changes.
+			//
+			// Observation time refreshes is not considered as a change.
+			oldProperties := oldCluster.Status.Properties
+			newProperties := newCluster.Status.Properties
+			if len(oldProperties) != len(newProperties) {
+				return true
+			}
+			for oldK, oldV := range oldProperties {
+				newV, ok := newProperties[oldK]
+				if !ok || oldV.Value != newV.Value {
+					return true
+				}
+			}
+
+			// Capture resource usage changes.
+			oldCapacity := oldCluster.Status.ResourceUsage.Capacity
+			newCapacity := newCluster.Status.ResourceUsage.Capacity
+			if len(oldCapacity) != len(newCapacity) {
+				return true
+			}
+			for oldK, oldV := range oldCapacity {
+				newV, ok := newCapacity[oldK]
+				if !ok || !oldV.Equal(newV) {
+					return true
+				}
+			}
+
+			oldAllocatable := oldCluster.Status.ResourceUsage.Allocatable
+			newAllocatable := newCluster.Status.ResourceUsage.Allocatable
+			if len(oldAllocatable) != len(newAllocatable) {
+				return true
+			}
+			for oldK, oldV := range oldAllocatable {
+				newV, ok := newAllocatable[oldK]
+				if !ok || !oldV.Equal(newV) {
+					return true
+				}
+			}
+
+			oldAvailable := oldCluster.Status.ResourceUsage.Available
+			newAvailable := newCluster.Status.ResourceUsage.Available
+			if len(oldAvailable) != len(newAvailable) {
+				return true
+			}
+			for oldK, oldV := range oldAvailable {
+				newV, ok := newAvailable[oldK]
+				if !ok || !oldV.Equal(newV) {
+					return true
+				}
 			}
 
 			// Check the resource placement eligibility for the old and new cluster object.
