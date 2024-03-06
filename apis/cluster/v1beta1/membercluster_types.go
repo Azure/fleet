@@ -141,6 +141,23 @@ const (
 	// - "Unknown" means the member cluster has an unknown health status.
 	// NOTE: This condition type is currently unused.
 	ConditionTypeMemberClusterHealthy MemberClusterConditionType = "Healthy"
+
+	// ConditionTypeClusterPropertyProviderStarted indicates the startup condition of the configured
+	// cluster property provider (if any).
+	// Its condition status can be one of the following:
+	// - "True" means the cluster property provider has started.
+	// - "False" means the cluster property provider has failed to start.
+	// - "Unknown" means it is unknown whether the cluster property provider has started or not.
+	ConditionTypeClusterPropertyProviderStarted MemberClusterConditionType = "ClusterPropertyProviderStarted"
+
+	// ConditionTypeClusterPropertyCollectionSucceeded indicates the
+	// condition of the latest attempt to collect cluster properties from the configured
+	// cluster property provider (if any).
+	// Its condition status can be one of the following:
+	// - "True" means the cluster property collection has succeeded.
+	// - "False" means the cluster property collection has failed.
+	// - "Unknown" means it is unknown whether the cluster property collection has succeeded or not.
+	ConditionTypeClusterPropertyCollectionSucceeded MemberClusterConditionType = "ClusterPropertyCollectionSucceeded"
 )
 
 //+kubebuilder:object:root=true

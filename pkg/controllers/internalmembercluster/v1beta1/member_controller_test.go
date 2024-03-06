@@ -405,7 +405,7 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 				Status: clusterv1beta1.InternalMemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:    ClusterPropertyCollectionSucceededConditionType,
+							Type:    string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
 							Status:  metav1.ConditionFalse,
 							Reason:  ClusterPropertyCollectionFailedTooManyCallsReason,
 							Message: ClusterPropertyCollectionFailedTooManyCallsMessage,
@@ -425,28 +425,14 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 			for i := 0; i < maxedQueuedPropertyCollectionCalls; i++ {
 				// Invoke the method with no expectations for returns.
 				go func() {
-					imc := tc.imc.DeepCopy()
-					r.reportClusterPropertiesWithPropertyProvider(ctx, imc) //nolint:all
+					r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc) //nolint:all
 					// Linting is disabled for this line as we are discarding the returned error intentionally.
 				}()
 			}
 
-			childCtx, childCancelFunc := context.WithDeadline(ctx, time.Now().Add(time.Second*10))
-			// Always cancel to avoid leaks.
-			defer childCancelFunc()
 			for {
-				done := false
-				// Wait for the prev. calls to get queued, or until the deadline passed.
-				select {
-				case <-childCtx.Done():
-					t.Fatalf("timed out waiting for queued property collection calls to accumulate")
-				default:
-					if r.queuedPropertyCollectionCalls.Load() == int32(maxedQueuedPropertyCollectionCalls) {
-						done = true
-					}
-				}
-
-				if done {
+				// Wait for the prev. calls to get queued.
+				if r.queuedPropertyCollectionCalls.Load() == int32(maxedQueuedPropertyCollectionCalls) {
 					break
 				}
 			}
@@ -492,7 +478,7 @@ func TestReportClusterPropertiesWithPropertyProviderTimedOut(t *testing.T) {
 				Status: clusterv1beta1.InternalMemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:    ClusterPropertyCollectionSucceededConditionType,
+							Type:    string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
 							Status:  metav1.ConditionFalse,
 							Reason:  ClusterPropertyCollectionTimedOutReason,
 							Message: ClusterPropertyCollectionTimedOutMessage,
@@ -592,7 +578,7 @@ func TestReportClusterPropertiesWithPropertyProvider(t *testing.T) {
 				Status: clusterv1beta1.InternalMemberClusterStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               ClusterPropertyCollectionSucceededConditionType,
+							Type:               string(clusterv1beta1.ConditionTypeClusterPropertyCollectionSucceeded),
 							Status:             metav1.ConditionTrue,
 							Reason:             ClusterPropertyCollectionSucceededReason,
 							Message:            ClusterPropertyCollectionSucceededMessage,
