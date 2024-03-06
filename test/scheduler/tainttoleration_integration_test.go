@@ -201,9 +201,9 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		// The scheduler is designed to produce only deterministic decisions; if there are no
 		// comparable scores available for selected clusters, the scheduler will rank the clusters
 		// by their names.
-		wantPickedClusters := []string{memberCluster1EastProd, memberCluster2EastProd}
-		wantFilteredClusters1 := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
-		wantFilteredClusters2 := []string{memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
+		wantFilteredClusters := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
+		wantPickedClustersAfter := []string{memberCluster1EastProd, memberCluster2EastProd}
+		wantFilteredClustersAfter := []string{memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
@@ -260,7 +260,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, []string{}, []string{}, wantFilteredClusters1, zeroScoreByCluster, policySnapshotName1)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, []string{}, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName1)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -283,7 +283,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, wantPickedClusters, []string{}, wantFilteredClusters2, zeroScoreByCluster, policySnapshotName2)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, wantPickedClustersAfter, []string{}, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName2)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
