@@ -778,12 +778,12 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 	tests := map[string]struct {
 		oldPolicy     *placementv1beta1.PlacementPolicy
 		currentPolicy *placementv1beta1.PlacementPolicy
-		wantResult    bool
+		want          bool
 	}{
 		"old policy is nil, current policy is nil": {
 			oldPolicy:     nil,
 			currentPolicy: nil,
-			wantResult:    false,
+			want:          false,
 		},
 		"old policy nil, current policy non nil, current placement type is PickAll": {
 			oldPolicy: nil,
@@ -803,7 +803,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: false,
+			want: false,
 		},
 		"old policy nil, current policy non nil, current placement type is PickN": {
 			oldPolicy: nil,
@@ -823,7 +823,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: true,
+			want: true,
 		},
 		"old policy is non nil, current policy is nil, old placement type is PickAll": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
@@ -843,7 +843,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 				},
 			},
 			currentPolicy: nil,
-			wantResult:    false,
+			want:          false,
 		},
 		"old policy is non nil, current policy is nil, old placement type is PickFixed": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
@@ -863,7 +863,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 				},
 			},
 			currentPolicy: nil,
-			wantResult:    true,
+			want:          true,
 		},
 		"old policy is non nil, current policy is non nil, placement type changed": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
@@ -898,7 +898,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: true,
+			want: true,
 		},
 		"old policy is not nil, current policy is non nil, placement type unchanged": {
 			oldPolicy: &placementv1beta1.PlacementPolicy{
@@ -933,13 +933,13 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 					},
 				},
 			},
-			wantResult: false,
+			want: false,
 		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if gotResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); gotResult != testCase.wantResult {
-				t.Errorf("IsPlacementPolicyUpdateValid() gotResult = %v, wantResult %v", gotResult, testCase.wantResult)
+			if got := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); got != testCase.want {
+				t.Errorf("IsPlacementPolicyUpdateValid() got = %v, want %v", got, testCase.want)
 			}
 		})
 	}
