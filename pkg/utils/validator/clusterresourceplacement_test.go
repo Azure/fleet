@@ -190,7 +190,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 				t.Errorf("ValidateClusterResourcePlacementAlpha() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("ValidateClusterResourcePlacementAlpha() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("ValidateClusterResourcePlacementAlpha() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
@@ -264,7 +264,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("ValidateClusterResourcePlacement() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("ValidateClusterResourcePlacement() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
@@ -357,7 +357,7 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 				t.Errorf("validateRolloutStrategy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateRolloutStrategy() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validateRolloutStrategy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
@@ -426,6 +426,36 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 			wantErr:    true,
 			wantErrMsg: "topology spread constraints needs to be empty for policy type PickFixed, only valid for PickN policy type",
 		},
+		"valid placement policy, PickFixed placementType, empty toleration, nil error": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				ClusterNames:  []string{"test-cluster"},
+			},
+			wantErr: false,
+		},
+		"invalid placement policy - PickFixed placementType, non empty valid tolerations, error": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickFixedPlacementType,
+				Tolerations: []placementv1beta1.Toleration{
+					{
+						Key:      "key1",
+						Operator: corev1.TolerationOpEqual,
+						Value:    "value1",
+						Effect:   corev1.TaintEffectNoSchedule,
+					},
+					{
+						Key:      "key2",
+						Operator: corev1.TolerationOpExists,
+						Effect:   corev1.TaintEffectNoSchedule,
+					},
+					{
+						Operator: corev1.TolerationOpExists,
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "tolerations needs to be empty for policy type PickFixed, only valid for PickAll/PickN",
+		},
 	}
 
 	for testName, testCase := range tests {
@@ -435,7 +465,7 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validatePlacementPolicy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
@@ -540,6 +570,27 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		"valid placement policy - PickAll placementType, empty tolerations, nil error": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			},
+			wantErr: false,
+		},
+		"invalid placement policy - PickAll placementType, non empty invalid tolerations, error": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Tolerations: []placementv1beta1.Toleration{
+					{
+						Key:      "key1",
+						Operator: corev1.TolerationOpExists,
+						Value:    "value1",
+						Effect:   corev1.TaintEffectNoSchedule,
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "toleration value needs to be empty, when operator is Exists",
+		},
 	}
 
 	for testName, testCase := range tests {
@@ -549,7 +600,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validatePlacementPolicy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
@@ -686,75 +737,17 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			},
 			wantErr: false,
 		},
-	}
-
-	for testName, testCase := range tests {
-		t.Run(testName, func(t *testing.T) {
-			gotErr := validatePlacementPolicy(testCase.policy)
-			if (gotErr != nil) != testCase.wantErr {
-				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
-			}
-			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
-			}
-		})
-	}
-}
-
-func TestValidateClusterResourcePlacement_ValidateTolerations(t *testing.T) {
-	tests := map[string]struct {
-		policy     *placementv1beta1.PlacementPolicy
-		wantErr    bool
-		wantErrMsg string
-	}{
-		"pickFixed placementType, empty toleration, nil err": {
+		"valid placement policy - PickN placementType, empty tolerations, nil error": {
 			policy: &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickFixedPlacementType,
-				ClusterNames:  []string{"test-cluster"},
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
 			},
 			wantErr: false,
 		},
-		"pickFixed placementType, non empty valid tolerations, error": {
+		"invalid placement policy - PickN placementType, non empty invalid tolerations, error": {
 			policy: &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickFixedPlacementType,
-				Tolerations: []placementv1beta1.Toleration{
-					{
-						Key:      "key1",
-						Operator: corev1.TolerationOpEqual,
-						Value:    "value1",
-						Effect:   corev1.TaintEffectNoSchedule,
-					},
-					{
-						Key:      "key2",
-						Operator: corev1.TolerationOpExists,
-						Effect:   corev1.TaintEffectNoSchedule,
-					},
-					{
-						Operator: corev1.TolerationOpExists,
-					},
-				},
-			},
-			wantErr:    true,
-			wantErrMsg: "tolerations needs to be empty for policy type PickFixed, only valid for PickAll/PickN",
-		},
-		"pickAll placementType, non empty invalid tolerations, error": {
-			policy: &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickAllPlacementType,
-				Tolerations: []placementv1beta1.Toleration{
-					{
-						Key:      "key1",
-						Operator: corev1.TolerationOpExists,
-						Value:    "value1",
-						Effect:   corev1.TaintEffectNoSchedule,
-					},
-				},
-			},
-			wantErr:    true,
-			wantErrMsg: "toleration value needs to be empty, when operator is Exists",
-		},
-		"pickN placementType, non empty invalid tolerations, error": {
-			policy: &placementv1beta1.PlacementPolicy{
-				PlacementType: placementv1beta1.PickAllPlacementType,
+				PlacementType:    placementv1beta1.PickAllPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
 				Tolerations: []placementv1beta1.Toleration{
 					{
 						Operator: corev1.TolerationOpEqual,
@@ -775,7 +768,7 @@ func TestValidateClusterResourcePlacement_ValidateTolerations(t *testing.T) {
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validatePlacementPolicy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
@@ -1076,7 +1069,7 @@ func TestValidateTolerations(t *testing.T) {
 				t.Errorf("validateTolerations() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateTolerations() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validateTolerations() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}

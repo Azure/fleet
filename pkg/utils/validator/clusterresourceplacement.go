@@ -136,13 +136,6 @@ func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
 			allErr = append(allErr, err)
 		}
 	}
-	if policy.PlacementType != placementv1beta1.PickFixedPlacementType {
-		if err := validateTolerations(policy.Tolerations); err != nil {
-			allErr = append(allErr, err)
-		}
-	} else if policy.Tolerations != nil {
-		allErr = append(allErr, fmt.Errorf("tolerations needs to be empty for policy type %s, only valid for PickAll/PickN", placementv1beta1.PickFixedPlacementType))
-	}
 
 	return apiErrors.NewAggregate(allErr)
 }
@@ -160,6 +153,9 @@ func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementP
 	}
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickFixedPlacementType))
+	}
+	if policy.Tolerations != nil {
+		allErr = append(allErr, fmt.Errorf("tolerations needs to be empty for policy type %s, only valid for PickAll/PickN", placementv1beta1.PickFixedPlacementType))
 	}
 
 	return apiErrors.NewAggregate(allErr)
@@ -180,6 +176,7 @@ func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPol
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickAllPlacementType))
 	}
+	allErr = append(allErr, validateTolerations(policy.Tolerations))
 
 	return apiErrors.NewAggregate(allErr)
 }
@@ -203,6 +200,7 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, validateTopologySpreadConstraints(policy.TopologySpreadConstraints))
 	}
+	allErr = append(allErr, validateTolerations(policy.Tolerations))
 
 	return apiErrors.NewAggregate(allErr)
 }

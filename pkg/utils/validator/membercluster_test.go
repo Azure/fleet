@@ -93,7 +93,7 @@ func TestValidateTaints(t *testing.T) {
 				t.Errorf("validateTaints() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateTaints() failed to find expected error message = %s, in error = %s", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validateTaints() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
 			}
 		})
 	}
