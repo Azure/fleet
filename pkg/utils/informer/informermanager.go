@@ -8,7 +8,6 @@ package informer
 import (
 	"context"
 	"fmt"
-
 	"sync"
 	"time"
 
@@ -126,7 +125,7 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 				panic(err)
 			}
 			s.apiResources[newRes.GroupVersionKind] = &newRes
-			klog.InfoS("Added an informer for a new resource", "res", newRes)
+			klog.InfoS("Added an informer for a new resource", "res", s.apiResources[newRes.GroupVersionKind])
 		}
 	}
 
