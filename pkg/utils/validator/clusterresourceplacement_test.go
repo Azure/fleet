@@ -190,7 +190,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 				t.Errorf("ValidateClusterResourcePlacementAlpha() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("ValidateClusterResourcePlacementAlpha() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("ValidateClusterResourcePlacementAlpha() got %v, should contain want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -264,7 +264,7 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("ValidateClusterResourcePlacement() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("ValidateClusterResourcePlacement() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -357,7 +357,7 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 				t.Errorf("validateRolloutStrategy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateRolloutStrategy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validateRolloutStrategy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -465,7 +465,7 @@ func TestValidateClusterResourcePlacement_PickFixedPlacementPolicy(t *testing.T)
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validatePlacementPolicy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -600,7 +600,7 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validatePlacementPolicy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -768,7 +768,7 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 				t.Errorf("validatePlacementPolicy() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validatePlacementPolicy() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validatePlacementPolicy() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
@@ -938,8 +938,8 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if actualResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); actualResult != testCase.wantResult {
-				t.Errorf("IsPlacementPolicyUpdateValid() actualResult = %v, wantResult %v", actualResult, testCase.wantResult)
+			if gotResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); gotResult != testCase.wantResult {
+				t.Errorf("IsPlacementPolicyUpdateValid() actualResult = %v, wantResult %v", gotResult, testCase.wantResult)
 			}
 		})
 	}
@@ -1069,7 +1069,7 @@ func TestValidateTolerations(t *testing.T) {
 				t.Errorf("validateTolerations() error = %v, wantErr %v", gotErr, testCase.wantErr)
 			}
 			if testCase.wantErr && !strings.Contains(gotErr.Error(), testCase.wantErrMsg) {
-				t.Errorf("validateTolerations() failed to find expected error message = %v, in error = %v", testCase.wantErrMsg, gotErr.Error())
+				t.Errorf("validateTolerations() got %v, should containt want %s", gotErr, testCase.wantErrMsg)
 			}
 		})
 	}
