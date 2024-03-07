@@ -45,7 +45,7 @@ func serviceScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func TestGetAllOverrides(t *testing.T) {
+func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 	fakeInformer := informer.FakeManager{
 		APIResources: map[schema.GroupVersionKind]bool{
 			{
@@ -103,7 +103,7 @@ func TestGetAllOverrides(t *testing.T) {
 			wantRO:  []*fleetv1alpha1.ResourceOverride{},
 		},
 		{
-			name: "single resource snapshot with no overrides",
+			name: "single resource snapshot with no matched overrides",
 			master: &fleetv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
@@ -437,6 +437,160 @@ func TestGetAllOverrides(t *testing.T) {
 				},
 			},
 		},
+		{
+			// not supported in the first phase
+			name: "single resource snapshot with multiple matched cro and ro",
+			master: &fleetv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Labels: map[string]string{
+						fleetv1beta1.ResourceIndexLabel: "0",
+						fleetv1beta1.CRPTrackingLabel:   crpName,
+					},
+					Annotations: map[string]string{
+						fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
+						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+					},
+				},
+				Spec: fleetv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []fleetv1beta1.ResourceContent{
+						*resource.ServiceResourceContentForTest(t),
+					},
+				},
+			},
+			croList: []fleetv1alpha1.ClusterResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    "svc-namespace",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    "svc-namespace",
+							},
+						},
+					},
+				},
+			},
+			roList: []fleetv1alpha1.ResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+					},
+					Spec: fleetv1alpha1.ResourceOverrideSpec{
+						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Service",
+								Name:    "svc-name",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-2",
+						Namespace: "svc-namespace",
+					},
+					Spec: fleetv1alpha1.ResourceOverrideSpec{
+						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Service",
+								Name:    "svc-name",
+							},
+						},
+					},
+				},
+			},
+			wantCRO: []*fleetv1alpha1.ClusterResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    "svc-namespace",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Namespace",
+								Name:    "svc-namespace",
+							},
+						},
+					},
+				},
+			},
+			wantRO: []*fleetv1alpha1.ResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+					},
+					Spec: fleetv1alpha1.ResourceOverrideSpec{
+						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Service",
+								Name:    "svc-name",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-2",
+						Namespace: "svc-namespace",
+					},
+					Spec: fleetv1alpha1.ResourceOverrideSpec{
+						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
+							{
+								Group:   "",
+								Version: "v1",
+								Kind:    "Service",
+								Name:    "svc-name",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -460,9 +614,9 @@ func TestGetAllOverrides(t *testing.T) {
 				Client:          fakeClient,
 				InformerManager: &fakeInformer,
 			}
-			gotCRO, gotRO, err := r.getAllOverrides(context.Background(), crpName, tc.master)
+			gotCRO, gotRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(context.Background(), crpName, tc.master)
 			if err != nil {
-				t.Fatalf("getAllOverrides() failed, got err %v, want no err", err)
+				t.Fatalf("fetchAllMatchingOverridesForResourceSnapshot() failed, got err %v, want no err", err)
 			}
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
@@ -478,16 +632,16 @@ func TestGetAllOverrides(t *testing.T) {
 				cmpopts.EquateEmpty(),
 			}
 			if diff := cmp.Diff(tc.wantCRO, gotCRO, options...); diff != "" {
-				t.Errorf("getAllOverrides() returned clusterResourceOverrides mismatch (-want, +got):\n%s", diff)
+				t.Errorf("fetchAllMatchingOverridesForResourceSnapshot() returned clusterResourceOverrides mismatch (-want, +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.wantRO, gotRO, options...); diff != "" {
-				t.Errorf("getAllOverrides() returned resourceOverrides mismatch (-want, +got):\n%s", diff)
+				t.Errorf("fetchAllMatchingOverridesForResourceSnapshot() returned resourceOverrides mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestGetLatestOverridesPerBinding(t *testing.T) {
+func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 	tests := []struct {
 		name    string
 		cluster *clusterv1beta1.MemberCluster
@@ -529,42 +683,19 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Name: "cro-1",
 					},
 					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "name-1",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
-										},
-									},
-								},
+								{}, // empty cluster label selects all clusters
 								{
 									ClusterSelector: &fleetv1beta1.ClusterSelector{
 										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 											{
-												LabelSelector: metav1.LabelSelector{
+												LabelSelector: &metav1.LabelSelector{
 													MatchLabels: map[string]string{
 														"key1": "value1",
 													},
 												},
 											},
-										},
-									},
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
 										},
 									},
 								},
@@ -577,25 +708,9 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Name: "cro-2",
 					},
 					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "ClusterRole",
-								Name:    "clusterrole-name-2",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
-										},
-									},
-								},
+								{}, // empty cluster label selects all clusters
 							},
 						},
 					},
@@ -608,31 +723,9 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Namespace: "svc-namespace",
 					},
 					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "not-exist",
-							},
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
-										},
-									},
-								},
+								{}, // empty cluster label selects all clusters
 							},
 						},
 					},
@@ -643,25 +736,9 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Namespace: "deployment-namespace",
 					},
 					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "deployment-name",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
-										},
-									},
-								},
+								{}, // empty cluster label selects all clusters
 							},
 						},
 					},
@@ -696,33 +773,18 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Name: "cro-1",
 					},
 					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "name-1",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
 								{
 									ClusterSelector: &fleetv1beta1.ClusterSelector{
 										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 											{
-												LabelSelector: metav1.LabelSelector{
+												LabelSelector: &metav1.LabelSelector{
 													MatchLabels: map[string]string{
 														"key1": "value1",
 													},
 												},
 											},
-										},
-									},
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
 										},
 									},
 								},
@@ -735,33 +797,18 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Name: "cro-2",
 					},
 					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "ClusterRole",
-								Name:    "clusterrole-name-2",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
 								{
 									ClusterSelector: &fleetv1beta1.ClusterSelector{
 										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 											{
-												LabelSelector: metav1.LabelSelector{
+												LabelSelector: &metav1.LabelSelector{
 													MatchLabels: map[string]string{
 														"key1": "value2",
 													},
 												},
 											},
-										},
-									},
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
 										},
 									},
 								},
@@ -777,39 +824,18 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Namespace: "test",
 					},
 					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "not-exist",
-							},
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
 								{
 									ClusterSelector: &fleetv1beta1.ClusterSelector{
 										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 											{
-												LabelSelector: metav1.LabelSelector{
+												LabelSelector: &metav1.LabelSelector{
 													MatchLabels: map[string]string{
 														"key1": "value1",
 													},
 												},
 											},
-										},
-									},
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
 										},
 									},
 								},
@@ -823,33 +849,18 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 						Namespace: "test",
 					},
 					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "deployment-name",
-							},
-						},
 						Policy: &fleetv1alpha1.OverridePolicy{
 							OverrideRules: []fleetv1alpha1.OverrideRule{
 								{
 									ClusterSelector: &fleetv1beta1.ClusterSelector{
 										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 											{
-												LabelSelector: metav1.LabelSelector{
+												LabelSelector: &metav1.LabelSelector{
 													MatchLabels: map[string]string{
 														"key2": "value2",
 													},
 												},
 											},
-										},
-									},
-									JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-										{
-											Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-											Path:     ".meta",
-											Value:    "abc",
 										},
 									},
 								},
@@ -869,6 +880,73 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 					Name:      "ro-2",
 				},
 			},
+		},
+		{
+			name: "no matched overrides with non-empty cluster label",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+					Labels: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+			},
+			croList: []*fleetv1alpha1.ClusterResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						Policy: &fleetv1alpha1.OverridePolicy{
+							OverrideRules: []fleetv1alpha1.OverrideRule{
+								{
+									ClusterSelector: &fleetv1beta1.ClusterSelector{
+										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+											{
+												LabelSelector: &metav1.LabelSelector{
+													MatchLabels: map[string]string{
+														"key1": "value2",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			roList: []*fleetv1alpha1.ResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "test",
+					},
+					Spec: fleetv1alpha1.ResourceOverrideSpec{
+						Policy: &fleetv1alpha1.OverridePolicy{
+							OverrideRules: []fleetv1alpha1.OverrideRule{
+								{
+									ClusterSelector: &fleetv1beta1.ClusterSelector{
+										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+											{
+												LabelSelector: &metav1.LabelSelector{
+													MatchLabels: map[string]string{
+														"key4": "value1",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCRO: []string{},
+			wantRO:  []fleetv1beta1.NamespacedName{},
 		},
 	}
 	for _, tc := range tests {
@@ -890,15 +968,15 @@ func TestGetLatestOverridesPerBinding(t *testing.T) {
 					TargetCluster: "cluster-1",
 				},
 			}
-			gotCRO, gotRO, err := r.getLatestOverridesPerBinding(context.Background(), binding, tc.croList, tc.roList)
+			gotCRO, gotRO, err := r.pickFromResourceMatchedOverridesForTargetCluster(context.Background(), binding, tc.croList, tc.roList)
 			if gotErr, wantErr := err != nil, tc.wantErr != nil; gotErr != wantErr || !errors.Is(err, tc.wantErr) {
-				t.Fatalf("getLatestOverridesPerBinding() got error %v, want error %v", err, tc.wantErr)
+				t.Fatalf("pickFromResourceMatchedOverridesForTargetCluster() got error %v, want error %v", err, tc.wantErr)
 			}
 			if diff := cmp.Diff(tc.wantCRO, gotCRO); diff != "" {
-				t.Errorf("getLatestOverridesPerBinding() returned clusterResourceOverrides mismatch (-want, +got):\n%s", diff)
+				t.Errorf("pickFromResourceMatchedOverridesForTargetCluster() returned clusterResourceOverrides mismatch (-want, +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.wantRO, gotRO); diff != "" {
-				t.Errorf("getLatestOverridesPerBinding() returned resourceOverrides mismatch (-want, +got):\n%s", diff)
+				t.Errorf("pickFromResourceMatchedOverridesForTargetCluster() returned resourceOverrides mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}

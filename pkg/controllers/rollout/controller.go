@@ -144,7 +144,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 		r.updateBindings(ctx, latestResourceSnapshot.Name, toBeUpdatedBindings)
 }
 
-// fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the name of the master clusterResourceSnapshot.
+// fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the master clusterResourceSnapshot.
 func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName string) (*fleetv1beta1.ClusterResourceSnapshot, error) {
 	var latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
 	latestResourceLabelMatcher := client.MatchingLabels{

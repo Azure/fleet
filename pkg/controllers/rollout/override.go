@@ -24,7 +24,8 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-func (r *Reconciler) getAllOverrides(ctx context.Context, crp string, masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) ([]*fleetv1alpha1.ClusterResourceOverride, []*fleetv1alpha1.ResourceOverride, error) {
+// fetchAllMatchingOverridesForResourceSnapshot fetches all the matching overrides which are attached to the selected resources.
+func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Context, crp string, masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) ([]*fleetv1alpha1.ClusterResourceOverride, []*fleetv1alpha1.ResourceOverride, error) {
 	resourceSnapshots, err := controller.FetchAllClusterResourceSnapshots(ctx, r.Client, crp, masterResourceSnapshot)
 	if err != nil {
 		return nil, nil, err
@@ -115,8 +116,12 @@ func (r *Reconciler) getAllOverrides(ctx context.Context, crp string, masterReso
 	return filteredCRO, filteredRO, nil
 }
 
-// getLatestOverridesPerBinding will look for any overrides associated with the "Bound" binding.
-func (r *Reconciler) getLatestOverridesPerBinding(ctx context.Context, binding *fleetv1beta1.ClusterResourceBinding, croList []*fleetv1alpha1.ClusterResourceOverride, roList []*fleetv1alpha1.ResourceOverride) ([]string, []fleetv1beta1.NamespacedName, error) {
+// pickFromResourceMatchedOverridesForTargetCluster will look for any overrides associated with the "Bound" binding.
+// croList is a list of clusterResourceOverrides attached to the selected resources.
+// roList is a list of resourceOverrides attached to the selected resources.
+// It returns names of cro and ro attached to the target cluster, and they're ordered by its namespace (if present) and
+// then name.
+func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx context.Context, binding *fleetv1beta1.ClusterResourceBinding, croList []*fleetv1alpha1.ClusterResourceOverride, roList []*fleetv1alpha1.ResourceOverride) ([]string, []fleetv1beta1.NamespacedName, error) {
 	cluster := clusterv1beta1.MemberCluster{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: binding.Spec.TargetCluster}, &cluster); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -182,7 +187,7 @@ func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *fleetv1alpha
 		}
 
 		for _, term := range rule.ClusterSelector.ClusterSelectorTerms {
-			selector, err := metav1.LabelSelectorAsSelector(&term.LabelSelector)
+			selector, err := metav1.LabelSelectorAsSelector(term.LabelSelector)
 			if err != nil {
 				return false, err
 			}
