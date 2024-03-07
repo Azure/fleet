@@ -24,7 +24,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 		targetClusters := []string{memberCluster1EastProd, memberCluster4CentralProd, memberCluster6WestProd}
-		taintClusters := []string{memberCluster1EastProd, memberCluster4CentralProd, memberCluster6WestProd}
+		taintClusters := targetClusters
 
 		BeforeAll(func() {
 			// Ensure that no bindings have been created so far.
@@ -120,7 +120,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 		taintClusters := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster6WestProd}
 		tolerateClusters := []string{memberCluster1EastProd, memberCluster2EastProd}
-		selectedClusters := []string{memberCluster1EastProd, memberCluster2EastProd}
+		selectedClusters := tolerateClusters
 		unSelectedClusters := []string{memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
 
 		BeforeAll(func() {
@@ -131,22 +131,24 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			// Add taints to some member clusters 1, 2, 6 from all regions.
 			addTaintsToMemberClusters(taintClusters, buildTaints(taintClusters))
 
-			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot, with no tolerations.
-			// Add tolerations for some clusters 1, 2.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "prod",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values:   []string{"east", "west"},
+			// Create a CRP with affinity, tolerations for clusters 1,2.
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values:   []string{"east", "west"},
+											},
 										},
 									},
 								},
@@ -154,9 +156,10 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 						},
 					},
 				},
+				Tolerations: buildTolerations(tolerateClusters),
 			}
-			// Create CRP with tolerations for clusters 1,2.
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName, buildTolerations(tolerateClusters))
+			// Create CRP .
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -193,16 +196,16 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 	// This is a serial test as adding taints, tolerations can affect other tests.
 	Context("pick N clusters with affinity specified, ignore valid clusters with taints, CRP has some matching tolerations after update", Serial, Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-		policySnapshotName1 := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
-		policySnapshotName2 := fmt.Sprintf(policySnapshotNameTemplate, crpName, 2)
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		policySnapshotNameAfter := fmt.Sprintf(policySnapshotNameTemplate, crpName, 2)
 		numOfClusters := int32(2) // Less than the number of clusters available (7) in the fleet.
 		taintClusters := []string{memberCluster1EastProd, memberCluster2EastProd}
-		tolerateClusters := []string{memberCluster1EastProd, memberCluster2EastProd}
+		tolerateClusters := taintClusters
 		// The scheduler is designed to produce only deterministic decisions; if there are no
 		// comparable scores available for selected clusters, the scheduler will rank the clusters
 		// by their names.
 		wantFilteredClusters := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
-		wantPickedClustersAfter := []string{memberCluster1EastProd, memberCluster2EastProd}
+		wantPickedClustersAfter := taintClusters
 		wantFilteredClustersAfter := []string{memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
 
 		BeforeAll(func() {
@@ -213,21 +216,25 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			// Add taints to some member clusters 1, 2.
 			addTaintsToMemberClusters(taintClusters, buildTaints(taintClusters))
 
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -237,9 +244,8 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 					},
 				},
 			}
-
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot, no tolerations specified.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName1, nil)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -254,20 +260,20 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual([]string{}, zeroScoreByCluster, crpName, policySnapshotName1)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual([]string{}, zeroScoreByCluster, crpName, policySnapshotName)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, []string{}, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName1)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, []string{}, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
 
 		It("update CRP with new tolerations", func() {
 			// Update CRP with tolerations for clusters 1,2.
-			updatePickNCRPWithTolerations(crpName, buildTolerations(tolerateClusters), policySnapshotName1, policySnapshotName2)
+			updatePickNCRPWithTolerations(crpName, buildTolerations(tolerateClusters), policySnapshotName, policySnapshotNameAfter)
 		})
 
 		It("should create N bindings", func() {
@@ -277,13 +283,13 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should create scheduled bindings for selected clusters", func() {
-			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual([]string{}, zeroScoreByCluster, crpName, policySnapshotName2)
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual([]string{}, zeroScoreByCluster, crpName, policySnapshotNameAfter)
 			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create scheduled bindings for selected clusters")
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, wantPickedClustersAfter, []string{}, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName2)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, wantPickedClustersAfter, []string{}, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotNameAfter)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -340,7 +346,6 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		newUnhealthyMemberClusterName := fmt.Sprintf(provisionalClusterNameTemplate, GinkgoParallelProcess())
 		updatedHealthyClusters := healthyClusters
 		updatedHealthyClusters = append(updatedHealthyClusters, newUnhealthyMemberClusterName)
-		// Copy the map to avoid interrupting other concurrently running test cases.
 		updatedZeroScoreByCluster := make(map[string]*placementv1beta1.ClusterScore)
 		for k, v := range zeroScoreByCluster {
 			updatedZeroScoreByCluster[k] = v
@@ -353,7 +358,10 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot, and toleration for new cluster.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, buildTolerations([]string{newUnhealthyMemberClusterName}))
+			policy := &placementv1beta1.PlacementPolicy{
+				Tolerations: buildTolerations([]string{newUnhealthyMemberClusterName}),
+			}
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Create a new member cluster.
 			createMemberCluster(newUnhealthyMemberClusterName, buildTaints([]string{newUnhealthyMemberClusterName}))
@@ -443,15 +451,19 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
 			// Create CRP with no tolerations specified.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName, nil)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -550,7 +562,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		wantNotPickedClusters := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster6WestProd}
 		wantFilteredClusters := []string{memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
 		wantPickedClustersAfter := []string{memberCluster7WestCanary, memberCluster5CentralProd, newUnhealthyMemberClusterName}
-		wantNotPickedClustersAfter := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster6WestProd}
+		wantNotPickedClustersAfter := wantNotPickedClusters
 		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
 			memberCluster1EastProd:    &zeroScore,
 			memberCluster2EastProd:    &zeroScore,
@@ -612,8 +624,14 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 				},
 			}
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:             placementv1beta1.PickNPlacementType,
+				NumberOfClusters:          &numOfClusters,
+				TopologySpreadConstraints: topologySpreadConstraints,
+				Tolerations:               buildTolerations([]string{newUnhealthyMemberClusterName}),
+			}
 			// Create CRP with toleration for new cluster.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName, buildTolerations([]string{newUnhealthyMemberClusterName}))
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
