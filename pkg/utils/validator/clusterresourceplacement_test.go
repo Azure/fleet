@@ -939,7 +939,7 @@ func TestIsPlacementPolicyUpdateValid(t *testing.T) {
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
 			if gotResult := IsPlacementPolicyTypeUpdated(testCase.oldPolicy, testCase.currentPolicy); gotResult != testCase.wantResult {
-				t.Errorf("IsPlacementPolicyUpdateValid() actualResult = %v, wantResult %v", gotResult, testCase.wantResult)
+				t.Errorf("IsPlacementPolicyUpdateValid() gotResult = %v, wantResult %v", gotResult, testCase.wantResult)
 			}
 		})
 	}
