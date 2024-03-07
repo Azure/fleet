@@ -711,6 +711,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means the selected resources successfully start rolling out in all scheduled clusters.
 	// - "False" means the selected resources have not been rolled out in all scheduled clusters yet.
+	// - "Unknown" means we don't have a rollout decision yet.
 	ClusterResourcePlacementRolloutStartedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementRolloutStarted"
 
 	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
@@ -729,6 +730,7 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
 	// - "False" means all the selected resources have not been created under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	// - "Unknown" means we haven't started processing the work yet.
 	ClusterResourcePlacementWorkCreatedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkCreated"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
