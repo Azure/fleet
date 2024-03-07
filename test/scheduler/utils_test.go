@@ -676,8 +676,8 @@ func buildTaints(memberClusterNames []string) []clusterv1beta1.Taint {
 		} else {
 			// for new member clusters added.
 			labels = map[string]string{
-				regionLabel: "north",
-				envLabel:    "prod",
+				regionLabel: "unknown",
+				envLabel:    "unknown",
 			}
 		}
 		taints[i].Key = labels[regionLabel]
