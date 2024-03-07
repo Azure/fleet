@@ -46,6 +46,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
@@ -96,6 +97,7 @@ const (
 	namespaceResourceName                = "namespaces"
 	replicaSetResourceName               = "replicasets"
 	podResourceName                      = "pods"
+	clusterResourceOverrideName          = "clusterresourceoverrides"
 )
 
 var (
@@ -306,6 +308,22 @@ func (w *Config) buildFleetValidatingWebhooks() []admv1.ValidatingWebhook {
 				},
 			},
 			TimeoutSeconds: longWebhookTimeout,
+		},
+		{
+			Name:                    "fleet.clusterresourceoverride.validating",
+			ClientConfig:            w.createClientConfig(clusterresourceoverride.ValidationPath),
+			FailurePolicy:           &ignoreFailurePolicy,
+			SideEffects:             &sideEffortsNone,
+			AdmissionReviewVersions: admissionReviewVersions,
+			Rules: []admv1.RuleWithOperations{
+				{
+					Operations: []admv1.OperationType{
+						admv1.Create,
+						admv1.Update},
+					Rule: createRule([]string{fleetv1alpha1.GroupVersion.Group}, []string{fleetv1alpha1.GroupVersion.Version}, []string{clusterResourceOverrideName}, &clusterScope),
+				},
+			},
+			TimeoutSeconds: shortWebhookTimeout,
 		},
 	}
 
