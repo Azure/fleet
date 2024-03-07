@@ -1,6 +1,9 @@
+# CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters from
+# AKS Cluster's and joins them onto the hub cluster.
+
 # Replace the value of HUB_CLUSTER_CONTEXT with the name of the kubeconfig context you use for
 # accessing your hub cluster.
-export HUB_CLUSTER_CONTEXT=<hub-context>
+export HUB_CLUSTER_CONTEXT=<hub-cluster-context>
 # Replace the value of HUB_CLUSTER_ADDRESS with the address of your hub cluster API server.
 export HUB_CLUSTER_ADDRESS=<hub-cluster-address>
 

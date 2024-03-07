@@ -1,17 +1,17 @@
+# This script creates a Hub CLuster from an AKS Cluster (AKS Cluster and Container Registry must be created beforehand).
+
 echo "Setting Subscription..."
 export SUB=<subscription-id>
 
 az account set -s ${SUB}
 
 export RG_NAME=<resource-group-name>
-export CLUSTER_NAME=<cluster-name>
+export HUB_CLUSTER_NAME=<hub-cluster-name>
 
 echo "Retrieving AKS cluster credentials..."
-az aks get-credentials --resource-group  ${RG_NAME} --name ${CLUSTER_NAME}
+az aks get-credentials --resource-group  ${RG_NAME} --name ${HUB_CLUSTER_NAME}
 
-# Replace the value of HUB_CLUSTER_CONTEXT with the context and HUB_CLUSTER_ADDRESS with address of your hub cluster.
-export HUB_CLUSTER_CONTEXT=<hub-cluster-context>
-export HUB_CLUSTER_ADDRESS=<hub-cluster-address>
+kubectl kubectl config use-context $HUB_CLUSTER_NAME
 
 # Replace with the name of your registry and tag
 export REGISTRY=<acr_name>.azurecr.io
@@ -67,7 +67,7 @@ helm install hub-agent charts/hub-agent/ \
 # Check the status of the hub agent
 kubectl get pods -n fleet-system
 
-echo "Instlling prometheus endpoint..."
+echo "Installing prometheus endpoint..."
 # Add prometheus and grafana to the hub cluster
 helm repo add prometheus-community https://prometheus-community.github.io/helm-chart
 helm repo update
