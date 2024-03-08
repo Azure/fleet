@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/test/utils/controller"
 )
 
 const timeout = time.Second * 10
@@ -120,7 +120,7 @@ var _ = Describe("Work Controller", func() {
 					Reason: string(manifestNotTrackableAction),
 				},
 			}
-			Expect(condition.CompareConditions(expected, resultWork.Status.ManifestConditions[0].Conditions)).Should(BeEmpty())
+			Expect(controller.CompareConditions(expected, resultWork.Status.ManifestConditions[0].Conditions)).Should(BeEmpty())
 			expected = []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
@@ -133,7 +133,7 @@ var _ = Describe("Work Controller", func() {
 					Reason: workNotTrackableReason,
 				},
 			}
-			Expect(condition.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())
+			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())
 
 			By("Check applied config map")
 			var configMap corev1.ConfigMap

@@ -662,10 +662,9 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 				oldAvailableStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 				newAvailableStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
-				// we only need to handle the case the applied or available conditions is flipped between true and NOT true between the
+				// we only need to handle the case the applied or available condition is changed between the
 				// new and old work objects. Otherwise, it won't affect the binding applied condition
-				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) &&
-					condition.IsConditionStatusTrue(oldAvailableStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAvailableStatus, newWork.GetGeneration()) {
+				if condition.EqualCondition(oldAppliedStatus, newAppliedStatus) && condition.EqualCondition(oldAvailableStatus, newAvailableStatus) {
 					klog.V(2).InfoS("The work applied or available condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return
 				}

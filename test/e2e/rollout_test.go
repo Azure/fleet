@@ -21,9 +21,9 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
 	testutils "go.goms.io/fleet/test/e2e/v1alpha1/utils"
+	"go.goms.io/fleet/test/utils/controller"
 )
 
 var (
@@ -122,7 +122,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 									ObservedGeneration: 1,
 								},
 							}
-							diff := condition.CompareConditions(wantConditions, work.Status.Conditions)
+							diff := controller.CompareConditions(wantConditions, work.Status.Conditions)
 							if len(diff) != 0 {
 								return diff
 							}
@@ -143,7 +143,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 									ObservedGeneration: 1,
 								},
 							}
-							diff := condition.CompareConditions(wantConditions, work.Status.Conditions)
+							diff := controller.CompareConditions(wantConditions, work.Status.Conditions)
 							if len(diff) != 0 {
 								return diff
 							}

@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 )
 
 // createWorkWithManifest creates a work given a manifest
@@ -95,11 +96,12 @@ func waitForWorkToBeAvailable(workName, workNS string) *fleetv1beta1.Work {
 			return false
 		}
 		applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-		if applyCond == nil || applyCond.Status != metav1.ConditionTrue || applyCond.ObservedGeneration != resultWork.Generation {
+		if !condition.IsConditionStatusTrue(applyCond, resultWork.Generation) {
 			return false
 		}
 		for _, manifestCondition := range resultWork.Status.ManifestConditions {
-			if !meta.IsStatusConditionTrue(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable) {
+			applyCond := meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+			if !condition.IsConditionStatusTrue(applyCond, resultWork.Generation) {
 				return false
 			}
 		}

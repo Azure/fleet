@@ -53,7 +53,8 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
-	"go.goms.io/fleet/pkg/utils/condition"
+	"go.goms.io/fleet/pkg/utils/controller"
+	controller2 "go.goms.io/fleet/test/utils/controller"
 )
 
 var (
@@ -286,14 +287,14 @@ func TestIsManifestManagedByWork(t *testing.T) {
 
 func TestBuildManifestCondition(t *testing.T) {
 	tests := map[string]struct {
-		err      error
-		action   applyAction
-		expected []metav1.Condition
+		err    error
+		action applyAction
+		want   []metav1.Condition
 	}{
 		"TestNoErrorManifestCreated": {
 			err:    nil,
 			action: manifestCreatedAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
@@ -309,7 +310,7 @@ func TestBuildManifestCondition(t *testing.T) {
 		"TestNoErrorManifestServerSideApplied": {
 			err:    nil,
 			action: manifestServerSideAppliedAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
@@ -325,7 +326,7 @@ func TestBuildManifestCondition(t *testing.T) {
 		"TestNoErrorManifestThreeWayMergePatch": {
 			err:    nil,
 			action: manifestThreeWayMergePatchAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
@@ -341,7 +342,7 @@ func TestBuildManifestCondition(t *testing.T) {
 		"TestNoErrorManifestNotAvailable": {
 			err:    nil,
 			action: manifestNotAvailableYetAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
@@ -357,7 +358,7 @@ func TestBuildManifestCondition(t *testing.T) {
 		"TestNoErrorManifestNotTrackableAction": {
 			err:    nil,
 			action: manifestNotTrackableAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
@@ -373,7 +374,7 @@ func TestBuildManifestCondition(t *testing.T) {
 		"TestNoErrorManifestAvailableAction": {
 			err:    nil,
 			action: manifestAvailableAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
@@ -389,7 +390,7 @@ func TestBuildManifestCondition(t *testing.T) {
 		"TestWithError": {
 			err:    errors.New("test error"),
 			action: errorApplyAction,
-			expected: []metav1.Condition{
+			want: []metav1.Condition{
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionFalse,
@@ -407,7 +408,7 @@ func TestBuildManifestCondition(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			conditions := buildManifestCondition(tt.err, tt.action, 1)
-			diff := condition.CompareConditions(tt.expected, conditions)
+			diff := controller2.CompareConditions(tt.want, conditions)
 			assert.Empty(t, diff, "buildManifestCondition() test %v failed, (-want +got):\n%s", name, diff)
 		})
 	}
@@ -772,7 +773,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			conditions := buildWorkCondition(tt.manifestConditions, 1)
-			diff := condition.CompareConditions(tt.expected, conditions)
+			diff := controller2.CompareConditions(tt.expected, conditions)
 			assert.Empty(t, diff, "buildWorkCondition() test %v failed, (-want +got):\n%s", name, diff)
 		})
 	}
@@ -785,6 +786,31 @@ func TestTrackResourceAvailability(t *testing.T) {
 		expected applyAction
 		err      error
 	}{
+		"Test a mal-formated object": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+						"name":       "test-deployment",
+					},
+					"spec": "wrongspec",
+					"status": map[string]interface{}{
+						"observedGeneration": 1,
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":   "Available",
+								"status": "True",
+							},
+						},
+					},
+				},
+			},
+			expected: errorApplyAction,
+			err:      controller.ErrUnexpectedBehavior,
+		},
 		"Test Deployment available": {
 			gvr: utils.DeploymentGVR,
 			obj: &unstructured.Unstructured{
@@ -905,6 +931,30 @@ func TestTrackResourceAvailability(t *testing.T) {
 			expected: manifestNotAvailableYetAction,
 			err:      nil,
 		},
+		"Test StatefulSet observed old generation": {
+			gvr: utils.StatefulSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "StatefulSet",
+					"metadata": map[string]interface{}{
+						"generation": 3,
+						"name":       "test-statefulset",
+					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 2,
+						"availableReplicas":  2,
+						"currentReplicas":    3,
+						"updatedReplicas":    3,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
 		"Test DaemonSet Available": {
 			gvr: utils.DaemonSettGVR,
 			obj: &unstructured.Unstructured{
@@ -934,6 +984,27 @@ func TestTrackResourceAvailability(t *testing.T) {
 					"kind":       "DaemonSet",
 					"metadata": map[string]interface{}{
 						"generation": 1,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration":     1,
+						"numberAvailable":        0,
+						"desiredNumberScheduled": 1,
+						"currentNumberScheduled": 1,
+						"updatedNumberScheduled": 1,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test DaemonSet not observe current generation": {
+			gvr: utils.DaemonSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "DaemonSet",
+					"metadata": map[string]interface{}{
+						"generation": 2,
 					},
 					"status": map[string]interface{}{
 						"observedGeneration":     1,
@@ -1020,7 +1091,7 @@ func TestTrackResourceAvailability(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			action, err := trackResourceAvailability(tt.gvr, tt.obj)
 			assert.Equal(t, tt.expected, action, "action not matching in test %s", name)
-			assert.Equal(t, tt.err, err, "applyErr not matching in test %s", name)
+			assert.Equal(t, errors.Is(err, tt.err), true, "applyErr not matching in test %s", name)
 		})
 	}
 }
