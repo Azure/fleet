@@ -7,6 +7,7 @@ package work
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
@@ -75,10 +76,12 @@ func waitForWorkToApply(workName, workNS string) *fleetv1beta1.Work {
 		}
 		applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		if applyCond == nil || applyCond.Status != metav1.ConditionTrue || applyCond.ObservedGeneration != resultWork.Generation {
+			By(fmt.Sprintf("applyCond not true: %v", applyCond))
 			return false
 		}
 		for _, manifestCondition := range resultWork.Status.ManifestConditions {
 			if !meta.IsStatusConditionTrue(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeApplied) {
+				By(fmt.Sprintf("manifest applyCond not true %v : %v", manifestCondition.Identifier, manifestCondition.Conditions))
 				return false
 			}
 		}
@@ -95,13 +98,14 @@ func waitForWorkToBeAvailable(workName, workNS string) *fleetv1beta1.Work {
 		if err != nil {
 			return false
 		}
-		applyCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-		if !condition.IsConditionStatusTrue(applyCond, resultWork.Generation) {
+		availCond := meta.FindStatusCondition(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		if !condition.IsConditionStatusTrue(availCond, resultWork.Generation) {
+			By(fmt.Sprintf("availCond not true: %v", availCond))
 			return false
 		}
 		for _, manifestCondition := range resultWork.Status.ManifestConditions {
-			applyCond := meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
-			if !condition.IsConditionStatusTrue(applyCond, resultWork.Generation) {
+			if !meta.IsStatusConditionTrue(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeAvailable) {
+				By(fmt.Sprintf("manifest availCond not true %v : %v", manifestCondition.Identifier, manifestCondition.Conditions))
 				return false
 			}
 		}
