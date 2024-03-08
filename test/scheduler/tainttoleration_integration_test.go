@@ -194,6 +194,80 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 	})
 
 	// This is a serial test as adding taints, tolerations can affect other tests.
+	Context("pickAll valid cluster without taints, add a taint to a cluster that's already picked", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		selectedClusters := healthyClusters
+		unSelectedClusters := []string{memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
+		taintClusters := []string{memberCluster1EastProd, memberCluster2EastProd}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+			}
+			// Create CRP with PickAll.
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for valid clusters", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(selectedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for valid clusters", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(unSelectedClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(selectedClusters, unSelectedClusters, policySnapshotName)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		It("add taint to existing clusters", func() {
+			// Add taints to some member clusters 1, 2.
+			addTaintsToMemberClusters(taintClusters, buildTaints(taintClusters))
+		})
+
+		It("should create scheduled bindings for valid clusters without taints, valid clusters with taint", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(selectedClusters, zeroScoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for valid clusters without taints, valid clusters with taint", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(unSelectedClusters, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(selectedClusters, unSelectedClusters, policySnapshotName)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Remove taints
+			removeTaintsFromMemberClusters(taintClusters)
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+
+	// This is a serial test as adding taints, tolerations can affect other tests.
 	Context("pick N clusters with affinity specified, ignore valid clusters with taints, CRP has some matching tolerations after update", Serial, Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
@@ -389,14 +463,14 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 		// Prepare a new cluster to avoid interrupting other concurrently running test cases.
-		newUnhealthyMemberClusterName := fmt.Sprintf(provisionalClusterNameTemplate, GinkgoParallelProcess())
+		newClusterName := fmt.Sprintf(provisionalClusterNameTemplate, GinkgoParallelProcess())
 		numOfClusters := int32(2)
 		numOfClustersAfter := int32(3)
 		wantPickedClusters := []string{memberCluster7WestCanary, memberCluster5CentralProd}
 		wantNotPickedClusters := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster6WestProd}
 		wantFilteredClusters := []string{memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
 		wantPickedClustersAfter := []string{memberCluster7WestCanary, memberCluster5CentralProd, memberCluster3EastCanary}
-		wantNotPickedClustersAfter := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster4CentralProd, memberCluster6WestProd, newUnhealthyMemberClusterName}
+		wantNotPickedClustersAfter := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster4CentralProd, memberCluster6WestProd, newClusterName}
 		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
 			memberCluster1EastProd:    &zeroScore,
 			memberCluster2EastProd:    &zeroScore,
@@ -442,7 +516,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 				AffinityScore:       ptr.To(int32(0)),
 				TopologySpreadScore: ptr.To(int32(-1)),
 			},
-			newUnhealthyMemberClusterName: nil,
+			newClusterName: nil,
 		}
 
 		BeforeAll(func() {
@@ -491,10 +565,10 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 
 		It("create a new member cluster", func() {
 			// Create a new member cluster.
-			createMemberCluster(newUnhealthyMemberClusterName, buildTaints([]string{newUnhealthyMemberClusterName}))
+			createMemberCluster(newClusterName, buildTaints([]string{newClusterName}))
 			// Retrieve the cluster object.
 			memberCluster := &clusterv1beta1.MemberCluster{}
-			Expect(hubClient.Get(ctx, types.NamespacedName{Name: newUnhealthyMemberClusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: newClusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Add the region label.
 			memberCluster.Labels = map[string]string{
@@ -503,7 +577,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			}
 			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster")
 			// Mark this cluster as healthy.
-			markClusterAsHealthy(newUnhealthyMemberClusterName)
+			markClusterAsHealthy(newClusterName)
 		})
 
 		It("upscale policy to pick 3 clusters", func() {
@@ -511,7 +585,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			//
 			// Normally upscaling is done by increasing the number of clusters field in the CRP;
 			// however, since in the integration test environment, CRP controller is not available,
-			// we directly manipulate the number of clusters annoation on the policy snapshot
+			// we directly manipulate the number of clusters annotation on the policy snapshot
 			// to trigger upscaling.
 			Eventually(func() error {
 				policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
@@ -546,7 +620,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			// Delete the CRP.
 			ensureCRPAndAllRelatedResourcesDeletion(crpName)
 			// Delete the provisional cluster.
-			ensureProvisionalClusterDeletion(newUnhealthyMemberClusterName)
+			ensureProvisionalClusterDeletion(newClusterName)
 		})
 	})
 
@@ -555,13 +629,13 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
 		// Prepare a new cluster to avoid interrupting other concurrently running test cases.
-		newUnhealthyMemberClusterName := fmt.Sprintf(provisionalClusterNameTemplate, GinkgoParallelProcess())
+		newClusterName := fmt.Sprintf(provisionalClusterNameTemplate, GinkgoParallelProcess())
 		numOfClusters := int32(2)
 		numOfClustersAfter := int32(3)
 		wantPickedClusters := []string{memberCluster7WestCanary, memberCluster5CentralProd}
 		wantNotPickedClusters := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster6WestProd}
 		wantFilteredClusters := []string{memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
-		wantPickedClustersAfter := []string{memberCluster7WestCanary, memberCluster5CentralProd, newUnhealthyMemberClusterName}
+		wantPickedClustersAfter := []string{memberCluster7WestCanary, memberCluster5CentralProd, newClusterName}
 		wantNotPickedClustersAfter := wantNotPickedClusters
 		scoreByCluster := map[string]*placementv1beta1.ClusterScore{
 			memberCluster1EastProd:    &zeroScore,
@@ -605,7 +679,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			// new cluster is picked in the third iteration, as placing resources on it does
 			// not violate any topology spread constraints + does not increase the skew. It
 			// is assigned a topology spread score of 0 as the skew is unchanged.
-			newUnhealthyMemberClusterName: {
+			newClusterName: {
 				AffinityScore:       ptr.To(int32(0)),
 				TopologySpreadScore: ptr.To(int32(0)),
 			},
@@ -628,7 +702,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 				PlacementType:             placementv1beta1.PickNPlacementType,
 				NumberOfClusters:          &numOfClusters,
 				TopologySpreadConstraints: topologySpreadConstraints,
-				Tolerations:               buildTolerations([]string{newUnhealthyMemberClusterName}),
+				Tolerations:               buildTolerations([]string{newClusterName}),
 			}
 			// Create CRP with toleration for new cluster.
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
@@ -659,10 +733,10 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 
 		It("create a new member cluster", func() {
 			// Create a new member cluster.
-			createMemberCluster(newUnhealthyMemberClusterName, buildTaints([]string{newUnhealthyMemberClusterName}))
+			createMemberCluster(newClusterName, buildTaints([]string{newClusterName}))
 			// Retrieve the cluster object.
 			memberCluster := &clusterv1beta1.MemberCluster{}
-			Expect(hubClient.Get(ctx, types.NamespacedName{Name: newUnhealthyMemberClusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: newClusterName}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
 			// Add the region label.
 			memberCluster.Labels = map[string]string{
@@ -671,7 +745,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			}
 			Expect(hubClient.Update(ctx, memberCluster)).To(Succeed(), "Failed to update member cluster")
 			// Mark this cluster as healthy.
-			markClusterAsHealthy(newUnhealthyMemberClusterName)
+			markClusterAsHealthy(newClusterName)
 		})
 
 		It("upscale policy to pick 3 clusters", func() {
@@ -679,7 +753,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			//
 			// Normally upscaling is done by increasing the number of clusters field in the CRP;
 			// however, since in the integration test environment, CRP controller is not available,
-			// we directly manipulate the number of clusters annoation on the policy snapshot
+			// we directly manipulate the number of clusters annotation on the policy snapshot
 			// to trigger upscaling.
 			Eventually(func() error {
 				policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
@@ -714,7 +788,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			// Delete the CRP.
 			ensureCRPAndAllRelatedResourcesDeletion(crpName)
 			// Delete the provisional cluster.
-			ensureProvisionalClusterDeletion(newUnhealthyMemberClusterName)
+			ensureProvisionalClusterDeletion(newClusterName)
 		})
 	})
 })
