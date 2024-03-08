@@ -89,6 +89,9 @@ var (
 	lessFuncClusterDecision = func(decision1, decision2 placementv1beta1.ClusterDecision) bool {
 		return decision1.ClusterName < decision2.ClusterName
 	}
+	ignoreUnSelectedClusterDecision = func(decision placementv1beta1.ClusterDecision) bool {
+		return decision.Selected
+	}
 
 	ignoreClusterDecisionReasonField          = cmpopts.IgnoreFields(placementv1beta1.ClusterDecision{}, "Reason")
 	ignoreObjectMetaNameField                 = cmpopts.IgnoreFields(metav1.ObjectMeta{}, "Name")

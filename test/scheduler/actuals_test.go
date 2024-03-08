@@ -461,6 +461,8 @@ func pickNPolicySnapshotStatusUpdatedActual(
 			ignoreClusterDecisionReasonField,
 			cmpopts.SortSlices(lessFuncClusterDecision),
 			cmpopts.EquateEmpty(),
+			// for PickN ignore unselected clusters since there are two possible states for policy snapshot status based on whether status update is successful.
+			cmpopts.IgnoreSliceElements(ignoreUnSelectedClusterDecision),
 		); diff != "" {
 			return fmt.Errorf("policy snapshot status cluster decisions (-got, +want): %s", diff)
 		}
