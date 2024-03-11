@@ -262,7 +262,7 @@ kubectl get membercluster $MEMBER_CLUSTER
 
 If you see that the cluster is still in an unknown state, it might be that the member cluster
 is still connecting to the hub cluster. Should this state persist for a prolonged
-period, refer to the [Troubleshooting Guide](../troubleshooting/README.md) for
+period, refer to the [Troubleshooting Guide](../../docs/troubleshooting/README.md) for
 more information.
 
 Alternatively, if you would like to find out the exact steps the script performs, or if you feel
@@ -437,7 +437,7 @@ The status consists of:
     * the `Healthy` condition, which signals whether the cluster is in a healthy state.
 
   Typically, a member cluster should have all three conditions set to true. Refer to the
-  [Troubleshooting Guide](../troubleshooting/README.md) for help if a cluster fails to join
+  [Troubleshooting Guide](../../docs/troubleshooting/README.md) for help if a cluster fails to join
   into a fleet.
 
 * the resource usage of the cluster; at this moment Fleet reports the capacity and
