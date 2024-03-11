@@ -420,6 +420,7 @@ func pickNPolicySnapshotStatusUpdatedActual(
 	picked, notPicked, filtered []string,
 	scoreByCluster map[string]*placementv1beta1.ClusterScore,
 	policySnapshotName string,
+	opts []cmp.Option,
 ) func() error {
 	return func() error {
 		policySnapshot := &placementv1beta1.ClusterSchedulingPolicySnapshot{}
@@ -458,11 +459,7 @@ func pickNPolicySnapshotStatusUpdatedActual(
 		}
 		if diff := cmp.Diff(
 			policySnapshot.Status.ClusterDecisions, wantClusterDecisions,
-			ignoreClusterDecisionReasonField,
-			cmpopts.SortSlices(lessFuncClusterDecision),
-			cmpopts.EquateEmpty(),
-			// for PickN ignore unselected clusters since there are two possible states for policy snapshot status based on whether status update is successful.
-			cmpopts.IgnoreSliceElements(ignoreUnselectedClusterDecision),
+			opts...,
 		); diff != "" {
 			return fmt.Errorf("policy snapshot status cluster decisions (-got, +want): %s", diff)
 		}

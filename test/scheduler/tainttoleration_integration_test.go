@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +19,16 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+var (
+	taintTolerationCmpOpts = []cmp.Option{
+		ignoreClusterDecisionReasonField,
+		cmpopts.SortSlices(lessFuncClusterDecision),
+		cmpopts.EquateEmpty(),
+		// for PickN ignore unselected clusters since there are two possible states for policy snapshot status based on whether status update is successful.
+		cmpopts.IgnoreSliceElements(ignoreUnselectedClusterDecision),
+	}
 )
 
 var _ = Describe("scheduling CRPs on member clusters with taints & tolerations", func() {
@@ -341,7 +353,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, []string{}, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, []string{}, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, taintTolerationCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -364,7 +376,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, wantPickedClustersAfter, []string{}, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotNameAfter)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(2, wantPickedClustersAfter, []string{}, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotNameAfter, taintTolerationCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -559,7 +571,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, taintTolerationCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -612,7 +624,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClusters, scoreByClusterAfter, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClusters, scoreByClusterAfter, policySnapshotName, taintTolerationCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -727,7 +739,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, taintTolerationCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -780,7 +792,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClusters, scoreByClusterAfter, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClusters, scoreByClusterAfter, policySnapshotName, taintTolerationCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
