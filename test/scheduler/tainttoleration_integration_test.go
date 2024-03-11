@@ -222,7 +222,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			policy := &placementv1beta1.PlacementPolicy{
 				PlacementType: placementv1beta1.PickAllPlacementType,
 			}
-			// Create CRP with PickAll.
+			// Create CRP with PickAll, no tolerations specified.
 			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
@@ -303,6 +303,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			// Add taints to some member clusters 1, 2.
 			addTaintsToMemberClusters(taintClusters, buildTaints(taintClusters))
 
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot, no tolerations specified.
 			policy := &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: &numOfClusters,
@@ -331,7 +332,6 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 					},
 				},
 			}
-			// Create a CRP of the PickN placement type, along with its associated policy snapshot, no tolerations specified.
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
@@ -401,7 +401,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
-			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
+			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot, no tolerations specified.
 			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 
 			// Create a new member cluster.
@@ -537,7 +537,7 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
-			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
+			// Create a CRP of the PickN placement type, along with its associated policy snapshot, no tolerations specified.
 			policy := &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
 				NumberOfClusters: &numOfClusters,
@@ -549,7 +549,6 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 					},
 				},
 			}
-			// Create CRP with no tolerations specified.
 			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
