@@ -1,24 +1,12 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters from
 # AKS Cluster's and joins them onto the hub cluster.
 
-# Replace the value of HUB_CLUSTER_CONTEXT with the name of the kubeconfig context you use for
-# accessing your hub cluster.
-export HUB_CLUSTER_CONTEXT=<hub-cluster-context>
-# Replace the value of HUB_CLUSTER_ADDRESS with the address of your hub cluster API server.
-export HUB_CLUSTER_ADDRESS=<hub-cluster-address>
+MC_NAMES=(member-1 member-2) # Change with a list of your member cluster names
+for MC in "${numbers[@]}"; do
 
-for i in {0..99}; do # change to how many clusters you want to join
-
-# Replace the value of MEMBER_CLUSTER with the name you would like to assign to the new member
-# cluster.
-#
 # Note that Fleet will recognize your cluster with this name once it joins.
-export MEMBER_CLUSTER=<member-cluster-name>-${i}
-# Replace the value of MEMBER_CLUSTER_CONTEXT with the name of the kubeconfig context you use
-# for accessing your member cluster.
-export MEMBER_CLUSTER_CONTEXT=<member-cluster-context>-${i}
-# Replace the value of HUB_CLUSTER_CONTEXT with the name of the kubeconfig
-# context you use for accessing your hub cluster.
+export MEMBER_CLUSTER=${MC}
+export MEMBER_CLUSTER_CONTEXT=${MC}
 
 export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 

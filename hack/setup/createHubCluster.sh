@@ -1,52 +1,32 @@
 # This script creates a Hub CLuster from an AKS Cluster (AKS Cluster and Container Registry must be created beforehand).
 
-echo "Setting Subscription..."
-export SUB=<subscription-id>
-
-az account set -s ${SUB}
-
-export RG_NAME=<resource-group-name>
-export HUB_CLUSTER_NAME=<hub-cluster-name>
-
-echo "Retrieving AKS cluster credentials..."
-az aks get-credentials --resource-group  ${RG_NAME} --name ${HUB_CLUSTER_NAME}
-
-kubectl kubectl config use-context $HUB_CLUSTER_NAME
-
-# Replace with the name of your registry and tag
-export REGISTRY=<acr_name>.azurecr.io
-export TAG=<tag>
-export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
-
-
-# Clone the Fleet repository from GitHub (if not done so already) and go into directory
-git clone https://github.com/Azure/fleet.git
+# Go into fleet directory
 cd fleet
 
 # Build the hub agent image
 echo "Building hub-agent image..."
+export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 make docker-build-hub-agent
 
 # Check if the image is built
 docker images
 
 echo "Logging into registry..."
-# Replace <acr_name> with container registry name
-az acr login -n <acr_name>
+az acr login -n $REGISTRY
 
 echo "Pushing image to registry..."
 # Push the image to the registry
-docker push <acr_name>.azurecr.io/hub-agent:<tag>
+docker push $REGISTRY.azurecr.io/hub-agent:$TAG
 
 echo "Attaching registry to AKS Cluster..."
 # Attach acr to the cluster
-az aks update -n <cluster_name> -g <rg_name> --attach-acr <acr_name>
+az aks update -n $CLUSTER_NAME -g $RESOURCE_GROUP --attach-acr $REGISTRY
 
 echo "Installing hub-agent..."
 # Install the hub agent helm chart on the hub cluster
 helm install hub-agent charts/hub-agent/ \
   --set image.pullPolicy=Always \
-  --set image.repository=$REGISTRY/hub-agent \
+  --set image.repository=$REGISTRY.azurecr.io/hub-agent \
   --set image.tag=$TAG \
   --set logVerbosity=2 \
   --set namespace=fleet-system \
