@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,10 +17,13 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller/metrics"
 	"go.goms.io/fleet/pkg/utils/keys"
+	"go.goms.io/fleet/pkg/utils/labels"
 )
 
 const (
@@ -290,4 +294,53 @@ func NamespaceKeyFunc(obj interface{}) (QueueKey, error) {
 // ClusterWideKeyFunc generates a ClusterWideKey for object.
 func ClusterWideKeyFunc(obj interface{}) (QueueKey, error) {
 	return keys.GetClusterWideKeyForObject(obj)
+}
+
+var (
+	errResourceNotFullyCreated = errors.New("not all resource snapshot in the same index group are created")
+)
+
+// FetchAllClusterResourceSnapshots fetches the group of clusterResourceSnapshots using master clusterResourceSnapshot.
+func FetchAllClusterResourceSnapshots(ctx context.Context, k8Client client.Client, crp string, masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (map[string]*fleetv1beta1.ClusterResourceSnapshot, error) {
+	resourceSnapshots := make(map[string]*fleetv1beta1.ClusterResourceSnapshot)
+	resourceSnapshots[masterResourceSnapshot.Name] = masterResourceSnapshot
+
+	// check if there are more snapshot in the same index group
+	countAnnotation := masterResourceSnapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
+	snapshotCount, err := strconv.Atoi(countAnnotation)
+	if err != nil || snapshotCount < 1 {
+		return nil, NewUnexpectedBehaviorError(fmt.Errorf(
+			"master resource snapshot %s has an invalid snapshot count %d or err %w", masterResourceSnapshot.Name, snapshotCount, err))
+	}
+
+	if snapshotCount > 1 {
+		// fetch all the resource snapshot in the same index group
+		index, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(masterResourceSnapshot)
+		if err != nil {
+			klog.ErrorS(err, "Master resource snapshot has invalid resource index", "clusterResourceSnapshot", klog.KObj(masterResourceSnapshot))
+			return nil, NewUnexpectedBehaviorError(err)
+		}
+		resourceIndexLabelMatcher := client.MatchingLabels{
+			fleetv1beta1.ResourceIndexLabel: strconv.Itoa(index),
+			fleetv1beta1.CRPTrackingLabel:   crp,
+		}
+		resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
+		if err := k8Client.List(ctx, resourceSnapshotList, resourceIndexLabelMatcher); err != nil {
+			klog.ErrorS(err, "Failed to list all the resource snapshot", "clusterResourcePlacement", crp)
+			return nil, NewAPIServerError(true, err)
+		}
+		//insert all the resource snapshot into the map
+		for i := 0; i < len(resourceSnapshotList.Items); i++ {
+			resourceSnapshots[resourceSnapshotList.Items[i].Name] = &resourceSnapshotList.Items[i]
+		}
+	}
+
+	// check if all the resource snapshots are created since that may take a while but the rollout controller may update the resource binding on master snapshot creation
+	if len(resourceSnapshots) != snapshotCount {
+		misMatchErr := fmt.Errorf("%w: resource snapshots are still being created for the masterResourceSnapshot %s, total snapshot in the index group = %d, num Of existing snapshot in the group= %d",
+			errResourceNotFullyCreated, masterResourceSnapshot.Name, snapshotCount, len(resourceSnapshots))
+		klog.ErrorS(misMatchErr, "Resource snapshot are not ready", "clusterResourcePlacement", crp)
+		return nil, NewExpectedBehaviorError(misMatchErr)
+	}
+	return resourceSnapshots, nil
 }

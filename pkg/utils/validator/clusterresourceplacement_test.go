@@ -16,6 +16,7 @@ import (
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	"go.goms.io/fleet/pkg/utils/informer"
+	testinformer "go.goms.io/fleet/test/utils/informer"
 )
 
 var (
@@ -53,7 +54,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          false,
 		},
 		"invalid Resource Selector with name & label selector": {
@@ -75,7 +76,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          true,
 			wantErrMsg:       "the labelSelector and name fields are mutually exclusive in selector",
 		},
@@ -99,7 +100,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          true,
 			wantErrMsg:       "for 'in', 'notin' operators, values set can't be empty",
 		},
@@ -119,7 +120,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: true},
 			wantErr:          true,
 			wantErrMsg:       "the resource is not found in schema (please retry) or it is not a cluster scoped resource",
 		},
@@ -177,7 +178,7 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 					},
 				},
 			},
-			resourceInformer: MockResourceInformer{},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
 			wantErr:          true,
 			wantErrMsg:       "for 'in', 'notin' operators, values set can't be empty",
 		},
