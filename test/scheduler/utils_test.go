@@ -632,14 +632,13 @@ func updatePickNCRPWithNewAffinityAndTopologySpreadConstraints(
 }
 
 func updatePickNCRPWithTolerations(crpName string, tolerations []placementv1beta1.Toleration, oldPolicySnapshotName, newPolicySnapshotName string) {
-	// Update the CRP.
 	crp := &placementv1beta1.ClusterResourcePlacement{}
-	Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get CRP")
+	Expect(hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp)).To(Succeed(), "Failed to get cluster resource placement")
 
 	policy := crp.Spec.Policy.DeepCopy()
 	policy.Tolerations = tolerations
 	numOfClusters := policy.NumberOfClusters
-	Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update CRP")
+	Expect(hubClient.Update(ctx, crp)).To(Succeed(), "Failed to update cluster resource placement")
 
 	crpGeneration := crp.Generation
 
@@ -716,7 +715,7 @@ func addTaintsToMemberClusters(memberClusterNames []string, taints []clusterv1be
 		var mc clusterv1beta1.MemberCluster
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)).Should(Succeed(), "Failed to get member cluster")
 		mc.Spec.Taints = []clusterv1beta1.Taint{taints[i]}
-		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update MC")
+		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update member cluster")
 	}
 }
 
@@ -725,6 +724,6 @@ func removeTaintsFromMemberClusters(memberClusterNames []string) {
 		var mc clusterv1beta1.MemberCluster
 		Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)).Should(Succeed(), "Failed to get member cluster")
 		mc.Spec.Taints = nil
-		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update MC")
+		Expect(hubClient.Update(ctx, &mc)).Should(Succeed(), "Failed to update member cluster")
 	}
 }
