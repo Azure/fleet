@@ -466,7 +466,7 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 // It reconciles on the CRP when a new resource resourceBinding is created or an existing resource binding is created/updated.
 func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("rollout-controller")
-	return runtime.NewControllerManagedBy(mgr).Named("rollout_controller").
+	return runtime.NewControllerManagedBy(mgr).Named("rollout-controller").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		Watches(&fleetv1beta1.ClusterResourceSnapshot{}, handler.Funcs{
 			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
