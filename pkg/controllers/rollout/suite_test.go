@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -75,6 +77,7 @@ var _ = BeforeSuite(func() {
 	Expect(fleetv1beta1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(workv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 	Expect(kruisev1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
+	Expect(fleetv1alpha1.AddToScheme(scheme.Scheme)).Should(Succeed())
 
 	By("starting the controller manager")
 	klog.InitFlags(flag.CommandLine)

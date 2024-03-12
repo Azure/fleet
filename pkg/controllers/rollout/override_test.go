@@ -652,23 +652,37 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "cluster not found",
-			cluster: &clusterv1beta1.MemberCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "cluster-not-exist",
-				},
-			},
-			wantErr: controller.ErrExpectedBehavior,
-		},
-		{
 			name: "empty overrides",
 			cluster: &clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster-1",
 				},
 			},
-			wantCRO: []string{},
-			wantRO:  []fleetv1beta1.NamespacedName{},
+			wantCRO: nil,
+			wantRO:  nil,
+		},
+		{
+			name: "cluster not found",
+			croList: []*fleetv1alpha1.ClusterResourceOverride{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						Policy: &fleetv1alpha1.OverridePolicy{
+							OverrideRules: []fleetv1alpha1.OverrideRule{
+								{}, // empty cluster label selects all clusters
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-not-exist",
+				},
+			},
+			wantErr: controller.ErrExpectedBehavior,
 		},
 		{
 			name: "matched overrides with empty cluster label",
