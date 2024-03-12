@@ -347,6 +347,7 @@ func buildFailedResourcePlacements(work *fleetv1beta1.Work) (isPending bool, res
 
 // setResourceConditions sets the resource related conditions by looking at the bindings and work, excluding the scheduled
 // condition.
+// It returns whether there is a cluster scheduled or not.
 func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement,
 	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
 	placementStatuses := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
@@ -376,7 +377,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 	var clusterConditionStatusRes [TotalCondition][TotalConditionStatus]int
 
 	for _, c := range selected {
-		var rp fleetv1beta1.ResourcePlacementStatus
+		var rps fleetv1beta1.ResourcePlacementStatus
 		scheduledCondition := metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
@@ -384,17 +385,17 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
 			ObservedGeneration: crp.Generation,
 		}
-		rp.ClusterName = c.ClusterName
+		rps.ClusterName = c.ClusterName
 		if c.ClusterScore != nil {
 			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, *c.ClusterScore.AffinityScore, *c.ClusterScore.TopologySpreadScore, c.Reason)
 		}
 		oldConditions, ok := oldResourcePlacementStatusMap[c.ClusterName]
 		if ok {
 			// update the lastTransitionTime considering the existing condition status instead of overwriting
-			rp.Conditions = oldConditions
+			rps.Conditions = oldConditions
 		}
-		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		res, err := r.setResourcePlacementStatusPerCluster(ctx, crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rp)
+		meta.SetStatusCondition(&rps.Conditions, scheduledCondition)
+		res, err := r.setResourcePlacementStatusPerCluster(ctx, crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rps)
 		if err != nil {
 			return false, err
 		}
@@ -408,7 +409,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 				clusterConditionStatusRes[i][UnknownConditionStatus]++
 			}
 		}
-		placementStatuses = append(placementStatuses, rp)
+		placementStatuses = append(placementStatuses, rps)
 	}
 	isClusterScheduled := len(placementStatuses) > 0
 
@@ -480,12 +481,7 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 		}
 
 		// We don't check the bindings[i].Spec.ResourceSnapshotName != latestResourceSnapshot.Name here.
-		// There are few cases:
-		// * if the resourceSnapshotName is not equal,
-		//     1. the status is false, it means the rollout is stuck.
-		//     2. otherwise, the rollout controller has not processed it yet.
-		// * if the resourceSnapshotName is equal,
-		//     just return the corresponding status.
+		// The existing conditions are needed when building the new ones.
 		if bindings[i].Spec.SchedulingPolicySnapshotName != latestSchedulingPolicySnapshot.Name {
 			continue
 		}
@@ -503,6 +499,12 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 	}
 
 	res := make([]metav1.ConditionStatus, 0, TotalCondition)
+	// There are few cases:
+	// * if the resourceSnapshotName is not equal,
+	//     1. the status is false, it means the rollout is stuck.
+	//     2. otherwise, the rollout controller has not processed it yet.
+	// * if the resourceSnapshotName is equal,
+	//     just return the corresponding status.
 	if binding.Spec.ResourceSnapshotName == latestResourceSnapshot.Name {
 		for i := RolloutStartedCondition; i < TotalCondition; i++ {
 			bindingCond := binding.GetCondition(string(i.ResourceBindingConditionType()))
@@ -543,6 +545,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 		}
 		return res, nil
 	}
+	// handling stale binding if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name
 	rolloutStartedCond := binding.GetCondition(string(RolloutStartedCondition.ResourceBindingConditionType()))
 	if condition.IsConditionStatusFalse(rolloutStartedCond, binding.Generation) {
 		cond := metav1.Condition{
@@ -610,6 +613,9 @@ func buildFailedResourcePlacementsPerCluster(work *fleetv1beta1.Work) []fleetv1b
 	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
+	// The applied condition and available condition are always updated in one call.
+	// It means the observedGeneration of these two are always the same.
+	// If IsConditionStatusFalse is true, means both are observing the latest work.
 	if !condition.IsConditionStatusFalse(appliedCond, work.Generation) &&
 		!condition.IsConditionStatusFalse(availableCond, work.Generation) {
 		return nil
@@ -644,6 +650,9 @@ func buildFailedResourcePlacementsPerCluster(work *fleetv1beta1.Work) []fleetv1b
 
 		appliedCond = meta.FindStatusCondition(manifestCondition.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 		// collect if there is an explicit fail
+		// The observedGeneration of the manifest condition is the generation of the applied manifest.
+		// The overall applied and available conditions are observing the latest work generation.
+		// So that the manifest condition should be latest, assuming they're populated by the work agent in one update call.
 		if appliedCond != nil && appliedCond.Status == metav1.ConditionFalse {
 			if isEnveloped {
 				klog.V(2).InfoS("Find a failed to apply enveloped manifest",

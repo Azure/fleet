@@ -2613,7 +2613,6 @@ func TestSetPlacementStatus_useNewConditions(t *testing.T) {
 				SelectedResources:     selectedResources,
 				ObservedResourceIndex: "0",
 				Conditions: []metav1.Condition{
-
 					{
 						Status:             metav1.ConditionUnknown,
 						Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
