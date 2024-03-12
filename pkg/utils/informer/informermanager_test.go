@@ -74,7 +74,6 @@ func TestAddDynamicResources(t *testing.T) {
 	}
 	for testName, tc := range tests {
 		t.Run(testName, func(t *testing.T) {
-
 			// Create a resource event handler
 			handler := &cache.ResourceEventHandlerFuncs{
 				AddFunc:    func(obj interface{}) {},
@@ -120,7 +119,6 @@ func TestAddDynamicResources(t *testing.T) {
 					t.Errorf("Expected dynamic resource %v to be removed to informer manager", dynResource)
 				}
 			}
-
 		})
 	}
 }
