@@ -435,7 +435,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 	if !isClusterScheduled {
 		// TODO special handling when isClusterScheduled is false
 		// Currently it will stop updating the resource related conditions and leave the existing conditions there.
-		return isClusterScheduled, nil
+		return false, nil
 	}
 
 	for i := RolloutStartedCondition; i < TotalCondition; i++ {
@@ -450,7 +450,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		}
 	}
 
-	return isClusterScheduled, nil
+	return true, nil
 }
 
 func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) (map[string]*fleetv1beta1.ClusterResourceBinding, error) {
@@ -491,6 +491,18 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 }
 
 // setResourcePlacementStatusPerCluster sets the resource related fields for each cluster.
+// It returns an array which records the status for each resource condition.
+// The resource condition order (index) is defined as const:
+// const (
+//
+//	RolloutStartedCondition resourceCondition = iota
+//	OverriddenCondition
+//	WorkCreatedCondition
+//	AppliedCondition
+//	AvailableCondition
+//	TotalCondition
+//
+// )
 func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 	crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
 	if binding == nil {
@@ -559,7 +571,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 		res = append(res, metav1.ConditionFalse)
 		return res, nil
 	}
-	// At this point, either the generation is not the one in the binding spec or the status is true.
+	// At this point, either the generation is not the one in the binding spec or the status is true/unknown.
 	// It means the rollout controller has not handled the binding yet.
 	meta.SetStatusCondition(&status.Conditions, RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 	return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
@@ -586,7 +598,6 @@ func (r *Reconciler) setFailedPlacementsPerCluster(ctx context.Context, crp *fle
 		if work.DeletionTimestamp != nil {
 			continue // ignore the deleting work
 		}
-		// We only build the work applied status on the new works.
 		failedManifests := buildFailedResourcePlacementsPerCluster(&work)
 		if len(failedManifests) != 0 && len(failedResourcePlacements) < maxFailedResourcePlacementLimit {
 			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
