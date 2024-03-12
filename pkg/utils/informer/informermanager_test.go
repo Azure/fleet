@@ -1,66 +1,44 @@
 package informer
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"context"
+	"sync"
+	"testing"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/tools/cache"
 )
 
-var _ = Describe("Informer Manager Suite", func() {
-	Context("add then remove", Ordered, func() {
-		It("add one dynamic resource", func() {
-			//Create a resource event handler
-			handler := &cache.ResourceEventHandlerFuncs{
-				AddFunc:    func(obj interface{}) {},
-				UpdateFunc: func(oldObj, newObj interface{}) {},
-				DeleteFunc: func(obj interface{}) {},
-			}
-
-			// Create a dynamic resource
-			dynResource := APIResourceMeta{
-				GroupVersionKind: schema.GroupVersionKind{
-					Group:   "example.com",
-					Version: "v1",
-					Kind:    "ExampleResource",
+func TestAddDynamicResources(t *testing.T) {
+	tests := map[string]struct {
+		dynResources  []APIResourceMeta
+		dynamicClient *fake.FakeDynamicClient
+	}{
+		"add one dynamic resource": {
+			dynResources: []APIResourceMeta{
+				{
+					GroupVersionKind: schema.GroupVersionKind{
+						Group:   "example.com",
+						Version: "v1",
+						Kind:    "ExampleResource",
+					},
+					GroupVersionResource: schema.GroupVersionResource{
+						Group:    "example.com",
+						Version:  "v1",
+						Resource: "exampleresources",
+					},
+					IsClusterScoped:  true,
+					isStaticResource: false,
+					Registration:     nil,
 				},
-				GroupVersionResource: schema.GroupVersionResource{
-					Group:    "example.com",
-					Version:  "v1",
-					Resource: "exampleresources",
-				},
-				IsClusterScoped:  true,
-				isStaticResource: false,
-				Registration:     nil,
-			}
-
-			// Make sure that the add method returns with no errors
-			//Check that the dynamic resource was added to the informer manager
-			impl.AddDynamicResources([]APIResourceMeta{dynResource}, handler, true)
-			addedResource, ok := impl.apiResources[dynResource.GroupVersionKind]
-			Expect(ok).Should(BeTrue(), "Expected dynamic resource %v to be added to informer manager", dynResource)
-
-			// Check that the informer was created for the dynamic resource
-			informer := impl.informerFactory.ForResource(addedResource.GroupVersionResource).Informer()
-			Expect(informer).ShouldNot(BeNil())
-
-			// Remove the dynamic resource from the informer manager
-			impl.AddDynamicResources([]APIResourceMeta{}, handler, true)
-
-			// Verify the map. Check that the dynamic resource was removed from the informer manager
-			_, ok = impl.apiResources[dynResource.GroupVersionKind]
-			Expect(ok).ShouldNot(BeTrue(), "Expected dynamic resource %v to be removed from informer manager", dynResource)
-		})
-		It("multiple dynamic resources", func() {
-			handler := &cache.ResourceEventHandlerFuncs{
-				AddFunc:    func(obj interface{}) {},
-				UpdateFunc: func(oldObj, newObj interface{}) {},
-				DeleteFunc: func(obj interface{}) {},
-			}
-
-			// Create dynamic resources
-			dynResources := []APIResourceMeta{
+			},
+			dynamicClient: fake.NewSimpleDynamicClient(runtime.NewScheme()),
+		},
+		"add multiple resources": {
+			dynResources: []APIResourceMeta{
 				{
 					GroupVersionKind: schema.GroupVersionKind{
 						Group:   "example.com",
@@ -91,35 +69,58 @@ var _ = Describe("Informer Manager Suite", func() {
 					isStaticResource: false,
 					Registration:     nil,
 				},
+			},
+		},
+	}
+	for testName, tc := range tests {
+		t.Run(testName, func(t *testing.T) {
+
+			// Create a resource event handler
+			handler := &cache.ResourceEventHandlerFuncs{
+				AddFunc:    func(obj interface{}) {},
+				UpdateFunc: func(oldObj, newObj interface{}) {},
+				DeleteFunc: func(obj interface{}) {},
 			}
 
-			// Make sure that the add method returns with no errors
-			// Check that the dynamic resources were added to the informer manager
-			impl.AddDynamicResources([]APIResourceMeta{dynResources[0]}, handler, false)
-			impl.AddDynamicResources(dynResources, handler, true)
-			for _, dynResource := range dynResources {
-				_, ok := impl.apiResources[dynResource.GroupVersionKind]
-				Expect(ok).Should(BeTrue(), "Expected dynamic resource %v to be added to informer manager", dynResource)
+			// Create a fake dynamic client and informer factory
+			client := fake.NewSimpleDynamicClient(runtime.NewScheme())
+			factory := dynamicinformer.NewDynamicSharedInformerFactory(client, 0)
+
+			// Create a new informerManagerImpl with the fake client and factory
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			impl := &informerManagerImpl{
+				dynamicClient:   client,
+				ctx:             ctx,
+				cancel:          cancel,
+				informerFactory: factory,
+				apiResources:    make(map[schema.GroupVersionKind]*APIResourceMeta),
+				resourcesLock:   sync.RWMutex{},
+			}
+			// Add the dynamic resource to the informer manager
+			impl.AddDynamicResources(tc.dynResources, handler, true)
+			for _, dynResource := range tc.dynResources {
+				if _, ok := impl.apiResources[dynResource.GroupVersionKind]; !ok {
+					t.Errorf("Expected dynamic resource %v to be added to informer manager", dynResource)
+				}
 			}
 
 			// Check that the informer was created for the dynamic resources
-			for _, dynResource := range dynResources {
+			for _, dynResource := range tc.dynResources {
 				informer := impl.informerFactory.ForResource(dynResource.GroupVersionResource).Informer()
-				Expect(informer).ShouldNot(BeNil())
+				if informer == nil {
+					t.Fatalf("Expected informer to be created for resource %v", dynResource)
+				}
 			}
 
-			// Remove the dynamic resource from the informer manager
-			impl.AddDynamicResources([]APIResourceMeta{dynResources[0]}, handler, true)
-
-			// verify the map. Check that the dynamic resource was removed from the informer manager
-			_, ok := impl.apiResources[dynResources[1].GroupVersionKind]
-			Expect(ok).ShouldNot(BeTrue(), "Expected dynamic resource %v to be removed from informer manager", dynResources[1])
-			// Remove the dynamic resource from the informer manager
+			//Remove the dynamic resource from the informer manager
 			impl.AddDynamicResources([]APIResourceMeta{}, handler, true)
+			for _, dynResource := range tc.dynResources {
+				if _, ok := impl.apiResources[dynResource.GroupVersionKind]; ok {
+					t.Errorf("Expected dynamic resource %v to be removed to informer manager", dynResource)
+				}
+			}
 
-			// verify the map. Check that the dynamic resource was removed from the informer manager
-			_, ok = impl.apiResources[dynResources[0].GroupVersionKind]
-			Expect(ok).ShouldNot(BeTrue(), "Expected dynamic resource %v to be removed from informer manager", dynResources[0])
 		})
-	})
-})
+	}
+}
