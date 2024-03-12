@@ -49,7 +49,7 @@ If you would like to add a prometheus server to access metrics, run the followin
     ````
     kubectl get service -n fleet-system
 
-4. Install the Prometheus community Helm Chart
+2. Install the Prometheus community Helm Chart
    ```
     helm install prom prometheus-community/kube-prometheus-stack -f prom1.yaml
    ```
