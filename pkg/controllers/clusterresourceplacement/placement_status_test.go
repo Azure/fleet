@@ -5908,7 +5908,7 @@ func TestBuildClusterResourceBindings(t *testing.T) {
 	}
 }
 
-func TestBuildFailedResourcePlacementsPerCluster(t *testing.T) {
+func TestExtractFailedResourcePlacementsFromWork(t *testing.T) {
 	workGeneration := int64(12)
 	tests := []struct {
 		name string
@@ -6345,9 +6345,9 @@ func TestBuildFailedResourcePlacementsPerCluster(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := buildFailedResourcePlacementsPerCluster(&tc.work)
+			got := extractFailedResourcePlacementsFromWork(&tc.work)
 			if diff := cmp.Diff(tc.want, got, statusCmpOptions...); diff != "" {
-				t.Errorf("buildFailedResourcePlacementsPerCluster() status mismatch (-want, +got):\n%s", diff)
+				t.Errorf("extractFailedResourcePlacementsFromWork() status mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}

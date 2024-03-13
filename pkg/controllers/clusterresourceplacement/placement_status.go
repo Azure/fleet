@@ -410,6 +410,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			}
 		}
 		placementStatuses = append(placementStatuses, rps)
+		klog.V(2).InfoS("Populated the resource placement status for the scheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", c.ClusterName)
 	}
 	isClusterScheduled := len(placementStatuses) > 0
 
@@ -429,6 +430,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		}
 		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
 		placementStatuses = append(placementStatuses, rp)
+		klog.V(2).InfoS("Populated the resource placement status for the unscheduled cluster", "clusterResourcePlacement", klog.KObj(crp), "cluster", unselected[i].ClusterName)
 	}
 	crp.Status.PlacementStatuses = placementStatuses
 
@@ -449,6 +451,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			crp.SetConditions(i.TrueClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][TrueConditionStatus]))
 		}
 	}
+	klog.V(2).InfoS("Populated the placement conditions", "clusterResourcePlacement", klog.KObj(crp))
 
 	return true, nil
 }
@@ -526,13 +529,6 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 				res = append(res, metav1.ConditionUnknown)
 				break
 			}
-			cond := metav1.Condition{
-				Type:               string(i.ResourcePlacementConditionType()),
-				Status:             bindingCond.Status,
-				ObservedGeneration: crp.Generation,
-				Reason:             bindingCond.Reason,
-				Message:            bindingCond.Message,
-			}
 
 			switch i {
 			case RolloutStartedCondition:
@@ -547,7 +543,13 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 					}
 				}
 			}
-
+			cond := metav1.Condition{
+				Type:               string(i.ResourcePlacementConditionType()),
+				Status:             bindingCond.Status,
+				ObservedGeneration: crp.Generation,
+				Reason:             bindingCond.Reason,
+				Message:            bindingCond.Message,
+			}
 			meta.SetStatusCondition(&status.Conditions, cond)
 			res = append(res, bindingCond.Status)
 
@@ -577,28 +579,32 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 	return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
 }
 
+// TODO, instead of crp looking for the failed manifests from the works, the work generator will populate in the binding
+// in addition to the conditions to solve the inconsistency data between bindings and works, which is also more efficient.
+// Note, today there is no data about the mapping between the binding generation and work generation.
 func (r *Reconciler) setFailedPlacementsPerCluster(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) error {
-	crpKObj := klog.KObj(crp)
-
 	namespaceMatcher := client.InNamespace(fmt.Sprintf(utils.NamespaceNameFormat, status.ClusterName))
 	workLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.CRPTrackingLabel:   crp.Name,
 		fleetv1beta1.ParentBindingLabel: binding.Name,
 	}
 	workList := &fleetv1beta1.WorkList{}
-
+	crpKObj := klog.KObj(crp)
+	bindingKObj := klog.KObj(binding)
 	if err := r.Client.List(ctx, workList, workLabelMatcher, namespaceMatcher); err != nil {
-		klog.ErrorS(err, "Failed to list all the work associated with the clusterResourcePlacement", "clusterResourcePlacement", crpKObj, "clusterName", status.ClusterName)
+		klog.ErrorS(err, "Failed to list all the work associated with the clusterResourcePlacement", "clusterResourcePlacement", crpKObj, "clusterResourceBinding", bindingKObj, "clusterName", status.ClusterName)
 		return controller.NewAPIServerError(true, err)
 	}
+	klog.V(2).InfoS("Listed works to find the failed placements", "clusterResourcePlacement", crpKObj, "clusterResourceBinding", bindingKObj, "clusterName", status.ClusterName, "numberOfWorks", len(workList.Items))
 
 	failedResourcePlacements := make([]fleetv1beta1.FailedResourcePlacement, 0, maxFailedResourcePlacementLimit) // preallocate the memory
 	for i := range workList.Items {
 		work := workList.Items[i]
 		if work.DeletionTimestamp != nil {
+			klog.V(2).InfoS("Ignoring the deleting work", "clusterResourcePlacement", crpKObj, "clusterResourceBinding", bindingKObj, "work", klog.KObj(&work))
 			continue // ignore the deleting work
 		}
-		failedManifests := buildFailedResourcePlacementsPerCluster(&work)
+		failedManifests := extractFailedResourcePlacementsFromWork(&work)
 		if len(failedManifests) != 0 && len(failedResourcePlacements) < maxFailedResourcePlacementLimit {
 			failedResourcePlacements = append(failedResourcePlacements, failedManifests...)
 		}
@@ -606,7 +612,7 @@ func (r *Reconciler) setFailedPlacementsPerCluster(ctx context.Context, crp *fle
 
 	if len(failedResourcePlacements) == 0 {
 		err := fmt.Errorf("there are no works (total number %v) with failed manifest condition which is not matched with the binding status: %v", len(workList.Items), binding.Status.Conditions)
-		klog.ErrorS(err, "No failed manifests are found for the resource", "clusterResourcePlacement", klog.KObj(crp), "clusterResourceBinding", klog.KObj(binding))
+		klog.ErrorS(err, "No failed manifests are found for the resource", "clusterResourcePlacement", crpKObj, "clusterResourceBinding", bindingKObj, "clusterName", status.ClusterName)
 		// There will be a case that, the binding is just updated when we query the works.
 		// So that the works have been updated and the cached binding condition is out of date.
 		// We requeue the request to try again.
@@ -617,10 +623,11 @@ func (r *Reconciler) setFailedPlacementsPerCluster(ctx context.Context, crp *fle
 		failedResourcePlacements = failedResourcePlacements[0:maxFailedResourcePlacementLimit]
 	}
 	status.FailedPlacements = failedResourcePlacements
+	klog.V(2).InfoS("Populated failed manifests", "clusterResourcePlacement", crpKObj, "clusterName", status.ClusterName, "numberOfFailedPlacements", len(failedResourcePlacements))
 	return nil
 }
 
-func buildFailedResourcePlacementsPerCluster(work *fleetv1beta1.Work) []fleetv1beta1.FailedResourcePlacement {
+func extractFailedResourcePlacementsFromWork(work *fleetv1beta1.Work) []fleetv1beta1.FailedResourcePlacement {
 	appliedCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 	availableCond := meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
 
