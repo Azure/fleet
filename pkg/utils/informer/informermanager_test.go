@@ -17,27 +17,7 @@ func TestAddDynamicResources(t *testing.T) {
 		dynResources  []APIResourceMeta
 		dynamicClient *fake.FakeDynamicClient
 	}{
-		"add one dynamic resource": {
-			dynResources: []APIResourceMeta{
-				{
-					GroupVersionKind: schema.GroupVersionKind{
-						Group:   "example.com",
-						Version: "v1",
-						Kind:    "ExampleResource",
-					},
-					GroupVersionResource: schema.GroupVersionResource{
-						Group:    "example.com",
-						Version:  "v1",
-						Resource: "exampleresources",
-					},
-					IsClusterScoped:  true,
-					isStaticResource: false,
-					Registration:     nil,
-				},
-			},
-			dynamicClient: fake.NewSimpleDynamicClient(runtime.NewScheme()),
-		},
-		"add multiple resources": {
+		"add multiple dynamic resources then remove one": {
 			dynResources: []APIResourceMeta{
 				{
 					GroupVersionKind: schema.GroupVersionKind{
