@@ -125,7 +125,7 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,

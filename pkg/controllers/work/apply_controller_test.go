@@ -520,7 +520,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
@@ -552,7 +552,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
@@ -600,7 +600,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
@@ -664,7 +664,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
@@ -712,7 +712,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
@@ -760,7 +760,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeApplied,
 					Status: metav1.ConditionTrue,
-					Reason: workAppliedCompleteReason,
+					Reason: workAppliedCompletedReason,
 				},
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,

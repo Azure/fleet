@@ -64,7 +64,7 @@ const (
 // WorkCondition condition reasons
 const (
 	workAppliedFailedReason       = "WorkAppliedFailed"
-	workAppliedCompleteReason     = "WorkAppliedComplete"
+	workAppliedCompletedReason    = "WorkAppliedCompleted"
 	workNotAvailableYetReason     = "WorkNotAvailableYet"
 	workAvailabilityUnknownReason = "WorkAvailabilityUnknown"
 	workAvailableReason           = "WorkAvailable"
@@ -72,9 +72,11 @@ const (
 	// ManifestApplyFailedReason is the reason string of condition when it failed to apply manifest.
 	ManifestApplyFailedReason = "ManifestApplyFailed"
 	// ManifestAlreadyUpToDateReason is the reason string of condition when the manifest is already up to date.
-	ManifestAlreadyUpToDateReason = "ManifestAlreadyUpToDate"
+	ManifestAlreadyUpToDateReason  = "ManifestAlreadyUpToDate"
+	manifestAlreadyUpToDateMessage = "Manifest is already up to date"
 	// ManifestNeedsUpdateReason is the reason string of condition when the manifest needs to be updated.
-	ManifestNeedsUpdateReason = "ManifestNeedsUpdate"
+	ManifestNeedsUpdateReason  = "ManifestNeedsUpdate"
+	manifestNeedsUpdateMessage = "Manifest has just been updated and in the processing of checking its availability"
 )
 
 // ApplyWorkReconciler reconciles a Work object
@@ -613,6 +615,7 @@ func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr sche
 }
 
 // constructWorkCondition constructs the work condition based on the apply result
+// TODO: special handle no results
 func constructWorkCondition(results []applyResult, work *fleetv1beta1.Work) []error {
 	var errs []error
 	// Update manifestCondition based on the results.
@@ -809,6 +812,7 @@ func buildManifestCondition(err error, action applyAction, observedGeneration in
 		applyCondition.Message = fmt.Sprintf("Failed to apply manifest: %v", err)
 		availableCondition.Status = metav1.ConditionUnknown
 		availableCondition.Reason = ManifestApplyFailedReason
+		availableCondition.Message = "Manifest is not applied yet"
 	} else {
 		applyCondition.Status = metav1.ConditionTrue
 		// the first three actions types means we did write to the cluster thus the availability is unknown
@@ -816,33 +820,46 @@ func buildManifestCondition(err error, action applyAction, observedGeneration in
 		switch action {
 		case manifestCreatedAction:
 			applyCondition.Reason = string(manifestCreatedAction)
+			applyCondition.Message = "Manifest is created successfully"
 			availableCondition.Status = metav1.ConditionUnknown
 			availableCondition.Reason = ManifestNeedsUpdateReason
+			availableCondition.Message = manifestNeedsUpdateMessage
 
 		case manifestThreeWayMergePatchAction:
 			applyCondition.Reason = string(manifestThreeWayMergePatchAction)
+			applyCondition.Message = "Manifest is patched successfully"
 			availableCondition.Status = metav1.ConditionUnknown
 			availableCondition.Reason = ManifestNeedsUpdateReason
+			availableCondition.Message = manifestNeedsUpdateMessage
 
 		case manifestServerSideAppliedAction:
 			applyCondition.Reason = string(manifestServerSideAppliedAction)
+			applyCondition.Message = "Manifest is patched successfully"
 			availableCondition.Status = metav1.ConditionUnknown
 			availableCondition.Reason = ManifestNeedsUpdateReason
+			availableCondition.Message = manifestNeedsUpdateMessage
 
 		case manifestAvailableAction:
 			applyCondition.Reason = ManifestAlreadyUpToDateReason
+			applyCondition.Message = manifestAlreadyUpToDateMessage
 			availableCondition.Status = metav1.ConditionTrue
 			availableCondition.Reason = string(manifestAvailableAction)
+			availableCondition.Message = "Manifest is trackable and available now"
 
 		case manifestNotAvailableYetAction:
 			applyCondition.Reason = ManifestAlreadyUpToDateReason
+			applyCondition.Message = manifestAlreadyUpToDateMessage
 			availableCondition.Status = metav1.ConditionFalse
 			availableCondition.Reason = string(manifestNotAvailableYetAction)
+			availableCondition.Message = "Manifest is trackable but not available yet"
+
 		// we cannot stuck at unknown so we have to mark it as true
 		case manifestNotTrackableAction:
 			applyCondition.Reason = ManifestAlreadyUpToDateReason
+			applyCondition.Message = manifestAlreadyUpToDateMessage
 			availableCondition.Status = metav1.ConditionTrue
 			availableCondition.Reason = string(manifestNotTrackableAction)
+			availableCondition.Message = "Manifest is not trackable"
 
 		default:
 			klog.ErrorS(controller.ErrUnexpectedBehavior, "Unknown apply action result", "applyResult", action)
@@ -852,11 +869,11 @@ func buildManifestCondition(err error, action applyAction, observedGeneration in
 	return []metav1.Condition{applyCondition, availableCondition}
 }
 
-// buildWorkCondition generate applied and available status condition for work.
-// If one of the manifests is applied failed on the spoke, the applied status condition of the work is false.
-// If one of the manifests is not available yet on the spoke, the available status condition of the work is false.
+// buildWorkCondition generate overall applied and available status condition for work.
+// If one of the manifests is applied failed on the member cluster, the applied status condition of the work is false.
+// If one of the manifests is not available yet on the member cluster, the available status condition of the work is false.
 // If all the manifests are available, the available status condition of the work is true.
-// Otherwise, the available status condition of the work is unknown as we can't track some of them.
+// Otherwise, the available status condition of the work is unknown.
 func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, observedGeneration int64) []metav1.Condition {
 	applyCondition := metav1.Condition{
 		Type:               fleetv1beta1.WorkConditionTypeApplied,
@@ -881,8 +898,8 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 		}
 	}
 	applyCondition.Status = metav1.ConditionTrue
-	applyCondition.Reason = workAppliedCompleteReason
-	applyCondition.Message = "Apply work complete"
+	applyCondition.Reason = workAppliedCompletedReason
+	applyCondition.Message = "Work is applied successfully"
 	// we mark the entire work available condition to unknown if one of the manifests is not known yet
 	for _, manifestCond := range manifestConditions {
 		cond := meta.FindStatusCondition(manifestCond.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
@@ -915,8 +932,10 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 	availableCondition.Status = metav1.ConditionTrue
 	if trackable {
 		availableCondition.Reason = workAvailableReason
+		availableCondition.Message = "Work is available now"
 	} else {
 		availableCondition.Reason = workNotTrackableReason
+		availableCondition.Message = "Work's availability is not trackable"
 	}
 	return []metav1.Condition{applyCondition, availableCondition}
 }
