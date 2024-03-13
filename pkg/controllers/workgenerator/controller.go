@@ -618,10 +618,13 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 				}
 				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				// we only need to handle the case the applied condition is flipped between true and NOT true between the
+				oldAvailableStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+				newAvailableStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+
+				// we only need to handle the case the applied or available condition is changed between the
 				// new and old work objects. Otherwise, it won't affect the binding applied condition
-				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) {
-					klog.V(2).InfoS("The work applied condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+				if condition.EqualCondition(oldAppliedStatus, newAppliedStatus) && condition.EqualCondition(oldAvailableStatus, newAvailableStatus) {
+					klog.V(2).InfoS("The work applied or available condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return
 				}
 				klog.V(2).InfoS("Received a work update event", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)
