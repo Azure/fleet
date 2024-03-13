@@ -112,7 +112,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 								{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionTrue,
-									Reason:             "WorkAppliedComplete",
+									Reason:             "WorkAppliedCompleted",
 									ObservedGeneration: 1,
 								},
 								{
