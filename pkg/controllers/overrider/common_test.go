@@ -40,7 +40,7 @@ func getClusterResourceOverrideSpec() fleetv1alpha1.ClusterResourceOverrideSpec 
 			{
 				Group:   "",
 				Version: "v1",
-				Kind:    "Pod",
+				Kind:    "Namespace",
 			},
 		},
 		Policy: &fleetv1alpha1.OverridePolicy{

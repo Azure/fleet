@@ -29,7 +29,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/resource"
 )
 
-// Reconciler reconciles a clusterResourceOverride object.
+// ClusterResourceReconciler reconciles a clusterResourceOverride object.
 type ClusterResourceReconciler struct {
 	Reconciler
 	recorder record.EventRecorder

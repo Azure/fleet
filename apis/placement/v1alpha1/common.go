@@ -10,8 +10,8 @@ const (
 	ClusterResourceOverrideSnapshotKind = "ClusterResourceOverrideSnapshot"
 
 	// ResourceOverrideKind is the kind of the ResourceOverride.
-	ResourceOverrideKind = "ClusterResourceOverride"
+	ResourceOverrideKind = "ResourceOverride"
 
 	// ResourceOverrideSnapshotKind is the kind of the ResourceOverrideSnapshotKind.
-	ResourceOverrideSnapshotKind = "ClusterResourceOverrideSnapshot"
+	ResourceOverrideSnapshotKind = "ResourceOverrideSnapshot"
 )

@@ -28,7 +28,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/resource"
 )
 
-// Reconciler reconciles a ResourceOverride object.
+// ResourceReconciler reconciles a ResourceOverride object.
 type ResourceReconciler struct {
 	Reconciler
 }
@@ -124,7 +124,8 @@ func (r *ResourceReconciler) ensureResourceOverrideSnapshot(ctx context.Context,
 	latestSnapshotIndex++
 	newSnapshot := &placementv1alpha1.ResourceOverrideSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, ro.Name, latestSnapshotIndex),
+			Name:      fmt.Sprintf(placementv1alpha1.OverrideSnapshotNameFmt, ro.Name, latestSnapshotIndex),
+			Namespace: ro.Namespace,
 			Labels: map[string]string{
 				placementv1alpha1.OverrideTrackingLabel: ro.Name,
 				placementv1beta1.IsLatestSnapshotLabel:  strconv.FormatBool(true),
