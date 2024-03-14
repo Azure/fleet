@@ -1433,6 +1433,7 @@ var _ = Describe("responding to specific member cluster changes", func() {
 		AfterAll(func() {
 			ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
 			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName1ForWatcherTests)
+			ensureMemberClusterAndRelatedResourcesDeletion(fakeClusterName2ForWatcherTests)
 		})
 	})
 })
