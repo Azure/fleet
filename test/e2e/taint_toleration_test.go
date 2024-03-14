@@ -54,7 +54,7 @@ var _ = Describe("placing resource using a cluster resource placement with pickF
 	})
 })
 
-var _ = Describe("placing resources using a cluster resource placement with no placement policy specified, taint cluster, update cluster resource placement with tolerations", Serial, Ordered, func() {
+var _ = Describe("placing resources using a cluster resource placement with no placement policy specified, taint clusters, update cluster resource placement with tolerations", Serial, Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 	taintClusterNames := []string{memberCluster1EastProdName, memberCluster2EastCanaryName}
 	selectedClusterNames := []string{memberCluster3WestProdName}
