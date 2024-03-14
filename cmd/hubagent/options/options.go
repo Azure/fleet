@@ -131,8 +131,8 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.IntVar(&o.ConcurrentClusterPlacementSyncs, "concurrent-cluster-placement-syncs", 1, "The number of cluster placement reconcilers to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
 	flags.IntVar(&o.MaxFleetSizeSupported, "max-fleet-size", 100, "The max number of member clusters supported in this fleet")
-	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
-	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
+	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", false, "If set, the agents will watch for the v1alpha1 APIs.")
+	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", true, "If set, the agents will watch for the v1beta1 APIs.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }

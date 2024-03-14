@@ -32,8 +32,8 @@ tolerations: []
 
 affinity: {}
 
-enableV1Alpha1APIs: true
-enableV1Beta1APIs: false
+enableV1Alpha1APIs: false
+enableV1Beta1APIs: true
 
 hubAPIQPS: 20
 hubAPIBurst: 100
