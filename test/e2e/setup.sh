@@ -68,8 +68,6 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set namespace=fleet-system \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \
-    --set enableV1Alpha1APIs=false \
-    --set enableV1Beta1APIs=true \
     --set logFileMaxSize=1000000
 
 # Download CRDs from Fleet networking repo

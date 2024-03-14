@@ -164,7 +164,7 @@ install-hub-agent-helm:
     --set webhookServiceName=fleetwebhook \
     --set webhookClientConnectionType=service \
     --set enableV1Alpha1APIs=true \
-	--set enableV1Beta1APIs=false \
+    --set enableV1Beta1APIs=false \
     --set logFileMaxSize=1000000
 
 .PHONY: e2e-v1alpha1-hub-kubeconfig-secret
