@@ -62,8 +62,7 @@ func getClusterResourceOverrideSpec() fleetv1alpha1.ClusterResourceOverrideSpec 
 func getClusterResourceOverride(testOverrideName string) *fleetv1alpha1.ClusterResourceOverride {
 	return &fleetv1alpha1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       testOverrideName,
-			Finalizers: []string{fleetv1alpha1.OverrideFinalizer},
+			Name: testOverrideName,
 		},
 		Spec: getClusterResourceOverrideSpec(),
 	}
@@ -112,12 +111,13 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 
 	Context("Test handle override deleting", func() {
 		It("Should not do anything if there is no finalizer", func() {
-			By("Removing the overrideFinalizer")
-			controllerutil.RemoveFinalizer(cro, fleetv1alpha1.OverrideFinalizer)
 			Expect(commonReconciler.handleOverrideDeleting(ctx, nil, cro)).Should(Succeed())
 		})
 
 		It("Should not fail if there is no snapshots associated with the cro yet", func() {
+			By("Adding the overrideFinalizer")
+			controllerutil.AddFinalizer(cro, fleetv1alpha1.OverrideFinalizer)
+
 			By("verifying that it handles no snapshot cases")
 			cro.Name = "another-cro" //there is no snapshot associated with this CRO
 			// we cannot apply the CRO to the cluster as it will trigger the real reconcile loop so the update can only return APIServerError
@@ -132,6 +132,8 @@ var _ = Describe("Test ClusterResourceOverride common logic", func() {
 		})
 
 		It("Should delete all the snapshots if there is finalizer", func() {
+			By("Adding the overrideFinalizer")
+			controllerutil.AddFinalizer(cro, fleetv1alpha1.OverrideFinalizer)
 			By("verifying that all snapshots are deleted")
 			// we cannot apply the CRO to the cluster as it will trigger the real reconcile loop so the update can only return APIServerError
 			Expect(errors.Is(commonReconciler.handleOverrideDeleting(context.Background(), getClusterResourceOverrideSnapshot(testCROName, 0), cro), controller.ErrAPIServerError)).Should(BeTrue())

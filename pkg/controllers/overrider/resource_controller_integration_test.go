@@ -51,9 +51,8 @@ func getResourceOverrideSpec() fleetv1alpha1.ResourceOverrideSpec {
 func getResourceOverride(testOverrideName string) *fleetv1alpha1.ResourceOverride {
 	return &fleetv1alpha1.ResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       testOverrideName,
-			Namespace:  "default",
-			Finalizers: []string{fleetv1alpha1.OverrideFinalizer},
+			Name:      testOverrideName,
+			Namespace: "default",
 		},
 		Spec: getResourceOverrideSpec(),
 	}
@@ -96,8 +95,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		Expect(k8sClient.Create(ctx, ro)).Should(Succeed())
 		By("Checking if the finalizer is added to the RO")
 		Eventually(func() error {
-			err := k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro)
-			if err != nil {
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro); err != nil {
 				return err
 			}
 			if !controllerutil.ContainsFinalizer(ro, fleetv1alpha1.OverrideFinalizer) {
@@ -139,6 +137,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 
 		By("Updating an existing RO")
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro)).Should(Succeed())
 		ro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
 			OverrideRules: []fleetv1alpha1.OverrideRule{
 				{
@@ -163,10 +162,10 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 			fleetv1beta1.IsLatestSnapshotLabel:  "true",
 			fleetv1alpha1.OverrideTrackingLabel: testROName,
 		}, snapshot.GetLabels())
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
 		diff = cmp.Diff(ro.Spec, snapshot.Spec.OverrideSpec)
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), diff, "Snapshot spec mismatch (-want, +got)")
 		By("Checking if the old snapshot is updated")
 		snapshot = getResourceOverrideSnapshot(testROName, 0)
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)).Should(Succeed())
@@ -176,10 +175,10 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 			fleetv1beta1.IsLatestSnapshotLabel:  "false",
 			fleetv1alpha1.OverrideTrackingLabel: testROName,
 		}, snapshot.GetLabels())
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Make sure the old snapshot spec is not the same as the current RO")
 		diff = cmp.Diff(ro.Spec, snapshot.Spec.OverrideSpec)
-		Expect(diff).ShouldNot(BeEmpty(), diff)
+		Expect(diff).ShouldNot(BeEmpty(), diff, "Snapshot spec mismatch (-want, +got)")
 	})
 
 	It("Should delete all snapshots when a Resource override is deleted", func() {
@@ -191,6 +190,7 @@ var _ = Describe("Test ResourceOverride controller logic", func() {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name, Namespace: snapshot.Namespace}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Updating an existing RO")
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ro.Name, Namespace: ro.Namespace}, ro)).Should(Succeed())
 		ro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
 			OverrideRules: []fleetv1alpha1.OverrideRule{
 				{
