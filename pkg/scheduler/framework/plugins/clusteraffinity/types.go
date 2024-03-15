@@ -58,7 +58,7 @@ func (t PreferredAffinityTerms) Score(cluster *clusterv1beta1.MemberCluster) int
 }
 
 func newAffinityTerm(term *placementv1beta1.ClusterSelectorTerm) (*affinityTerm, error) {
-	selector, err := metav1.LabelSelectorAsSelector(&term.LabelSelector)
+	selector, err := metav1.LabelSelectorAsSelector(term.LabelSelector)
 	if err != nil {
 		return nil, err
 	}

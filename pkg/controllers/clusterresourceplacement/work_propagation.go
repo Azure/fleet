@@ -7,7 +7,6 @@ package clusterresourceplacement
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"time"
@@ -17,16 +16,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	apiErrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 const (
@@ -44,15 +43,15 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		Kind:               placement.GroupVersionKind().Kind,
 		Name:               placement.GetName(),
 		UID:                placement.GetUID(),
-		BlockOwnerDeletion: pointer.Bool(true),
-		Controller:         pointer.Bool(true),
+		BlockOwnerDeletion: ptr.To(true),
+		Controller:         ptr.To(true),
 	}
 	workerSpec := workv1alpha1.WorkSpec{
 		Workload: workv1alpha1.WorkloadTemplate{
 			Manifests: manifests,
 		},
 	}
-	specHash, err := generateSpecHash(workerSpec.Workload)
+	specHash, err := resource.HashOf(workerSpec.Workload)
 	if err != nil {
 		return fmt.Errorf("failed to calculate the spec hash of the newly generated work resource: %w", err)
 	}
@@ -120,7 +119,7 @@ func (r *Reconciler) scheduleWork(ctx context.Context, placement *fleetv1alpha1.
 		klog.V(2).InfoS("Nothing new to apply for the cluster resource placement", "placement", klog.KObj(placement), "number of clusters", len(memberClusterNames))
 	}
 
-	return apiErrors.NewAggregate(allErr)
+	return errors.NewAggregate(allErr)
 }
 
 // removeStaleWorks removes all the work objects from the clusters that are no longer selected.
@@ -150,7 +149,7 @@ func (r *Reconciler) removeStaleWorks(ctx context.Context, placementName string,
 				"member cluster namespace", memberClusterNsName, "work name", workName, "place", placementName)
 		}
 	}
-	return removed, apiErrors.NewAggregate(allErr)
+	return removed, errors.NewAggregate(allErr)
 }
 
 // collectAllManifestsStatus goes through all the manifest this placement handles and return if there is either
@@ -229,14 +228,4 @@ func (r *Reconciler) getResourceBinding(namespace, name string) (*workv1alpha1.W
 		return nil, err
 	}
 	return &workObj, nil
-}
-
-// Generates a hash of the workload in the work spec
-func generateSpecHash(workload workv1alpha1.WorkloadTemplate) (string, error) {
-	jsonBytes, err := json.Marshal(workload)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", sha256.Sum256(jsonBytes)), nil
 }

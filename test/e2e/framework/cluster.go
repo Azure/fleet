@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,7 +64,10 @@ func GetClusterClient(cluster *Cluster) {
 	cluster.DynamicClient, err = dynamic.NewForConfig(restConfig)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Dynamic Client")
 
-	cluster.RestMapper, err = apiutil.NewDynamicRESTMapper(restConfig, apiutil.WithLazyDiscovery)
+	httpClient, err := rest.HTTPClientFor(restConfig)
+	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up HTTP client")
+
+	cluster.RestMapper, err = apiutil.NewDynamicRESTMapper(restConfig, httpClient)
 	gomega.Expect(err).Should(gomega.Succeed(), "Failed to set up Rest Mapper")
 
 	cluster.ImpersonateKubeClient, err = client.New(impersonateRestConfig, client.Options{Scheme: cluster.Scheme})

@@ -48,6 +48,14 @@ type InternalMemberClusterSpec struct {
 
 // InternalMemberClusterStatus defines the observed state of InternalMemberCluster.
 type InternalMemberClusterStatus struct {
+	// Conditions is an array of current observed conditions for the member cluster.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions"`
+
+	// Properties is an array of properties observed for the member cluster.
+	// +optional
+	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
+
 	// The current observed resource usage of the member cluster. It is populated by the member agent.
 	// +optional
 	ResourceUsage ResourceUsage `json:"resourceUsage,omitempty"`

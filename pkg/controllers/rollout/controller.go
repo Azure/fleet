@@ -28,11 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
@@ -43,6 +43,9 @@ type Reconciler struct {
 	// the max number of concurrent reconciles per controller.
 	MaxConcurrentReconciles int
 	recorder                record.EventRecorder
+	// the informer contains the cache for all the resources we need.
+	// to check the resource scope
+	InformerManager informer.Manager
 }
 
 // Reconcile triggers a single binding reconcile round.
@@ -108,13 +111,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// find the latest clusterResourceSnapshot.
-	latestResourceSnapshotName, err := r.fetchLatestResourceSnapshot(ctx, crpName)
+	latestResourceSnapshot, err := r.fetchLatestResourceSnapshot(ctx, crpName)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find the latest clusterResourceSnapshot for the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
 		return runtime.Result{}, err
 	}
-	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshotName", latestResourceSnapshotName)
+	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshot", klog.KObj(latestResourceSnapshot))
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	fleetv1beta1.SetDefaultsClusterResourcePlacement(&crp)
@@ -125,7 +128,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	}
 
 	// pick the bindings to be updated according to the rollout plan
-	toBeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshotName, &crp)
+	toBeUpdatedBindings, needRoll := pickBindingsToRoll(allBindings, latestResourceSnapshot.Name, &crp)
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
 		return runtime.Result{}, nil
@@ -138,12 +141,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// We wait for 1/5 of the UnavailablePeriodSeconds so we can catch the next ready one early.
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
 	return runtime.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
-		r.updateBindings(ctx, latestResourceSnapshotName, toBeUpdatedBindings)
+		r.updateBindings(ctx, latestResourceSnapshot.Name, toBeUpdatedBindings)
 }
 
-// fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the name of the master clusterResourceSnapshot.
-func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName string) (string, error) {
-	var latestResourceSnapshotName string
+// fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the master clusterResourceSnapshot.
+func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName string) (*fleetv1beta1.ClusterResourceSnapshot, error) {
+	var latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot
 	latestResourceLabelMatcher := client.MatchingLabels{
 		fleetv1beta1.IsLatestSnapshotLabel: "true",
 		fleetv1beta1.CRPTrackingLabel:      crpName,
@@ -152,25 +155,25 @@ func (r *Reconciler) fetchLatestResourceSnapshot(ctx context.Context, crpName st
 	if err := r.Client.List(ctx, resourceSnapshotList, latestResourceLabelMatcher); err != nil {
 		klog.ErrorS(err, "Failed to list the latest clusterResourceSnapshot associated with the clusterResourcePlacement",
 			"clusterResourcePlacement", crpName)
-		return "", controller.NewAPIServerError(true, err)
+		return nil, controller.NewAPIServerError(true, err)
 	}
 	// try to find the master clusterResourceSnapshot.
-	for _, resourceSnapshot := range resourceSnapshotList.Items {
+	for i, resourceSnapshot := range resourceSnapshotList.Items {
 		// only master has this annotation
 		if len(resourceSnapshot.Annotations[fleetv1beta1.ResourceGroupHashAnnotation]) != 0 {
-			latestResourceSnapshotName = resourceSnapshot.Name
+			latestResourceSnapshot = &resourceSnapshotList.Items[i]
 			break
 		}
 	}
 	// no clusterResourceSnapshot found, it's possible since we remove the label from the last one first before
 	// creating a new clusterResourceSnapshot.
-	if len(latestResourceSnapshotName) == 0 {
+	if latestResourceSnapshot == nil {
 		klog.V(2).InfoS("Cannot find the latest associated clusterResourceSnapshot", "clusterResourcePlacement", crpName)
-		return "", controller.NewExpectedBehaviorError(fmt.Errorf("crp `%s` has no latest clusterResourceSnapshot", crpName))
+		return nil, controller.NewExpectedBehaviorError(fmt.Errorf("crp `%s` has no latest clusterResourceSnapshot", crpName))
 	}
 	klog.V(2).InfoS("Found the latest associated clusterResourceSnapshot", "clusterResourcePlacement", crpName,
-		"latestClusterResourceSnapshotName", latestResourceSnapshotName)
-	return latestResourceSnapshotName, nil
+		"latestClusterResourceSnapshot", klog.KObj(latestResourceSnapshot))
+	return latestResourceSnapshot, nil
 }
 
 // waitForResourcesToCleanUp checks if there are any cluster that has a binding that is both being deleted and another one that needs rollout.
@@ -463,28 +466,28 @@ func (r *Reconciler) updateBindings(ctx context.Context, latestResourceSnapshotN
 // It reconciles on the CRP when a new resource resourceBinding is created or an existing resource binding is created/updated.
 func (r *Reconciler) SetupWithManager(mgr runtime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("rollout-controller")
-	return runtime.NewControllerManagedBy(mgr).Named("rollout_controller").
+	return runtime.NewControllerManagedBy(mgr).Named("rollout-controller").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
-		Watches(&source.Kind{Type: &fleetv1beta1.ClusterResourceSnapshot{}}, handler.Funcs{
-			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+		Watches(&fleetv1beta1.ClusterResourceSnapshot{}, handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceSnapshot create event", "resourceSnapshot", klog.KObj(e.Object))
 				handleResourceSnapshot(e.Object, q)
 			},
-			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceSnapshot generic event", "resourceSnapshot", klog.KObj(e.Object))
 				handleResourceSnapshot(e.Object, q)
 			},
 		}).
-		Watches(&source.Kind{Type: &fleetv1beta1.ClusterResourceBinding{}}, handler.Funcs{
-			CreateFunc: func(e event.CreateEvent, q workqueue.RateLimitingInterface) {
+		Watches(&fleetv1beta1.ClusterResourceBinding{}, handler.Funcs{
+			CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceBinding create event", "resourceBinding", klog.KObj(e.Object))
 				handleResourceBinding(e.Object, q)
 			},
-			UpdateFunc: func(e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceBinding update event", "resourceBinding", klog.KObj(e.ObjectNew))
 				handleResourceBinding(e.ObjectNew, q)
 			},
-			GenericFunc: func(e event.GenericEvent, q workqueue.RateLimitingInterface) {
+			GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 				klog.V(2).InfoS("Handling a resourceBinding generic event", "resourceBinding", klog.KObj(e.Object))
 				handleResourceBinding(e.Object, q)
 			},

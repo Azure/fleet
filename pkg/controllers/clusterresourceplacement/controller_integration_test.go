@@ -18,11 +18,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/resource"
 )
 
 const (
@@ -65,8 +66,8 @@ var (
 		APIVersion:         fleetAPIVersion,
 		Kind:               "ClusterResourcePlacement",
 		Name:               testName,
-		Controller:         pointer.Bool(true),
-		BlockOwnerDeletion: pointer.Bool(true),
+		Controller:         ptr.To(true),
+		BlockOwnerDeletion: ptr.To(true),
 	}
 )
 
@@ -228,13 +229,13 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 							},
 						},
 					},
-					RevisionHistoryLimit: pointer.Int32(1),
+					RevisionHistoryLimit: ptr.To(int32(1)),
 				},
 			}
 			Expect(k8sClient.Create(ctx, crp)).Should(Succeed(), "Failed to create crp")
 
 			By("By checking clusterSchedulingPolicySnapshot")
-			policyHash, err := generatePolicyHash(crp.Spec.Policy)
+			policyHash, err := resource.HashOf(crp.Spec.Policy)
 			Expect(err).Should(Succeed(), "failed to create policy hash")
 
 			wantPolicySnapshot := placementv1beta1.ClusterSchedulingPolicySnapshot{
@@ -262,7 +263,7 @@ var _ = Describe("Test ClusterResourcePlacement Controller", func() {
 			emptyResources := &placementv1beta1.ResourceSnapshotSpec{
 				SelectedResources: []placementv1beta1.ResourceContent{},
 			}
-			jsonBytes, err := generateResourceHash(emptyResources)
+			jsonBytes, err := resource.HashOf(emptyResources)
 			Expect(err).Should(Succeed(), "Failed to create resource hash")
 
 			wantResourceSnapshot := &placementv1beta1.ClusterResourceSnapshot{

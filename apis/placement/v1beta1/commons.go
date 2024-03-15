@@ -32,9 +32,6 @@ const (
 	// CRPTrackingLabel is the label that points to the cluster resource policy that creates a resource binding.
 	CRPTrackingLabel = fleetPrefix + "parent-CRP"
 
-	// ResourceSnapshotTrackingLabel is the label that points to the cluster resource snapshot that this work is generated from.
-	ResourceSnapshotTrackingLabel = fleetPrefix + "parent-resource-snapshot"
-
 	// IsLatestSnapshotLabel tells if the snapshot is the latest one.
 	IsLatestSnapshotLabel = fleetPrefix + "is-latest-snapshot"
 

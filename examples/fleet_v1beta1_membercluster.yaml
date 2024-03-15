@@ -4,7 +4,7 @@ metadata:
   name: kind-cluster-1
 spec:
   identity:
-    name: hub-agent-sa
+    name: fleet-member-agent-cluster-1
     kind: ServiceAccount
     namespace: fleet-system
     apiGroup: ""

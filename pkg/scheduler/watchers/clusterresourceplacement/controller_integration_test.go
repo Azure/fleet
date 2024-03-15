@@ -117,7 +117,7 @@ var _ = Describe("scheduler cluster resource placement source controller", Seria
 						RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"foo": "bar",
 										},

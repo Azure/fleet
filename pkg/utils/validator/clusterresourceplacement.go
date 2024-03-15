@@ -9,6 +9,7 @@ package validator
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -21,6 +22,13 @@ import (
 )
 
 var ResourceInformer informer.Manager
+
+var (
+	invalidTolerationErrFmt      = "invalid toleration %+v: %s"
+	invalidTolerationKeyErrFmt   = "invalid toleration key %+v: %s"
+	invalidTolerationValueErrFmt = "invalid toleration value %+v: %s"
+	uniqueTolerationErrFmt       = "toleration %+v already exists, tolerations must be unique"
+)
 
 // ValidateClusterResourcePlacementAlpha validates a ClusterResourcePlacement v1alpha1 object.
 func ValidateClusterResourcePlacementAlpha(clusterResourcePlacement *fleetv1alpha1.ClusterResourcePlacement) error {
@@ -113,22 +121,23 @@ func IsPlacementPolicyTypeUpdated(oldPolicy, currentPolicy *placementv1beta1.Pla
 }
 
 func validatePlacementPolicy(policy *placementv1beta1.PlacementPolicy) error {
+	allErr := make([]error, 0)
 	switch policy.PlacementType {
 	case placementv1beta1.PickFixedPlacementType:
 		if err := validatePolicyForPickFixedPlacementType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	case placementv1beta1.PickAllPlacementType:
 		if err := validatePolicyForPickAllPlacementType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	case placementv1beta1.PickNPlacementType:
 		if err := validatePolicyForPickNPolicyType(policy); err != nil {
-			return err
+			allErr = append(allErr, err)
 		}
 	}
 
-	return nil
+	return apiErrors.NewAggregate(allErr)
 }
 
 func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementPolicy) error {
@@ -140,10 +149,13 @@ func validatePolicyForPickFixedPlacementType(policy *placementv1beta1.PlacementP
 		allErr = append(allErr, fmt.Errorf("number of clusters must be nil for policy type %s, only valid for PickN placement policy type", placementv1beta1.PickFixedPlacementType))
 	}
 	if policy.Affinity != nil {
-		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement poliy types", placementv1beta1.PickFixedPlacementType))
+		allErr = append(allErr, fmt.Errorf("affinity must be nil for policy type %s, only valid for PickAll/PickN placement policy types", placementv1beta1.PickFixedPlacementType))
 	}
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickFixedPlacementType))
+	}
+	if policy.Tolerations != nil {
+		allErr = append(allErr, fmt.Errorf("tolerations needs to be empty for policy type %s, only valid for PickAll/PickN", placementv1beta1.PickFixedPlacementType))
 	}
 
 	return apiErrors.NewAggregate(allErr)
@@ -164,6 +176,7 @@ func validatePolicyForPickAllPlacementType(policy *placementv1beta1.PlacementPol
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, fmt.Errorf("topology spread constraints needs to be empty for policy type %s, only valid for PickN policy type", placementv1beta1.PickAllPlacementType))
 	}
+	allErr = append(allErr, validateTolerations(policy.Tolerations))
 
 	return apiErrors.NewAggregate(allErr)
 }
@@ -187,6 +200,7 @@ func validatePolicyForPickNPolicyType(policy *placementv1beta1.PlacementPolicy) 
 	if len(policy.TopologySpreadConstraints) > 0 {
 		allErr = append(allErr, validateTopologySpreadConstraints(policy.TopologySpreadConstraints))
 	}
+	allErr = append(allErr, validateTolerations(policy.Tolerations))
 
 	return apiErrors.NewAggregate(allErr)
 }
@@ -213,11 +227,54 @@ func validateClusterAffinity(clusterAffinity *placementv1beta1.ClusterAffinity, 
 	return apiErrors.NewAggregate(allErr)
 }
 
+func validateTolerations(tolerations []placementv1beta1.Toleration) error {
+	allErr := make([]error, 0)
+	tolerationMap := make(map[placementv1beta1.Toleration]bool)
+	for _, toleration := range tolerations {
+		if toleration.Key != "" {
+			for _, msg := range validation.IsQualifiedName(toleration.Key) {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationKeyErrFmt, toleration, msg))
+			}
+		}
+		switch toleration.Operator {
+		case corev1.TolerationOpExists:
+			if toleration.Value != "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration value needs to be empty, when operator is Exists"))
+			}
+		case corev1.TolerationOpEqual:
+			if toleration.Key == "" {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationErrFmt, toleration, "toleration key cannot be empty, when operator is Equal"))
+			}
+			for _, msg := range validation.IsValidLabelValue(toleration.Value) {
+				allErr = append(allErr, fmt.Errorf(invalidTolerationValueErrFmt, toleration, msg))
+			}
+		}
+		if tolerationMap[toleration] {
+			allErr = append(allErr, fmt.Errorf(uniqueTolerationErrFmt, toleration))
+		}
+		tolerationMap[toleration] = true
+	}
+	return apiErrors.NewAggregate(allErr)
+}
+
+func IsTolerationsUpdatedOrDeleted(oldTolerations []placementv1beta1.Toleration, newTolerations []placementv1beta1.Toleration) bool {
+	newTolerationsMap := make(map[placementv1beta1.Toleration]bool)
+	for _, newToleration := range newTolerations {
+		newTolerationsMap[newToleration] = true
+	}
+	for _, oldToleration := range oldTolerations {
+		if !newTolerationsMap[oldToleration] {
+			return true
+		}
+	}
+	return false
+}
+
 func validateTopologySpreadConstraints(topologyConstraints []placementv1beta1.TopologySpreadConstraint) error {
 	allErr := make([]error, 0)
 	for _, tc := range topologyConstraints {
 		if len(tc.WhenUnsatisfiable) > 0 && tc.WhenUnsatisfiable != placementv1beta1.DoNotSchedule && tc.WhenUnsatisfiable != placementv1beta1.ScheduleAnyway {
-			allErr = append(allErr, fmt.Errorf("unknown when unsatisfiable type %s", tc.WhenUnsatisfiable))
+			allErr = append(allErr, fmt.Errorf("unknown unsatisfiable type %s", tc.WhenUnsatisfiable))
 		}
 	}
 	return apiErrors.NewAggregate(allErr)
@@ -227,7 +284,7 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	allErr := make([]error, 0)
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
-		allErr = append(allErr, validateLabelSelector(&clusterSelectorTerm.LabelSelector, "cluster selector"))
+		allErr = append(allErr, validateLabelSelector(clusterSelectorTerm.LabelSelector, "cluster selector"))
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -236,7 +293,7 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 	allErr := make([]error, 0)
 	for _, preferredClusterSelector := range preferredClusterSelectors {
 		// API server validation on object occurs before webhook is triggered hence not validating weight.
-		allErr = append(allErr, validateLabelSelector(&preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
+		allErr = append(allErr, validateLabelSelector(preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
 	}
 	return apiErrors.NewAggregate(allErr)
 }

@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	workapiv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	"go.goms.io/fleet/apis/v1alpha1"
@@ -102,7 +102,7 @@ var _ = Describe("workload orchestration testing", func() {
 			ownerReferences := []metav1.OwnerReference{
 				{
 					APIVersion:         workapiv1alpha1.GroupVersion.String(),
-					BlockOwnerDeletion: pointer.Bool(false),
+					BlockOwnerDeletion: ptr.To(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},
@@ -269,7 +269,7 @@ var _ = Describe("workload orchestration testing", func() {
 			ownerReferences := []metav1.OwnerReference{
 				{
 					APIVersion:         workapiv1alpha1.GroupVersion.String(),
-					BlockOwnerDeletion: pointer.Bool(false),
+					BlockOwnerDeletion: ptr.To(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},
@@ -392,7 +392,7 @@ var _ = Describe("workload orchestration testing", func() {
 			ownerReferences := []metav1.OwnerReference{
 				{
 					APIVersion:         workapiv1alpha1.GroupVersion.String(),
-					BlockOwnerDeletion: pointer.Bool(false),
+					BlockOwnerDeletion: ptr.To(false),
 					Kind:               "AppliedWork",
 					Name:               crp.Name,
 				},

@@ -21,6 +21,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/keys"
 	"go.goms.io/fleet/pkg/utils/validator"
+	"go.goms.io/fleet/test/utils/informer"
 )
 
 var _ controller.Controller = &fakeController{}
@@ -632,7 +633,7 @@ func TestCollectAllAffectedPlacementsV1Alpha1(t *testing.T) {
 				crpList = append(crpList, &unstructured.Unstructured{Object: uMap})
 			}
 			uRes, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.res)
-			validator.ResourceInformer = validator.MockResourceInformer{}
+			validator.ResourceInformer = &informer.FakeManager{}
 			got := collectAllAffectedPlacementsV1Alpha1(&unstructured.Unstructured{Object: uRes}, crpList)
 			if !reflect.DeepEqual(got, tt.wantCrp) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantCrp)
@@ -1000,7 +1001,7 @@ func TestCollectAllAffectedPlacementsV1Beta1(t *testing.T) {
 				crpList = append(crpList, &unstructured.Unstructured{Object: uMap})
 			}
 			uRes, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(tt.res)
-			validator.ResourceInformer = validator.MockResourceInformer{}
+			validator.ResourceInformer = &informer.FakeManager{}
 			got := collectAllAffectedPlacementsV1Beta1(&unstructured.Unstructured{Object: uRes}, crpList)
 			if !reflect.DeepEqual(got, tt.wantCrp) {
 				t.Errorf("test case `%s` got = %v, wantResult %v", name, got, tt.wantCrp)

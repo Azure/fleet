@@ -38,10 +38,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/test/utils/controller"
 )
 
 const timeout = time.Second * 10
@@ -95,10 +96,8 @@ var _ = Describe("Work Controller", func() {
 			err := k8sClient.Create(context.Background(), work)
 			Expect(err).ToNot(HaveOccurred())
 
-			resultWork := waitForWorkToApply(work.GetName(), work.GetNamespace())
+			resultWork := waitForWorkToBeAvailable(work.GetName(), work.GetNamespace())
 			Expect(len(resultWork.Status.ManifestConditions)).Should(Equal(1))
-			Expect(meta.IsStatusConditionTrue(resultWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
-			Expect(meta.IsStatusConditionTrue(resultWork.Status.ManifestConditions[0].Conditions, fleetv1beta1.WorkConditionTypeApplied)).Should(BeTrue())
 			expectedResourceID := fleetv1beta1.WorkResourceIdentifier{
 				Ordinal:   0,
 				Group:     "",
@@ -109,13 +108,38 @@ var _ = Describe("Work Controller", func() {
 				Name:      cm.Name,
 			}
 			Expect(cmp.Diff(resultWork.Status.ManifestConditions[0].Identifier, expectedResourceID)).Should(BeEmpty())
+			expected := []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: ManifestAlreadyUpToDateReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestNotTrackableAction),
+				},
+			}
+			Expect(controller.CompareConditions(expected, resultWork.Status.ManifestConditions[0].Conditions)).Should(BeEmpty())
+			expected = []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: workNotTrackableReason,
+				},
+			}
+			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())
 
 			By("Check applied config map")
 			var configMap corev1.ConfigMap
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: cmName, Namespace: cmNamespace}, &configMap)).Should(Succeed())
 			Expect(cmp.Diff(configMap.Labels, cm.Labels)).Should(BeEmpty())
 			Expect(cmp.Diff(configMap.Data, cm.Data)).Should(BeEmpty())
-
 		})
 
 		It("Should apply the same manifest in two work properly", func() {
@@ -208,8 +232,8 @@ var _ = Describe("Work Controller", func() {
 			work = createWorkWithManifest(workNamespace, cm)
 			Expect(k8sClient.Create(context.Background(), work)).ToNot(HaveOccurred())
 
-			By("wait for the work to be applied")
-			waitForWorkToApply(work.GetName(), work.GetNamespace())
+			By("wait for the work to be available")
+			waitForWorkToBeAvailable(work.GetName(), work.GetNamespace())
 
 			By("Check applied config map")
 			verifyAppliedConfigMap(cm)
@@ -371,7 +395,7 @@ var _ = Describe("Work Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("wait for the work to be applied")
-			waitForWorkToApply(work.GetName(), work.GetNamespace())
+			waitForWorkToBeAvailable(work.GetName(), work.GetNamespace())
 
 			By("Check applied CloneSet")
 			var appliedCloneSet kruisev1alpha1.CloneSet
@@ -410,7 +434,7 @@ var _ = Describe("Work Controller", func() {
 					Values:   []string{"us", "asia", "eu"},
 				},
 			}
-			cloneSet.Spec.Replicas = pointer.Int32(10)
+			cloneSet.Spec.Replicas = ptr.To(int32(10))
 			cloneSet.Spec.MinReadySeconds = 1
 			maxuavail := intstr.FromInt(10)
 			cloneSet.Spec.ScaleStrategy.MaxUnavailable = &maxuavail
@@ -432,7 +456,7 @@ var _ = Describe("Work Controller", func() {
 			}
 			Expect(cmp.Diff(appliedCloneSet.Spec.ScaleStrategy, expectStrategy)).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.Selector, cloneSet.Spec.Selector)).Should(BeEmpty())
-			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, pointer.Int32(10))).Should(BeEmpty())
+			Expect(cmp.Diff(appliedCloneSet.Spec.Replicas, ptr.To(int32(10)))).Should(BeEmpty())
 			Expect(cmp.Diff(appliedCloneSet.Spec.MinReadySeconds, int32(1))).Should(BeEmpty())
 		})
 

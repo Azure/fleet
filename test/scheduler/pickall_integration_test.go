@@ -29,7 +29,7 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName)
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -84,10 +84,10 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName)
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 
 			// Create a new member cluster.
-			createMemberCluster(newUnhealthyMemberClusterName)
+			createMemberCluster(newUnhealthyMemberClusterName, nil)
 
 			// Mark this cluster as healthy.
 			markClusterAsHealthy(newUnhealthyMemberClusterName)
@@ -131,10 +131,10 @@ var _ = Describe("scheduling CRPs with no scheduling policy specified", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot.
-			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName)
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 
 			// Create a new member cluster.
-			createMemberCluster(newUnhealthyMemberClusterName)
+			createMemberCluster(newUnhealthyMemberClusterName, nil)
 
 			// Mark this cluster as healthy.
 			markClusterAsHealthy(newUnhealthyMemberClusterName)
@@ -175,7 +175,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
-			createPickAllCRPWithPolicySnapshot(crpName, nil, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -231,20 +231,23 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "prod",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values:   []string{"east", "west"},
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values:   []string{"east", "west"},
+											},
 										},
 									},
 								},
@@ -253,7 +256,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -309,26 +312,29 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "canary",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "canary",
+										},
 									},
 								},
-							},
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values: []string{
-												"east",
-												"central",
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"east",
+													"central",
+												},
 											},
 										},
 									},
@@ -338,7 +344,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -406,22 +412,25 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickAll placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "canary",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"east",
-												"west",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "canary",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"east",
+													"west",
+												},
 											},
 										},
 									},
@@ -431,7 +440,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName1)
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName1, policy)
 
 			// Verify that bindings have been created as expected.
 			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(wantTargetClusters1, zeroScoreByCluster, crpName, policySnapshotName1)
@@ -442,19 +451,19 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			markBindingsAsBoundForClusters(crpName, boundClusters)
 
 			// Update the CRP with a new affinity.
-			affinity = &placementv1beta1.Affinity{
+			affinity := &placementv1beta1.Affinity{
 				ClusterAffinity: &placementv1beta1.ClusterAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										envLabel: "canary",
 									},
 								},
 							},
 							{
-								LabelSelector: metav1.LabelSelector{
+								LabelSelector: &metav1.LabelSelector{
 									MatchExpressions: []metav1.LabelSelectorRequirement{
 										{
 											Key:      regionLabel,
@@ -530,27 +539,30 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "wonderland",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "wonderland",
+										},
 									},
 								},
-							},
-							{
-								LabelSelector: metav1.LabelSelector{
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values: []string{
-												"east",
-												"central",
-												"west",
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"east",
+													"central",
+													"west",
+												},
 											},
 										},
 									},
@@ -560,7 +572,7 @@ var _ = Describe("scheduling CRPs of the PickAll placement type", func() {
 					},
 				},
 			}
-			createPickAllCRPWithPolicySnapshot(crpName, affinity, policySnapshotName)
+			createPickAllCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {

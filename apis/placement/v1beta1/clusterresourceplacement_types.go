@@ -225,11 +225,141 @@ type PreferredClusterSelector struct {
 	Preference ClusterSelectorTerm `json:"preference"`
 }
 
-// ClusterSelectorTerm contains the requirements to select clusters.
-type ClusterSelectorTerm struct {
-	// LabelSelector is a label query over all the joined member clusters. Clusters matching the query are selected.
+// +enum
+type PropertySortOrder string
+
+const (
+	// Descending instructs Fleet to sort in descending order, that is, the clusters with higher
+	// observed values of a property are most preferred and should have higher weights. We will
+	// use linear scaling to calculate the weight for each cluster based on the observed values.
+	//
+	// For example, with this order, if Fleet sorts all clusters by a specific property where the
+	// observed values are in the range [10, 100], and a weight of 100 is specified;
+	// Fleet will assign:
+	//
+	// * a weight of 100 to the cluster with the maximum observed value (100); and
+	// * a weight of 0 to the cluster with the minimum observed value (10); and
+	// * a weight of 11 to the cluster with an observed value of 20.
+	//
+	//   It is calculated using the formula below:
+	//   ((20 - 10)) / (100 - 10)) * 100 = 11
+	Descending PropertySortOrder = "Descending"
+
+	// Ascending instructs Fleet to sort in ascending order, that is, the clusters with lower
+	// observed values are most preferred and should have higher weights. We will use linear scaling
+	// to calculate the weight for each cluster based on the observed values.
+	//
+	// For example, with this order, if Fleet sorts all clusters by a specific property where
+	// the observed values are in the range [10, 100], and a weight of 100 is specified;
+	// Fleet will assign:
+	//
+	// * a weight of 0 to the cluster with the  maximum observed value (100); and
+	// * a weight of 100 to the cluster with the minimum observed value (10); and
+	// * a weight of 89 to the cluster with an observed value of 20.
+	//
+	//   It is calculated using the formula below:
+	//   (1 - ((20 - 10) / (100 - 10))) * 100 = 89
+	Ascending PropertySortOrder = "Ascending"
+)
+
+// PropertySelectorOperator is the operator that can be used with PropertySelectorRequirements.
+// +enum
+type PropertySelectorOperator string
+
+const (
+	// PropertySelectorGreaterThan dictates Fleet to select cluster if its observed value of a given
+	// property is greater than the value specified in the requirement.
+	PropertySelectorGreaterThan PropertySelectorOperator = "Gt"
+	// PropertySelectorGreaterThanOrEqualTo dictates Fleet to select cluster if its observed value
+	// of a given property is greater than or equal to the value specified in the requirement.
+	PropertySelectorGreaterThanOrEqualTo PropertySelectorOperator = "Ge"
+	// PropertySelectorEqualTo dictates Fleet to select cluster if its observed value of a given
+	// property is equal to the values specified in the requirement.
+	PropertySelectorEqualTo PropertySelectorOperator = "Eq"
+	// PropertySelectorNotEqualTo dictates Fleet to select cluster if its observed value of a given
+	// property is not equal to the values specified in the requirement.
+	PropertySelectorNotEqualTo PropertySelectorOperator = "Ne"
+	// PropertySelectorLessThan dictates Fleet to select cluster if its observed value of a given
+	// property is less than the value specified in the requirement.
+	PropertySelectorLessThan PropertySelectorOperator = "Lt"
+	// PropertySelectorLessThanOrEqualTo dictates Fleet to select cluster if its observed value of a
+	// given property is less than or equal to the value specified in the requirement.
+	PropertySelectorLessThanOrEqualTo PropertySelectorOperator = "Le"
+)
+
+// PropertySelectorRequirement is a specific property requirement when picking clusters for
+// resource placement.
+type PropertySelectorRequirement struct {
+	// Name is the name of the property; it should be a Kubernetes label name.
 	// +required
-	LabelSelector metav1.LabelSelector `json:"labelSelector"`
+	Name string `json:"name"`
+
+	// Operator specifies the relationship between a cluster's observed value of the specified
+	// property and the values given in the requirement.
+	// +required
+	Operator PropertySelectorOperator `json:"operator"`
+
+	// Values are a list of values of the specified property which Fleet will compare against
+	// the observed values of individual member clusters in accordance with the given
+	// operator.
+	//
+	// At this moment, each value should be a Kubernetes quantity. For more information, see
+	// https://pkg.go.dev/k8s.io/apimachinery/pkg/api/resource#Quantity.
+	//
+	// If the operator is Gt (greater than), Ge (greater than or equal to), Lt (less than),
+	// or `Le` (less than or equal to), Eq (equal to), or Ne (ne), exactly one value must be
+	// specified in the list.
+	//
+	// +kubebuilder:validation:MaxItems=1
+	// +required
+	Values []string `json:"values"`
+}
+
+// PropertySelector helps user specify property requirements when picking clusters for resource
+// placement.
+type PropertySelector struct {
+	// MatchExpressions is an array of PropertySelectorRequirements. The requirements are AND'd.
+	// +required
+	MatchExpressions []PropertySelectorRequirement `json:"matchExpressions"`
+}
+
+// PropertySorter helps user specify how to sort clusters based on a specific property.
+type PropertySorter struct {
+	// Name is the name of the property which Fleet sorts clusters by.
+	// +required
+	Name string `json:"name"`
+
+	// SortOrder explains how Fleet should perform the sort; specifically, whether Fleet should
+	// sort in ascending or descending order.
+	// +required
+	SortOrder PropertySortOrder `json:"sortOrder"`
+}
+
+type ClusterSelectorTerm struct {
+	// LabelSelector is a label query over all the joined member clusters. Clusters matching
+	// the query are selected.
+	//
+	// If you specify both label and property selectors in the same term, the results are AND'd.
+	// +optional
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+
+	// PropertySelector is a property query over all joined member clusters. Clusters matching
+	// the query are selected.
+	//
+	// If you specify both label and property selectors in the same term, the results are AND'd.
+	//
+	// At this moment, PropertySelector can only be used with
+	// `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
+	// +optional
+	PropertySelector *PropertySelector `json:"propertySelector,omitempty"`
+
+	// PropertySorter sorts all matching clusters by a specific property and assigns different weights
+	// to each cluster based on their observed property values.
+	//
+	// At this moment, PropertySorter can only be used with
+	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
+	// +optional
+	PropertySorter *PropertySorter `json:"propertySorter,omitempty"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.
@@ -501,7 +631,7 @@ type ResourcePlacementStatus struct {
 
 	// +kubebuilder:validation:MaxItems=100
 
-	// FailedPlacements is a list of all the resources failed to be placed to the given cluster.
+	// FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
 	// Note that we only include 100 failed resource placements even if there are more than 100.
 	// This field is only meaningful if the `ClusterName` is not empty.
 	// +optional
@@ -581,6 +711,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means the selected resources successfully start rolling out in all scheduled clusters.
 	// - "False" means the selected resources have not been rolled out in all scheduled clusters yet.
+	// - "Unknown" means we don't have a rollout decision yet.
 	ClusterResourcePlacementRolloutStartedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementRolloutStarted"
 
 	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
@@ -588,7 +719,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
 	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
-	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
+	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the override yet.
 	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
 
@@ -599,6 +730,7 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
 	// - "False" means all the selected resources have not been created under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	// - "Unknown" means we haven't started processing the work yet.
 	ClusterResourcePlacementWorkCreatedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkCreated"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
@@ -609,6 +741,15 @@ const (
 	// - "False" means some of them have failed. We will place some of the detailed failure in the FailedResourcePlacement array.
 	// - "Unknown" means we haven't finished the apply yet.
 	ClusterResourcePlacementAppliedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementApplied"
+
+	// ClusterResourcePlacementAvailableConditionType indicates whether the selected resources are available on all the
+	// selected member clusters.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are available on all the selected member clusters.
+	// - "False" means some of them are not available yet. We will place some of the detailed failure in the FailedResourcePlacement
+	// array.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ClusterResourcePlacementAvailableConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementAvailable"
 )
 
 // ResourcePlacementConditionType defines a specific condition of a resource placement.
@@ -675,6 +816,13 @@ const (
 	// - "Unknown" means we haven't finished the apply yet.
 	// TODO: use "Applied" instead.
 	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
+
+	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
+	// Its condition status can be one of the following:
+	// - "True" means all the selected resources are available on the target cluster.
+	// - "False" means some of them are not available yet.
+	// - "Unknown" means we haven't finished the apply yet so that we cannot check the resource availability.
+	ResourcesAvailableConditionType ResourcePlacementConditionType = "Available"
 )
 
 // PlacementType identifies the type of placement.
@@ -699,6 +847,14 @@ type ClusterResourcePlacementList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacement `json:"items"`
+}
+
+// Tolerations returns tolerations for ClusterResourcePlacement.
+func (m *ClusterResourcePlacement) Tolerations() []Toleration {
+	if m.Spec.Policy != nil {
+		return m.Spec.Policy.Tolerations
+	}
+	return nil
 }
 
 // SetConditions sets the conditions of the ClusterResourcePlacement.

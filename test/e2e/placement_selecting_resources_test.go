@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -187,7 +187,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -276,7 +276,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -352,7 +352,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -431,7 +431,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 
 	BeforeAll(func() {
 		By("creating namespace")
-		ns := workNamespace()
+		ns := appNamespace()
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -446,7 +446,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -534,7 +534,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 				ResourceSelectors: workResourceSelector(),
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -707,7 +707,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -770,7 +770,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		createWorkResources()
 
 		By("creating work namespace on member cluster")
-		ns := workNamespace()
+		ns := appNamespace()
 
 		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
@@ -844,7 +844,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             work.AppliedManifestFailedReason,
+									Reason:             work.ManifestApplyFailedReason,
 									ObservedGeneration: 0,
 								},
 							},
@@ -1070,10 +1070,10 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
-				RevisionHistoryLimit: pointer.Int32(1),
+				RevisionHistoryLimit: ptr.To(int32(1)),
 			},
 		}
 		By(fmt.Sprintf("creating placement %s", crpName))
@@ -1167,7 +1167,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 				},
 				Strategy: placementv1beta1.RolloutStrategy{
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(5),
+						UnavailablePeriodSeconds: ptr.To(5),
 					},
 				},
 			},
@@ -1321,7 +1321,7 @@ func createResourcesForMultipleResourceSnapshots() {
 	for i := 0; i < 3; i++ {
 		var secret corev1.Secret
 		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed(), "Failed to read large secret from file")
-		secret.Namespace = workNamespace().Name
+		secret.Namespace = appNamespace().Name
 		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
 		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
 	}

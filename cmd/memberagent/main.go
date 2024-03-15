@@ -29,9 +29,12 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
@@ -113,21 +116,33 @@ func main() {
 	memberConfig := ctrl.GetConfigOrDie()
 	// we place the leader election lease on the member cluster to avoid adding load to the hub
 	hubOpts := ctrl.Options{
-		Scheme:                  scheme,
-		MetricsBindAddress:      *hubMetricsAddr,
-		Port:                    8443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: *hubMetricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 8443,
+		}),
 		HealthProbeBindAddress:  *hubProbeAddr,
 		LeaderElection:          *enableLeaderElection,
 		LeaderElectionNamespace: *leaderElectionNamespace,
 		LeaderElectionConfig:    memberConfig,
 		LeaderElectionID:        "136224848560.hub.fleet.azure.com",
-		Namespace:               mcNamespace,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				mcNamespace: {},
+			},
+		},
 	}
 
 	memberOpts := ctrl.Options{
-		Scheme:                  scheme,
-		MetricsBindAddress:      *metricsAddr,
-		Port:                    9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: *metricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
 		HealthProbeBindAddress:  *probeAddr,
 		LeaderElection:          hubOpts.LeaderElection,
 		LeaderElectionNamespace: *leaderElectionNamespace,
@@ -267,10 +282,27 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		return err
 	}
 
-	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, apiutil.WithLazyDiscovery)
+	httpClient, err := rest.HTTPClientFor(memberConfig)
+	if err != nil {
+		klog.ErrorS(err, "unable to create spoke HTTP client")
+		return err
+	}
+	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, httpClient)
 	if err != nil {
 		klog.ErrorS(err, "unable to create spoke rest mapper")
 		return err
+	}
+
+	// In a recent refresh, the cache in use by the controller runtime has been upgraded to
+	// support multiple default namespaces (originally the number of default namespaces is
+	// limited to 1); however, the Fleet controllers still assume that only one default
+	// namespace is used, and for compatibility reasons, here we simply retrieve the first
+	// default namespace set (there should only be one set up anyway) and pass it to the
+	// Fleet controllers.
+	var targetNS string
+	for ns := range hubOpts.Cache.DefaultNamespaces {
+		targetNS = ns
+		break
 	}
 
 	if *enableV1Alpha1APIs {
@@ -279,7 +311,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			hubMgr.GetClient(),
 			spokeDynamicClient,
 			memberMgr.GetClient(),
-			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, targetNS)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
 			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "work")
@@ -299,7 +331,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			hubMgr.GetClient(),
 			spokeDynamicClient,
 			memberMgr.GetClient(),
-			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, hubOpts.Namespace)
+			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, targetNS)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
 			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "work")

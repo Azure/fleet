@@ -33,9 +33,9 @@ func NewParallelizer(workers int) *Parallerlizer {
 // ParallelizeUntil wraps workqueue.ParallelizeUntil for running tasks in parallel.
 func (p *Parallerlizer) ParallelizeUntil(ctx context.Context, pieces int, doWork workqueue.DoWorkPieceFunc, operation string) {
 	doWorkWithLogs := func(piece int) {
-		klog.V(4).Infof("run piece %d for operation %s", operation, piece)
+		klog.V(4).Infof("run piece %d for operation %s", piece, operation)
 		doWork(piece)
-		klog.V(4).Infof("completed piece %d for operation %s", operation, piece)
+		klog.V(4).Infof("completed piece %d for operation %s", piece, operation)
 	}
 
 	workqueue.ParallelizeUntil(ctx, p.numOfWorkers, pieces, doWorkWithLogs)

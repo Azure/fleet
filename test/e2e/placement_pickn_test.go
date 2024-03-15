@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -41,12 +41,12 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(1),
+						NumberOfClusters: ptr.To(int32(1)),
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -88,12 +88,12 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(2),
+						NumberOfClusters: ptr.To(int32(2)),
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -116,7 +116,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					return err
 				}
 
-				crp.Spec.Policy.NumberOfClusters = pointer.Int32(1)
+				crp.Spec.Policy.NumberOfClusters = ptr.To(int32(1))
 				return hubClient.Update(ctx, crp)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to downscale")
 		})
@@ -160,12 +160,12 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(1),
+						NumberOfClusters: ptr.To(int32(1)),
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -186,7 +186,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					return err
 				}
 
-				crp.Spec.Policy.NumberOfClusters = pointer.Int32(2)
+				crp.Spec.Policy.NumberOfClusters = ptr.To(int32(2))
 				return hubClient.Update(ctx, crp)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to downscale")
 		})
@@ -228,7 +228,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(2),
+						NumberOfClusters: ptr.To(int32(2)),
 						// Note that due to limitations in the E2E environment, specifically the limited
 						// number of clusters available, the affinity and topology spread constraints
 						// specified here are validated only on a very superficial level, i.e., the flow
@@ -240,7 +240,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													regionLabelName: regionLabelValue1,
 												},
@@ -252,7 +252,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 						},
 						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
-								MaxSkew:           pointer.Int32(1),
+								MaxSkew:           ptr.To(int32(1)),
 								TopologyKey:       envLabelName,
 								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 							},
@@ -261,7 +261,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -306,13 +306,13 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(2),
+						NumberOfClusters: ptr.To(int32(2)),
 						Affinity: &placementv1beta1.Affinity{
 							ClusterAffinity: &placementv1beta1.ClusterAffinity{
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													regionLabelName: regionLabelValue1,
 												},
@@ -324,7 +324,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 						},
 						TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
 							{
-								MaxSkew:           pointer.Int32(1),
+								MaxSkew:           ptr.To(int32(1)),
 								TopologyKey:       envLabelName,
 								WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
 							},
@@ -333,7 +333,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -363,7 +363,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 							{
 								Weight: 20,
 								Preference: placementv1beta1.ClusterSelectorTerm{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											envLabelName: envLabelValue1,
 										},
@@ -375,7 +375,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 				}
 				crp.Spec.Policy.TopologySpreadConstraints = []placementv1beta1.TopologySpreadConstraint{
 					{
-						MaxSkew:           pointer.Int32(1),
+						MaxSkew:           ptr.To(int32(1)),
 						TopologyKey:       regionLabelName,
 						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
 					},
@@ -435,13 +435,13 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 						// unselected clusters will be reported in the CRP status. To avoid
 						// undeterministic behaviors, here this value is set to make sure that all
 						// unselected clusters will be included in the status.
-						NumberOfClusters: pointer.Int32(5),
+						NumberOfClusters: ptr.To(int32(5)),
 						Affinity: &placementv1beta1.Affinity{
 							ClusterAffinity: &placementv1beta1.ClusterAffinity{
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													regionLabelName: regionLabelValue1,
 												},
@@ -455,7 +455,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -500,12 +500,12 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					ResourceSelectors: workResourceSelector(),
 					Policy: &placementv1beta1.PlacementPolicy{
 						PlacementType:    placementv1beta1.PickNPlacementType,
-						NumberOfClusters: pointer.Int32(2),
+						NumberOfClusters: ptr.To(int32(2)),
 					},
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -528,7 +528,7 @@ var _ = Describe("placing resources using a CRP of PickN placement", func() {
 					return err
 				}
 
-				crp.Spec.Policy.NumberOfClusters = pointer.Int32(0)
+				crp.Spec.Policy.NumberOfClusters = ptr.To(int32(0))
 				return hubClient.Update(ctx, crp)
 			}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to downscale")
 		})

@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -38,7 +38,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 				Strategy: placementv1beta1.RolloutStrategy{
 					Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 					RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-						UnavailablePeriodSeconds: pointer.Int(2),
+						UnavailablePeriodSeconds: ptr.To(2),
 					},
 				},
 			},
@@ -83,7 +83,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -127,7 +127,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													regionLabelName: regionLabelValue1,
 												},
@@ -150,7 +150,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -197,7 +197,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													regionLabelName: regionLabelValue1,
 												},
@@ -220,7 +220,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},
@@ -246,7 +246,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 								{
-									LabelSelector: metav1.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											regionLabelName: regionLabelValue2,
 										},
@@ -313,7 +313,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
 										{
-											LabelSelector: metav1.LabelSelector{
+											LabelSelector: &metav1.LabelSelector{
 												MatchLabels: map[string]string{
 													regionLabelName: regionLabelValue2,
 												},
@@ -336,7 +336,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 					Strategy: placementv1beta1.RolloutStrategy{
 						Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &placementv1beta1.RollingUpdateConfig{
-							UnavailablePeriodSeconds: pointer.Int(2),
+							UnavailablePeriodSeconds: ptr.To(2),
 						},
 					},
 				},

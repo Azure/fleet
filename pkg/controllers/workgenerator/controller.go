@@ -29,7 +29,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
@@ -58,7 +57,6 @@ const (
 
 var (
 	errResourceSnapshotNotFound = errors.New("the master resource snapshot is not found")
-	errResourceNotFullyCreated  = errors.New("not all resource snapshot in the same index group are created")
 )
 
 // Reconciler watches binding objects and generate work objects in the designated cluster namespace
@@ -337,7 +335,6 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 // fetchAllResourceSnapshots gathers all the resource snapshots for the resource binding.
 func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding) (map[string]*fleetv1beta1.ClusterResourceSnapshot, error) {
 	// fetch the master snapshot first
-	resourceSnapshots := make(map[string]*fleetv1beta1.ClusterResourceSnapshot)
 	masterResourceSnapshot := fleetv1beta1.ClusterResourceSnapshot{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: resourceBinding.Spec.ResourceSnapshotName}, &masterResourceSnapshot); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -348,46 +345,7 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 			"resourceBinding", klog.KObj(resourceBinding), "masterResourceSnapshot", resourceBinding.Spec.ResourceSnapshotName)
 		return nil, controller.NewAPIServerError(true, err)
 	}
-	resourceSnapshots[masterResourceSnapshot.Name] = &masterResourceSnapshot
-
-	// check if there are more snapshot in the same index group
-	countAnnotation := masterResourceSnapshot.Annotations[fleetv1beta1.NumberOfResourceSnapshotsAnnotation]
-	snapshotCount, err := strconv.Atoi(countAnnotation)
-	if err != nil || snapshotCount < 1 {
-		return nil, controller.NewUnexpectedBehaviorError(fmt.Errorf(
-			"master resource snapshot %s has an invalid snapshot count %d or err %w", masterResourceSnapshot.Name, snapshotCount, err))
-	}
-	if snapshotCount > 1 {
-		// fetch all the resource snapshot in the same index group
-		index, err := labels.ExtractResourceIndexFromClusterResourceSnapshot(&masterResourceSnapshot)
-		if err != nil {
-			klog.ErrorS(err, "master resource snapshot has invalid resource index", "clusterResourceSnapshot", klog.KObj(&masterResourceSnapshot))
-			return nil, controller.NewUnexpectedBehaviorError(err)
-		}
-		resourceIndexLabelMatcher := client.MatchingLabels{
-			fleetv1beta1.ResourceIndexLabel: strconv.Itoa(index),
-			fleetv1beta1.CRPTrackingLabel:   resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel],
-		}
-		resourceSnapshotList := &fleetv1beta1.ClusterResourceSnapshotList{}
-		if err := r.Client.List(ctx, resourceSnapshotList, resourceIndexLabelMatcher); err != nil {
-			klog.ErrorS(err, "Failed to list all the resource snapshot associated with the resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
-			return nil, controller.NewAPIServerError(true, err)
-		}
-		//insert all the resource snapshot into the map
-		for i := 0; i < len(resourceSnapshotList.Items); i++ {
-			resourceSnapshots[resourceSnapshotList.Items[i].Name] = &resourceSnapshotList.Items[i]
-		}
-	}
-	// check if all the resource snapshots are created since that may take a while but the rollout controller may update the resource binding on master snapshot creation
-	if len(resourceSnapshots) != snapshotCount {
-		misMatchErr := fmt.Errorf("%w: resource snapshots are still being created for the masterResourceSnapshot %s, total snapshot in the index group = %d, num Of existing snapshot in the group= %d",
-			errResourceNotFullyCreated, resourceBinding.Name, snapshotCount, len(resourceSnapshots))
-		klog.ErrorS(misMatchErr, "Resource snapshot associated with the binding are not ready", "resourceBinding", klog.KObj(resourceBinding))
-		// make sure the reconcile requeue the request
-		return nil, controller.NewExpectedBehaviorError(misMatchErr)
-	}
-	klog.V(2).InfoS("Get all the resource snapshot associated with the binding", "numOfSnapshot", len(resourceSnapshots), "resourceBinding", klog.KObj(resourceBinding))
-	return resourceSnapshots, nil
+	return controller.FetchAllClusterResourceSnapshots(ctx, r.Client, resourceBinding.Labels[fleetv1beta1.CRPTrackingLabel], &masterResourceSnapshot)
 }
 
 // getConfigMapEnvelopWorkObj first try to locate a work object for the corresponding envelopObj of type configMap.
@@ -440,7 +398,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 						Kind:               resourceBinding.Kind,
 						Name:               resourceBinding.Name,
 						UID:                resourceBinding.UID,
-						BlockOwnerDeletion: pointer.Bool(true), // make sure that the k8s will call work delete when the binding is deleted
+						BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
 					},
 				},
 			},
@@ -481,7 +439,7 @@ func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.Clus
 					Kind:               resourceBinding.Kind,
 					Name:               resourceBinding.Name,
 					UID:                resourceBinding.UID,
-					BlockOwnerDeletion: pointer.Bool(true), // make sure that the k8s will call work delete when the binding is deleted
+					BlockOwnerDeletion: ptr.To(true), // make sure that the k8s will call work delete when the binding is deleted
 				},
 			},
 		},
@@ -608,13 +566,13 @@ func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1be
 // It watches binding events and also update/delete events for work.
 func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("work generator")
-	return controllerruntime.NewControllerManagedBy(mgr).
+	return controllerruntime.NewControllerManagedBy(mgr).Named("work-generator").
 		WithOptions(ctrl.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}). // set the max number of concurrent reconciles
 		For(&fleetv1beta1.ClusterResourceBinding{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &fleetv1beta1.Work{}}, &handler.Funcs{
+		Watches(&fleetv1beta1.Work{}, &handler.Funcs{
 			// we care about work delete event as we want to know when a work is deleted so that we can
 			// delete the corresponding resource binding fast.
-			DeleteFunc: func(evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
+			DeleteFunc: func(ctx context.Context, evt event.DeleteEvent, queue workqueue.RateLimitingInterface) {
 				if evt.Object == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("deleteEvent %v received with no matadata", evt)),
 						"Failed to process a delete event for work object")
@@ -634,7 +592,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 			},
 			// we care about work update event as we want to know when a work is applied so that we can
 			// update the corresponding resource binding status fast.
-			UpdateFunc: func(evt event.UpdateEvent, queue workqueue.RateLimitingInterface) {
+			UpdateFunc: func(ctx context.Context, evt event.UpdateEvent, queue workqueue.RateLimitingInterface) {
 				if evt.ObjectOld == nil || evt.ObjectNew == nil {
 					klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("updateEvent %v received with no matadata", evt)),
 						"Failed to process an update event for work object")
@@ -660,10 +618,13 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 				}
 				oldAppliedStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
 				newAppliedStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied)
-				// we only need to handle the case the applied condition is flipped between true and NOT true between the
+				oldAvailableStatus := meta.FindStatusCondition(oldWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+				newAvailableStatus := meta.FindStatusCondition(newWork.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+
+				// we only need to handle the case the applied or available condition is changed between the
 				// new and old work objects. Otherwise, it won't affect the binding applied condition
-				if condition.IsConditionStatusTrue(oldAppliedStatus, oldWork.GetGeneration()) == condition.IsConditionStatusTrue(newAppliedStatus, newWork.GetGeneration()) {
-					klog.V(2).InfoS("The work applied condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
+				if condition.EqualCondition(oldAppliedStatus, newAppliedStatus) && condition.EqualCondition(oldAvailableStatus, newAvailableStatus) {
+					klog.V(2).InfoS("The work applied or available condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return
 				}
 				klog.V(2).InfoS("Received a work update event", "work", klog.KObj(newWork), "parentBindingName", parentBindingName)

@@ -207,7 +207,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if err := (&rollout.Reconciler{
 			Client:                  mgr.GetClient(),
 			UncachedReader:          mgr.GetAPIReader(),
-			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 34)), //3 rollout reconciler routine per 100 member clusters
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/30) * math.Ceil(float64(opts.ConcurrentClusterPlacementSyncs)/10)),
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
 			return err
@@ -217,7 +217,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		klog.Info("Setting up work generator")
 		if err := (&workgenerator.Reconciler{
 			Client:                  mgr.GetClient(),
-			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported) / 10)), //one work generator reconciler routine per 10 member clusters,
+			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/10) * math.Ceil(float64(opts.ConcurrentClusterPlacementSyncs)/10)),
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up work generator")
 			return err
@@ -230,7 +230,9 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		defaultSchedulingQueue := queue.NewSimpleClusterResourcePlacementSchedulingQueue(
 			queue.WithName(schedulerQueueName),
 		)
-		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr)
+		// we use one scheduler for every 10 concurrent placement
+		defaultScheduler := scheduler.NewScheduler("DefaultScheduler", defaultFramework, defaultSchedulingQueue, mgr,
+			int(math.Ceil(float64(opts.MaxFleetSizeSupported)/50)*math.Ceil(float64(opts.ConcurrentClusterPlacementSyncs)/10)))
 		klog.Info("Starting the scheduler")
 		// Scheduler must run in a separate goroutine as Run() is a blocking call.
 		wg.Add(1)
@@ -284,7 +286,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		InformerManager:                            dynamicInformerManager,
 		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
-		ConcurrentClusterPlacementWorker:           opts.MaxConcurrentClusterPlacement,
+		ConcurrentClusterPlacementWorker:           int(math.Ceil(float64(MaxConcurrentClusterPlacement) / 10)),
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,
 	}
 

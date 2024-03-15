@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 
@@ -106,7 +106,7 @@ func TestReconcilerHandleResourceSnapshot(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			queue := controllertest.Queue{Interface: workqueue.New()}
+			queue := &controllertest.Queue{Interface: workqueue.New()}
 			handleResourceSnapshot(tt.snapshot, queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
 				t.Errorf("handleResourceSnapshot test `%s` didn't queue the object when it should enqueue", name)
@@ -142,7 +142,7 @@ func TestReconcilerHandleResourceBinding(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			queue := controllertest.Queue{Interface: workqueue.New()}
+			queue := &controllertest.Queue{Interface: workqueue.New()}
 			handleResourceBinding(tt.resourceBinding, queue)
 			if tt.shouldEnqueue && queue.Len() == 0 {
 				t.Errorf("handleResourceBinding test `%s` didn't queue the object when it should enqueue", name)
@@ -545,13 +545,13 @@ func TestPickBindingsToRoll(t *testing.T) {
 func createPlacementPolicyForTest(placementType fleetv1beta1.PlacementType, numberOfClusters int32) *fleetv1beta1.PlacementPolicy {
 	return &fleetv1beta1.PlacementPolicy{
 		PlacementType:    placementType,
-		NumberOfClusters: pointer.Int32(numberOfClusters),
+		NumberOfClusters: ptr.To(numberOfClusters),
 		Affinity: &fleetv1beta1.Affinity{
 			ClusterAffinity: &fleetv1beta1.ClusterAffinity{
 				RequiredDuringSchedulingIgnoredDuringExecution: &fleetv1beta1.ClusterSelector{
 					ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
 						{
-							LabelSelector: metav1.LabelSelector{
+							LabelSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									"key1": "value1",
 								},
@@ -592,7 +592,7 @@ func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.Placem
 						Type:   intstr.Int,
 						IntVal: 3,
 					},
-					UnavailablePeriodSeconds: pointer.Int(1),
+					UnavailablePeriodSeconds: ptr.To(1),
 				},
 			},
 		},

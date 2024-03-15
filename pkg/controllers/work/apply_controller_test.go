@@ -47,12 +47,14 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
 	testingclient "k8s.io/client-go/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/controller"
+	controller2 "go.goms.io/fleet/test/utils/controller"
 )
 
 var (
@@ -60,11 +62,6 @@ var (
 	ownerRef          = metav1.OwnerReference{
 		APIVersion: fleetv1beta1.GroupVersion.String(),
 		Kind:       "AppliedWork",
-	}
-	testGvr = schema.GroupVersionResource{
-		Group:    "apps",
-		Version:  "v1",
-		Resource: "Deployment",
 	}
 	testDeployment = appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -95,7 +92,7 @@ type testMapper struct {
 func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
 	if gk.Kind == "Deployment" {
 		return &meta.RESTMapping{
-			Resource:         testGvr,
+			Resource:         utils.DeploymentGVR,
 			GroupVersionKind: testDeployment.GroupVersionKind(),
 			Scope:            nil,
 		}, nil
@@ -213,7 +210,7 @@ func TestSetManifestHashAnnotation(t *testing.T) {
 		"manifest has a different spec, need update": {
 			manifestObj: func() *appsv1.Deployment {
 				alterObj := manifestObj.DeepCopy()
-				alterObj.Spec.Replicas = pointer.Int32(100)
+				alterObj.Spec.Replicas = ptr.To(int32(100))
 				return alterObj
 			}(),
 			isSame: false,
@@ -284,6 +281,817 @@ func TestIsManifestManagedByWork(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			assert.Equalf(t, tt.isManaged, isManifestManagedByWork(tt.ownerRefs), "isManifestManagedByWork(%v)", tt.ownerRefs)
+		})
+	}
+}
+
+func TestBuildManifestCondition(t *testing.T) {
+	tests := map[string]struct {
+		err    error
+		action applyAction
+		want   []metav1.Condition
+	}{
+		"TestNoErrorManifestCreated": {
+			err:    nil,
+			action: manifestCreatedAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestCreatedAction),
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: ManifestNeedsUpdateReason,
+				},
+			},
+		},
+		"TestNoErrorManifestServerSideApplied": {
+			err:    nil,
+			action: manifestServerSideAppliedAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestServerSideAppliedAction),
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: ManifestNeedsUpdateReason,
+				},
+			},
+		},
+		"TestNoErrorManifestThreeWayMergePatch": {
+			err:    nil,
+			action: manifestThreeWayMergePatchAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestThreeWayMergePatchAction),
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: ManifestNeedsUpdateReason,
+				},
+			},
+		},
+		"TestNoErrorManifestNotAvailable": {
+			err:    nil,
+			action: manifestNotAvailableYetAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: ManifestAlreadyUpToDateReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: string(manifestNotAvailableYetAction),
+				},
+			},
+		},
+		"TestNoErrorManifestNotTrackableAction": {
+			err:    nil,
+			action: manifestNotTrackableAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: ManifestAlreadyUpToDateReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestNotTrackableAction),
+				},
+			},
+		},
+		"TestNoErrorManifestAvailableAction": {
+			err:    nil,
+			action: manifestAvailableAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: ManifestAlreadyUpToDateReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: string(manifestAvailableAction),
+				},
+			},
+		},
+		"TestWithError": {
+			err:    errors.New("test error"),
+			action: errorApplyAction,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: ManifestApplyFailedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: ManifestApplyFailedReason,
+				},
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			conditions := buildManifestCondition(tt.err, tt.action, 1)
+			diff := controller2.CompareConditions(tt.want, conditions)
+			assert.Empty(t, diff, "buildManifestCondition() test %v failed, (-want +got):\n%s", name, diff)
+		})
+	}
+}
+
+func TestGenerateWorkCondition(t *testing.T) {
+	tests := map[string]struct {
+		manifestConditions []fleetv1beta1.ManifestCondition
+		expected           []metav1.Condition
+	}{
+		"Test applied one failed": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionFalse,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionUnknown,
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: workAppliedFailedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: workAppliedFailedReason,
+				},
+			},
+		},
+		"Test applied one of the two failed": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 2,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionFalse,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionUnknown,
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: workAppliedFailedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: workAppliedFailedReason,
+				},
+			},
+		},
+		"Test applied one succeed but available unknown yet": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestNotTrackableAction),
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionUnknown,
+							Reason: ManifestNeedsUpdateReason,
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: workAvailabilityUnknownReason,
+				},
+			},
+		},
+		"Test applied one succeed but not available yet": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestNotTrackableAction),
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionFalse,
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: workNotAvailableYetReason,
+				},
+			},
+		},
+		"Test applied all succeeded but one of two not available yet": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionFalse,
+							Reason: string(manifestNotAvailableYetAction),
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 2,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestNotTrackableAction),
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionFalse,
+					Reason: workNotAvailableYetReason,
+				},
+			},
+		},
+		"Test applied all succeeded but one unknown, one unavailable, one available": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionFalse,
+							Reason: string(manifestNotAvailableYetAction),
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 2,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionUnknown,
+							Reason: ManifestNeedsUpdateReason,
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 3,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestNotTrackableAction),
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: workAvailabilityUnknownReason,
+				},
+			},
+		},
+		"Test applied all succeeded but one of two not trackable": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestAvailableAction),
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 2,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestNotTrackableAction),
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: workNotTrackableReason,
+				},
+			},
+		},
+		"Test applied all available": {
+			manifestConditions: []fleetv1beta1.ManifestCondition{
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 1,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestAvailableAction),
+						},
+					},
+				},
+				{
+					Identifier: fleetv1beta1.WorkResourceIdentifier{
+						Ordinal: 2,
+					},
+					Conditions: []metav1.Condition{
+						{
+							Type:   fleetv1beta1.WorkConditionTypeApplied,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   fleetv1beta1.WorkConditionTypeAvailable,
+							Status: metav1.ConditionTrue,
+							Reason: string(manifestAvailableAction),
+						},
+					},
+				},
+			},
+			expected: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionTrue,
+					Reason: workAppliedCompletedReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionTrue,
+					Reason: workAvailableReason,
+				},
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			conditions := buildWorkCondition(tt.manifestConditions, 1)
+			diff := controller2.CompareConditions(tt.expected, conditions)
+			assert.Empty(t, diff, "buildWorkCondition() test %v failed, (-want +got):\n%s", name, diff)
+		})
+	}
+}
+
+func TestTrackResourceAvailability(t *testing.T) {
+	tests := map[string]struct {
+		gvr      schema.GroupVersionResource
+		obj      *unstructured.Unstructured
+		expected applyAction
+		err      error
+	}{
+		"Test a mal-formated object": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+						"name":       "test-deployment",
+					},
+					"spec": "wrongspec",
+					"status": map[string]interface{}{
+						"observedGeneration": 1,
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":   "Available",
+								"status": "True",
+							},
+						},
+					},
+				},
+			},
+			expected: errorApplyAction,
+			err:      controller.ErrUnexpectedBehavior,
+		},
+		"Test Deployment available": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+						"name":       "test-deployment",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 1,
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":   "Available",
+								"status": "True",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test Deployment not observe the latest generation": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 2,
+						"name":       "test-deployment",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 1,
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":   "Available",
+								"status": "True",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test Deployment not available": {
+			gvr: utils.DeploymentGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+						"name":       "test-deployment",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 1,
+						"conditions": []interface{}{
+							map[string]interface{}{
+								"type":   "Available",
+								"status": "False",
+							},
+						},
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test StatefulSet available": {
+			gvr: utils.StatefulSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "StatefulSet",
+					"metadata": map[string]interface{}{
+						"generation": 5,
+						"name":       "test-statefulset",
+					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 5,
+						"availableReplicas":  3,
+						"currentReplicas":    3,
+						"updatedReplicas":    3,
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test StatefulSet not available": {
+			gvr: utils.StatefulSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "StatefulSet",
+					"metadata": map[string]interface{}{
+						"generation": 3,
+						"name":       "test-statefulset",
+					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 3,
+						"availableReplicas":  2,
+						"currentReplicas":    3,
+						"updatedReplicas":    3,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test StatefulSet observed old generation": {
+			gvr: utils.StatefulSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "StatefulSet",
+					"metadata": map[string]interface{}{
+						"generation": 3,
+						"name":       "test-statefulset",
+					},
+					"spec": map[string]interface{}{
+						"replicas": 3,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": 2,
+						"availableReplicas":  2,
+						"currentReplicas":    3,
+						"updatedReplicas":    3,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test DaemonSet Available": {
+			gvr: utils.DaemonSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "DaemonSet",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration":     1,
+						"numberAvailable":        1,
+						"desiredNumberScheduled": 1,
+						"currentNumberScheduled": 1,
+						"updatedNumberScheduled": 1,
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test DaemonSet not available": {
+			gvr: utils.DaemonSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "DaemonSet",
+					"metadata": map[string]interface{}{
+						"generation": 1,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration":     1,
+						"numberAvailable":        0,
+						"desiredNumberScheduled": 1,
+						"currentNumberScheduled": 1,
+						"updatedNumberScheduled": 1,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test DaemonSet not observe current generation": {
+			gvr: utils.DaemonSettGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "DaemonSet",
+					"metadata": map[string]interface{}{
+						"generation": 2,
+					},
+					"status": map[string]interface{}{
+						"observedGeneration":     1,
+						"numberAvailable":        0,
+						"desiredNumberScheduled": 1,
+						"currentNumberScheduled": 1,
+						"updatedNumberScheduled": 1,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test Job available with succeeded pod": {
+			gvr: utils.JobGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "batch/v1",
+					"kind":       "Job",
+					"status": map[string]interface{}{
+						"succeeded": 1,
+						"ready":     0,
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"Test Job available with ready pod": {
+			gvr: utils.JobGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "batch/v1",
+					"kind":       "Job",
+					"status": map[string]interface{}{
+						"ready": 4,
+					},
+				},
+			},
+			expected: manifestAvailableAction,
+			err:      nil,
+		},
+		"TestJob not available": {
+			gvr: utils.JobGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "batch/v1",
+					"kind":       "Job",
+					"status": map[string]interface{}{
+						"ready": 0,
+					},
+				},
+			},
+			expected: manifestNotAvailableYetAction,
+			err:      nil,
+		},
+		"Test Job not trackable": {
+			gvr: utils.JobGVR,
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "batch/v1",
+					"kind":       "Job",
+					"status": map[string]interface{}{
+						"Succeeded": 2,
+					},
+				},
+			},
+			expected: manifestNotTrackableAction,
+			err:      nil,
+		},
+		"Test UnknownResource": {
+			gvr: schema.GroupVersionResource{
+				Group:    "unknown",
+				Version:  "v1",
+				Resource: "unknown",
+			},
+			obj:      &unstructured.Unstructured{},
+			expected: manifestNotTrackableAction,
+			err:      nil,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			action, err := trackResourceAvailability(tt.gvr, tt.obj)
+			assert.Equal(t, tt.expected, action, "action not matching in test %s", name)
+			assert.Equal(t, errors.Is(err, tt.err), true, "applyErr not matching in test %s", name)
 		})
 	}
 }
@@ -444,7 +1252,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj.DeepCopy(),
 			resultSpecHash: correctSpecHash,
-			resultAction:   ManifestCreatedAction,
+			resultAction:   manifestCreatedAction,
 			resultErr:      nil,
 		},
 		"test creation succeeds when the object has a generated name": {
@@ -457,7 +1265,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        generatedSpecObj.DeepCopy(),
 			resultSpecHash: generatedSpecHash,
-			resultAction:   ManifestCreatedAction,
+			resultAction:   manifestCreatedAction,
 			resultErr:      nil,
 		},
 		"client error looking for object / fail": {
@@ -469,7 +1277,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: ManifestNoChangeAction,
+			resultAction: errorApplyAction,
 			resultErr:    errors.New("client error"),
 		},
 		"owner reference comparison failure / fail": {
@@ -481,17 +1289,17 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: ManifestNoChangeAction,
+			resultAction: errorApplyAction,
 			resultErr:    errors.New("resource is not managed by the work controller"),
 		},
-		"equal spec hash of current vs work object / succeed without updates": {
+		"equal spec hash of current vs work object /  not available yet": {
 			reconciler: ApplyWorkReconciler{
 				spokeDynamicClient: correctDynamicClient,
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:        correctObj.DeepCopy(),
 			resultSpecHash: correctSpecHash,
-			resultAction:   ManifestNoChangeAction,
+			resultAction:   manifestNotAvailableYetAction,
 			resultErr:      nil,
 		},
 		"unequal spec hash of current vs work object / client patch fail": {
@@ -500,7 +1308,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: ManifestNoChangeAction,
+			resultAction: errorApplyAction,
 			resultErr:    errors.New("patch failed"),
 		},
 		"happy path - with updates": {
@@ -511,7 +1319,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        correctObj,
 			resultSpecHash: diffSpecHash,
-			resultAction:   ManifestThreeWayMergePatchAction,
+			resultAction:   manifestThreeWayMergePatchAction,
 			resultErr:      nil,
 		},
 		"test create succeeds for large manifest when object does not exist": {
@@ -522,7 +1330,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        largeObj,
 			resultSpecHash: largeObjSpecHash,
-			resultAction:   ManifestCreatedAction,
+			resultAction:   manifestCreatedAction,
 			resultErr:      nil,
 		},
 		"test apply succeeds on update for large manifest when object exists": {
@@ -533,7 +1341,7 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			workObj:        updatedLargeObj,
 			resultSpecHash: updatedLargeObjSpecHash,
-			resultAction:   ManifestServerSideAppliedAction,
+			resultAction:   manifestServerSideAppliedAction,
 			resultErr:      nil,
 		},
 		"test create fails for large manifest when object does not exist": {
@@ -543,7 +1351,7 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      largeObj,
-			resultAction: ManifestNoChangeAction,
+			resultAction: errorApplyAction,
 			resultErr:    errors.New("create error"),
 		},
 		"test apply fails for large manifest when object exists": {
@@ -553,19 +1361,19 @@ func TestApplyUnstructured(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      updatedLargeObj,
-			resultAction: ManifestNoChangeAction,
+			resultAction: errorApplyAction,
 			resultErr:    errors.New("apply error"),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			applyResult, applyAction, err := testCase.reconciler.applyUnstructured(context.Background(), testGvr, testCase.workObj)
+			applyResult, applyAction, err := testCase.reconciler.applyUnstructured(context.Background(), utils.DeploymentGVR, testCase.workObj)
 			assert.Equalf(t, testCase.resultAction, applyAction, "updated boolean not matching for Testcase %s", testName)
 			if testCase.resultErr != nil {
 				assert.Containsf(t, err.Error(), testCase.resultErr.Error(), "error not matching for Testcase %s", testName)
 			} else {
-				assert.Truef(t, err == nil, "err is not nil for Testcase %s", testName)
+				assert.Truef(t, err == nil, "applyErr is not nil for Testcase %s", testName)
 				assert.Truef(t, applyResult != nil, "applyResult is not nil for Testcase %s", testName)
 				// Not checking last applied config because it has live fields.
 				assert.Equalf(t, testCase.resultSpecHash, applyResult.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation],
@@ -609,12 +1417,13 @@ func TestApplyManifest(t *testing.T) {
 	})
 
 	testCases := map[string]struct {
-		reconciler   ApplyWorkReconciler
-		manifestList []fleetv1beta1.Manifest
-		generation   int64
-		action       applyAction
-		wantGvr      schema.GroupVersionResource
-		wantErr      error
+		reconciler     ApplyWorkReconciler
+		manifestList   []fleetv1beta1.Manifest
+		applyStrategy  *fleetv1beta1.ApplyStrategy
+		wantGeneration int64
+		wantAction     applyAction
+		wantGvr        schema.GroupVersionResource
+		wantErr        error
 	}{
 		"manifest is in proper format/ happy path": {
 			reconciler: ApplyWorkReconciler{
@@ -625,11 +1434,11 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: []fleetv1beta1.Manifest{testManifest},
-			generation:   0,
-			action:       ManifestCreatedAction,
-			wantGvr:      expectedGvr,
-			wantErr:      nil,
+			manifestList:   []fleetv1beta1.Manifest{testManifest},
+			wantGeneration: 0,
+			wantAction:     manifestCreatedAction,
+			wantGvr:        expectedGvr,
+			wantErr:        nil,
 		},
 		"manifest has incorrect syntax/ decode fail": {
 			reconciler: ApplyWorkReconciler{
@@ -640,10 +1449,10 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]fleetv1beta1.Manifest{}, InvalidManifest),
-			generation:   0,
-			action:       ManifestNoChangeAction,
-			wantGvr:      emptyGvr,
+			manifestList:   append([]fleetv1beta1.Manifest{}, InvalidManifest),
+			wantGeneration: 0,
+			wantAction:     errorApplyAction,
+			wantGvr:        emptyGvr,
 			wantErr: &json.UnmarshalTypeError{
 				Value: "string",
 				Type:  reflect.TypeOf(map[string]interface{}{}),
@@ -658,11 +1467,11 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]fleetv1beta1.Manifest{}, MissingManifest),
-			generation:   0,
-			action:       ManifestNoChangeAction,
-			wantGvr:      emptyGvr,
-			wantErr:      errors.New("failed to find group/version/resource from restmapping: test error: mapping does not exist"),
+			manifestList:   append([]fleetv1beta1.Manifest{}, MissingManifest),
+			wantGeneration: 0,
+			wantAction:     errorApplyAction,
+			wantGvr:        emptyGvr,
+			wantErr:        errors.New("failed to find group/version/resource from restmapping: test error: mapping does not exist"),
 		},
 		"manifest is in proper format/ should fail applyUnstructured": {
 			reconciler: ApplyWorkReconciler{
@@ -673,23 +1482,23 @@ func TestApplyManifest(t *testing.T) {
 				recorder:           utils.NewFakeRecorder(1),
 				joined:             atomic.NewBool(true),
 			},
-			manifestList: append([]fleetv1beta1.Manifest{}, testManifest),
-			generation:   0,
-			action:       ManifestNoChangeAction,
-			wantGvr:      expectedGvr,
-			wantErr:      errors.New(failMsg),
+			manifestList:   append([]fleetv1beta1.Manifest{}, testManifest),
+			wantGeneration: 0,
+			wantAction:     errorApplyAction,
+			wantGvr:        expectedGvr,
+			wantErr:        errors.New(failMsg),
 		},
 	}
 
 	for testName, testCase := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			resultList := testCase.reconciler.applyManifests(context.Background(), testCase.manifestList, ownerRef)
+			resultList := testCase.reconciler.applyManifests(context.Background(), testCase.manifestList, ownerRef, testCase.applyStrategy)
 			for _, result := range resultList {
 				if testCase.wantErr != nil {
-					assert.Containsf(t, result.err.Error(), testCase.wantErr.Error(), "Incorrect error for Testcase %s", testName)
+					assert.Containsf(t, result.applyErr.Error(), testCase.wantErr.Error(), "Incorrect error for Testcase %s", testName)
 				} else {
-					assert.Equalf(t, testCase.generation, result.generation, "Testcase %s: generation incorrect", testName)
-					assert.Equalf(t, testCase.action, result.action, "Testcase %s: Updated action incorrect", testName)
+					assert.Equalf(t, testCase.wantGeneration, result.generation, "Testcase %s: wantGeneration incorrect", testName)
+					assert.Equalf(t, testCase.wantAction, result.action, "Testcase %s: Updated wantAction incorrect", testName)
 				}
 			}
 		})
@@ -1008,7 +1817,7 @@ func TestReconcile(t *testing.T) {
 			} else {
 				if testCase.requeue {
 					if testCase.reconciler.joined.Load() {
-						assert.Equal(t, ctrl.Result{RequeueAfter: time.Minute * 5}, ctrlResult, "incorrect ctrlResult for Testcase %s", testName)
+						assert.Equal(t, ctrl.Result{RequeueAfter: time.Second * 3}, ctrlResult, "incorrect ctrlResult for Testcase %s", testName)
 					} else {
 						assert.Equal(t, ctrl.Result{RequeueAfter: time.Second * 5}, ctrlResult, "incorrect ctrlResult for Testcase %s", testName)
 					}
