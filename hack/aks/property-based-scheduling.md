@@ -160,7 +160,7 @@ commands below for details.
 
 ```sh
 # Retrieve the hub cluster API server address.
-export HUB_SERVER_ADDR=$(az aks show -n $HUB_CLUSTER -g $RG --query "fqdn")
+export HUB_SERVER_ADDR=$(az aks show -n $HUB_CLUSTER -g $RG --query "fqdn" | tr -d '"')
 export PROPERTY_PROVIDER=aks
 
 declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
@@ -222,6 +222,35 @@ kubectl get pods -n fleet-system
 
 You should see that the agent is in the ready state. Repeat the command on the other
 two member clusters; agents there should be ready as well.
+
+At last, join the member clusters to the hub cluster:
+
+```sh
+kubectl config use-context $HUB_CLUSTER-admin
+
+for i in "${MEMBER_CLUSTERS[@]}"
+do
+    cat <<EOF | kubectl apply -f -
+    apiVersion: cluster.kubernetes-fleet.io/v1beta1
+    kind: MemberCluster
+    metadata:
+        name: $i
+    spec:
+        identity:
+            name: fleet-member-agent-$i
+            kind: ServiceAccount
+            namespace: fleet-system
+            apiGroup: ""
+EOF
+done
+```
+
+You can verify the membership status using the command below; after a few moments all
+member clusters should have their `JOINED` status set to `True`:
+
+```sh
+kubectl get membercluster
+```
 
 ## Experience the new property-based scheduling features
 
