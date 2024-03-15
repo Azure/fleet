@@ -483,6 +483,58 @@ func TestPluginScore(t *testing.T) {
 			},
 		},
 		{
+			name: "single preferred term which features label selector and requires sorting (cannot be sorted, no data available)",
+			ps: &pluginState{
+				minMaxValuesByProperty: map[string]observedMinMaxValues{
+					nodeCountPropertyName: {
+						min: ptr.To(resource.MustParse("10")),
+						max: ptr.To(resource.MustParse("20")),
+					},
+				},
+			},
+			policy: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+									{
+										Weight: 50,
+										Preference: placementv1beta1.ClusterSelectorTerm{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySorter: &placementv1beta1.PropertySorter{
+												Name:      nodeCountPropertyName,
+												SortOrder: placementv1beta1.Descending,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{},
+				},
+			},
+			wantScore: &framework.ClusterScore{
+				AffinityScore: 0,
+			},
+		},
+		{
 			name: "multiple preferred terms",
 			ps: &pluginState{
 				minMaxValuesByProperty: map[string]observedMinMaxValues{
