@@ -22,22 +22,15 @@ type pluginState struct {
 	minMaxValuesByProperty map[string]observedMinMaxValues
 }
 
+// preparePluginState prepares a common state for easier queries of min. and max.
+// observed values of properties (if applicable).
 func preparePluginState(state framework.CycleStatePluginReadWriter, policy *placementv1beta1.ClusterSchedulingPolicySnapshot) (*pluginState, error) {
 	ps := &pluginState{
 		minMaxValuesByProperty: make(map[string]observedMinMaxValues),
 	}
 
-	// Verify if the policy features any property that requires sorting.
-	noPreferredClusterAffinityTerms := (policy == nil ||
-		policy.Spec.Policy == nil ||
-		policy.Spec.Policy.Affinity == nil ||
-		policy.Spec.Policy.Affinity.ClusterAffinity == nil ||
-		len(policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) == 0)
-	if noPreferredClusterAffinityTerms {
-		// There are no preferred cluster affinity terms specified in the scheduling policy;
-		// Normally this should never occur as an inspection has been performed in the upper level.
-		return ps, nil
-	}
+	// Note that this function assumes that the scheduling policy must have at least one
+	// enforceable preferred cluster affinity term, as guaranteed by its caller.
 
 	var cs []clusterv1beta1.MemberCluster
 	for tidx := range policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
@@ -52,8 +45,8 @@ func preparePluginState(state framework.CycleStatePluginReadWriter, policy *plac
 			// Use pointers so that zero values can also be compared.
 			var minQ, maxQ *resource.Quantity
 
-			for sidx := range cs {
-				c := &cs[sidx]
+			for cidx := range cs {
+				c := &cs[cidx]
 				q, err := retrievePropertyValueFrom(c, n)
 				if err != nil {
 					// An error has occurred when retrieving the property value from the cluster.

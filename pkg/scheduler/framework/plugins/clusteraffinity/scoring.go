@@ -21,10 +21,10 @@ func (p *Plugin) PreScore(
 	state framework.CycleStatePluginReadWriter,
 	policy *placementv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
-	noPreferredClusterAffinityTerms := (policy.Spec.Policy == nil ||
+	noPreferredClusterAffinityTerms := policy.Spec.Policy == nil ||
 		policy.Spec.Policy.Affinity == nil ||
 		policy.Spec.Policy.Affinity.ClusterAffinity == nil ||
-		len(policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) == 0)
+		len(policy.Spec.Policy.Affinity.ClusterAffinity.PreferredDuringSchedulingIgnoredDuringExecution) == 0
 	if noPreferredClusterAffinityTerms {
 		// There are no preferred cluster affinity terms specified in the scheduling policy;
 		// skip the step.

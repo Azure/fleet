@@ -23,7 +23,6 @@ import (
 const (
 	clusterName1 = "cluster-1"
 	clusterName2 = "cluster-2"
-	clusterName3 = "cluster-3"
 
 	regionLabelName   = "region"
 	regionLabelValue1 = "eastus"
@@ -31,7 +30,6 @@ const (
 
 	envLabelName   = "env"
 	envLabelValue1 = "prod"
-	envLabelValue2 = "dev"
 
 	nodeCountPropertyName   = "kubernetes.azure.com/node-count"
 	nodeCountPropertyValue1 = "3"
@@ -166,7 +164,7 @@ func TestPreFilter(t *testing.T) {
 				cmp.AllowUnexported(framework.Status{}),
 				ignoreStatusErrorField,
 			); diff != "" {
-				t.Errorf("Filter() unexpected status (-got, +want):\n%s", diff)
+				t.Errorf("PreFilter() unexpected status (-got, +want):\n%s", diff)
 			}
 		})
 	}
@@ -180,66 +178,6 @@ func TestFilter(t *testing.T) {
 		cluster    *clusterv1beta1.MemberCluster
 		wantStatus *framework.Status
 	}{
-		{
-			name: "has no scheduling policy",
-			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: nil,
-				},
-			},
-		},
-		{
-			name: "has no affinity",
-			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &placementv1beta1.PlacementPolicy{
-						Affinity: nil,
-					},
-				},
-			},
-		},
-		{
-			name: "has no cluster affinity",
-			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &placementv1beta1.PlacementPolicy{
-						Affinity: &placementv1beta1.Affinity{
-							ClusterAffinity: nil,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "has no required cluster affinity terms",
-			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &placementv1beta1.PlacementPolicy{
-						Affinity: &placementv1beta1.Affinity{
-							ClusterAffinity: &placementv1beta1.ClusterAffinity{
-								RequiredDuringSchedulingIgnoredDuringExecution: nil,
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "has no cluster selectors",
-			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
-				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
-					Policy: &placementv1beta1.PlacementPolicy{
-						Affinity: &placementv1beta1.Affinity{
-							ClusterAffinity: &placementv1beta1.ClusterAffinity{
-								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-									ClusterSelectorTerms: nil,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 		{
 			name: "single cluster selector term, matched",
 			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
@@ -373,7 +311,7 @@ func TestFilter(t *testing.T) {
 			},
 		},
 		{
-			name: "single cluster selector term, not matched",
+			name: "single cluster selector term, not matched (neither)",
 			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
 				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
 					Policy: &placementv1beta1.PlacementPolicy{
@@ -411,6 +349,110 @@ func TestFilter(t *testing.T) {
 					Name: clusterName1,
 					Labels: map[string]string{
 						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: "4",
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
+		},
+		{
+			name: "single cluster selector term, not matched (label selector)",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue1,
+					},
+				},
+				Spec: clusterv1beta1.MemberClusterSpec{},
+				Status: clusterv1beta1.MemberClusterStatus{
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						nodeCountPropertyName: {
+							Value: nodeCountPropertyValue1,
+						},
+					},
+				},
+			},
+			wantStatus: framework.NewNonErrorStatus(framework.ClusterUnschedulable, p.Name(), "cluster does not match with any of the required cluster affinity terms"),
+		},
+		{
+			name: "single cluster selector term, not matched (property selector)",
+			ps: &placementv1beta1.ClusterSchedulingPolicySnapshot{
+				Spec: placementv1beta1.SchedulingPolicySnapshotSpec{
+					Policy: &placementv1beta1.PlacementPolicy{
+						Affinity: &placementv1beta1.Affinity{
+							ClusterAffinity: &placementv1beta1.ClusterAffinity{
+								RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													regionLabelName: regionLabelValue2,
+												},
+											},
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     nodeCountPropertyName,
+														Operator: placementv1beta1.PropertySelectorEqualTo,
+														Values: []string{
+															nodeCountPropertyValue1,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName1,
+					Labels: map[string]string{
+						regionLabelName: regionLabelValue2,
 					},
 				},
 				Spec: clusterv1beta1.MemberClusterSpec{},

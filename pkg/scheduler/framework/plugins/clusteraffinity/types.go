@@ -34,12 +34,12 @@ const (
 // easy method extension.
 type clusterRequirement placementv1beta1.ClusterSelectorTerm
 
-// retrieveResourcePropertyValueFrom retrieves a resource property value from a member cluster.
+// retrieveResourceUsageFrom retrieves a resource property value from a member cluster.
 //
 // Note that it will return nil if the property is not available for the cluster;
 // the zero value of resource.Quantity, i.e., resource.Quantity{}, is a valid
 // quantity.
-func retrieveResourcePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name string) (*resource.Quantity, error) {
+func retrieveResourceUsageFrom(cluster *clusterv1beta1.MemberCluster, name string) (*resource.Quantity, error) {
 	// Split the name into two segments, the capacity type, and the resource name.
 	//
 	// As a pre-defined rule, all the resource properties are assigned a label name of the format
@@ -89,11 +89,11 @@ func retrievePropertyValueFrom(cluster *clusterv1beta1.MemberCluster, name strin
 	// Check if the expression concerns a resource property.
 	var q *resource.Quantity
 	var err error
-	if strings.Contains(name, resourcePropertyNamePrefix) {
+	if strings.HasPrefix(name, resourcePropertyNamePrefix) {
 		name, _ := strings.CutPrefix(name, resourcePropertyNamePrefix)
 
 		// Retrieve the property value from the cluster resource usage data.
-		q, err = retrieveResourcePropertyValueFrom(cluster, name)
+		q, err = retrieveResourceUsageFrom(cluster, name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve resource property value for %s from cluster %s: %w", name, cluster.Name, err)
 		}

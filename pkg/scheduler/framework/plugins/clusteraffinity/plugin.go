@@ -33,10 +33,10 @@ var (
 	//
 	// Note that successful connection to any of the extension points implies that the
 	// plugin already implements the Plugin interface.
-	_ framework.PreScorePlugin = &Plugin{}
-	_ framework.FilterPlugin   = &Plugin{}
-	_ framework.PreScorePlugin = &Plugin{}
-	_ framework.ScorePlugin    = &Plugin{}
+	_ framework.PreFilterPlugin = &Plugin{}
+	_ framework.FilterPlugin    = &Plugin{}
+	_ framework.PreScorePlugin  = &Plugin{}
+	_ framework.ScorePlugin     = &Plugin{}
 )
 
 type clusterAffinityPluginOptions struct {

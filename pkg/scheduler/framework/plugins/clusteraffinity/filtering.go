@@ -19,11 +19,11 @@ func (p *Plugin) PreFilter(
 	_ framework.CycleStatePluginReadWriter,
 	ps *placementv1beta1.ClusterSchedulingPolicySnapshot,
 ) (status *framework.Status) {
-	noRequiredClusterAffinityTerms := (ps.Spec.Policy == nil ||
+	noRequiredClusterAffinityTerms := ps.Spec.Policy == nil ||
 		ps.Spec.Policy.Affinity == nil ||
 		ps.Spec.Policy.Affinity.ClusterAffinity == nil ||
 		ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil ||
-		len(ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) == 0)
+		len(ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) == 0
 	if noRequiredClusterAffinityTerms {
 		// There are no required cluster affinity terms to enforce; consider all clusters
 		// eligible for resource placement in the scope of this plugin.
@@ -42,16 +42,9 @@ func (p *Plugin) Filter(
 	ps *placementv1beta1.ClusterSchedulingPolicySnapshot,
 	cluster *clusterv1beta1.MemberCluster,
 ) (status *framework.Status) {
-	noRequiredClusterAffinityTerms := (ps.Spec.Policy == nil ||
-		ps.Spec.Policy.Affinity == nil ||
-		ps.Spec.Policy.Affinity.ClusterAffinity == nil ||
-		ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil ||
-		len(ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms) == 0)
-	if noRequiredClusterAffinityTerms {
-		// There are no required cluster affinity terms to enforce; consider all cluster
-		// eligible for resource placement in the scope of this plugin.
-		return nil
-	}
+	// Note that this extension point assumes that previous extension point (PreFilter) has
+	// guaranteed that if scheduling policy reaches this stage, it must have at least one
+	// required cluster affinity term to enforce.
 
 	for idx := range ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms {
 		t := &ps.Spec.Policy.Affinity.ClusterAffinity.RequiredDuringSchedulingIgnoredDuringExecution.ClusterSelectorTerms[idx]
