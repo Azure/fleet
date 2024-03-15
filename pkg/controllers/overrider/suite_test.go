@@ -48,6 +48,10 @@ var _ = BeforeSuite(func() {
 	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	ctx, cancel = context.WithCancel(context.TODO())
+	By("Setup klog")
+	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(fs)
+	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -87,6 +91,12 @@ var _ = BeforeSuite(func() {
 	}
 	// setup the clusterResourceReconciler
 	err = (&ClusterResourceReconciler{
+		Reconciler: commonReconciler,
+	}).SetupWithManager(mgr)
+	Expect(err).Should(Succeed())
+
+	// setup the resourceReconciler
+	err = (&ResourceReconciler{
 		Reconciler: commonReconciler,
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())

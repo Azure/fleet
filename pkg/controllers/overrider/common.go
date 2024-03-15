@@ -40,7 +40,7 @@ func (r *Reconciler) handleOverrideDeleting(ctx context.Context, overrideSnapsho
 		return nil
 	}
 	// delete all the associated snapshots
-	if err := r.Client.DeleteAllOf(ctx, overrideSnapshotObj, client.MatchingLabels{placementv1alpha1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
+	if err := r.Client.DeleteAllOf(ctx, overrideSnapshotObj, client.InNamespace(parentOverrideObj.GetNamespace()), client.MatchingLabels{placementv1alpha1.OverrideTrackingLabel: parentOverrideObj.GetName()}); err != nil {
 		klog.ErrorS(err, "Failed to delete all associated overrideSnapshot", "override", overrideRef)
 		return controller.NewAPIServerError(false, err)
 	}
