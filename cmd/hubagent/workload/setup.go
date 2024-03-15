@@ -284,7 +284,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		InformerManager:                            dynamicInformerManager,
 		ResourceConfig:                             resourceConfig,
 		SkippedNamespaces:                          skippedNamespaces,
-		ConcurrentClusterPlacementWorker:           opts.ConcurrentClusterPlacementSyncs,
+		ConcurrentClusterPlacementWorker:           opts.MaxConcurrentClusterPlacement,
 		ConcurrentResourceChangeWorker:             opts.ConcurrentResourceChangeSyncs,
 	}
 
