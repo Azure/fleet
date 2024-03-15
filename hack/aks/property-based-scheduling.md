@@ -121,6 +121,8 @@ agent installation:
 
 ```sh
 git clone https://github.com/Azure/fleet.git
+cd fleet
+git checkout demo
 ```
 
 Then install the Fleet hub agent in the Fleet hub cluster:
@@ -130,7 +132,7 @@ kubectl config use-context $HUB_CLUSTER-admin
 
 export REGISTRY=fleetdemo.azurecr.io
 export TAG=demo
-helm install hub-agent fleet/charts/hub-agent/ \
+helm install hub-agent charts/hub-agent/ \
     --set image.pullPolicy=Always \
     --set image.repository=$REGISTRY/hub-agent \
     --set image.tag=$TAG \
