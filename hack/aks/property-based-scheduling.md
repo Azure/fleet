@@ -84,17 +84,17 @@ export LOCATION_3=westus
 
 # Create the three member clusters.
 az aks create -n $MEMBER_CLUSTER_1 \
-    -l $LOCATION \
+    -l $LOCATION_1 \
     -g $RG \
     --node-count 2 
 
 az aks create -n $MEMBER_CLUSTER_2 \
-    -l $LOCATION \
+    -l $LOCATION_2 \
     -g $RG \
     --node-count 3
 
 az aks create -n $MEMBER_CLUSTER_3 \
-    -l $LOCATION \
+    -l $LOCATION_3 \
     -g $RG \
     --node-count 4 
 ```
@@ -158,7 +158,7 @@ commands below for details.
 
 ```sh
 # Retrieve the hub cluster API server address.
-export HUB_SERVER_ADDR=$(az aks show -n hub -g fleet-demo --query "fqdn")
+export HUB_SERVER_ADDR=$(az aks show -n $HUB_CLUSTER -g $RG --query "fqdn")
 export PROPERTY_PROVIDER=aks
 
 declare -a MEMBER_CLUSTERS=($MEMBER_CLUSTER_1 $MEMBER_CLUSTER_2 $MEMBER_CLUSTER_3)
