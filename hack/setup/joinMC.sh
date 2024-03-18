@@ -1,11 +1,7 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters from
 # AKS Cluster's and joins them onto the hub cluster.
 
-# Convert the string to an array
-MC_NAMES=($MC_NAMES_STR)
-
-for MC in "${MC_NAMES[@]}"; do
-
+for MC in "$@"; do
 # Note that Fleet will recognize your cluster with this name once it joins.
 export MEMBER_CLUSTER=${MC}
 export MEMBER_CLUSTER_CONTEXT=${MC}
@@ -24,7 +20,7 @@ kubectl create serviceaccount $SERVICE_ACCOUNT -n fleet-system
 
 echo "Creating member service account secret..."
 export SERVICE_ACCOUNT_SECRET="$MEMBER_CLUSTER-hub-cluster-access-token"
-cat <<EOF | kubectl apply -f - 
+cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
 metadata:
