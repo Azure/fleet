@@ -90,6 +90,7 @@ var (
 	regionLabelName   = "region"
 	regionLabelValue1 = "east"
 	regionLabelValue2 = "west"
+	regionLabelValue3 = "south"
 	envLabelName      = "env"
 	envLabelValue1    = "prod"
 	envLabelValue2    = "canary"
@@ -114,10 +115,10 @@ var (
 			regionLabelName: regionLabelValue1,
 		},
 		memberCluster2EastCanaryName: {
-			regionLabelName: regionLabelValue1,
+			regionLabelName: regionLabelValue2,
 		},
 		memberCluster3WestProdName: {
-			regionLabelName: regionLabelValue2,
+			regionLabelName: regionLabelValue3,
 		},
 	}
 )
