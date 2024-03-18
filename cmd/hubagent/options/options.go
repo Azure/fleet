@@ -93,7 +93,7 @@ func NewOptions() *Options {
 		MaxConcurrentClusterPlacement: 10,
 		ConcurrentResourceChangeSyncs: 1,
 		MaxFleetSizeSupported:         100,
-		EnableV1Alpha1APIs:            true,
+		EnableV1Alpha1APIs:            false,
 	}
 }
 
