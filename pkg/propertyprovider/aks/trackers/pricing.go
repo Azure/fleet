@@ -40,6 +40,8 @@ func (k *AKSKarpenterPricingClient) LastUpdated() time.Time {
 	return k.karpenterPricingClient.OnDemandLastUpdated()
 }
 
+// NewAKSKarpenterPricingClient returns a new AKS Karpenter pricing client, which implements
+// the PricingProvider interface.
 func NewAKSKarpenterPricingClient(ctx context.Context, region string) *AKSKarpenterPricingClient {
 	// In the case of AKS property provider, there is no need to wait for leader election
 	// successes; close the channel immediately to allow immediate boot-up of the pricing

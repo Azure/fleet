@@ -1218,6 +1218,46 @@ func TestPodTrackerAddOrUpdate(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "can track a pod with containers that do not have resource requests",
+			pt:   NewPodTracker(),
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName1,
+						Namespace: namespaceName1,
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: containerName1,
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("1"),
+										corev1.ResourceMemory: resource.MustParse("200Mi"),
+									},
+								},
+							},
+							{
+								Name: containerName2,
+							},
+						},
+					},
+				},
+			},
+			wantPT: &PodTracker{
+				totalRequested: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+				requestedByPod: map[string]corev1.ResourceList{
+					fmt.Sprintf("%s/%s", namespaceName1, podName1): {
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("200Mi"),
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
