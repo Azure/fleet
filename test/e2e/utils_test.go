@@ -664,25 +664,25 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 }
 
 func buildTaints(memberClusterNames []string) []clusterv1beta1.Taint {
-	var labels map[string]string
+	var taint map[string]string
 	taints := make([]clusterv1beta1.Taint, len(memberClusterNames))
 	for i, name := range memberClusterNames {
-		labels = labelsByClusterName[name]
-		taints[i].Key = labels[regionLabelName]
-		taints[i].Value = labels[envLabelName]
+		taint = taintTolerationMap[name]
+		taints[i].Key = regionLabelName
+		taints[i].Value = taint[regionLabelName]
 		taints[i].Effect = corev1.TaintEffectNoSchedule
 	}
 	return taints
 }
 
 func buildTolerations(memberClusterNames []string) []placementv1beta1.Toleration {
-	var labels map[string]string
+	var toleration map[string]string
 	tolerations := make([]placementv1beta1.Toleration, len(memberClusterNames))
 	for i, name := range memberClusterNames {
-		labels = labelsByClusterName[name]
-		tolerations[i].Key = labels[regionLabelName]
+		toleration = taintTolerationMap[name]
+		tolerations[i].Key = regionLabelName
 		tolerations[i].Operator = corev1.TolerationOpEqual
-		tolerations[i].Value = labels[envLabelName]
+		tolerations[i].Value = toleration[regionLabelName]
 		tolerations[i].Effect = corev1.TaintEffectNoSchedule
 	}
 	return tolerations

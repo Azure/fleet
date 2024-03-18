@@ -210,3 +210,55 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 		ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary})
 	})
 })
+
+var _ = Describe("picking all clusters using pickAll placement policy, add taint to a cluster that's already selected", Serial, Ordered, func() {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	taintClusterNames := []string{memberCluster1EastProdName}
+
+	BeforeAll(func() {
+		// Create the resources.
+		createWorkResources()
+
+		// Create the CRP.
+		crp := &placementv1beta1.ClusterResourcePlacement{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: crpName,
+				// Add a custom finalizer; this would allow us to better observe
+				// the behavior of the controllers.
+				Finalizers: []string{customDeletionBlockerFinalizer},
+			},
+			Spec: placementv1beta1.ClusterResourcePlacementSpec{
+				Policy: &placementv1beta1.PlacementPolicy{
+					PlacementType: placementv1beta1.PickAllPlacementType,
+				},
+				ResourceSelectors: workResourceSelector(),
+			},
+		}
+		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create cluster resource placement")
+	})
+
+	It("should update cluster resource placement status as expected", func() {
+		statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should place resources on the selected clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	It("should add taint to a cluster that's already selected", func() {
+		// Add taint to member cluster 1.
+		addTaintsToMemberClusters(taintClusterNames, buildTaints(taintClusterNames))
+	})
+
+	It("should still update cluster resource placement status as expected, no status updates", func() {
+		statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
+	It("should still place resources on the selected clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
+
+	AfterAll(func() {
+		// Remove taint from member cluster 1.
+		removeTaintsFromMemberClusters(taintClusterNames)
+		ensureCRPAndRelatedResourcesDeletion(crpName, allMemberClusters)
+	})
+})
