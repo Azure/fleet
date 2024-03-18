@@ -1,20 +1,14 @@
 # Use property-based scheduling with Fleet on AKS clusters: Preview
 
-This document explains how to try out the latest Fleet feature, property-based scheduling,
-using AKS clusters.
+This document explains how to try out the latest Fleet feature, property-based scheduling, using AKS clusters.
 
-The new property-based scheduling experience adds great flexibility to
-Fleet's existing resource propagation capabilities, granting users the ability to pick
-clusters based on their resource usage, costs, node counts, and potentially many more
-features. This can be very helpful in a number of common multi-cluster administration
-scenarios, including:
+The new property-based scheduling experience adds great flexibility to Fleet's existing resource propagation capabilities, granting users the ability to pick clusters based on their resource usage, costs, node counts, and potentially many more features. This can be very helpful in many common multi-cluster administration scenarios, including:
 
 * eliminating hotspots in a multi-cluster environment; and
 * balancing resource usage (CPU, memory, etc.) across clusters; and
 * making full use of the cost benefits that platforms such as Azure Kubernetes Service provide.
 
-This new experience will be publicly available soon; if you would like an early preview of
-the experience using AKS clusters of your own, follow the instructions below.
+This new experience will be publicly available soon; if you would like an early preview of the experience using AKS clusters of your own, follow the instructions below.
 
 ## Before you begin
 
@@ -28,22 +22,16 @@ To complete this tutorial, you will need:
     * [The Kubernetes CLI](https://kubernetes.io/docs/tasks/tools/)
     * [Helm](https://helm.sh), the Kubernetes package manager
 
-    If you are having trouble setting up the tools in your local environment, you may consider using
-    [the Bash environment on Azure Cloud Shell](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart),
-    which has the tools pre-installed and is available via web browser.
+    If you are having trouble setting up the tools in your local environment, you may consider using [the Bash environment on Azure Cloud Shell](https://learn.microsoft.com/en-us/azure/cloud-shell/quickstart), which has the tools pre-installed and is available via web browser.
 
-This tutorial assumes that you have a basic understanding of how Kubernetes works; for a review
-of core Kubernetes concepts, see [Core Kubernetes Concepts for AKS](https://learn.microsoft.com/en-us/azure/aks/concepts-clusters-workloads). 
+This tutorial assumes that you have a basic understanding of how Kubernetes works; for a review of core Kubernetes concepts, see [Core Kubernetes Concepts for AKS](https://learn.microsoft.com/en-us/azure/aks/concepts-clusters-workloads). 
 
 ## Set up AKS clusters
 
 In this tutorial, you will set up a Fleet using 4 AKS clusters, in which:
 
-* one will be configured as the Fleet hub cluster; this cluster serves as the management portal
-for the fleet, through which you may perform a number of multi-cluster management tasks, such
-as resource propagation.
-* the other three clusters will be configured as the Fleet member cluster; these clusters
-can run your workloads under the coordination of the Fleet hub cluster.
+* one will be configured as the Fleet hub cluster; this cluster serves as the management portal for the fleet, through which you may perform many multi-cluster management tasks, such as resource propagation.
+* the other three clusters will be configured as the Fleet member cluster; these clusters can run your workloads under the coordination of the Fleet hub cluster.
 
 First, create the hub cluster using the commands below:
 
@@ -101,8 +89,7 @@ az aks create -n $MEMBER_CLUSTER_3 \
 
 It may take a few moments before the command completes.
 
-After all the commands have completed successfully, use the command below to retrieve their
-credentials for later access:
+After all the commands have completed successfully, use the command below to retrieve their credentials for later access:
 
 ```sh
 az aks get-credentials -n $HUB_CLUSTER -g $RG --admin
@@ -113,11 +100,9 @@ az aks get-credentials -n $MEMBER_CLUSTER_3 -g $RG --admin
 
 ## Deploy Fleet
 
-To set up Fleet using the clusters you just created, you will need to install Fleet hub and
-member agents on the respective clusters.
+To set up Fleet using the clusters you just created, you will need to install Fleet hub and member agents on the respective clusters.
 
-First, clone the Fleet source code repository, which contains the Helm charts used for Fleet
-agent installation:
+First, clone the Fleet source code repository, which contains the Helm charts used for Fleet agent installation:
 
 ```sh
 git clone https://github.com/Azure/fleet.git
@@ -144,19 +129,15 @@ helm install hub-agent charts/hub-agent/ \
     --set enableV1Beta1APIs=true
 ```
 
-It will take a few moments to complete the installation. After the command returns, verify that the
-Fleet hub agent is up and running with this command:
+It will take a few moments to complete the installation. After the command returns, verify that the Fleet hub agent is up and running with this command:
 
 ```sh
 kubectl get pods -n fleet-system
 ```
 
-You should see all pods in the ready state. Note that the hub agent may take a few seconds
-to get ready after the installation.
+You should see all pods in the ready state. Note that the hub agent may take a few seconds to get ready after the installation.
 
-Next, install the Fleet member agents in the Fleet member clusters. The member agent needs
-their credentials set up in the hub cluster so that they can access the hub cluster; see the
-commands below for details.
+Next, install the Fleet member agents in the Fleet member clusters. The member agent needs their credentials set up in the hub cluster so that they can access the hub cluster; see the commands below for details.
 
 ```sh
 # Retrieve the hub cluster API server address.
@@ -213,15 +194,13 @@ do
 done
 ```
 
-After completing the commands, pick a cluster and verify that the member agent pod is up
-and running:
+After completing the commands, pick a cluster and verify that the member agent pod is up and running:
 
 ```sh
 kubectl get pods -n fleet-system
 ```
 
-You should see that the agent is in the ready state. Repeat the command on the other
-two member clusters; agents there should be ready as well.
+You should see that the agent is in the ready state. Repeat the command on the other two member clusters; agents there should be ready as well.
 
 At last, join the member clusters to the hub cluster:
 
@@ -245,8 +224,7 @@ EOF
 done
 ```
 
-You can verify the membership status using the command below; after a few moments all
-member clusters should have their `JOINED` status set to `True`:
+You can verify the membership status using the command below; after a few moments all member clusters should have their `JOINED` status set to `True`:
 
 ```sh
 kubectl get membercluster
@@ -254,8 +232,7 @@ kubectl get membercluster
 
 ## Experience the new property-based scheduling features
 
-The new property-based scheduling experience features an AKS property provider, which exposes a
-number of cluster properties about each joined AKS cluster; the properties include:
+The new property-based scheduling experience features an AKS property provider, which exposes many cluster properties about each joined AKS cluster; the properties include:
 
 * the average cost of 1 CPU core in a cluster
 * the average cost of 1 GB of memory in a cluster
@@ -280,13 +257,9 @@ watch -n 10 -d 'kubectl get membercluster -o custom-columns=Name:metadata.name,N
 
 ### Schedule workloads with the properties
 
-The exposed properties not only give additional insights about your clusters but can also be used
-for scheduling purposes. Fleet comes with an API, `ClusterResourcePlacement`, which allows
-you to place resources on the most appropriate clusters with the help of cluster affinity terms and
-topology spread constraints.
+The exposed properties not only give additional insights about your clusters but can also be used for scheduling purposes. Fleet comes with an API, `ClusterResourcePlacement`, which allows you to place resources on the most appropriate clusters with the help of cluster affinity terms and topology spread constraints.
 
-For example, if you would like to place an application in the cluster with the cheapest CPU cost,
-the configuration below can be helpful:
+For example, if you would like to place an application in the cluster with the cheapest CPU cost, the configuration below can be helpful:
 
 ```sh
 # Create a namespace and deployment on the hub cluster, which serves as the resource template.
@@ -356,9 +329,15 @@ spec:
 EOF
 ```
 
-You may also use this API to select clusters based on other conditions, such as the amount
-of available memory; the example below places the resources on a cluster only if it has at
-least 2 GB of available memory:
+After the CRP object is created, verify that the resource placement is completed with the command
+
+```sh
+kubectl get crp work-1
+```
+
+You should see that the manifests are scheduled and applied successfully. Switch to the cluster with the lowest cost, and you will find the namespace and deployment there, distributed by the Fleet hub cluster.
+
+You may also use this API to select clusters based on other conditions, such as the amount of available memory; the example below places the resources on a cluster only if it has at least 2 GB of available memory:
 
 ```sh
 # Similarly, create a namespace and deployment as placement template.
@@ -430,15 +409,11 @@ spec:
 EOF
 ```
 
-The CRP API enables great flexibility; you can set up different requirements/preferences in combination,
-such as finding all clusters with at least 5 nodes and 10 available CPU cores, or 4 of all the
-clusters with the cheapest memory cost and the most amount of available memory. [Read Fleet's
-API definition to learn more](https://github.com/Azure/fleet/blob/main/apis/placement/v1beta1/clusterresourceplacement_types.go).
+The CRP API enables great flexibility; you can set up different requirements/preferences in combination, such as finding all clusters with at least 5 nodes and 10 available CPU cores, or 4 of all the clusters with the cheapest memory cost and the most amount of available memory. [Read Fleet's API definition to learn more](https://github.com/Azure/fleet/blob/main/apis/placement/v1beta1/clusterresourceplacement_types.go).
 
 ## Clean things up
 
-To remove the resources you have created in this tutorial, simply delete the resource group
-with the command below:
+To remove the resources you have created in this tutorial, simply delete the resource group with the command below:
 
 ```sh
 az group delete -n $RG
@@ -448,9 +423,6 @@ All the AKS clusters in the resource group will be removed.
 
 ## What's next
 
-Congratulations! You have completed the tutorial; we hope that you will appreciate the
-property-based scheduling capabilities we have added to Fleet. If you have any questions,
-feedback, or concerns, please raise [a GitHub issue](https://github.com/Azure/fleet/issues).
+Congratulations! You have completed the tutorial; we hope that you will appreciate the property-based scheduling capabilities we have added to Fleet. If you have any questions, feedback, or concerns, please raise [a GitHub issue](https://github.com/Azure/fleet/issues).
 
-To learn more about Fleet, see the [Fleet GitHub repository](https://github.com/Azure/fleet) and
-the [Fleet documentation](https://github.com/Azure/fleet/tree/main/docs).
+To learn more about Fleet, see the [Fleet GitHub repository](https://github.com/Azure/fleet) and the [Fleet documentation](https://github.com/Azure/fleet/tree/main/docs).
