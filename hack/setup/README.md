@@ -54,6 +54,7 @@ If you would like to add a prometheus server to access metrics, run the followin
 1.  Check the status of the service. Copy the `EXTERNAL-IP` of the `fleet-prometheus-endpoint` from the services for later.
     ````
     kubectl get service -n fleet-system
+    ````
 
 2. Install the Prometheus community Helm Chart
    ```
