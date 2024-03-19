@@ -426,7 +426,7 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 			for i := 0; i < maxQueuedPropertyCollectionCalls; i++ {
 				// Invoke the method with no expectations for returns.
 				go func() {
-					r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc) //nolint:all
+					r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc.DeepCopy()) //nolint:all
 					// Linting is disabled for this line as we are discarding the returned error intentionally.
 				}()
 			}
