@@ -267,18 +267,22 @@ func cleanupInvalidClusters() {
 				Name: name,
 			},
 		}
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj)).To(Succeed(), "Failed to get member cluster object")
-		mcObj.Finalizers = []string{}
-		Expect(hubClient.Update(ctx, mcObj)).To(Succeed(), "Failed to update member cluster object")
+		Eventually(func() error {
+			err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj)
+			if err != nil {
+				return err
+			}
+			mcObj.Finalizers = []string{}
+			return hubClient.Update(ctx, mcObj)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster object")
 		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !apierrors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
-
 			return nil
-		})
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if member cluster is deleted, member cluster still exists")
 	}
 }
 
@@ -657,4 +661,76 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 			return hubClient.Status().Update(ctx, &work)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	}
+}
+
+func buildTaints(memberClusterNames []string) []clusterv1beta1.Taint {
+	var taint map[string]string
+	taints := make([]clusterv1beta1.Taint, len(memberClusterNames))
+	for i, name := range memberClusterNames {
+		taint = taintTolerationMap[name]
+		taints[i].Key = regionLabelName
+		taints[i].Value = taint[regionLabelName]
+		taints[i].Effect = corev1.TaintEffectNoSchedule
+	}
+	return taints
+}
+
+func buildTolerations(memberClusterNames []string) []placementv1beta1.Toleration {
+	var toleration map[string]string
+	tolerations := make([]placementv1beta1.Toleration, len(memberClusterNames))
+	for i, name := range memberClusterNames {
+		toleration = taintTolerationMap[name]
+		tolerations[i].Key = regionLabelName
+		tolerations[i].Operator = corev1.TolerationOpEqual
+		tolerations[i].Value = toleration[regionLabelName]
+		tolerations[i].Effect = corev1.TaintEffectNoSchedule
+	}
+	return tolerations
+}
+
+func addTaintsToMemberClusters(memberClusterNames []string, taints []clusterv1beta1.Taint) {
+	for i, clusterName := range memberClusterNames {
+		Eventually(func() error {
+			var mc clusterv1beta1.MemberCluster
+			err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.Spec.Taints = []clusterv1beta1.Taint{taints[i]}
+			return hubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add taints to member cluster %s", clusterName)
+	}
+}
+
+func removeTaintsFromMemberClusters(memberClusterNames []string) {
+	for _, clusterName := range memberClusterNames {
+		Eventually(func() error {
+			var mc clusterv1beta1.MemberCluster
+			err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.Spec.Taints = nil
+			return hubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove taints from member cluster %s", clusterName)
+	}
+}
+
+func updateCRPWithTolerations(tolerations []placementv1beta1.Toleration) {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	Eventually(func() error {
+		var crp placementv1beta1.ClusterResourcePlacement
+		err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)
+		if err != nil {
+			return err
+		}
+		if crp.Spec.Policy == nil {
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				Tolerations: tolerations,
+			}
+		} else {
+			crp.Spec.Policy.Tolerations = tolerations
+		}
+		return hubClient.Update(ctx, &crp)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement with tolerations %s", crpName)
 }

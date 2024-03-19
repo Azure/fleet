@@ -90,6 +90,7 @@ var (
 	regionLabelName   = "region"
 	regionLabelValue1 = "east"
 	regionLabelValue2 = "west"
+	regionLabelValue3 = "south"
 	envLabelName      = "env"
 	envLabelValue1    = "prod"
 	envLabelValue2    = "canary"
@@ -106,6 +107,18 @@ var (
 		memberCluster3WestProdName: {
 			regionLabelName: regionLabelValue2,
 			envLabelName:    envLabelValue1,
+		},
+	}
+
+	taintTolerationMap = map[string]map[string]string{
+		memberCluster1EastProdName: {
+			regionLabelName: regionLabelValue1,
+		},
+		memberCluster2EastCanaryName: {
+			regionLabelName: regionLabelValue2,
+		},
+		memberCluster3WestProdName: {
+			regionLabelName: regionLabelValue3,
 		},
 	}
 )
