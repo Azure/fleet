@@ -109,6 +109,11 @@ var _ = Describe("placing resources using a cluster resource placement with no p
 		updateCRPWithTolerations(buildTolerations(taintClusterNames))
 	})
 
+	It("should update cluster resource placement status as expected", func() {
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement status as expected")
+	})
+
 	It("should place resources on the all available member clusters", checkIfPlacedWorkResourcesOnAllMemberClusters)
 
 	AfterAll(func() {
