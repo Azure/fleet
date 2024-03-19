@@ -1,14 +1,19 @@
 # CAN ONLY BE RUN AFTER CREATING NEEDED AKS CLUSTERS AND HUB CLUSTER. This script creates member clusters from
 # AKS Cluster's and joins them onto the hub cluster.
 
-for MC in "$@"; do
+export HUB_CLUSTER=$1
+export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
+export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
+
+for MC in "${@:2}"; do
+
 # Note that Fleet will recognize your cluster with this name once it joins.
 export MEMBER_CLUSTER=${MC}
 export MEMBER_CLUSTER_CONTEXT=${MC}
 
 export SERVICE_ACCOUNT="$MEMBER_CLUSTER-hub-cluster-access"
 
-echo "Switching into hub cluster context..."
+#echo "Switching into hub cluster context..."
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 # The service account can, in theory, be created in any namespace; for simplicity reasons,
 # here you will use the namespace reserved by Fleet installation, `fleet-system`.
@@ -47,10 +52,6 @@ spec:
     heartbeatPeriodSeconds: 60
 EOF
 
-# # Clone the Fleet repository from GitHub (If not done so already and go into directory).
-# git clone https://github.com/Azure/fleet.git
-# cd fleet
-
 # # Install the member agent helm chart on the member cluster.
 
 # The variables below uses the Fleet images kept in the Microsoft Container Registry (MCR),
@@ -59,9 +60,10 @@ EOF
 # You can, however, build the Fleet images of your own; see the repository README for
 # more information.
 echo "Retrieving image..."
-export REGISTRY="${REGISTRY:-mcr.microsoft.com/aks/fleet}"
+export REGISTRY="mcr.microsoft.com/aks/fleet"
 export FLEET_VERSION="${FLEET_VERSION:-$(curl "https://api.github.com/repos/Azure/fleet/tags" | jq -r '.[0].name')}"
-export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_NAME:-member-agent}"
+export MEMBER_AGENT_IMAGE="member-agent"
+export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_NAME:-refresh-token}"
 export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 
 echo "Switching to member cluster context.."

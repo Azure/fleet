@@ -22,24 +22,15 @@ This how-to guide discusses how to create a fleet, specifically:
 > * `cd fleet`
 
 ## Create a hub cluster from an AKS Cluster
-> Note
-> 
->  Make sure you have already created an AKS cluster and have gotten its credentials.
-> Instructions to create an AKS cluster can be found [here](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli).
->
-
 For your convenience, Fleet provides a script that can automate the process of creating a hub cluster. To use script,
 run the commands bellow:
 ```sh
-# Replace the value of HUB_CLUSTER_CONTEXT with the name of the kubeconfig context you use for
-# accessing your hub cluster.
-export HUB_CLUSTER_CONTEXT=<YOUR-HUB-CLUSTER-CONTEXT>
-# Replace the value of HUB_CLUSTER_ADDRESS with the address of your hub cluster API server located in the kubeconfig file.
-export HUB_CLUSTER_ADDRESS=<YOUR-HUB-CLUSTER-ADDRESS>
+# Replace the value of <AZURE-SUBSCRIPTION-ID> with your Azure subscription ID.
+export SUB=<AZURE-SUBSCRIPTION-ID>
 
-# Run the script.
-chmod +x hack/setup/createHubCluster.sh
-./hack/setup/createHubCluster.sh
+# Run the script. Be sure to replace the values of <RESOURCE-GROUP-NAME>, <LOCATION>, and <HUB-CLUSTER-NAME> with those of your own.
+chmod +x hack/Azure/setup/createHubCluster.sh
+./hack/Azure/setup/createHubCluster.sh <RESOURCE-GROUP-NAME> <LOCATION> <HUB-CLUSTER-NAME>
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify that the `hub-agent` has been installed:
@@ -91,12 +82,12 @@ A cluster can join in a hub cluster if:
 For your convenience, Fleet provides a script that can automate the process of joining a cluster
 onto a hub cluster. To use the script, run the commands below after creating needed AKS clusters:
 ```sh
-# Pass in a list of cluster names (separated by a space) as arguments to the script that you would like to 
+# Pass in the hub cluster name and a list of cluster names (separated by a space) as arguments to the script that you would like to 
 # join the fleet as member clusters. Their context will be used to access the cluster.
-# Ex.: ./hack/setup/joinMC.sh member member2 member3 member4
+# Ex.: ./hack/setup/joinMC.sh test-hub member member2 member3 
 # Run the script.
-chmod +x hack/setup/joinMC.sh
-./hack/setup/joinMC.sh <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2>
+chmod +x hack/Azure/setup/joinMC.sh
+./hack/Azure/setup/joinMC.sh <HUB-CLUSTER-NAME> <MEMBER-CLUSTER-NAME-1> <MEMBER-CLUSTER-NAME-2> <MEMBER-CLUSTER-NAME-3> <MEMBER-CLUSTER-NAME-4>
 ```
 
 It may take a few minutes for the script to finish running. Once it is completed, verify
@@ -109,7 +100,7 @@ kubectl get membercluster $MEMBER_CLUSTER
 
 If you see that the cluster is still in an unknown state, it might be that the member cluster
 is still connecting to the hub cluster. Should this state persist for a prolonged
-period, refer to the [Troubleshooting Guide](../../docs/troubleshooting/README.md) for
+period, refer to the [Troubleshooting Guide](../../../docs/troubleshooting/README.md) for
 more information.
 
 ## Adding labels to a member cluster

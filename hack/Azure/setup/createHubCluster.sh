@@ -1,10 +1,24 @@
 # This script creates a Hub CLuster from an AKS Cluster (AKS Cluster and Container Registry must be created beforehand).
+
+export RESOURCE_GROUP=$1
+export LOCATION=$2
+export HUB_CLUSTER=$3
+
+az account set -s ${SUB}
+az group create --name $RESOURCE_GROUP --location $LOCATION
+az aks create --resource-group $RESOURCE_GROUP --name $HUB_CLUSTER --node-count 2
+az aks get-credentials --resource-group $RESOURCE_GROUP --name $HUB_CLUSTER
+
+export HUB_CLUSTER_CONTEXT=$(kubectl config view -o jsonpath="{.contexts[?(@.context.cluster==\"$HUB_CLUSTER\")].name}")
+export HUB_CLUSTER_ADDRESS=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$HUB_CLUSTER\")].cluster.server}")
+
+
 kubectl config use-context $HUB_CLUSTER_CONTEXT
 
-# Build the hub agent image
+# Retrieve the hub agent image
 echo "Retrieving hub-agent image..."
-export REGISTRY="${REGISTRY:-mcr.microsoft.com/aks/fleet}"
-export TAG="${TAG:-$(curl "https://api.github.com/repos/Azure/fleet/tags" | jq -r '.[0].name')}"
+export REGISTRY="mcr.microsoft.com/aks/fleet"
+export TAG=$(curl "https://api.github.com/repos/Azure/fleet/tags" | jq -r '.[0].name')
 export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 
 
