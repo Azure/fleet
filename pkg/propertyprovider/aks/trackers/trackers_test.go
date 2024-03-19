@@ -66,7 +66,8 @@ func (d *dummyPricingProvider) LastUpdated() time.Time {
 }
 
 var (
-	ignoreNodeTrackerFields    = cmpopts.IgnoreFields(NodeTracker{}, "mu", "pricingProvider", "costLastUpdated")
+	ignoreNodeTrackerFields    = cmpopts.IgnoreFields(NodeTracker{}, "mu", "pricingProvider")
+	ignoreCostInfoFields       = cmpopts.IgnoreFields(costInfo{}, "lastUpdated")
 	ignorePodTrackerMutexField = cmpopts.IgnoreFields(PodTracker{}, "mu")
 
 	// This variable should only work with test cases that do not mutate the tracker.
@@ -186,8 +187,6 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("15Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  0.25,
-				perGBMemoryHourlyCost: 0.0625,
 				nodeSetBySKU: map[string]NodeSet{
 					"Standard_1": {
 						"node-1": true,
@@ -195,6 +194,10 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				},
 				skuByNode: map[string]string{
 					"node-1": "Standard_1",
+				},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.25,
+					perGBMemoryHourlyCost: 0.0625,
 				},
 			},
 		},
@@ -297,8 +300,6 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("15Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  1.777,
-				perGBMemoryHourlyCost: 0.444,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -314,6 +315,10 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 					nodeName1: nodeSKU1,
 					nodeName2: nodeSKU2,
 					nodeName3: nodeSKU3,
+				},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  1.777,
+					perGBMemoryHourlyCost: 0.444,
 				},
 			},
 		},
@@ -340,8 +345,6 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  0.5,
-				perGBMemoryHourlyCost: 0.125,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -351,6 +354,10 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 					nodeName1: nodeSKU1,
 				},
 				pricingProvider: &dummyPricingProvider{},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.5,
+					perGBMemoryHourlyCost: 0.125,
+				},
 			},
 			nodes: []*corev1.Node{
 				{
@@ -394,8 +401,6 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  0.5,
-				perGBMemoryHourlyCost: 0.125,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -403,6 +408,10 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				},
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
+				},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.5,
+					perGBMemoryHourlyCost: 0.125,
 				},
 			},
 		},
@@ -429,8 +438,6 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  0.5,
-				perGBMemoryHourlyCost: 0.125,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -440,6 +447,10 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 					nodeName1: nodeSKU1,
 				},
 				pricingProvider: &dummyPricingProvider{},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.5,
+					perGBMemoryHourlyCost: 0.125,
+				},
 			},
 			nodes: []*corev1.Node{
 				{
@@ -483,8 +494,6 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("11Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  0.333,
-				perGBMemoryHourlyCost: 0.0833,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -492,6 +501,10 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				},
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
+				},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.333,
+					perGBMemoryHourlyCost: 0.0833,
 				},
 			},
 		},
@@ -507,6 +520,8 @@ func TestNodeTrackerAddOrUpdateNode(t *testing.T) {
 				tc.nt, tc.wantNT,
 				cmp.AllowUnexported(NodeTracker{}),
 				ignoreNodeTrackerFields,
+				ignoreCostInfoFields,
+				cmp.AllowUnexported(costInfo{}),
 				cmpopts.EquateApprox(0.0, 0.01),
 				cmpopts.EquateErrors(),
 			); diff != "" {
@@ -578,6 +593,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 					nodeName3: nodeSKU1,
 				},
 				pricingProvider: &dummyPricingProvider{},
+				costs:           &costInfo{},
 			},
 			nodeNames: []string{nodeName2},
 			wantNT: &NodeTracker{
@@ -609,8 +625,6 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 						corev1.ResourceMemory: resource.MustParse("1.8Gi"),
 					},
 				},
-				perCPUCoreHourlyCost:  0.285,
-				perGBMemoryHourlyCost: 0.111,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {
 						nodeName1: true,
@@ -621,6 +635,10 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
 					nodeName3: nodeSKU1,
+				},
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.285,
+					perGBMemoryHourlyCost: 0.111,
 				},
 			},
 		},
@@ -680,6 +698,7 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 					nodeName2: nodeSKU2,
 					nodeName3: nodeSKU3,
 				},
+				costs: &costInfo{},
 			},
 			nodeNames: []string{
 				nodeName1,
@@ -697,13 +716,15 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				},
 				capacityByNode:    map[string]corev1.ResourceList{},
 				allocatableByNode: map[string]corev1.ResourceList{},
-				costErr:           cmpopts.AnyError,
 				nodeSetBySKU: map[string]NodeSet{
 					nodeSKU1: {},
 					nodeSKU2: {},
 					nodeSKU3: {},
 				},
 				skuByNode: map[string]string{},
+				costs: &costInfo{
+					err: cmpopts.AnyError,
+				},
 			},
 		},
 		{
@@ -738,8 +759,10 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
 				},
-				perCPUCoreHourlyCost:  0.5,
-				perGBMemoryHourlyCost: 0.125,
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.5,
+					perGBMemoryHourlyCost: 0.125,
+				},
 			},
 			nodeNames: []string{nodeName2},
 			wantNT: &NodeTracker{
@@ -772,8 +795,10 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				skuByNode: map[string]string{
 					nodeName1: nodeSKU1,
 				},
-				perCPUCoreHourlyCost:  0.5,
-				perGBMemoryHourlyCost: 0.125,
+				costs: &costInfo{
+					perCPUCoreHourlyCost:  0.5,
+					perGBMemoryHourlyCost: 0.125,
+				},
 			},
 		},
 	}
@@ -788,6 +813,8 @@ func TestNodeTrackerRemoveNode(t *testing.T) {
 				tc.nt, tc.wantNT,
 				cmp.AllowUnexported(NodeTracker{}),
 				ignoreNodeTrackerFields,
+				ignoreCostInfoFields,
+				cmp.AllowUnexported(costInfo{}),
 				cmpopts.EquateApprox(0.0, 0.01),
 				cmpopts.EquateErrors(),
 			); diff != "" {

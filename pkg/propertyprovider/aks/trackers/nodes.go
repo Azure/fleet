@@ -35,27 +35,38 @@ var supportedResourceNames []corev1.ResourceName = []corev1.ResourceName{
 // NodeSet is a set of nodes.
 type NodeSet map[string]bool
 
+// costInfo is a struct that keeps cost related information.
+type costInfo struct {
+	// perCPUCoreHourlyCost and perGBMemoryHourlyCost are the average per CPU core and per GB memory
+	// costs in the cluster, respectively.
+	//
+	// For reference,
+	// per CPU core hourly cost = total hourly costs of all nodes / total CPU capacity; and
+	// per GB of memory hourly cost = total hourly costs of all nodes / total memory capacity.
+	perCPUCoreHourlyCost  float64
+	perGBMemoryHourlyCost float64
+
+	// lastUpdated is the timestamp when the per-resource-unit costs above are last calculated.
+	lastUpdated time.Time
+	// err tracks any error that occurs during cost calculation.
+	err error
+}
+
 // NodeTracker helps track specific stats about nodes in a Kubernetes cluster, e.g., its count.
 type NodeTracker struct {
 	// totalCapacity and totalAllocatable are the total capacity and allocatable capacity
 	// of the cluster, respectively.
 	totalCapacity    corev1.ResourceList
 	totalAllocatable corev1.ResourceList
-	// perCPUCoreHourlyCost and perGBMemoryHourlyCost are the average per CPU core and per GB memory
-	// costs in the cluster, respectively.
-	perCPUCoreHourlyCost  float64
-	perGBMemoryHourlyCost float64
+
+	// costs tracks the cost-related information about the cluster.
+	costs *costInfo
 
 	// Below are a list of maps that tracks information about individual nodes in the cluster.
 	capacityByNode    map[string]corev1.ResourceList
 	allocatableByNode map[string]corev1.ResourceList
 	nodeSetBySKU      map[string]NodeSet
 	skuByNode         map[string]string
-
-	// costLastUpdated is the timestamp when the per-resource-unit costs are last calculated.
-	costLastUpdated time.Time
-	// costErr tracks any error that occurs during cost calculation.
-	costErr error
 
 	// pricingProvider facilitates cost calculation.
 	pricingProvider PricingProvider
@@ -74,7 +85,9 @@ func NewNodeTracker(pp PricingProvider) *NodeTracker {
 		nodeSetBySKU:      make(map[string]NodeSet),
 		skuByNode:         make(map[string]string),
 		pricingProvider:   pp,
-		costErr:           fmt.Errorf("costs have not been calculated yet"),
+		costs: &costInfo{
+			err: fmt.Errorf("costs have not been calculated yet"),
+		},
 	}
 
 	for _, rn := range supportedResourceNames {
@@ -117,6 +130,7 @@ func (nt *NodeTracker) calculateCosts() {
 	// TO-DO (chenyu1): add a cap on the total hourly rate to ensure safe division.
 
 	// Calculate the per CPU core and per GB memory costs.
+	ci := nt.costs
 
 	// Cast the CPU resource quantity into a float64 value. Precision might suffer a bit of loss,
 	// but it should be mostly acceptable in the case of cost calculation.
@@ -130,15 +144,15 @@ func (nt *NodeTracker) calculateCosts() {
 		// This will stop all reportings of cost related properties until the issue is resolved.
 		costErr := fmt.Errorf("failed to calculate costs: cpu quantity is of an invalid value: %v", cpuCores)
 		klog.Error(costErr)
-		nt.costErr = costErr
+		ci.err = costErr
 
 		// Reset the cost data.
-		nt.perCPUCoreHourlyCost = 0.0
-		nt.perGBMemoryHourlyCost = 0.0
+		ci.perCPUCoreHourlyCost = 0.0
+		ci.perGBMemoryHourlyCost = 0.0
 		return
 	}
-	nt.perCPUCoreHourlyCost = totalHourlyRate / cpuCores
-	klog.V(4).InfoS("Calculated per CPU core hourly cost", "perCPUCoreHourlyCost", nt.perCPUCoreHourlyCost)
+	ci.perCPUCoreHourlyCost = totalHourlyRate / cpuCores
+	klog.V(4).InfoS("Calculated per CPU core hourly cost", "perCPUCoreHourlyCost", ci.perCPUCoreHourlyCost)
 
 	// Cast the memory resource quantitu into a float64 value. Precision might suffer a bit of
 	// loss, but it should be mostly acceptable in the case of cost calculation.
@@ -151,18 +165,18 @@ func (nt *NodeTracker) calculateCosts() {
 		// This will stop all reportings of cost related properties until the issue is resolved.
 		costErr := fmt.Errorf("failed to calculate costs: memory quantity is of an invalid value: %v", memoryBytes)
 		klog.Error(costErr)
-		nt.costErr = costErr
+		ci.err = costErr
 
 		// Reset the cost data.
-		nt.perCPUCoreHourlyCost = 0.0
-		nt.perGBMemoryHourlyCost = 0.0
+		ci.perCPUCoreHourlyCost = 0.0
+		ci.perGBMemoryHourlyCost = 0.0
 		return
 	}
-	nt.perGBMemoryHourlyCost = totalHourlyRate / (memoryBytes / (1024.0 * 1024.0 * 1024.0))
-	klog.V(4).InfoS("Calculated per GB memory hourly cost", "perGBMemoryHourlyCost", nt.perGBMemoryHourlyCost)
+	ci.perGBMemoryHourlyCost = totalHourlyRate / (memoryBytes / (1024.0 * 1024.0 * 1024.0))
+	klog.V(4).InfoS("Calculated per GB memory hourly cost", "perGBMemoryHourlyCost", ci.perGBMemoryHourlyCost)
 
-	nt.costLastUpdated = time.Now()
-	nt.costErr = nil
+	ci.lastUpdated = time.Now()
+	ci.err = nil
 }
 
 // trackSKU tracks the SKU of a node. It returns true if a recalculation of costs is needed.
@@ -440,8 +454,9 @@ func (nt *NodeTracker) TotalAllocatable() corev1.ResourceList {
 func (nt *NodeTracker) Costs() (perCPUCoreCost, perGBMemoryCost float64, err error) {
 	nt.mu.Lock()
 	defer nt.mu.Unlock()
-	if nt.costLastUpdated.Before(nt.pricingProvider.LastUpdated()) {
+
+	if nt.costs.lastUpdated.Before(nt.pricingProvider.LastUpdated()) {
 		nt.calculateCosts()
 	}
-	return nt.perCPUCoreHourlyCost, nt.perGBMemoryHourlyCost, nt.costErr
+	return nt.costs.perCPUCoreHourlyCost, nt.costs.perGBMemoryHourlyCost, nt.costs.err
 }
