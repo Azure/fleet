@@ -246,10 +246,27 @@ func waitForResourcesToCleanUp(allBindings []*fleetv1beta1.ClusterResourceBindin
 	return false, nil
 }
 
-// toBeUpdatedBinding is the stale binding which should be rolled out.
+// toBeUpdatedBinding is the stale binding which will be updated by the rollout controller based on the rollout strategy.
+// If the binding is selected, it will be updated to the desired state.
+// Otherwise, its status will be updated.
 type toBeUpdatedBinding struct {
 	currentBinding *fleetv1beta1.ClusterResourceBinding
-	desiredBinding *fleetv1beta1.ClusterResourceBinding // only valid for scheduled or bounded binding
+	desiredBinding *fleetv1beta1.ClusterResourceBinding // only valid for scheduled or bound binding
+}
+
+func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding, crp *fleetv1beta1.ClusterResourcePlacement,
+	latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, cro []string, ro []fleetv1beta1.NamespacedName) toBeUpdatedBinding {
+	desiredBinding := binding.DeepCopy()
+	desiredBinding.Spec.State = fleetv1beta1.BindingStateBound
+	desiredBinding.Spec.ResourceSnapshotName = latestResourceSnapshot.Name
+	// update the resource apply strategy when controller rolls out the new changes
+	desiredBinding.Spec.ApplyStrategy = crp.Spec.Strategy.ApplyStrategy
+	desiredBinding.Spec.ClusterResourceOverrideSnapshots = cro
+	desiredBinding.Spec.ResourceOverrideSnapshots = ro
+	return toBeUpdatedBinding{
+		currentBinding: binding,
+		desiredBinding: desiredBinding,
+	}
 }
 
 // pickBindingsToRoll go through all bindings associated with a CRP and returns the bindings that are ready to be updated
@@ -298,23 +315,6 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	crpKObj := klog.KObj(crp)
 	for idx := range allBindings {
 		binding := allBindings[idx]
-		desiredBinding := binding.DeepCopy()
-		desiredBinding.Spec.State = fleetv1beta1.BindingStateBound
-		desiredBinding.Spec.ResourceSnapshotName = latestResourceSnapshot.Name
-		// update the resource apply strategy when controller rolls out the new changes
-		desiredBinding.Spec.ApplyStrategy = crp.Spec.Strategy.ApplyStrategy
-
-		// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
-		cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
-		if err != nil {
-			return nil, nil, false, err
-		}
-		desiredBinding.Spec.ClusterResourceOverrideSnapshots = cro
-		desiredBinding.Spec.ResourceOverrideSnapshots = ro
-		updateInfo := toBeUpdatedBinding{
-			currentBinding: binding,
-			desiredBinding: desiredBinding,
-		}
 		bindingKObj := klog.KObj(binding)
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
@@ -342,8 +342,14 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		case fleetv1beta1.BindingStateScheduled:
 			// the scheduler has picked a cluster for this binding
 			schedulerTargetedBinds = append(schedulerTargetedBinds, binding)
+
 			// this binding has not been bound yet, so it is an update candidate
-			boundingCandidates = append(boundingCandidates, updateInfo)
+			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
+			if err != nil {
+				return nil, nil, false, err
+			}
+			boundingCandidates = append(boundingCandidates, createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro))
 
 		case fleetv1beta1.BindingStateBound:
 			bindingFailed := false
@@ -359,8 +365,16 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
+
+			// pickFromResourceMatchedOverridesForTargetCluster always returns the ordered list of the overrides.
+			cro, ro, err := r.pickFromResourceMatchedOverridesForTargetCluster(ctx, binding, matchedCROs, matchedROs)
+			if err != nil {
+				return nil, nil, false, err
+			}
+
 			// The binding needs update if it's not pointing to the latest resource resourceBinding or the overrides.
 			if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name || !equality.Semantic.DeepEqual(binding.Spec.ClusterResourceOverrideSnapshots, cro) || !equality.Semantic.DeepEqual(binding.Spec.ResourceOverrideSnapshots, ro) {
+				updateInfo := createUpdateInfo(binding, crp, latestResourceSnapshot, cro, ro)
 				if bindingFailed {
 					// the binding has been applied but failed to apply, we can safely update it to latest resources without affecting max unavailable count
 					applyFailedUpdateCandidates = append(applyFailedUpdateCandidates, updateInfo)
@@ -414,9 +428,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		"lowerBoundAvailableBindings", lowerBoundAvailableNumber, "maxNumberOfBindingsToRemove", maxNumberToRemove)
 
 	// we can still update the bindings that are failed to apply already regardless of the maxNumberToRemove
-	for i := 0; i < len(applyFailedUpdateCandidates); i++ {
-		toBeUpdatedBindingList = append(toBeUpdatedBindingList, applyFailedUpdateCandidates[i])
-	}
+	toBeUpdatedBindingList = append(toBeUpdatedBindingList, applyFailedUpdateCandidates...)
+
 	// updateCandidateUnselectedIndex stores the last index of the updateCandidate which are not selected to be updated.
 	// The rolloutStarted condition of these elements from this index should be updated.
 	updateCandidateUnselectedIndex := 0
@@ -448,6 +461,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 	// boundingCandidatesUnselectedIndex stores the last index of the boundingCandidates which are not selected to be updated.
 	// The rolloutStarted condition of these elements from this index should be updated.
 	boundingCandidatesUnselectedIndex := 0
+	// TODO re-slice the array
 	for ; boundingCandidatesUnselectedIndex < maxNumberToAdd && boundingCandidatesUnselectedIndex < len(boundingCandidates); boundingCandidatesUnselectedIndex++ {
 		toBeUpdatedBindingList = append(toBeUpdatedBindingList, boundingCandidates[boundingCandidatesUnselectedIndex])
 	}
@@ -651,7 +665,7 @@ func (r *Reconciler) updateBindingStatus(ctx context.Context, binding *fleetv1be
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: binding.Generation,
 			Reason:             condition.RolloutStartedReason,
-			Message:            "Updated the resource to the latest one and starting rolling out",
+			Message:            "Detected the new changes on the resources and started the rollout process",
 		}
 	}
 	binding.SetConditions(cond)
