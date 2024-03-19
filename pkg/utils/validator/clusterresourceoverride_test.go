@@ -1,24 +1,23 @@
 package validator
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"testing"
 
+	admissionv1 "k8s.io/api/admission/v1"
+
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 func TestValidateResourceSelectedByName(t *testing.T) {
 	tests := map[string]struct {
-		name       string
 		cro        fleetv1alpha1.ClusterResourceOverride
-		want       bool
-		wantErrMsg string
+		wantErrMsg error
 	}{
 		// TODO: Add test cases.
 		"resource selected by label selector": {
@@ -38,8 +37,7 @@ func TestValidateResourceSelectedByName(t *testing.T) {
 					},
 				},
 			},
-			want:       false,
-			wantErrMsg: "resource is not being selected by resource name",
+			wantErrMsg: fmt.Errorf("label selector is not supported for resource selection"),
 		},
 		"resource selected by name": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
@@ -49,19 +47,18 @@ func TestValidateResourceSelectedByName(t *testing.T) {
 							Group:   "group",
 							Version: "v1",
 							Kind:    "Kind",
-							Name:    "valid-name",
+							Name:    "",
 						},
 					},
 				},
 			},
-			want:       true,
-			wantErrMsg: "",
+			wantErrMsg: fmt.Errorf("resource name is required for resource selection"),
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ValidateResourceSelectedByName(tt.cro); got != tt.want {
-				t.Errorf("ValidateResourceSelectedByName() = %v, want %v", got, tt.want)
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			if got := ValidateResourceSelectedByName(tt.cro); errors.Is(got, tt.wantErrMsg) {
+				t.Errorf("ValidateResourceSelectedByName() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}
@@ -70,75 +67,58 @@ func TestValidateResourceSelectedByName(t *testing.T) {
 func TestValidateCROLimit(t *testing.T) {
 	tests := map[string]struct {
 		overrideCount int
+		operation     admissionv1.Operation
 		want          bool
-		wantErrMsg    string
 	}{
 		// TODO: Add test cases.
-		"no overrides": {
+		"create override with zero overrides": {
 			overrideCount: 0,
+			operation:     admissionv1.Create,
 			want:          true,
-			wantErrMsg:    "",
 		},
-		"less than 100 overrides": {
-			overrideCount: 75,
+		"create override with less than 100 overrides": {
+			overrideCount: 99,
+			operation:     admissionv1.Create,
 			want:          true,
-			wantErrMsg:    "",
 		},
-		"exactly 100 overrides": {
+		"create override with exactly 100 overrides": {
 			overrideCount: 100,
+			operation:     admissionv1.Create,
 			want:          false,
-			wantErrMsg:    "",
+		},
+		"update override with exactly 100 overrides": {
+			overrideCount: 100,
+			operation:     admissionv1.Update,
+			want:          true,
 		},
 	}
 
 	// Run the tests
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Create a fake client for testing
-			scheme := runtime.NewScheme()
-			if err := fleetv1alpha1.AddToScheme(scheme); err != nil {
-				t.Fatalf("failed to add scheme: %v", err)
-			}
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			ctx := context.Background()
-
-			// Add overrides to the fake client for testing
+			croList := &fleetv1alpha1.ClusterResourceOverrideList{}
 			for i := 0; i < tt.overrideCount; i++ {
-				cro := &fleetv1alpha1.ClusterResourceOverride{
+				cro := fleetv1alpha1.ClusterResourceOverride{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("override-%d", i),
 					},
 				}
-				if err := fakeClient.Create(ctx, cro); err != nil {
-					t.Fatalf("failed to create override: %v", err)
-				}
+				croList.Items = append(croList.Items, cro)
 			}
-			if got := ValidateCROLimit(ctx, fakeClient); got != tt.want {
-				t.Errorf("ValidateCROLimit() = %v, want %v", got, tt.want)
+			if got := ValidateClusterResourceOverrideLimit(tt.operation, croList); got != tt.want {
+				t.Errorf("ValidateClusterResourceOverrideLimit() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
 func TestValidateCROResourceLimit(t *testing.T) {
-	// Create a fake client for testing
-	scheme := runtime.NewScheme()
-	if err := fleetv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
-	}
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	ctx := context.Background()
-
-	selectors := []fleetv1beta1.ClusterResourceSelector{{Name: "foo"}, {Name: "bar"}, {Name: "baz"}}
-
 	tests := map[string]struct {
-		cro           fleetv1alpha1.ClusterResourceOverride
-		overrideCount int
-		want          bool
-		wantErrMsg    string
+		cro  fleetv1alpha1.ClusterResourceOverride
+		want bool
 	}{
 		// TODO: Add test cases.
-		"create one cluster resource override for already exist for resource ": {
+		"create one cluster resource override for resource foo": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
@@ -148,15 +128,14 @@ func TestValidateCROResourceLimit(t *testing.T) {
 					},
 				},
 			},
-			want:       false,
-			wantErrMsg: "only 1 cluster resource override per resource can be created",
+			want: true,
 		},
-		"one override, multiple selectors for existing overrides": {
+		"one override, multiple selectors for 1 existing cluster override": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 						{
-							Name: "example",
+							Name: "example-1",
 						},
 						{
 							Name: "bar",
@@ -164,45 +143,44 @@ func TestValidateCROResourceLimit(t *testing.T) {
 					},
 				},
 			},
-			want:       false,
-			wantErrMsg: "only 1 cluster resource override per resource can be created",
+			want: false,
 		},
-		"one override multiple resource overrides": {
+		"one override, multiple selectors for existing cluster overrides": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
 						{
-							Name: "example",
+							Name: "example-1",
 						},
 						{
-							Name: "example-1",
+							Name: "example-2",
 						},
 					},
 				},
 			},
-			want:       true,
-			wantErrMsg: "",
+			want: false,
 		},
 	}
-	// Add overrides to the fake client for testing
-	for i := 0; i < 5; i++ {
-		cro := &fleetv1alpha1.ClusterResourceOverride{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("override-%d", i),
-			},
-			Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-				ClusterResourceSelectors: selectors,
-			},
-		}
-		if err := fakeClient.Create(ctx, cro); err != nil {
-			t.Fatalf("failed to create override: %v", err)
-		}
-	}
-
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			if got := ValidateCROResourceLimit(ctx, fakeClient, tt.cro); got != tt.want {
-				t.Errorf("ValidateCROResourceLimit() = %v, want %v", got, tt.want)
+			croList := &fleetv1alpha1.ClusterResourceOverrideList{}
+			for i := 0; i < 3; i++ {
+				cro := fleetv1alpha1.ClusterResourceOverride{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("override-%d", i),
+					},
+					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+							{
+								Name: fmt.Sprintf("example-%d", i),
+							},
+						},
+					},
+				}
+				croList.Items = append(croList.Items, cro)
+			}
+			if got := ValidateClusterResourceOverrideResourceLimit(tt.cro, croList); got != tt.want {
+				t.Errorf("ValidateClusterResourceOverrideResourceLimit() = %v, want %v", got, tt.want)
 			}
 		})
 	}
