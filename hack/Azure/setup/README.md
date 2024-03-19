@@ -94,7 +94,6 @@ It may take a few minutes for the script to finish running. Once it is completed
 that the cluster has joined successfully with the command below:
 
 ```sh
-kubectl config use-context $HUB_CLUSTER_CONTEXT
 kubectl get membercluster $MEMBER_CLUSTER
 ```
 
