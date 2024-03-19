@@ -37,7 +37,7 @@ helm install hub-agent charts/hub-agent/ \
   --set resources.limits.cpu=4 \
   --set resources.limits.memory=4Gi \
   --set concurrentClusterPlacementSyncs=10 \
-  --set ConcurrentRolloutSyncs=10 \
+  --set ConcurrentRolloutSyncs=20 \
   --set hubAPIQPS=100 \
   --set hubAPIBurst=1000 \
   --set logFileMaxSize=100000000 \
