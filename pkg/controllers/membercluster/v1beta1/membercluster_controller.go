@@ -455,7 +455,7 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 	// Copy additional conditions.
 	for idx := range imc.Status.Conditions {
 		cond := imc.Status.Conditions[idx]
-		cond.ObservedGeneration = imc.GetGeneration()
+		cond.ObservedGeneration = mc.GetGeneration()
 		meta.SetStatusCondition(&mc.Status.Conditions, cond)
 	}
 	// Copy the cluster properties.
