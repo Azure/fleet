@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -225,38 +226,20 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// Capture resource usage changes.
 			oldCapacity := oldCluster.Status.ResourceUsage.Capacity
 			newCapacity := newCluster.Status.ResourceUsage.Capacity
-			if len(oldCapacity) != len(newCapacity) {
+			if !equality.Semantic.DeepEqual(oldCapacity, newCapacity) {
 				return true
-			}
-			for oldK, oldV := range oldCapacity {
-				newV, ok := newCapacity[oldK]
-				if !ok || !oldV.Equal(newV) {
-					return true
-				}
 			}
 
 			oldAllocatable := oldCluster.Status.ResourceUsage.Allocatable
 			newAllocatable := newCluster.Status.ResourceUsage.Allocatable
-			if len(oldAllocatable) != len(newAllocatable) {
+			if !equality.Semantic.DeepEqual(oldAllocatable, newAllocatable) {
 				return true
-			}
-			for oldK, oldV := range oldAllocatable {
-				newV, ok := newAllocatable[oldK]
-				if !ok || !oldV.Equal(newV) {
-					return true
-				}
 			}
 
 			oldAvailable := oldCluster.Status.ResourceUsage.Available
 			newAvailable := newCluster.Status.ResourceUsage.Available
-			if len(oldAvailable) != len(newAvailable) {
+			if !equality.Semantic.DeepEqual(oldAvailable, newAvailable) {
 				return true
-			}
-			for oldK, oldV := range oldAvailable {
-				newV, ok := newAvailable[oldK]
-				if !ok || !oldV.Equal(newV) {
-					return true
-				}
 			}
 
 			// Check the resource placement eligibility for the old and new cluster object.
