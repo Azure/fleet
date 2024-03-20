@@ -65,8 +65,8 @@ type Options struct {
 	HubBurst int
 	// ResyncPeriod is the base frequency the informers are resynced. Defaults is 5 minutes.
 	ResyncPeriod metav1.Duration
-	// ConcurrentClusterPlacementSyncs is the number of cluster `placement` reconcilers that are allowed to sync concurrently.
-	ConcurrentClusterPlacementSyncs int
+	// MaxConcurrentClusterPlacement is the number of cluster placement that are allowed to run concurrently.
+	MaxConcurrentClusterPlacement int
 	// ConcurrentResourceChangeSyncs is the number of resource change reconcilers that are allowed to sync concurrently.
 	ConcurrentResourceChangeSyncs int
 	// MaxFleetSizeSupported is the max number of member clusters this fleet supports.
@@ -90,10 +90,10 @@ func NewOptions() *Options {
 			ResourceNamespace: utils.FleetSystemNamespace,
 			ResourceName:      "136224848560.hub.fleet.azure.com",
 		},
-		ConcurrentClusterPlacementSyncs: 1,
-		ConcurrentResourceChangeSyncs:   1,
-		MaxFleetSizeSupported:           100,
-		EnableV1Alpha1APIs:              true,
+		MaxConcurrentClusterPlacement: 10,
+		ConcurrentResourceChangeSyncs: 1,
+		MaxFleetSizeSupported:         100,
+		EnableV1Alpha1APIs:            false,
 	}
 }
 
@@ -128,11 +128,11 @@ func (o *Options) AddFlags(flags *flag.FlagSet) {
 	flags.Float64Var(&o.HubQPS, "hub-api-qps", 20.0, "QPS to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
 	flags.IntVar(&o.HubBurst, "hub-api-burst", 100, "Burst to use while talking with fleet-apiserver. Doesn't cover events and node heartbeat apis which rate limiting is controlled by a different set of flags.")
 	flags.DurationVar(&o.ResyncPeriod.Duration, "resync-period", 300*time.Second, "Base frequency the informers are resynced.")
-	flags.IntVar(&o.ConcurrentClusterPlacementSyncs, "concurrent-cluster-placement-syncs", 1, "The number of cluster placement reconcilers to run concurrently.")
+	flags.IntVar(&o.MaxConcurrentClusterPlacement, "max-concurrent-cluster-placement", 10, "The max number of concurrent cluster placement to run concurrently.")
 	flags.IntVar(&o.ConcurrentResourceChangeSyncs, "concurrent-resource-change-syncs", 20, "The number of resourceChange reconcilers that are allowed to run concurrently.")
 	flags.IntVar(&o.MaxFleetSizeSupported, "max-fleet-size", 100, "The max number of member clusters supported in this fleet")
-	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
-	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
+	flags.BoolVar(&o.EnableV1Alpha1APIs, "enable-v1alpha1-apis", false, "If set, the agents will watch for the v1alpha1 APIs.")
+	flags.BoolVar(&o.EnableV1Beta1APIs, "enable-v1beta1-apis", true, "If set, the agents will watch for the v1beta1 APIs.")
 
 	o.RateLimiterOpts.AddFlags(flags)
 }

@@ -32,5 +32,12 @@ tolerations: []
 
 affinity: {}
 
-enableV1Alpha1APIs: true
-enableV1Beta1APIs: false
+enableV1Alpha1APIs: false
+enableV1Beta1APIs: true
+
+hubAPIQPS: 20
+hubAPIBurst: 100
+MaxConcurrentClusterPlacement: 10
+ConcurrentResourceChangeSyncs: 20
+logFileMaxSize: 1000000
+MaxFleetSizeSupported: 100
