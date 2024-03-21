@@ -206,6 +206,9 @@ func (nt *NodeTracker) trackSKU(node *corev1.Node) bool {
 		// Untrack the old SKU.
 		nt.skuByNode[node.Name] = sku
 		delete(nt.nodeSetBySKU[registeredSKU], node.Name)
+		if len(nt.nodeSetBySKU[registeredSKU]) == 0 {
+			delete(nt.nodeSetBySKU, registeredSKU)
+		}
 		ns := nt.nodeSetBySKU[sku]
 		if ns == nil {
 			ns = make(NodeSet)
@@ -350,6 +353,9 @@ func (nt *NodeTracker) untrackSKU(nodeName string) {
 	if found {
 		delete(nt.skuByNode, nodeName)
 		delete(nt.nodeSetBySKU[sku], nodeName)
+		if len(nt.nodeSetBySKU[sku]) == 0 {
+			delete(nt.nodeSetBySKU, sku)
+		}
 		klog.V(4).InfoS("Untracked the node's SKU", "sku", sku, "node", nodeName)
 	}
 }
