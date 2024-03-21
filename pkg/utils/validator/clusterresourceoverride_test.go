@@ -2,9 +2,9 @@ package validator
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -59,7 +59,7 @@ func TestValidateClusterResourceSelectors(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: fmt.Errorf("resource is required for resource selection %+v",
+			wantErrMsg: fmt.Errorf("resource name is required for resource selection %+v",
 				fleetv1beta1.ClusterResourceSelector{
 					Group:   "group",
 					Version: "v1",
