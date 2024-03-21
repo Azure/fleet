@@ -34,6 +34,7 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
@@ -122,7 +123,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshot", klog.KObj(latestResourceSnapshot))
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
-	fleetv1beta1.SetDefaultsClusterResourcePlacement(&crp)
+	defaulter.SetDefaultsClusterResourcePlacement(&crp)
 	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
 	if err = validator.ValidateClusterResourcePlacement(&crp); err != nil {
 		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)

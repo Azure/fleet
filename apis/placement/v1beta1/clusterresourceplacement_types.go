@@ -32,6 +32,9 @@ const (
 
 	// DefaultUnavailablePeriodSeconds is the default period of time we consider a newly applied workload as unavailable.
 	DefaultUnavailablePeriodSeconds = 60
+
+	// DefaultMaxSkewValue is the default degree to which resources may be unevenly distributed.
+	DefaultMaxSkewValue = 1
 )
 
 // +genclient
