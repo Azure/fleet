@@ -85,6 +85,13 @@ const (
 
 // ResourceBindingStatus represents the current status of a ClusterResourceBinding.
 type ResourceBindingStatus struct {
+	// +kubebuilder:validation:MaxItems=100
+
+	// FailedPlacements is a list of all the resources failed to be placed to the given cluster or the resource is unavailable.
+	// Note that we only include 100 failed resource placements even if there are more than 100.
+	// +optional
+	FailedPlacements []FailedResourcePlacement `json:"failedPlacements,omitempty"`
+
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	// +listType=map
