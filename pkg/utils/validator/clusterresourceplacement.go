@@ -340,7 +340,7 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 	// server-side apply strategy type is only valid for server-side apply strategy type
 	if rolloutStrategy.ApplyStrategy != nil {
 		if rolloutStrategy.ApplyStrategy.Type != placementv1beta1.ApplyStrategyTypeServerSideApply && rolloutStrategy.ApplyStrategy.ServerSideApplyConfig != nil {
-			allErr = append(allErr, errors.New("serverSideApplyConfig is only valid for server-side apply strategy type"))
+			allErr = append(allErr, errors.New("serverSideApplyConfig is only valid for ServerSideApply strategy type"))
 		}
 	}
 

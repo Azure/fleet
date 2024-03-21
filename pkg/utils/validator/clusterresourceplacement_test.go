@@ -360,7 +360,7 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "serverSideApplyConfig is only valid for server-side apply strategy type",
+			wantErrMsg: "serverSideApplyConfig is only valid for ServerSideApply strategy type",
 		},
 	}
 
