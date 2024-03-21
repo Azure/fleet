@@ -1,8 +1,8 @@
 package validator
 
 import (
-	"errors"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -12,12 +12,11 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
-func TestValidateResourceSelectedByName(t *testing.T) {
+func TestValidateClusterResourceSelectors(t *testing.T) {
 	tests := map[string]struct {
 		cro        fleetv1alpha1.ClusterResourceOverride
 		wantErrMsg error
 	}{
-		// TODO: Add test cases.
 		"resource selected by label selector": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
@@ -35,9 +34,19 @@ func TestValidateResourceSelectedByName(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: fmt.Errorf("label selector is not supported for resource selection"),
+			wantErrMsg: fmt.Errorf("label selector is not supported for resource selection %+v",
+				fleetv1beta1.ClusterResourceSelector{
+					Group:   "group",
+					Version: "v1",
+					Kind:    "Kind",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"key": "value",
+						},
+					},
+				}),
 		},
-		"resource selected by name": {
+		"resource selected by empty name": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
@@ -50,14 +59,45 @@ func TestValidateResourceSelectedByName(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: fmt.Errorf("resource name is required for resource selection"),
+			wantErrMsg: fmt.Errorf("resource is required for resource selection %+v",
+				fleetv1beta1.ClusterResourceSelector{
+					Group:   "group",
+					Version: "v1",
+					Kind:    "Kind",
+					Name:    "",
+				}),
+		},
+		"duplicate resources selected": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
+						{
+							Group:   "group",
+							Version: "v1",
+							Kind:    "Kind",
+							Name:    "example",
+						},
+						{
+							Group:   "group",
+							Version: "v1",
+							Kind:    "Kind",
+							Name:    "example",
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Errorf("duplicate selector %+v",
+				fleetv1beta1.ClusterResourceSelector{
+					Group:   "group",
+					Version: "v1",
+					Kind:    "Kind",
+					Name:    "example",
+				}),
 		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			if got := validateResourceSelected(tt.cro); errors.Is(got, tt.wantErrMsg) {
-				t.Errorf("validateResourceSelected() = %v, want %v", got, tt.wantErrMsg)
-			}
+			assert.Equal(t, tt.wantErrMsg, validateClusterResourceSelectors(tt.cro), "validateClusterResourceSelectors() should return the expected error message for Testcase: %s", testName)
 		})
 	}
 }
@@ -68,7 +108,6 @@ func TestValidateClusterResourceOverrideLimit(t *testing.T) {
 		operation     admissionv1.Operation
 		want          bool
 	}{
-		// TODO: Add test cases.
 		"create override with zero overrides": {
 			overrideCount: 0,
 			operation:     admissionv1.Create,
@@ -90,10 +129,8 @@ func TestValidateClusterResourceOverrideLimit(t *testing.T) {
 			want:          true,
 		},
 	}
-
-	// Run the tests
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
 			croList := &fleetv1alpha1.ClusterResourceOverrideList{}
 			for i := 0; i < tt.overrideCount; i++ {
 				cro := fleetv1alpha1.ClusterResourceOverride{
@@ -113,10 +150,8 @@ func TestValidateClusterResourceOverrideLimit(t *testing.T) {
 func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 	tests := map[string]struct {
 		cro        fleetv1alpha1.ClusterResourceOverride
-		operation  admissionv1.Operation
 		wantErrMsg error
 	}{
-		// TODO: Add test cases.
 		"create one cluster resource override for resource foo": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -133,7 +168,6 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 					},
 				},
 			},
-			operation:  admissionv1.Create,
 			wantErrMsg: nil,
 		},
 		"one override, multiple selectors for 1 existing cluster override": {
@@ -158,7 +192,7 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: fmt.Errorf("the resource %v has been selected by both %v and %v, which are not supported", "example-0", "override2", "override-0"),
+			wantErrMsg: fmt.Errorf("the resource %v has been selected by both %v and %v, which is not supported", "example-0", "override2", "override-0"),
 		},
 		"one override, multiple selectors for existing cluster overrides": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
@@ -176,7 +210,6 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 					},
 				},
 			},
-			operation:  admissionv1.Update,
 			wantErrMsg: nil,
 		},
 	}
@@ -199,15 +232,9 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 		}
 		croList.Items = append(croList.Items, cro)
 	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			if got := ValidateClusterResourceOverrideResourceLimit(tt.operation, tt.cro, &croList); got != nil {
-				if errors.Is(got, tt.wantErrMsg) {
-					t.Errorf("ValidateClusterResourceOverrideResourceLimit() = %v, want %v", got, tt.wantErrMsg)
-				}
-			} else if tt.wantErrMsg != nil {
-				t.Errorf("ValidateClusterResourceOverrideResourceLimit() = %v, want %v", got, tt.wantErrMsg)
-			}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			assert.Equal(t, tt.wantErrMsg, ValidateClusterResourceOverrideResourceLimit(tt.cro, &croList), "ValidateClusterResourceOverrideResourceLimit() should return the expected error message for Testcase: %s", testName)
 		})
 	}
 }
