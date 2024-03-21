@@ -2,9 +2,9 @@ package validator
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -97,7 +97,9 @@ func TestValidateClusterResourceSelectors(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			assert.Equal(t, tt.wantErrMsg, validateClusterResourceSelectors(tt.cro), "validateClusterResourceSelectors() should return the expected error message for Testcase: %s", testName)
+			if got := validateClusterResourceSelectors(tt.cro); !reflect.DeepEqual(tt.wantErrMsg, got) {
+				t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
+			}
 		})
 	}
 }
@@ -213,7 +215,7 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 			wantErrMsg: nil,
 		},
 	}
-	croList := fleetv1alpha1.ClusterResourceOverrideList{}
+	croList := &fleetv1alpha1.ClusterResourceOverrideList{}
 	for i := 0; i < 2; i++ {
 		cro := fleetv1alpha1.ClusterResourceOverride{
 			ObjectMeta: metav1.ObjectMeta{
@@ -234,7 +236,9 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			assert.Equal(t, tt.wantErrMsg, ValidateClusterResourceOverrideResourceLimit(tt.cro, &croList), "ValidateClusterResourceOverrideResourceLimit() should return the expected error message for Testcase: %s", testName)
+			if got := ValidateClusterResourceOverrideResourceLimit(tt.cro, croList); !reflect.DeepEqual(tt.wantErrMsg, got) {
+				t.Errorf("ValidateClusterResourceOverrideResourceLimit() = %v, want %v", got, tt.wantErrMsg)
+			}
 		})
 	}
 }
