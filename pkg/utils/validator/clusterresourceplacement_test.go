@@ -349,6 +349,19 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "maxSurge must be greater than or equal to 0, got `-10`",
 		},
+		"invalid rollout strategy - ServerSideApplyConfig not valid when type is not serversideApply": {
+			strategy: placementv1beta1.RolloutStrategy{
+				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
+				ApplyStrategy: &placementv1beta1.ApplyStrategy{
+					Type: placementv1beta1.ApplyStrategyTypeFailIfExists,
+					ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{
+						ForceConflicts: false,
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "serverSideApplyConfig is only valid for ServerSideApply strategy type",
+		},
 	}
 
 	for testName, testCase := range tests {

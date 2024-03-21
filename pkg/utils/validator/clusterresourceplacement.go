@@ -7,6 +7,7 @@ Licensed under the MIT license.
 package validator
 
 import (
+	"errors"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -333,6 +334,13 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 			if value < 0 {
 				allErr = append(allErr, fmt.Errorf("maxSurge must be greater than or equal to 0, got `%+v`", rolloutStrategy.RollingUpdate.MaxSurge))
 			}
+		}
+	}
+
+	// server-side apply strategy type is only valid for server-side apply strategy type
+	if rolloutStrategy.ApplyStrategy != nil {
+		if rolloutStrategy.ApplyStrategy.Type != placementv1beta1.ApplyStrategyTypeServerSideApply && rolloutStrategy.ApplyStrategy.ServerSideApplyConfig != nil {
+			allErr = append(allErr, errors.New("serverSideApplyConfig is only valid for ServerSideApply strategy type"))
 		}
 	}
 
