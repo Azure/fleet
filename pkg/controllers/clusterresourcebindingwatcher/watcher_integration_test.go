@@ -22,7 +22,7 @@ const (
 	testResourceSnapshotName         = "test-rs"
 	testSchedulingPolicySnapshotName = "test-sps"
 	testTargetCluster                = "test-cluster"
-	testReason                       = "test-reason"
+	testReason                       = "testReason"
 
 	eventuallyTimeout    = time.Second * 10
 	consistentlyDuration = time.Second * 10
