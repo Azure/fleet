@@ -1,3 +1,9 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+// Package clusterresourcebindingwatcher features a controller to watch the clusterResourceBinding changes.
 package clusterresourcebindingwatcher
 
 import (
