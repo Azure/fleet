@@ -1,3 +1,9 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the MIT license.
+*/
+
+// Package clusterresourceoverride provides a validating webhook for the ClusterResourceOverride custom resource in the fleet API group.
 package clusterresourceoverride
 
 import (
@@ -50,25 +56,24 @@ func (v *clusterResourceOverrideValidator) Handle(ctx context.Context, req admis
 	}
 
 	// Check if the override count limit has been reached, if there are at most 100 cluster resource overrides
-	if req.Operation == admissionv1.Create || req.Operation == admissionv1.Update {
-		if !validator.ValidateClusterResourceOverrideLimit(req.Operation, croList) {
-			return admission.Denied("Cluster Resource Override limit has been reached. At most 100 cluster resources can be created.")
-		}
+	if req.Operation == admissionv1.Create && len(croList.Items) >= 100 {
+		klog.Errorf("clusterResourceOverride limit has been reached. At most 100 cluster resources can be created.")
+		return admission.Denied("clusterResourceOverride limit has been reached. At most 100 cluster resources can be created.")
 	}
 
 	if err := validator.ValidateClusterResourceOverride(cro, croList); err != nil {
-		klog.V(2).ErrorS(err, "Cluster Resource Override has invalid fields, request is denied", "operation", req.Operation)
+		klog.V(2).ErrorS(err, "clusterResourceOverride has invalid fields, request is denied", "operation", req.Operation)
 		return admission.Denied(err.Error())
 	}
-	return admission.Allowed("Cluster Resource Override has valid fields")
+	return admission.Allowed("clusterResourceOverride has valid fields")
 }
 
 // listClusterResourceOverrideList returns a list of cluster resource overrides.
 func listClusterResourceOverrideList(ctx context.Context, client client.Client) (*fleetv1alpha1.ClusterResourceOverrideList, error) {
 	croList := &fleetv1alpha1.ClusterResourceOverrideList{}
 	if err := client.List(ctx, croList); err != nil {
-		klog.ErrorS(err, "Failed to list cluster resource overrides when validating")
-		return nil, fmt.Errorf("failed to list cluster resource overrides, please retry the request: %w", err)
+		klog.ErrorS(err, "Failed to list clusterResourceOverrides when validating")
+		return nil, fmt.Errorf("failed to list clusterResourceOverrides, please retry the request: %w", err)
 	}
 	return croList, nil
 }
