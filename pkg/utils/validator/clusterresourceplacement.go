@@ -9,6 +9,9 @@ package validator
 import (
 	"errors"
 	"fmt"
+	"reflect"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -286,6 +289,16 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
 		allErr = append(allErr, validateLabelSelector(clusterSelectorTerm.LabelSelector, "cluster selector"))
+
+		// Affinity is RequiredDuringSchedulingIgnoredDuringExecution, so check that PropertySorter is nil.
+		if clusterSelectorTerm.PropertySorter != nil {
+			allErr = append(allErr, fmt.Errorf("PropertySorter is not allowed for RequiredDuringSchedulingIgnoredDuringExecution affinity"))
+		}
+
+		// Affinity is RequiredDuringSchedulingIgnoredDuringExecution, so validate PropertySelector if exists
+		if clusterSelectorTerm.PropertySelector != nil {
+			allErr = append(allErr, validatePropertySelector(clusterSelectorTerm.PropertySelector))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -295,6 +308,11 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 	for _, preferredClusterSelector := range preferredClusterSelectors {
 		// API server validation on object occurs before webhook is triggered hence not validating weight.
 		allErr = append(allErr, validateLabelSelector(preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
+
+		// Affinity is PreferredDuringSchedulingIgnoredDuringExecution, so check that PropertySelector is nil.
+		if preferredClusterSelector.Preference.PropertySelector != nil {
+			allErr = append(allErr, fmt.Errorf("PropertySelector is not allowed for PreferredDuringSchedulingIgnoredDuringExecution affinity"))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -344,5 +362,46 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 		}
 	}
 
+	return apiErrors.NewAggregate(allErr)
+}
+
+// validatePropertySelector validates the property selector
+func validatePropertySelector(propertySelector *placementv1beta1.PropertySelector) error {
+	if reflect.TypeOf(propertySelector.MatchExpressions).Kind() == reflect.Slice && reflect.TypeOf(propertySelector.MatchExpressions).Elem().Name() == "PropertySelectorRequirement" {
+		// selector.MatchExpressions is of type []PropertySelectorRequirement
+		return validatePropertySelectorRequirements(propertySelector.MatchExpressions)
+	}
+	// MatchExpression is not of type []PropertySelectorRequirement
+	return fmt.Errorf("invalid MatchExpressions type %T, should be []PropertySelectorRequirement", reflect.TypeOf(propertySelector.MatchExpressions))
+}
+
+func validatePropertySelectorRequirements(propertySelectorRequirement []placementv1beta1.PropertySelectorRequirement) error {
+	allErr := make([]error, 0)
+	for _, propertySelectorRequirement := range propertySelectorRequirement {
+		// Validate the property name is a Kubernetes label name
+		errs := validation.IsQualifiedName(propertySelectorRequirement.Name)
+		if errs != nil {
+			allErr = append(allErr, fmt.Errorf("invalid property name %s: %v", propertySelectorRequirement.Name, errs))
+		}
+
+		validOperators := map[placementv1beta1.PropertySelectorOperator]bool{
+			placementv1beta1.PropertySelectorGreaterThan:          true,
+			placementv1beta1.PropertySelectorGreaterThanOrEqualTo: true,
+			placementv1beta1.PropertySelectorLessThan:             true,
+			placementv1beta1.PropertySelectorLessThanOrEqualTo:    true,
+			placementv1beta1.PropertySelectorEqualTo:              true,
+			placementv1beta1.PropertySelectorNotEqualTo:           true}
+
+		if validOperators[propertySelectorRequirement.Operator] && len(propertySelectorRequirement.Values) != 1 {
+			allErr = append(allErr, fmt.Errorf("operator %s requires exactly one value, got %d", propertySelectorRequirement.Operator, len(propertySelectorRequirement.Values)))
+			return apiErrors.NewAggregate(allErr)
+		}
+
+		for _, value := range propertySelectorRequirement.Values {
+			if _, err := resource.ParseQuantity(value); err != nil {
+				allErr = append(allErr, fmt.Errorf("invalid value %s for property %s: %w", value, propertySelectorRequirement.Name, err))
+			}
+		}
+	}
 	return apiErrors.NewAggregate(allErr)
 }
