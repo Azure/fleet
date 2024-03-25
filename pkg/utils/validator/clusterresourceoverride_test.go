@@ -5,10 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apiErrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/errors"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -125,7 +123,7 @@ func TestValidateClusterResourceSelectors(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: apiErrors.NewAggregate([]error{fmt.Errorf("label selector is not supported for resource selection %+v", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}}),
+			wantErrMsg: errors.NewAggregate([]error{fmt.Errorf("label selector is not supported for resource selection %+v", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}}),
 				fmt.Errorf("resource name is required for resource selection %+v", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: ""}),
 				fmt.Errorf("resource selector %+v already exists, and must be unique", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: "example"})}),
 		},
@@ -133,51 +131,12 @@ func TestValidateClusterResourceSelectors(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			got := validateClusterResourceSelectors(tt.cro)
-			if got != nil {
-				if !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-					t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
-				}
-			} else if !cmp.Equal(tt.wantErrMsg, got) {
-				t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
+			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
+				t.Fatalf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
 			}
-		})
-	}
-}
 
-func TestValidateClusterResourceOverrideLimit(t *testing.T) {
-	tests := map[string]struct {
-		overrideCount int
-		operation     admissionv1.Operation
-		want          bool
-	}{
-		"create override with zero overrides": {
-			overrideCount: 0,
-			operation:     admissionv1.Create,
-			want:          true,
-		},
-		"create override with less than 100 overrides": {
-			overrideCount: 99,
-			operation:     admissionv1.Create,
-			want:          true,
-		},
-		"create override with exactly 100 overrides": {
-			overrideCount: 100,
-			operation:     admissionv1.Create,
-			want:          false,
-		},
-		"update override with exactly 100 overrides": {
-			overrideCount: 100,
-			operation:     admissionv1.Update,
-			want:          true,
-		},
-	}
-	for testName, tt := range tests {
-		t.Run(testName, func(t *testing.T) {
-			croList := &fleetv1alpha1.ClusterResourceOverrideList{
-				Items: make([]fleetv1alpha1.ClusterResourceOverride, tt.overrideCount),
-			}
-			if got := validateClusterResourceOverrideLimit(tt.operation, croList); !cmp.Equal(tt.want, got) {
-				t.Errorf("validateClusterResourceOverrideLimit() = %v, want %v", got, tt.want)
+			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
+				t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}
@@ -294,13 +253,13 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 				}
 				croList.Items = append(croList.Items, cro)
 			}
-			got := ValidateClusterResourceOverrideResourceLimit(tt.cro, croList)
-			if got != nil {
-				if !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-					t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
-				}
-			} else if !cmp.Equal(tt.wantErrMsg, got) {
-				t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
+			got := validateClusterResourceOverrideResourceLimit(tt.cro, croList)
+			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
+				t.Fatalf("validateClusterResourceOverrideResourceLimit() = %v, want %v", got, tt.wantErrMsg)
+			}
+
+			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
+				t.Errorf("validateClusterResourceOverrideResourceLimit() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}
@@ -423,12 +382,12 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			got := ValidateClusterResourceOverride(tt.cro, tt.croList)
-			if got != nil {
-				if !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-					t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
-				}
-			} else if !cmp.Equal(tt.wantErrMsg, got) {
-				t.Errorf("validateClusterResourceSelectors() = %v, want %v", got, tt.wantErrMsg)
+			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
+				t.Fatalf("ValidateClusterResourceOverride() = %v, want %v", got, tt.wantErrMsg)
+			}
+
+			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
+				t.Errorf("ValidateClusterResourceOverride() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}

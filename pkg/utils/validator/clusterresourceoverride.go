@@ -13,7 +13,6 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-	admissionv1 "k8s.io/api/admission/v1"
 )
 
 // ValidateClusterResourceOverride validates cluster resource override fields and returns error.
@@ -25,7 +24,7 @@ func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, 
 	}
 
 	// Check if the override count limit for the resources has been reached
-	return ValidateClusterResourceOverrideResourceLimit(cro, croList)
+	return validateClusterResourceOverrideResourceLimit(cro, croList)
 }
 
 // validateClusterResourceSelectors checks if override is selecting resource by name.
@@ -51,26 +50,12 @@ func validateClusterResourceSelectors(cro fleetv1alpha1.ClusterResourceOverride)
 	return errors.NewAggregate(allErr)
 }
 
-// validateClusterResourceOverrideLimit checks if there are at most 100 cluster resource overrides.
-func validateClusterResourceOverrideLimit(operation admissionv1.Operation, croList *fleetv1alpha1.ClusterResourceOverrideList) bool {
-	// Check if croList is nil or empty, no need to check for resource limit
-	if croList == nil || len(croList.Items) == 0 {
-		return true
-	}
-	// Check if the override count limit has been reached
-	if operation == admissionv1.Create {
-		return len(croList.Items) < 100
-	}
-	return len(croList.Items) <= 100
-}
-
-// ValidateClusterResourceOverrideResourceLimit checks if there is only 1 cluster resource override per resource,
+// validateClusterResourceOverrideResourceLimit checks if there is only 1 cluster resource override per resource,
 // assuming the resource will be selected by the name only.
-func ValidateClusterResourceOverrideResourceLimit(cro fleetv1alpha1.ClusterResourceOverride, croList *fleetv1alpha1.ClusterResourceOverrideList) error {
+func validateClusterResourceOverrideResourceLimit(cro fleetv1alpha1.ClusterResourceOverride, croList *fleetv1alpha1.ClusterResourceOverrideList) error {
 	// Check if croList is nil or empty, no need to check for resource limit
 	if croList == nil || len(croList.Items) == 0 {
 		return nil
-
 	}
 	overrideMap := make(map[fleetv1beta1.ClusterResourceSelector]string)
 	// Add overrides and its selectors to the map
