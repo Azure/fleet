@@ -44,8 +44,6 @@ var _ = Describe("Work Status Reconciler", func() {
 	var cm, cm2 *corev1.ConfigMap
 	var rns corev1.Namespace
 
-	workNamespace := testWorkNamespace
-
 	BeforeEach(func() {
 		resourceNamespace = utilrand.String(5)
 		rns = corev1.Namespace{
@@ -53,8 +51,7 @@ var _ = Describe("Work Status Reconciler", func() {
 				Name: resourceNamespace,
 			},
 		}
-		err := k8sClient.Create(context.Background(), &rns)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(k8sClient.Create(context.Background(), &rns)).Should(Succeed(), "Failed to create the resource namespace")
 
 		// Create the Work object with some type of Manifest resource.
 		cm = &corev1.ConfigMap{
@@ -88,7 +85,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		work = &fleetv1beta1.Work{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "work-" + utilrand.String(5),
-				Namespace: workNamespace,
+				Namespace: testWorkNamespace,
 			},
 			Spec: fleetv1beta1.WorkSpec{
 				Workload: fleetv1beta1.WorkloadTemplate{
@@ -116,7 +113,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		Expect(k8sClient.Create(context.Background(), work)).ToNot(HaveOccurred())
 
 		By("Make sure that the work is applied")
-		currentWork := waitForWorkToApply(work.Name, workNamespace)
+		currentWork := waitForWorkToApply(work.Name, testWorkNamespace)
 		var appliedWork fleetv1beta1.AppliedWork
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
@@ -174,14 +171,14 @@ var _ = Describe("Work Status Reconciler", func() {
 		}, timeout, interval).Should(BeTrue())
 
 		By("Remove configMap 2 from the work")
-		currentWork := waitForWorkToApply(work.Name, workNamespace)
+		currentWork := waitForWorkToApply(work.Name, testWorkNamespace)
 		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: cm},
 			},
 		}
 		Expect(k8sClient.Update(context.Background(), currentWork)).Should(Succeed())
-		currentWork = waitForWorkToApply(work.Name, workNamespace)
+		currentWork = waitForWorkToApply(work.Name, testWorkNamespace)
 		Expect(len(currentWork.Status.ManifestConditions)).Should(Equal(1))
 
 		By("Verify that configMap 2 is removed from the appliedWork")
@@ -197,14 +194,14 @@ var _ = Describe("Work Status Reconciler", func() {
 		}, timeout, interval).Should(BeTrue())
 
 		By("Remove configMap 2 from the work2")
-		currentWork = waitForWorkToApply(work2.Name, workNamespace)
+		currentWork = waitForWorkToApply(work2.Name, testWorkNamespace)
 		currentWork.Spec.Workload.Manifests = []fleetv1beta1.Manifest{
 			{
 				RawExtension: runtime.RawExtension{Object: cm},
 			},
 		}
 		Expect(k8sClient.Update(context.Background(), currentWork)).Should(Succeed())
-		currentWork = waitForWorkToApply(work.Name, workNamespace)
+		currentWork = waitForWorkToApply(work.Name, testWorkNamespace)
 		Expect(len(currentWork.Status.ManifestConditions)).Should(Equal(1))
 
 		By("Verify that the resource is removed from the appliedWork")
@@ -225,7 +222,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		Expect(k8sClient.Create(context.Background(), work)).ToNot(HaveOccurred())
 
 		By("Make sure that the work is applied")
-		currentWork := waitForWorkToApply(work.Name, workNamespace)
+		currentWork := waitForWorkToApply(work.Name, testWorkNamespace)
 		var appliedWork fleetv1beta1.AppliedWork
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))
@@ -238,7 +235,7 @@ var _ = Describe("Work Status Reconciler", func() {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "broadcastjob-" + utilrand.String(5),
-				Namespace: workNamespace,
+				Namespace: testWorkNamespace,
 			},
 			Spec: kruisev1alpha1.BroadcastJobSpec{
 				Paused: true,
@@ -274,7 +271,7 @@ var _ = Describe("Work Status Reconciler", func() {
 		Expect(k8sClient.Create(context.Background(), work)).ToNot(HaveOccurred())
 
 		By("Make sure that the work is applied")
-		currentWork := waitForWorkToApply(work.Name, workNamespace)
+		currentWork := waitForWorkToApply(work.Name, testWorkNamespace)
 		var appliedWork fleetv1beta1.AppliedWork
 		Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: work.Name}, &appliedWork)).Should(Succeed())
 		Expect(len(appliedWork.Status.AppliedResources)).Should(Equal(2))

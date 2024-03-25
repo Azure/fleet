@@ -7,7 +7,6 @@ package work
 
 import (
 	"context"
-	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,8 +20,8 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
-// FailIfExistsApplier applies the manifest to the cluster and fails if the resource already exists.
-type FailIfExistsApplier struct {
+// ClientSideApplier applies the manifest to the cluster and fails if the resource already exists.
+type ClientSideApplier struct {
 	HubClient          client.Client
 	WorkNamespace      string
 	SpokeDynamicClient dynamic.Interface
@@ -31,7 +30,7 @@ type FailIfExistsApplier struct {
 // ApplyUnstructured determines if an unstructured manifest object can & should be applied. It first validates
 // the size of the last modified annotation of the manifest, it removes the annotation if the size crosses the annotation size threshold
 // and then creates/updates the resource on the cluster using server side apply instead of three-way merge patch.
-func (applier *FailIfExistsApplier) ApplyUnstructured(ctx context.Context, applyStrategy *fleetv1beta1.ApplyStrategy, gvr schema.GroupVersionResource, manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, ApplyAction, error) {
+func (applier *ClientSideApplier) ApplyUnstructured(ctx context.Context, applyStrategy *fleetv1beta1.ApplyStrategy, gvr schema.GroupVersionResource, manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, ApplyAction, error) {
 	manifestRef := klog.KObj(manifestObj)
 
 	// compute the hash without taking into consider the last applied annotation
@@ -69,24 +68,11 @@ func (applier *FailIfExistsApplier) ApplyUnstructured(ctx context.Context, apply
 		return nil, errorApplyAction, controller.NewAPIServerError(false, err)
 	}
 
-	conflictedWork, err := findConflictedWork(ctx, applier.HubClient, applier.WorkNamespace, applyStrategy, curObj.GetOwnerReferences())
+	result, err := validateOwnerReference(ctx, applier.HubClient, applier.WorkNamespace, applyStrategy, curObj.GetOwnerReferences())
 	if err != nil {
-		return nil, errorApplyAction, err
-	}
-	if conflictedWork != nil {
-		placement := conflictedWork.Labels[fleetv1beta1.CRPTrackingLabel]
-		err := fmt.Errorf(conflictBetweenPlacementsErrorFormat, placement)
-		klog.ErrorS(err, "Skip applying a manifest managed by another placement but with different apply strategy",
-			"gvr", gvr, "manifest", manifestRef, "applyStrategy", applyStrategy,
-			"conflictedWork", conflictedWork.Name, "conflictedPlacement", placement, "conflictedWorkApplyStrategy", conflictedWork.Spec.ApplyStrategy)
-		return nil, applyConflictBetweenPlacements, controller.NewUserError(err)
-	}
-
-	// check if the existing manifest is managed by the work
-	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
-		err = fmt.Errorf("resource is not managed by the work controller")
-		klog.ErrorS(err, "Skip applying a not managed manifest", "gvr", gvr, "obj", manifestRef)
-		return nil, errorApplyAction, controller.NewExpectedBehaviorError(err)
+		klog.ErrorS(err, "Skip applying a manifest", "result", result,
+			"gvr", gvr, "manifest", manifestRef, "applyStrategy", applyStrategy, "ownerReferences", curObj.GetOwnerReferences())
+		return nil, result, err
 	}
 
 	// We only try to update the object if its spec hash value has changed.
@@ -111,7 +97,7 @@ func (applier *FailIfExistsApplier) ApplyUnstructured(ctx context.Context, apply
 }
 
 // patchCurrentResource uses three-way merge to patch the current resource with the new manifest we get from the work.
-func (applier *FailIfExistsApplier) patchCurrentResource(ctx context.Context, gvr schema.GroupVersionResource,
+func (applier *ClientSideApplier) patchCurrentResource(ctx context.Context, gvr schema.GroupVersionResource,
 	manifestObj, curObj *unstructured.Unstructured) (*unstructured.Unstructured, ApplyAction, error) {
 	manifestRef := klog.KObj(manifestObj)
 	klog.V(2).InfoS("Manifest is modified", "gvr", gvr, "manifest", manifestRef,
@@ -128,7 +114,7 @@ func (applier *FailIfExistsApplier) patchCurrentResource(ctx context.Context, gv
 		klog.ErrorS(err, "Failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
 		return nil, errorApplyAction, controller.NewUnexpectedBehaviorError(err)
 	}
-	// Use client side apply the patch to the member cluster
+	// Use three-way merge (similar to kubectl client side apply) to the patch to the member cluster
 	manifestObj, patchErr := applier.SpokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).
 		Patch(ctx, manifestObj.GetName(), patch.Type(), data, metav1.PatchOptions{FieldManager: workFieldManagerName})
 	if patchErr != nil {

@@ -26,13 +26,14 @@ import (
 
 func TestApplyUnstructured(t *testing.T) {
 	tests := []struct {
-		name            string
-		manifest        *unstructured.Unstructured
-		owners          []metav1.OwnerReference
-		doeExist        bool // return whether the deployment exists
-		works           []placementv1beta1.Work
-		wantApplyAction ApplyAction
-		wantErr         error
+		name             string
+		allowCoOwnership bool
+		manifest         *unstructured.Unstructured
+		owners           []metav1.OwnerReference
+		doeExist         bool // return whether the deployment exists
+		works            []placementv1beta1.Work
+		wantApplyAction  ApplyAction
+		wantErr          error
 	}{
 		{
 			name: "the deployment has a generated name",
@@ -145,7 +146,8 @@ func TestApplyUnstructured(t *testing.T) {
 			wantApplyAction: manifestServerSideAppliedAction,
 		},
 		{
-			name: "the deployment exists and is owned by other non-work resource",
+			name:             "the deployment exists and is owned by other non-work resource (allow co-ownership)",
+			allowCoOwnership: true,
 			manifest: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
@@ -165,6 +167,29 @@ func TestApplyUnstructured(t *testing.T) {
 			},
 			doeExist:        true,
 			wantApplyAction: manifestServerSideAppliedAction,
+		},
+		{
+			name: "the deployment exists and is owned by other non-work resource (disallow co-ownership)",
+			manifest: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"namespace": "test-namespace",
+						"name":      "test",
+					},
+				},
+			},
+			owners: []metav1.OwnerReference{
+				{
+					APIVersion: placementv1beta1.GroupVersion.String(),
+					Kind:       "another-type",
+					Name:       "work1",
+				},
+			},
+			doeExist:        true,
+			wantApplyAction: manifestAlreadyOwnedByOthers,
+			wantErr:         controller.ErrUserError,
 		},
 	}
 	for _, tc := range tests {
@@ -210,6 +235,7 @@ func TestApplyUnstructured(t *testing.T) {
 				ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{
 					ForceConflicts: false,
 				},
+				AllowCoOwnership: tc.allowCoOwnership,
 			}
 			gvr := schema.GroupVersionResource{
 				Group:    "apps",

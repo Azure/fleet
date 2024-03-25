@@ -7,6 +7,7 @@ package work
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -21,10 +22,6 @@ import (
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
-)
-
-var (
-	conflictBetweenPlacementsErrorFormat = "manifest is already managed by placement %s but with different apply strategy or the placement strategy is changed"
 )
 
 // Applier is the interface to apply the resources on the member clusters.
@@ -73,11 +70,36 @@ func findConflictedWork(ctx context.Context, hubClient client.Client, namespace 
 			}
 			return nil, controller.NewAPIServerError(true, err)
 		}
-		// TODO, could be removed once we have the defaulting webhook
+		// TODO, could be removed once we have the defaulting webhook with fail policy.
+		// Make sure these conditions are met before moving
+		// * the defaulting webhook failure policy is configured as "fail".
+		// * user cannot update/delete the webhook.
 		defaulter.SetDefaultsWork(work)
 		if !equality.Semantic.DeepEqual(strategy, work.Spec.ApplyStrategy) {
 			return work, nil
 		}
 	}
 	return nil, nil
+}
+
+func validateOwnerReference(ctx context.Context, hubClient client.Client, namespace string, strategy *fleetv1beta1.ApplyStrategy, ownerRefs []metav1.OwnerReference) (ApplyAction, error) {
+	conflictedWork, err := findConflictedWork(ctx, hubClient, namespace, strategy, ownerRefs)
+	if err != nil {
+		return errorApplyAction, err
+	}
+	if conflictedWork != nil {
+		placement := conflictedWork.Labels[fleetv1beta1.CRPTrackingLabel]
+		err := fmt.Errorf("manifest is already managed by placement %s but with different apply strategy or the placement strategy is changed", placement)
+		klog.ErrorS(err, "Skip applying a manifest managed by another placement but with different apply strategy",
+			"conflictedWork", conflictedWork.Name, "conflictedPlacement", placement, "conflictedWorkApplyStrategy", conflictedWork.Spec.ApplyStrategy)
+		return applyConflictBetweenPlacements, controller.NewUserError(err)
+	}
+
+	// check if the existing manifest is managed by the work
+	if !strategy.AllowCoOwnership && !isManifestManagedByWork(ownerRefs) {
+		err := fmt.Errorf("resource exists and is not managed by the fleet controller")
+		klog.ErrorS(err, "Co-ownership is not allowed", "ownerRefs", ownerRefs)
+		return manifestAlreadyOwnedByOthers, controller.NewUserError(err)
+	}
+	return "", nil
 }

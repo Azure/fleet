@@ -432,7 +432,23 @@ func TestBuildManifestCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionUnknown,
-					Reason: ApplyConflictBetweenPlacementsReason,
+					Reason: ManifestApplyFailedReason,
+				},
+			},
+		},
+		"TestManifestOwnedByOthers": {
+			err:    errors.New("test error"),
+			action: manifestAlreadyOwnedByOthers,
+			want: []metav1.Condition{
+				{
+					Type:   fleetv1beta1.WorkConditionTypeApplied,
+					Status: metav1.ConditionFalse,
+					Reason: ManifestsAlreadyOwnedByOthersReason,
+				},
+				{
+					Type:   fleetv1beta1.WorkConditionTypeAvailable,
+					Status: metav1.ConditionUnknown,
+					Reason: ManifestApplyFailedReason,
 				},
 			},
 		},
@@ -1186,6 +1202,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "Deployment",
 			OwnerReferences: []metav1.OwnerReference{
+				ownerRef,
 				{
 					APIVersion: utilrand.String(10),
 					Kind:       utilrand.String(10),
@@ -1196,7 +1213,8 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 		},
 	}
 	rawTestDeploymentWithDifferentOwner, _ := json.Marshal(testDeploymentWithDifferentOwner)
-	_, diffOwnerDynamicClient, _, err := createObjAndDynamicClient(rawTestDeploymentWithDifferentOwner)
+	//correctObj, correctDynamicClient, correctSpecHash, err := createObjAndDynamicClient(testManifest.Raw)
+	diffOwnerDynamicObj, diffOwnerDynamicClient, diffOwnerSpechHash, err := createObjAndDynamicClient(rawTestDeploymentWithDifferentOwner)
 	if err != nil {
 		t.Errorf("failed to create obj and dynamic client: %s", err)
 	}
@@ -1292,11 +1310,12 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 	})
 
 	testCases := map[string]struct {
-		reconciler     ApplyWorkReconciler
-		workObj        *unstructured.Unstructured
-		resultSpecHash string
-		resultAction   ApplyAction
-		resultErr      error
+		reconciler       ApplyWorkReconciler
+		allowCoOwnership bool
+		workObj          *unstructured.Unstructured
+		resultSpecHash   string
+		resultAction     ApplyAction
+		resultErr        error
 	}{
 		"test creation succeeds when the object does not exist": {
 			reconciler: ApplyWorkReconciler{
@@ -1338,15 +1357,54 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 		},
 		"owner reference comparison failure / fail": {
 			reconciler: ApplyWorkReconciler{
-				client:             &test.MockClient{},
+				client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o, _ := obj.(*fleetv1beta1.Work)
+						*o = fleetv1beta1.Work{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "default-work",
+							},
+						}
+						return nil
+					},
+				},
 				spokeDynamicClient: diffOwnerDynamicClient,
 				spokeClient:        &test.MockClient{},
 				restMapper:         testMapper{},
 				recorder:           utils.NewFakeRecorder(1),
 			},
 			workObj:      correctObj.DeepCopy(),
-			resultAction: errorApplyAction,
-			resultErr:    errors.New("resource is not managed by the work controller"),
+			resultAction: manifestAlreadyOwnedByOthers,
+			resultErr:    controller.ErrUserError,
+		},
+		"co-ownership is allowed": {
+			reconciler: ApplyWorkReconciler{
+				client: &test.MockClient{
+					MockGet: func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+						o, _ := obj.(*fleetv1beta1.Work)
+						*o = fleetv1beta1.Work{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "default-work",
+							},
+							Spec: fleetv1beta1.WorkSpec{
+								ApplyStrategy: &fleetv1beta1.ApplyStrategy{
+									AllowCoOwnership: true,
+								},
+							},
+						}
+						return nil
+					},
+				},
+				spokeDynamicClient: diffOwnerDynamicClient,
+				spokeClient:        &test.MockClient{},
+				restMapper:         testMapper{},
+				recorder:           utils.NewFakeRecorder(1),
+			},
+			allowCoOwnership: true,
+			workObj:          diffOwnerDynamicObj.DeepCopy(),
+			resultSpecHash:   diffOwnerSpechHash,
+			resultAction:     manifestNotAvailableYetAction,
+			resultErr:        nil,
 		},
 		"resource is owned by another conflicted work (not found)": {
 			reconciler: ApplyWorkReconciler{
@@ -1404,7 +1462,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 								Name: "default-work",
 							},
 							Spec: fleetv1beta1.WorkSpec{
-								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists},
+								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply},
 							},
 						}
 						return nil
@@ -1428,7 +1486,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 								Name: "default-work",
 							},
 							Spec: fleetv1beta1.WorkSpec{
-								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists},
+								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply},
 							},
 						}
 						return nil
@@ -1452,7 +1510,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 								Name: "default-work",
 							},
 							Spec: fleetv1beta1.WorkSpec{
-								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists},
+								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply},
 							},
 						}
 						return nil
@@ -1488,7 +1546,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 								Name: "default-work",
 							},
 							Spec: fleetv1beta1.WorkSpec{
-								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists},
+								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply},
 							},
 						}
 						return nil
@@ -1523,7 +1581,7 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 								Name: "default-work",
 							},
 							Spec: fleetv1beta1.WorkSpec{
-								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists},
+								ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply},
 							},
 						}
 						return nil
@@ -1540,13 +1598,16 @@ func TestApplyUnstructuredAndTrackAvailability(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			r := testCase.reconciler
 			r.appliers = map[fleetv1beta1.ApplyStrategyType]Applier{
-				fleetv1beta1.ApplyStrategyTypeFailIfExists: &FailIfExistsApplier{
+				fleetv1beta1.ApplyStrategyTypeClientSideApply: &ClientSideApplier{
 					HubClient:          r.client,
 					WorkNamespace:      r.workNameSpace,
 					SpokeDynamicClient: r.spokeDynamicClient,
 				},
 			}
-			strategy := &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists}
+			strategy := &fleetv1beta1.ApplyStrategy{
+				Type:             fleetv1beta1.ApplyStrategyTypeClientSideApply,
+				AllowCoOwnership: testCase.allowCoOwnership,
+			}
 			applyResult, applyAction, err := r.applyUnstructuredAndTrackAvailability(context.Background(), utils.DeploymentGVR, testCase.workObj, strategy)
 			assert.Equalf(t, testCase.resultAction, applyAction, "updated boolean not matching for Testcase %s", testName)
 			if testCase.resultErr != nil {
@@ -1672,13 +1733,13 @@ func TestApplyManifest(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			r := testCase.reconciler
 			r.appliers = map[fleetv1beta1.ApplyStrategyType]Applier{
-				fleetv1beta1.ApplyStrategyTypeFailIfExists: &FailIfExistsApplier{
+				fleetv1beta1.ApplyStrategyTypeClientSideApply: &ClientSideApplier{
 					HubClient:          r.client,
 					WorkNamespace:      r.workNameSpace,
 					SpokeDynamicClient: r.spokeDynamicClient,
 				},
 			}
-			applyStrategy := &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists}
+			applyStrategy := &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply}
 			resultList := r.applyManifests(context.Background(), testCase.manifestList, ownerRef, applyStrategy)
 			for _, result := range resultList {
 				if testCase.wantErr != nil {
@@ -1733,7 +1794,7 @@ func TestReconcile(t *testing.T) {
 			},
 			Spec: fleetv1beta1.WorkSpec{
 				Workload:      fleetv1beta1.WorkloadTemplate{Manifests: []fleetv1beta1.Manifest{testManifest}},
-				ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeFailIfExists},
+				ApplyStrategy: &fleetv1beta1.ApplyStrategy{Type: fleetv1beta1.ApplyStrategyTypeClientSideApply},
 			},
 		}
 		return nil
@@ -2004,7 +2065,7 @@ func TestReconcile(t *testing.T) {
 			r := testCase.reconciler
 			r.workNameSpace = workNamespace
 			r.appliers = map[fleetv1beta1.ApplyStrategyType]Applier{
-				fleetv1beta1.ApplyStrategyTypeFailIfExists: &FailIfExistsApplier{
+				fleetv1beta1.ApplyStrategyTypeClientSideApply: &ClientSideApplier{
 					HubClient:          r.client,
 					WorkNamespace:      r.workNameSpace,
 					SpokeDynamicClient: r.spokeDynamicClient,

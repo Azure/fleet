@@ -844,7 +844,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             work.ManifestApplyFailedReason,
+									Reason:             work.ManifestsAlreadyOwnedByOthersReason,
 									ObservedGeneration: 0,
 								},
 							},

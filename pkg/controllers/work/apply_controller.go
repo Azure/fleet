@@ -75,6 +75,9 @@ const (
 	// ApplyConflictBetweenPlacementsReason is the reason string of condition when the manifest is owned by multiple placements,
 	// and they have conflicts.
 	ApplyConflictBetweenPlacementsReason = "ApplyConflictBetweenPlacements"
+	// ManifestsAlreadyOwnedByOthersReason is the reason string of condition when the manifest is already owned by other
+	// non-fleet appliers.
+	ManifestsAlreadyOwnedByOthersReason = "ManifestsAlreadyOwnedByOthers"
 	// ManifestAlreadyUpToDateReason is the reason string of condition when the manifest is already up to date.
 	ManifestAlreadyUpToDateReason  = "ManifestAlreadyUpToDate"
 	manifestAlreadyUpToDateMessage = "Manifest is already up to date"
@@ -132,6 +135,9 @@ const (
 	// and they have conflict apply strategy.
 	applyConflictBetweenPlacements ApplyAction = "ApplyConflictBetweenPlacements"
 
+	// manifestAlreadyOwnedByOthers indicates that the manifest is already owned by other non-fleet applier.
+	manifestAlreadyOwnedByOthers ApplyAction = "ManifestAlreadyOwnedByOthers"
+
 	// manifestNotAvailableYetAction indicates that we still need to wait for the manifest to be available.
 	manifestNotAvailableYetAction ApplyAction = "ManifestNotAvailableYet"
 
@@ -183,7 +189,10 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// set default value so that the following call can skip checking nil
-	// TODO, could be removed once we have the defaulting webhook
+	// TODO, could be removed once we have the defaulting webhook with fail policy.
+	// Make sure these conditions are met before moving
+	// * the defaulting webhook failure policy is configured as "fail".
+	// * user cannot update/delete the webhook.
 	defaulter.SetDefaultsWork(work)
 
 	// ensure that the appliedWork and the finalizer exist
@@ -608,7 +617,7 @@ func (r *ApplyWorkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			WorkNamespace:      r.workNameSpace,
 			SpokeDynamicClient: r.spokeDynamicClient,
 		},
-		fleetv1beta1.ApplyStrategyTypeFailIfExists: &FailIfExistsApplier{
+		fleetv1beta1.ApplyStrategyTypeClientSideApply: &ClientSideApplier{
 			HubClient:          r.client,
 			WorkNamespace:      r.workNameSpace,
 			SpokeDynamicClient: r.spokeDynamicClient,
@@ -657,7 +666,8 @@ func isManifestManagedByWork(ownerRefs []metav1.OwnerReference) bool {
 	}
 
 	// an object is NOT managed by the work if any of its owner reference is not of type appliedWork
-	// We'll fail the operation if the resource is owned by other applier.
+	// We'll fail the operation if the resource is owned by other applier (non-fleet agent) and placement does not allow
+	// co-ownership.
 	for _, ownerRef := range ownerRefs {
 		if ownerRef.APIVersion != fleetv1beta1.GroupVersion.String() || ownerRef.Kind != fleetv1beta1.AppliedWorkKind {
 			return false
@@ -739,12 +749,14 @@ func buildManifestCondition(err error, action ApplyAction, observedGeneration in
 		switch action {
 		case applyConflictBetweenPlacements:
 			applyCondition.Reason = ApplyConflictBetweenPlacementsReason
+		case manifestAlreadyOwnedByOthers:
+			applyCondition.Reason = ManifestsAlreadyOwnedByOthersReason
 		default:
 			applyCondition.Reason = ManifestApplyFailedReason
 		}
 		applyCondition.Message = fmt.Sprintf("Failed to apply manifest: %v", err)
 		availableCondition.Status = metav1.ConditionUnknown
-		availableCondition.Reason = applyCondition.Reason
+		availableCondition.Reason = ManifestApplyFailedReason
 		availableCondition.Message = "Manifest is not applied yet"
 	} else {
 		applyCondition.Status = metav1.ConditionTrue

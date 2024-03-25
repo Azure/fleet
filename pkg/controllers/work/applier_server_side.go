@@ -7,7 +7,6 @@ package work
 
 import (
 	"context"
-	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,17 +46,11 @@ func (applier *ServerSideApplier) ApplyUnstructured(ctx context.Context, applySt
 		return nil, errorApplyAction, controller.NewAPIServerError(false, err)
 	}
 
-	conflictedWork, err := findConflictedWork(ctx, applier.HubClient, applier.WorkNamespace, applyStrategy, curObj.GetOwnerReferences())
+	result, err := validateOwnerReference(ctx, applier.HubClient, applier.WorkNamespace, applyStrategy, curObj.GetOwnerReferences())
 	if err != nil {
-		return nil, errorApplyAction, err
-	}
-	if conflictedWork != nil {
-		placement := conflictedWork.Labels[fleetv1beta1.CRPTrackingLabel]
-		err := fmt.Errorf(conflictBetweenPlacementsErrorFormat, placement)
-		klog.ErrorS(err, "Skip applying a manifest managed by another placement but with different apply strategy",
-			"gvr", gvr, "manifest", manifestRef, "applyStrategy", applyStrategy,
-			"conflictedWork", conflictedWork.Name, "conflictedPlacement", placement, "conflictedWorkApplyStrategy", conflictedWork.Spec.ApplyStrategy)
-		return nil, applyConflictBetweenPlacements, controller.NewUserError(err)
+		klog.ErrorS(err, "Skip applying a manifest", "result", result,
+			"gvr", gvr, "manifest", manifestRef, "applyStrategy", applyStrategy, "ownerReferences", curObj.GetOwnerReferences())
+		return nil, result, err
 	}
 	return serverSideApply(ctx, applier.SpokeDynamicClient, force, gvr, manifestObj)
 }
