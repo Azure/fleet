@@ -17,6 +17,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -59,7 +60,7 @@ func invalidWorkResourceSelector() []placementv1beta1.ClusterResourceSelector {
 	}
 }
 
-func workNamespace() corev1.Namespace {
+func appNamespace() corev1.Namespace {
 	return corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),

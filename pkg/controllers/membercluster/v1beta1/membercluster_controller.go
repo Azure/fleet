@@ -452,6 +452,14 @@ func (r *Reconciler) syncInternalMemberClusterStatus(imc *clusterv1beta1.Interna
 	r.aggregateJoinedCondition(mc)
 	// Copy resource usages.
 	mc.Status.ResourceUsage = imc.Status.ResourceUsage
+	// Copy additional conditions.
+	for idx := range imc.Status.Conditions {
+		cond := imc.Status.Conditions[idx]
+		cond.ObservedGeneration = mc.GetGeneration()
+		meta.SetStatusCondition(&mc.Status.Conditions, cond)
+	}
+	// Copy the cluster properties.
+	mc.Status.Properties = imc.Status.Properties
 }
 
 // updateMemberClusterStatus is used to update member cluster status.

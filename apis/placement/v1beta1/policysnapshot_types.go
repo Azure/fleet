@@ -148,6 +148,14 @@ type ClusterSchedulingPolicySnapshotList struct {
 	Items           []ClusterSchedulingPolicySnapshot `json:"items"`
 }
 
+// Tolerations returns tolerations for ClusterSchedulingPolicySnapshot.
+func (m *ClusterSchedulingPolicySnapshot) Tolerations() []Toleration {
+	if m.Spec.Policy != nil {
+		return m.Spec.Policy.Tolerations
+	}
+	return nil
+}
+
 // SetConditions sets the given conditions on the ClusterSchedulingPolicySnapshot.
 func (m *ClusterSchedulingPolicySnapshot) SetConditions(conditions ...metav1.Condition) {
 	for _, c := range conditions {

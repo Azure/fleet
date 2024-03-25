@@ -185,21 +185,21 @@ func TestCalculateNewAppliedWork(t *testing.T) {
 			}
 			newRes, staleRes, err := r.generateDiff(context.Background(), &tt.inputWork, &tt.inputAppliedWork)
 			if len(tt.expectedNewRes) != len(newRes) {
-				t.Errorf("Testcase %s: get newRes contains different number of elements than the expected newRes.", testName)
+				t.Errorf("Testcase %s: get newRes contains different number of elements than the want newRes.", testName)
 			}
 			for i := 0; i < len(newRes); i++ {
 				diff := cmp.Diff(tt.expectedNewRes[i].WorkResourceIdentifier, newRes[i].WorkResourceIdentifier)
 				if len(diff) != 0 {
-					t.Errorf("Testcase %s: get newRes is different from the expected newRes, diff = %s", testName, diff)
+					t.Errorf("Testcase %s: get newRes is different from the want newRes, diff = %s", testName, diff)
 				}
 			}
 			if len(tt.expectedStaleRes) != len(staleRes) {
-				t.Errorf("Testcase %s: get staleRes contains different number of elements than the expected staleRes.", testName)
+				t.Errorf("Testcase %s: get staleRes contains different number of elements than the want staleRes.", testName)
 			}
 			for i := 0; i < len(staleRes); i++ {
 				diff := cmp.Diff(tt.expectedStaleRes[i].WorkResourceIdentifier, staleRes[i].WorkResourceIdentifier)
 				if len(diff) != 0 {
-					t.Errorf("Testcase %s: get staleRes is different from the expected staleRes, diff = %s", testName, diff)
+					t.Errorf("Testcase %s: get staleRes is different from the want staleRes, diff = %s", testName, diff)
 				}
 			}
 			if tt.hasErr {

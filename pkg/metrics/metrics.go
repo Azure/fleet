@@ -68,4 +68,10 @@ var (
 			"needs_requeue",
 		},
 	)
+
+	// SchedulerActiveWorkers is a prometheus metric which holds the number of active scheduler loop.
+	SchedulerActiveWorkers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "scheduling_active_workers",
+		Help: "Number of currently running scheduling loop",
+	}, []string{})
 )

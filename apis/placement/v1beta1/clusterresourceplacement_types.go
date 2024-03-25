@@ -323,7 +323,8 @@ type PropertySelector struct {
 	MatchExpressions []PropertySelectorRequirement `json:"matchExpressions"`
 }
 
-type PropertySortPreference struct {
+// PropertySorter helps user specify how to sort clusters based on a specific property.
+type PropertySorter struct {
 	// Name is the name of the property which Fleet sorts clusters by.
 	// +required
 	Name string `json:"name"`
@@ -358,7 +359,7 @@ type ClusterSelectorTerm struct {
 	// At this moment, PropertySorter can only be used with
 	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
 	// +optional
-	PropertySorter *PropertySortPreference `json:"propertySorter,omitempty"`
+	PropertySorter *PropertySorter `json:"propertySorter,omitempty"`
 }
 
 // TopologySpreadConstraint specifies how to spread resources among the given cluster topology.
@@ -710,6 +711,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means the selected resources successfully start rolling out in all scheduled clusters.
 	// - "False" means the selected resources have not been rolled out in all scheduled clusters yet.
+	// - "Unknown" means we don't have a rollout decision yet.
 	ClusterResourcePlacementRolloutStartedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementRolloutStarted"
 
 	// ClusterResourcePlacementOverriddenConditionType indicates whether all the selected resources have been overridden
@@ -717,7 +719,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully overridden before applying to the target cluster or
 	// override is not needed if there is no override defined with the reason of NoOverrideSpecified.
-	// - "False" means some of them have failed. We will place some detailed failure in the FailedResourcePlacement array.
+	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the override yet.
 	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
 
@@ -728,6 +730,7 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
 	// - "False" means all the selected resources have not been created under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
+	// - "Unknown" means we haven't started processing the work yet.
 	ClusterResourcePlacementWorkCreatedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkCreated"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
@@ -844,6 +847,14 @@ type ClusterResourcePlacementList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterResourcePlacement `json:"items"`
+}
+
+// Tolerations returns tolerations for ClusterResourcePlacement.
+func (m *ClusterResourcePlacement) Tolerations() []Toleration {
+	if m.Spec.Policy != nil {
+		return m.Spec.Policy.Tolerations
+	}
+	return nil
 }
 
 // SetConditions sets the conditions of the ClusterResourcePlacement.

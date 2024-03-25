@@ -267,20 +267,22 @@ func cleanupInvalidClusters() {
 				Name: name,
 			},
 		}
-		Expect(hubClient.Delete(ctx, mcObj)).To(Succeed(), "Failed to delete member cluster object")
-
-		Expect(hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj)).To(Succeed(), "Failed to get member cluster object")
-		mcObj.Finalizers = []string{}
-		Expect(hubClient.Update(ctx, mcObj)).To(Succeed(), "Failed to update member cluster object")
-
+		Eventually(func() error {
+			err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj)
+			if err != nil {
+				return err
+			}
+			mcObj.Finalizers = []string{}
+			return hubClient.Update(ctx, mcObj)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update member cluster object")
+		Expect(hubClient.Delete(ctx, mcObj)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete member cluster object")
 		Eventually(func() error {
 			mcObj := &clusterv1beta1.MemberCluster{}
 			if err := hubClient.Get(ctx, types.NamespacedName{Name: name}, mcObj); !apierrors.IsNotFound(err) {
 				return fmt.Errorf("member cluster still exists or an unexpected error occurred: %w", err)
 			}
-
 			return nil
-		})
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to check if member cluster is deleted, member cluster still exists")
 	}
 }
 
@@ -332,14 +334,14 @@ func deleteResourcesForFleetGuardRail() {
 			Name: "test-cluster-role-binding",
 		},
 	}
-	Expect(hubClient.Delete(ctx, &crb)).Should(Succeed())
+	Expect(hubClient.Delete(ctx, &crb)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 
 	cr := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-cluster-role",
 		},
 	}
-	Expect(hubClient.Delete(ctx, &cr)).Should(Succeed())
+	Expect(hubClient.Delete(ctx, &cr)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}))
 }
 
 // cleanupMemberCluster removes finalizers (if any) from the member cluster, and
@@ -447,7 +449,7 @@ func createWorkResource(name, namespace string) {
 
 // createWorkResources creates some resources on the hub cluster for testing purposes.
 func createWorkResources() {
-	ns := workNamespace()
+	ns := appNamespace()
 	Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Namespace)
 
 	configMap := appConfigMap()
@@ -460,7 +462,7 @@ func cleanupWorkResources() {
 }
 
 func cleanWorkResourcesOnCluster(cluster *framework.Cluster) {
-	ns := workNamespace()
+	ns := appNamespace()
 	Expect(client.IgnoreNotFound(cluster.KubeClient.Delete(ctx, &ns))).To(Succeed(), "Failed to delete namespace %s", ns.Namespace)
 
 	workResourcesRemovedActual := workNamespaceRemovedFromClusterActual(cluster)
@@ -559,7 +561,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 			Name: crpName,
 		},
 	}
-	Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP")
+	Expect(hubClient.Delete(ctx, crp)).Should(SatisfyAny(Succeed(), utils.NotFoundMatcher{}), "Failed to delete CRP")
 
 	// Verify that all resources placed have been removed from specified member clusters.
 	for idx := range memberClusters {
@@ -659,4 +661,76 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 			return hubClient.Status().Update(ctx, &work)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	}
+}
+
+func buildTaints(memberClusterNames []string) []clusterv1beta1.Taint {
+	var taint map[string]string
+	taints := make([]clusterv1beta1.Taint, len(memberClusterNames))
+	for i, name := range memberClusterNames {
+		taint = taintTolerationMap[name]
+		taints[i].Key = regionLabelName
+		taints[i].Value = taint[regionLabelName]
+		taints[i].Effect = corev1.TaintEffectNoSchedule
+	}
+	return taints
+}
+
+func buildTolerations(memberClusterNames []string) []placementv1beta1.Toleration {
+	var toleration map[string]string
+	tolerations := make([]placementv1beta1.Toleration, len(memberClusterNames))
+	for i, name := range memberClusterNames {
+		toleration = taintTolerationMap[name]
+		tolerations[i].Key = regionLabelName
+		tolerations[i].Operator = corev1.TolerationOpEqual
+		tolerations[i].Value = toleration[regionLabelName]
+		tolerations[i].Effect = corev1.TaintEffectNoSchedule
+	}
+	return tolerations
+}
+
+func addTaintsToMemberClusters(memberClusterNames []string, taints []clusterv1beta1.Taint) {
+	for i, clusterName := range memberClusterNames {
+		Eventually(func() error {
+			var mc clusterv1beta1.MemberCluster
+			err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.Spec.Taints = []clusterv1beta1.Taint{taints[i]}
+			return hubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add taints to member cluster %s", clusterName)
+	}
+}
+
+func removeTaintsFromMemberClusters(memberClusterNames []string) {
+	for _, clusterName := range memberClusterNames {
+		Eventually(func() error {
+			var mc clusterv1beta1.MemberCluster
+			err := hubClient.Get(ctx, types.NamespacedName{Name: clusterName}, &mc)
+			if err != nil {
+				return err
+			}
+			mc.Spec.Taints = nil
+			return hubClient.Update(ctx, &mc)
+		}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove taints from member cluster %s", clusterName)
+	}
+}
+
+func updateCRPWithTolerations(tolerations []placementv1beta1.Toleration) {
+	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	Eventually(func() error {
+		var crp placementv1beta1.ClusterResourcePlacement
+		err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &crp)
+		if err != nil {
+			return err
+		}
+		if crp.Spec.Policy == nil {
+			crp.Spec.Policy = &placementv1beta1.PlacementPolicy{
+				Tolerations: tolerations,
+			}
+		} else {
+			crp.Spec.Policy.Tolerations = tolerations
+		}
+		return hubClient.Update(ctx, &crp)
+	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update cluster resource placement with tolerations %s", crpName)
 }

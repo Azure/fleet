@@ -431,7 +431,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 
 	BeforeAll(func() {
 		By("creating namespace")
-		ns := workNamespace()
+		ns := appNamespace()
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -770,7 +770,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		createWorkResources()
 
 		By("creating work namespace on member cluster")
-		ns := workNamespace()
+		ns := appNamespace()
 
 		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
@@ -844,7 +844,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             work.AppliedManifestFailedReason,
+									Reason:             work.ManifestApplyFailedReason,
 									ObservedGeneration: 0,
 								},
 							},
@@ -1321,7 +1321,7 @@ func createResourcesForMultipleResourceSnapshots() {
 	for i := 0; i < 3; i++ {
 		var secret corev1.Secret
 		Expect(utils.GetObjectFromManifest("../integration/manifests/resources/test-large-secret.yaml", &secret)).Should(Succeed(), "Failed to read large secret from file")
-		secret.Namespace = workNamespace().Name
+		secret.Namespace = appNamespace().Name
 		secret.Name = fmt.Sprintf(appSecretNameTemplate, i)
 		Expect(hubClient.Create(ctx, &secret)).To(Succeed(), "Failed to create secret %s/%s", secret.Name, secret.Namespace)
 	}

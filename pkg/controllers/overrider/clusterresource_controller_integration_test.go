@@ -83,6 +83,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 
 		By("Updating an existing CRO")
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cro.Name}, cro)).Should(Succeed())
 		cro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
 			OverrideRules: []fleetv1alpha1.OverrideRule{
 				{
@@ -107,10 +108,10 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 			fleetv1beta1.IsLatestSnapshotLabel:  "true",
 			fleetv1alpha1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Checking if the spec is correct")
 		diff = cmp.Diff(cro.Spec, snapshot.Spec.OverrideSpec)
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), diff, "Snapshot spec mismatch (-want, +got)")
 		By("Checking if the old snapshot is updated")
 		snapshot = getClusterResourceOverrideSnapshot(testCROName, 0)
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)).Should(Succeed())
@@ -120,10 +121,10 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 			fleetv1beta1.IsLatestSnapshotLabel:  "false",
 			fleetv1alpha1.OverrideTrackingLabel: testCROName,
 		}, snapshot.GetLabels())
-		Expect(diff).Should(BeEmpty(), diff)
+		Expect(diff).Should(BeEmpty(), diff, "Snapshot label mismatch (-want, +got)")
 		By("Make sure the old snapshot spec is not the same as the current CRO")
 		diff = cmp.Diff(cro.Spec, snapshot.Spec.OverrideSpec)
-		Expect(diff).ShouldNot(BeEmpty(), diff)
+		Expect(diff).ShouldNot(BeEmpty(), diff, "Snapshot spec mismatch (-want, +got)")
 	})
 
 	It("Should delete all snapshots when a CRO is deleted", func() {
@@ -135,6 +136,7 @@ var _ = Describe("Test ClusterResourceOverride controller logic", func() {
 			return k8sClient.Get(ctx, types.NamespacedName{Name: snapshot.Name}, snapshot)
 		}, eventuallyTimeout, interval).Should(Succeed(), "snapshot should exist")
 		By("Updating an existing CRO")
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cro.Name}, cro)).Should(Succeed())
 		cro.Spec.Policy = &fleetv1alpha1.OverridePolicy{
 			OverrideRules: []fleetv1alpha1.OverrideRule{
 				{

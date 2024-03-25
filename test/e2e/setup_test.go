@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -59,10 +60,10 @@ const (
 )
 
 const (
-	eventuallyDuration   = time.Minute * 2
-	eventuallyInterval   = time.Second * 5
+	eventuallyDuration   = time.Minute * 3
+	eventuallyInterval   = time.Millisecond * 250
 	consistentlyDuration = time.Second * 10
-	consistentlyInterval = time.Second * 2
+	consistentlyInterval = time.Millisecond * 250
 )
 
 var (
@@ -89,6 +90,7 @@ var (
 	regionLabelName   = "region"
 	regionLabelValue1 = "east"
 	regionLabelValue2 = "west"
+	regionLabelValue3 = "south"
 	envLabelName      = "env"
 	envLabelValue1    = "prod"
 	envLabelValue2    = "canary"
@@ -105,6 +107,18 @@ var (
 		memberCluster3WestProdName: {
 			regionLabelName: regionLabelValue2,
 			envLabelName:    envLabelValue1,
+		},
+	}
+
+	taintTolerationMap = map[string]map[string]string{
+		memberCluster1EastProdName: {
+			regionLabelName: regionLabelValue1,
+		},
+		memberCluster2EastCanaryName: {
+			regionLabelName: regionLabelValue2,
+		},
+		memberCluster3WestProdName: {
+			regionLabelName: regionLabelValue3,
 		},
 	}
 )

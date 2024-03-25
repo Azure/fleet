@@ -33,6 +33,20 @@ const (
 	namespace1 = "fleet-member-mc1"
 	namespace2 = "fleet-member-mc2"
 	namespace3 = "fleet-member-mc3"
+
+	clusterPropertyName1  = "cluster-property-1"
+	clusterPropertyName2  = "cluster-property-2"
+	clusterPropertyValue1 = "property-value-1"
+	clusterPropertyValue2 = "property-value-2"
+
+	propertyProviderConditionType1    = "ProviderConditionType1"
+	propertyProviderConditionStatus1  = metav1.ConditionTrue
+	propertyProviderConditionReason1  = "ProviderConditionReason1"
+	propertyProviderConditionMessage1 = "property provider condition 1 message"
+	propertyProviderConditionType2    = "ProviderConditionType2"
+	propertyProviderConditionStatus2  = metav1.ConditionFalse
+	propertyProviderConditionReason2  = "ProviderConditionReason2"
+	propertyProviderConditionMessage2 = "property provider condition 2 message"
 )
 
 func TestSyncNamespace(t *testing.T) {
@@ -694,12 +708,44 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 			},
 			internalMemberCluster: &clusterv1beta1.InternalMemberCluster{
 				Status: clusterv1beta1.InternalMemberClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               propertyProviderConditionType1,
+							Status:             propertyProviderConditionStatus1,
+							Reason:             propertyProviderConditionReason1,
+							Message:            propertyProviderConditionMessage1,
+							LastTransitionTime: now,
+						},
+						{
+							Type:               propertyProviderConditionType2,
+							Status:             propertyProviderConditionStatus2,
+							Reason:             propertyProviderConditionReason2,
+							Message:            propertyProviderConditionMessage2,
+							LastTransitionTime: now,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						clusterPropertyName1: {
+							Value:           clusterPropertyValue1,
+							ObservationTime: now,
+						},
+						clusterPropertyName2: {
+							Value:           clusterPropertyValue2,
+							ObservationTime: now,
+						},
+					},
 					ResourceUsage: clusterv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
-							corev1.ResourceCPU: resource.MustParse("100m"),
+							corev1.ResourceCPU:    resource.MustParse("16"),
+							corev1.ResourceMemory: resource.MustParse("24Gi"),
 						},
 						Allocatable: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("12"),
+							corev1.ResourceMemory: resource.MustParse("20Gi"),
+						},
+						Available: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("3.6"),
+							corev1.ResourceMemory: resource.MustParse("4Gi"),
 						},
 						ObservationTime: now,
 					},
@@ -738,13 +784,41 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 							Status: metav1.ConditionTrue,
 							Reason: reasonMemberClusterJoined,
 						},
+						{
+							Type:    propertyProviderConditionType1,
+							Status:  propertyProviderConditionStatus1,
+							Reason:  propertyProviderConditionReason1,
+							Message: propertyProviderConditionMessage1,
+						},
+						{
+							Type:    propertyProviderConditionType2,
+							Status:  propertyProviderConditionStatus2,
+							Reason:  propertyProviderConditionReason2,
+							Message: propertyProviderConditionMessage2,
+						},
+					},
+					Properties: map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+						clusterPropertyName1: {
+							Value:           clusterPropertyValue1,
+							ObservationTime: now,
+						},
+						clusterPropertyName2: {
+							Value:           clusterPropertyValue2,
+							ObservationTime: now,
+						},
 					},
 					ResourceUsage: clusterv1beta1.ResourceUsage{
 						Capacity: corev1.ResourceList{
-							corev1.ResourceCPU: resource.MustParse("100m"),
+							corev1.ResourceCPU:    resource.MustParse("16"),
+							corev1.ResourceMemory: resource.MustParse("24Gi"),
 						},
 						Allocatable: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("12"),
+							corev1.ResourceMemory: resource.MustParse("20Gi"),
+						},
+						Available: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("3.6"),
+							corev1.ResourceMemory: resource.MustParse("4Gi"),
 						},
 						ObservationTime: now,
 					},
@@ -1356,8 +1430,29 @@ func TestSyncInternalMemberClusterStatus(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			tt.r.syncInternalMemberClusterStatus(tt.internalMemberCluster, tt.memberCluster)
-			assert.Equal(t, "", cmp.Diff(tt.wantedMemberCluster.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)), tt.memberCluster.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)), cmpopts.IgnoreTypes(time.Time{})))
+
+			// Compare the Joined condition.
+			diff := cmp.Diff(tt.wantedMemberCluster.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)),
+				tt.memberCluster.GetCondition(string(clusterv1beta1.ConditionTypeMemberClusterJoined)),
+				cmpopts.IgnoreTypes(time.Time{}))
+			assert.Equal(t, "", diff)
+
+			// Compare the property provider conditions (if present).
+			diff = cmp.Diff(tt.wantedMemberCluster.GetCondition(propertyProviderConditionType1),
+				tt.memberCluster.GetCondition(propertyProviderConditionType1),
+				cmpopts.IgnoreTypes(time.Time{}))
+			assert.Equal(t, "", diff)
+
+			diff = cmp.Diff(tt.wantedMemberCluster.GetCondition(propertyProviderConditionType2),
+				tt.memberCluster.GetCondition(propertyProviderConditionType2),
+				cmpopts.IgnoreTypes(time.Time{}))
+			assert.Equal(t, "", diff)
+
+			// Compare the properties (if present).
+			assert.Equal(t, tt.wantedMemberCluster.Status.Properties, tt.memberCluster.Status.Properties)
+			// Compare the resource usage.
 			assert.Equal(t, tt.wantedMemberCluster.Status.ResourceUsage, tt.memberCluster.Status.ResourceUsage)
+			// Compare the agent status.
 			assert.Equal(t, tt.wantedMemberCluster.Status.AgentStatus, tt.memberCluster.Status.AgentStatus)
 		})
 	}

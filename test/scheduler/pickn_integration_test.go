@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +21,14 @@ import (
 	"k8s.io/utils/ptr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+)
+
+var (
+	pickNCmpOpts = []cmp.Option{
+		ignoreClusterDecisionReasonField,
+		cmpopts.SortSlices(lessFuncClusterDecision),
+		cmpopts.EquateEmpty(),
+	}
 )
 
 var _ = Describe("scheduling CRPs of the PickN placement type", func() {
@@ -53,7 +63,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -74,7 +88,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -114,7 +128,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -135,7 +153,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -158,7 +176,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -173,7 +195,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), []string{}, []string{}, []string{}, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -210,21 +232,25 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -234,7 +260,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -255,7 +281,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -293,37 +319,41 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
 								},
-							},
-							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "west",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values: []string{
-												"prod",
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "west",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -333,7 +363,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -354,7 +384,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, []string{}, wantFilteredClusters, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -409,22 +439,26 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 10,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "central",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 10,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "central",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
@@ -434,7 +468,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -455,7 +489,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -513,41 +547,45 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 10,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "central",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"prod",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 10,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "central",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"prod",
+												},
 											},
 										},
 									},
 								},
 							},
-						},
-						{
-							Weight: 20,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      envLabel,
-											Operator: metav1.LabelSelectorOpIn,
-											Values: []string{
-												"canary",
+							{
+								Weight: 20,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      envLabel,
+												Operator: metav1.LabelSelectorOpIn,
+												Values: []string{
+													"canary",
+												},
 											},
 										},
 									},
@@ -557,7 +595,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, nil, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -578,7 +616,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -643,14 +681,18 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -671,7 +713,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -762,19 +804,23 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
-				},
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -795,7 +841,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -863,14 +909,18 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -891,7 +941,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -991,19 +1041,23 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
-				},
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, nil, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1024,7 +1078,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1090,18 +1144,22 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchExpressions: []metav1.LabelSelectorRequirement{
-										{
-											Key:      regionLabel,
-											Operator: metav1.LabelSelectorOpNotIn,
-											Values: []string{
-												"west",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
+											{
+												Key:      regionLabel,
+												Operator: metav1.LabelSelectorOpNotIn,
+												Values: []string{
+													"west",
+												},
 											},
 										},
 									},
@@ -1110,15 +1168,15 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 						},
 					},
 				},
-			}
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1139,7 +1197,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1231,30 +1289,34 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 30,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Weight: 30,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			}
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
 				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1275,7 +1337,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1357,46 +1419,50 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinity := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 40,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-								},
-							},
-						},
-					},
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "prod",
+								Weight: 40,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+									},
+								},
+							},
+						},
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			}
-			topologySpreadConstraints := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(2)),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(2)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
-				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinity, topologySpreadConstraints, policySnapshotName)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 		})
 
 		It("should add scheduler cleanup finalizer to the CRP", func() {
@@ -1417,7 +1483,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClusters, wantNotPickedClusters, wantFilteredClusters, scoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1464,7 +1530,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClustersBefore,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
@@ -1510,7 +1580,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1551,7 +1621,11 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			createPickNCRPWithPolicySnapshot(crpName, numOfClustersBefore, nil, nil, policySnapshotName)
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClustersBefore,
+			}
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotName, policy)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, int(numOfClustersBefore))
@@ -1597,7 +1671,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClustersAfter), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, zeroScoreByCluster, policySnapshotName, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})
@@ -1731,46 +1805,50 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
 
 			// Create a CRP of the PickN placement type, along with its associated policy snapshot.
-			affinityBefore := &placementv1beta1.Affinity{
-				ClusterAffinity: &placementv1beta1.ClusterAffinity{
-					PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
-						{
-							Weight: 40,
-							Preference: placementv1beta1.ClusterSelectorTerm{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										regionLabel: "east",
-									},
-								},
-							},
-						},
-					},
-					RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-						ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+			policy := &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &numOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
 							{
-								LabelSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{
-										envLabel: "prod",
+								Weight: 40,
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											regionLabel: "east",
+										},
+									},
+								},
+							},
+						},
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											envLabel: "prod",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			}
-			topologySpreadConstraintsBefore := []placementv1beta1.TopologySpreadConstraint{
-				{
-					MaxSkew:           ptr.To(int32(2)),
-					TopologyKey:       envLabel,
-					WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+				TopologySpreadConstraints: []placementv1beta1.TopologySpreadConstraint{
+					{
+						MaxSkew:           ptr.To(int32(2)),
+						TopologyKey:       envLabel,
+						WhenUnsatisfiable: placementv1beta1.ScheduleAnyway,
+					},
+					{
+						MaxSkew:           ptr.To(int32(1)),
+						TopologyKey:       regionLabel,
+						WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
+					},
 				},
-				{
-					MaxSkew:           ptr.To(int32(1)),
-					TopologyKey:       regionLabel,
-					WhenUnsatisfiable: placementv1beta1.DoNotSchedule,
-				},
 			}
-			createPickNCRPWithPolicySnapshot(crpName, numOfClusters, affinityBefore, topologySpreadConstraintsBefore, policySnapshotNameBefore)
+			createPickNCRPWithPolicySnapshot(crpName, policySnapshotNameBefore, policy)
 
 			// Verify that scheduling has been completed.
 			hasNScheduledOrBoundBindingsActual := hasNScheduledOrBoundBindingsPresentActual(crpName, len(wantPickedClustersBefore))
@@ -1826,7 +1904,7 @@ var _ = Describe("scheduling CRPs of the PickN placement type", func() {
 		})
 
 		It("should report status correctly", func() {
-			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, scoreByClusterAfter, policySnapshotNameAfter)
+			crpStatusUpdatedActual := pickNPolicySnapshotStatusUpdatedActual(int(numOfClusters), wantPickedClustersAfter, wantNotPickedClustersAfter, wantFilteredClustersAfter, scoreByClusterAfter, policySnapshotNameAfter, pickNCmpOpts)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to report status correctly")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to report status correctly")
 		})

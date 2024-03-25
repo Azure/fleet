@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	appv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -280,6 +282,30 @@ var (
 		Group:   placementv1alpha1.GroupVersion.Group,
 		Version: placementv1alpha1.GroupVersion.Version,
 		Kind:    placementv1alpha1.ResourceOverrideSnapshotKind,
+	}
+
+	DeploymentGVR = schema.GroupVersionResource{
+		Group:    appv1.GroupName,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "deployments",
+	}
+
+	DaemonSettGVR = schema.GroupVersionResource{
+		Group:    appv1.GroupName,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "daemonsets",
+	}
+
+	StatefulSettGVR = schema.GroupVersionResource{
+		Group:    appv1.GroupName,
+		Version:  appv1.SchemeGroupVersion.Version,
+		Resource: "statefulsets",
+	}
+
+	JobGVR = schema.GroupVersionResource{
+		Group:    batchv1.GroupName,
+		Version:  batchv1.SchemeGroupVersion.Version,
+		Resource: "jobs",
 	}
 )
 

@@ -17,7 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -106,16 +106,46 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(cmp.Diff(wantMC, mc.Status, ignoreOption)).Should(BeEmpty())
 
 			By("simulate member agent updating internal member cluster status")
-			imc.Status.ResourceUsage.Capacity = utils.NewResourceList()
-			imc.Status.ResourceUsage.Allocatable = utils.NewResourceList()
-			imc.Status.ResourceUsage.ObservationTime = metav1.Now()
+			now := metav1.Now()
+			// Update the resource usage.
+			imc.Status.ResourceUsage = clusterv1beta1.ResourceUsage{
+				Capacity:        utils.NewResourceList(),
+				Allocatable:     utils.NewResourceList(),
+				Available:       utils.NewResourceList(),
+				ObservationTime: now,
+			}
 			joinedCondition := metav1.Condition{
 				Type:               string(clusterv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
 				Reason:             reasonMemberClusterJoined,
 				ObservedGeneration: imc.GetGeneration(),
 			}
+			// Update the agent status.
 			imc.SetConditionsWithType(clusterv1beta1.MemberAgent, joinedCondition)
+			// Update the cluster properties.
+			imc.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				clusterPropertyName1: {
+					Value:           clusterPropertyValue1,
+					ObservationTime: now,
+				},
+				clusterPropertyName2: {
+					Value:           clusterPropertyValue2,
+					ObservationTime: now,
+				},
+			}
+			// Add conditions reported by the property provider.
+			meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+				Type:    propertyProviderConditionType1,
+				Status:  propertyProviderConditionStatus1,
+				Reason:  propertyProviderConditionReason1,
+				Message: propertyProviderConditionMessage1,
+			})
+			meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+				Type:    propertyProviderConditionType2,
+				Status:  propertyProviderConditionStatus2,
+				Reason:  propertyProviderConditionReason2,
+				Message: propertyProviderConditionMessage2,
+			})
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status to joined")
@@ -144,6 +174,53 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(joinCondition).NotTo(BeNil())
 			Expect(joinCondition.Status).To(Equal(metav1.ConditionTrue))
 			Expect(joinCondition.Reason).To(Equal(reasonMemberClusterJoined))
+		})
+
+		It("should relay cluster resource usage + properties, and property provider conditions", func() {
+			var mc clusterv1beta1.MemberCluster
+			Expect(k8sClient.Get(ctx, memberClusterNamespacedName, &mc)).Should(Succeed())
+
+			// Compare the properties (if present).
+			wantProperties := map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				clusterPropertyName1: {
+					Value: clusterPropertyValue1,
+				},
+				clusterPropertyName2: {
+					Value: clusterPropertyValue2,
+				},
+			}
+			Expect(cmp.Diff(mc.Status.Properties, wantProperties, cmpopts.IgnoreTypes(time.Time{}))).To(BeEmpty())
+
+			// Compare the resource usage.
+			wantResourceUsage := clusterv1beta1.ResourceUsage{
+				Capacity:    utils.NewResourceList(),
+				Allocatable: utils.NewResourceList(),
+				Available:   utils.NewResourceList(),
+			}
+			Expect(cmp.Diff(mc.Status.ResourceUsage, wantResourceUsage, cmpopts.IgnoreTypes(time.Time{}))).To(BeEmpty())
+
+			// Compare the property provider conditions.
+			wantConditions := []metav1.Condition{
+				{
+					Type:               propertyProviderConditionType1,
+					Status:             propertyProviderConditionStatus1,
+					Reason:             propertyProviderConditionReason1,
+					Message:            propertyProviderConditionMessage1,
+					ObservedGeneration: mc.GetGeneration(),
+				},
+				{
+					Type:               propertyProviderConditionType2,
+					Status:             propertyProviderConditionStatus2,
+					Reason:             propertyProviderConditionReason2,
+					Message:            propertyProviderConditionMessage2,
+					ObservedGeneration: mc.GetGeneration(),
+				},
+			}
+			conditions := []metav1.Condition{
+				*meta.FindStatusCondition(mc.Status.Conditions, propertyProviderConditionType1),
+				*meta.FindStatusCondition(mc.Status.Conditions, propertyProviderConditionType2),
+			}
+			Expect(cmp.Diff(conditions, wantConditions, cmpopts.IgnoreTypes(time.Time{}))).To(BeEmpty())
 		})
 
 		It("member cluster is marked as left after leave workflow is completed", func() {
@@ -256,13 +333,15 @@ var _ = Describe("Test MemberCluster Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(utils.RoleBindingNameFormat, memberClusterName), Namespace: namespaceName}, &roleBinding)).Should(Succeed())
 
 			By("simulate member agent updating internal member cluster status")
-			imc.Status.ResourceUsage.Capacity = corev1.ResourceList{
-				corev1.ResourceCPU: resource.MustParse("100m"),
+			now := metav1.Now()
+			// Update the resource usage.
+			imc.Status.ResourceUsage = clusterv1beta1.ResourceUsage{
+				Capacity:        utils.NewResourceList(),
+				Allocatable:     utils.NewResourceList(),
+				Available:       utils.NewResourceList(),
+				ObservationTime: now,
 			}
-			imc.Status.ResourceUsage.Allocatable = corev1.ResourceList{
-				corev1.ResourceMemory: resource.MustParse("1Gi"),
-			}
-			imc.Status.ResourceUsage.ObservationTime = metav1.Now()
+			// Update the agent status.
 			joinedCondition := metav1.Condition{
 				Type:               string(clusterv1beta1.AgentJoined),
 				Status:             metav1.ConditionTrue,
@@ -270,6 +349,30 @@ var _ = Describe("Test MemberCluster Controller", func() {
 				ObservedGeneration: imc.GetGeneration(),
 			}
 			imc.SetConditionsWithType(clusterv1beta1.MemberAgent, joinedCondition)
+			// Update the cluster properties.
+			imc.Status.Properties = map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue{
+				clusterPropertyName1: {
+					Value:           clusterPropertyValue1,
+					ObservationTime: now,
+				},
+				clusterPropertyName2: {
+					Value:           clusterPropertyValue2,
+					ObservationTime: now,
+				},
+			}
+			// Add conditions reported by the property provider.
+			meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+				Type:    propertyProviderConditionType1,
+				Status:  propertyProviderConditionStatus1,
+				Reason:  propertyProviderConditionReason1,
+				Message: propertyProviderConditionMessage1,
+			})
+			meta.SetStatusCondition(&imc.Status.Conditions, metav1.Condition{
+				Type:    propertyProviderConditionType2,
+				Status:  propertyProviderConditionStatus2,
+				Reason:  propertyProviderConditionReason2,
+				Message: propertyProviderConditionMessage2,
+			})
 			Expect(k8sClient.Status().Update(ctx, &imc)).Should(Succeed())
 
 			By("trigger reconcile again to update member cluster status to joined")
@@ -313,7 +416,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
 					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
 				},
+				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
@@ -356,7 +474,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
 					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
 				},
+				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
@@ -399,7 +532,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
 					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
 				},
+				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
@@ -442,7 +590,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Reason:             reasonMemberClusterJoined,
 						ObservedGeneration: mc.GetGeneration(),
 					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
 				},
+				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
@@ -499,7 +662,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Status: metav1.ConditionUnknown,
 						Reason: reasonMemberClusterUnknown,
 					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
 				},
+				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}
@@ -541,7 +719,22 @@ var _ = Describe("Test MemberCluster Controller", func() {
 						Reason:             reasonMemberClusterUnknown,
 						ObservedGeneration: mc.GetGeneration(),
 					},
+					{
+						Type:               propertyProviderConditionType1,
+						Status:             propertyProviderConditionStatus1,
+						Reason:             propertyProviderConditionReason1,
+						Message:            propertyProviderConditionMessage1,
+						ObservedGeneration: mc.GetGeneration(),
+					},
+					{
+						Type:               propertyProviderConditionType2,
+						Status:             propertyProviderConditionStatus2,
+						Reason:             propertyProviderConditionReason2,
+						Message:            propertyProviderConditionMessage2,
+						ObservedGeneration: mc.GetGeneration(),
+					},
 				},
+				Properties:    imc.Status.Properties,
 				ResourceUsage: imc.Status.ResourceUsage,
 				AgentStatus:   imc.Status.AgentStatus,
 			}

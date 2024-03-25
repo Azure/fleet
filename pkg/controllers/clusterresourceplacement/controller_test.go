@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +28,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/test/utils/resource"
 )
 
 const (
@@ -1034,105 +1034,13 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot_failure(t *testing.T) {
 	}
 }
 
-func serviceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
-	svc := &corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Service",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "svc-name",
-			Namespace: "svc-namespace",
-			Annotations: map[string]string{
-				"svc-annotation-key": "svc-object-annotation-key-value",
-			},
-			Labels: map[string]string{
-				"region": "east",
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"svc-spec-selector-key": "svc-spec-selector-value"},
-			Ports: []corev1.ServicePort{
-				{
-					Name:        "svc-port",
-					Protocol:    corev1.ProtocolTCP,
-					AppProtocol: ptr.To("svc.com/my-custom-protocol"),
-					Port:        9001,
-				},
-			},
-		},
-	}
-	return createResourceContentForTest(t, svc)
-}
-
-func deploymentResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
-	d := appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "deployment-name",
-			Namespace: "deployment-namespace",
-			Labels: map[string]string{
-				"app": "nginx",
-			},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app": "nginx",
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": "nginx",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx:1.14.2",
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: 80,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	return createResourceContentForTest(t, d)
-}
-
-func secretResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
-	s := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "secret-name",
-			Namespace: "secret-namespace",
-		},
-		Data: map[string][]byte{
-			".secret-file": []byte("dmFsdWUtMg0KDQo="),
-		},
-	}
-	return createResourceContentForTest(t, s)
-}
-
 func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 	// test service is 383 bytes in size.
-	serviceResourceContent := *serviceResourceContentForTest(t)
+	serviceResourceContent := *resource.ServiceResourceContentForTest(t)
 	// test deployment 390 bytes in size.
-	deploymentResourceContent := *deploymentResourceContentForTest(t)
+	deploymentResourceContent := *resource.DeploymentResourceContentForTest(t)
 	// test secret is 152 bytes in size.
-	secretResourceContent := *secretResourceContentForTest(t)
+	secretResourceContent := *resource.SecretResourceContentForTest(t)
 
 	jsonBytes, err := json.Marshal(&fleetv1beta1.ResourceSnapshotSpec{SelectedResources: []fleetv1beta1.ResourceContent{}})
 	if err != nil {
@@ -2484,7 +2392,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 
 func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 	selectedResources := []fleetv1beta1.ResourceContent{
-		*serviceResourceContentForTest(t),
+		*resource.ServiceResourceContentForTest(t),
 	}
 	resourceSnapshotSpecA := &fleetv1beta1.ResourceSnapshotSpec{
 		SelectedResources: selectedResources,
@@ -2834,11 +2742,11 @@ func TestGetOrCreateClusterResourceSnapshot_failure(t *testing.T) {
 
 func TestSplitSelectedResources(t *testing.T) {
 	// test service is 383 bytes in size.
-	serviceResourceContent := *serviceResourceContentForTest(t)
+	serviceResourceContent := *resource.ServiceResourceContentForTest(t)
 	// test deployment 390 bytes in size.
-	deploymentResourceContent := *deploymentResourceContentForTest(t)
+	deploymentResourceContent := *resource.DeploymentResourceContentForTest(t)
 	// test secret is 152 bytes in size.
-	secretResourceContent := *secretResourceContentForTest(t)
+	secretResourceContent := *resource.SecretResourceContentForTest(t)
 	tests := []struct {
 		name                       string
 		selectedResourcesSizeLimit int
@@ -3189,6 +3097,7 @@ func TestIsRolloutComplete(t *testing.T) {
 					ObservedGeneration: crpGeneration,
 				},
 			},
+			want: true,
 		},
 		{
 			name: "schedule has not completed",
@@ -3261,8 +3170,205 @@ func TestIsRolloutComplete(t *testing.T) {
 					Name:       testName,
 					Generation: crpGeneration,
 				},
+				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+					Conditions: tc.conditions,
+				},
 			}
-			got := isRolloutCompleted(crp)
+			got := isRolloutCompleted(false, crp)
+			if got != tc.want {
+				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsRolloutComplete_withNewConditions(t *testing.T) {
+	crpGeneration := int64(25)
+	tests := []struct {
+		name       string
+		conditions []metav1.Condition
+		want       bool
+	}{
+		{
+			name: "rollout is completed",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: true,
+		},
+		{
+			name: "schedule condition is unknown",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionUnknown,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "rollout condition is nil",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "overridden condition is not the latest",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					ObservedGeneration: 1,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "workCreated condition is false",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionFalse,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "applied condition is nil",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "available condition is false",
+			conditions: []metav1.Condition{
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionFalse,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementOverriddenConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+				{
+					Status:             metav1.ConditionTrue,
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					ObservedGeneration: crpGeneration,
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			crp := &fleetv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       testName,
+					Generation: crpGeneration,
+				},
+				Status: fleetv1beta1.ClusterResourcePlacementStatus{
+					Conditions: tc.conditions,
+				},
+			}
+			got := isRolloutCompleted(true, crp)
 			if got != tc.want {
 				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
 			}
