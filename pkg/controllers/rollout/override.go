@@ -9,6 +9,9 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,23 +21,26 @@ import (
 	"k8s.io/klog/v2"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
 // fetchAllMatchingOverridesForResourceSnapshot fetches all the matching overrides which are attached to the selected resources.
-func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Context, crp string, masterResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) ([]*fleetv1alpha1.ClusterResourceOverride, []*fleetv1alpha1.ResourceOverride, error) {
-	// fetch the cro and ro list first before finding the matched ones.
-	croList := &fleetv1alpha1.ClusterResourceOverrideList{}
-	if err := r.Client.List(ctx, croList); err != nil {
-		klog.ErrorS(err, "Failed to list all the clusterResourceOverrides")
+func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Context, crp string, masterResourceSnapshot *placementv1beta1.ClusterResourceSnapshot) ([]*placementv1alpha1.ClusterResourceOverrideSnapshot, []*placementv1alpha1.ResourceOverrideSnapshot, error) {
+	// fetch the cro and ro snapshot list first before finding the matched ones.
+	latestSnapshotLabelMatcher := client.MatchingLabels{
+		placementv1beta1.IsLatestSnapshotLabel: strconv.FormatBool(true),
+	}
+	croList := &placementv1alpha1.ClusterResourceOverrideSnapshotList{}
+	if err := r.Client.List(ctx, croList, latestSnapshotLabelMatcher); err != nil {
+		klog.ErrorS(err, "Failed to list all the clusterResourceOverrideSnapshots")
 		return nil, nil, err
 	}
-	roList := &fleetv1alpha1.ResourceOverrideList{}
-	if err := r.Client.List(ctx, roList); err != nil {
-		klog.ErrorS(err, "Failed to list all the resourceOverrides")
+	roList := &placementv1alpha1.ResourceOverrideSnapshotList{}
+	if err := r.Client.List(ctx, roList, latestSnapshotLabelMatcher); err != nil {
+		klog.ErrorS(err, "Failed to list all the resourceOverrideSnapshots")
 		return nil, nil, err
 	}
 
@@ -47,8 +53,8 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 		return nil, nil, err
 	}
 
-	possibleCROs := make(map[fleetv1beta1.ResourceIdentifier]bool)
-	possibleROs := make(map[fleetv1beta1.ResourceIdentifier]bool)
+	possibleCROs := make(map[placementv1beta1.ResourceIdentifier]bool)
+	possibleROs := make(map[placementv1beta1.ResourceIdentifier]bool)
 	// List all the possible CROs and ROs based on the selected resources.
 	for _, snapshot := range resourceSnapshots {
 		for _, res := range snapshot.Spec.SelectedResources {
@@ -60,14 +66,14 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 			// If the resource is namespaced scope resource, the resource could be selected by the namespace or selected
 			// by the object itself.
 			if !r.InformerManager.IsClusterScopedResources(uResource.GroupVersionKind()) {
-				croKey := fleetv1beta1.ResourceIdentifier{
+				croKey := placementv1beta1.ResourceIdentifier{
 					Group:   utils.NamespaceMetaGVK.Group,
 					Version: utils.NamespaceMetaGVK.Version,
 					Kind:    utils.NamespaceMetaGVK.Kind,
 					Name:    uResource.GetNamespace(),
 				}
 				possibleCROs[croKey] = true // selected by the namespace
-				roKey := fleetv1beta1.ResourceIdentifier{
+				roKey := placementv1beta1.ResourceIdentifier{
 					Group:     uResource.GetObjectKind().GroupVersionKind().Group,
 					Version:   uResource.GetObjectKind().GroupVersionKind().Version,
 					Kind:      uResource.GetObjectKind().GroupVersionKind().Kind,
@@ -76,7 +82,7 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 				}
 				possibleROs[roKey] = true // selected by the object itself
 			} else {
-				croKey := fleetv1beta1.ResourceIdentifier{
+				croKey := placementv1beta1.ResourceIdentifier{
 					Group:   uResource.GetObjectKind().GroupVersionKind().Group,
 					Version: uResource.GetObjectKind().GroupVersionKind().Version,
 					Kind:    uResource.GetObjectKind().GroupVersionKind().Kind,
@@ -87,11 +93,11 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 		}
 	}
 
-	filteredCRO := make([]*fleetv1alpha1.ClusterResourceOverride, 0, len(croList.Items))
-	filteredRO := make([]*fleetv1alpha1.ResourceOverride, 0, len(roList.Items))
+	filteredCRO := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList.Items))
+	filteredRO := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList.Items))
 	for i := range croList.Items {
-		for _, selector := range croList.Items[i].Spec.ClusterResourceSelectors {
-			croKey := fleetv1beta1.ResourceIdentifier{
+		for _, selector := range croList.Items[i].Spec.OverrideSpec.ClusterResourceSelectors {
+			croKey := placementv1beta1.ResourceIdentifier{
 				Group:   selector.Group,
 				Version: selector.Version,
 				Kind:    selector.Kind,
@@ -104,8 +110,8 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 		}
 	}
 	for i := range roList.Items {
-		for _, selector := range roList.Items[i].Spec.ResourceSelectors {
-			roKey := fleetv1beta1.ResourceIdentifier{
+		for _, selector := range roList.Items[i].Spec.OverrideSpec.ResourceSelectors {
+			roKey := placementv1beta1.ResourceIdentifier{
 				Group:     selector.Group,
 				Version:   selector.Version,
 				Kind:      selector.Kind,
@@ -126,7 +132,7 @@ func (r *Reconciler) fetchAllMatchingOverridesForResourceSnapshot(ctx context.Co
 // roList is a list of resourceOverrides attached to the selected resources.
 // It returns names of cro and ro attached to the target cluster, and they're ordered by its namespace (if present) and
 // then name.
-func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx context.Context, binding *fleetv1beta1.ClusterResourceBinding, croList []*fleetv1alpha1.ClusterResourceOverride, roList []*fleetv1alpha1.ResourceOverride) ([]string, []fleetv1beta1.NamespacedName, error) {
+func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx context.Context, binding *placementv1beta1.ClusterResourceBinding, croList []*placementv1alpha1.ClusterResourceOverrideSnapshot, roList []*placementv1alpha1.ResourceOverrideSnapshot) ([]string, []placementv1beta1.NamespacedName, error) {
 	if len(croList) == 0 && len(roList) == 0 {
 		return nil, nil, nil
 	}
@@ -141,9 +147,9 @@ func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx contex
 		return nil, nil, controller.NewAPIServerError(true, err)
 	}
 
-	croFiltered := make([]*fleetv1alpha1.ClusterResourceOverride, 0, len(croList))
+	croFiltered := make([]*placementv1alpha1.ClusterResourceOverrideSnapshot, 0, len(croList))
 	for i, cro := range croList {
-		matched, err := isClusterMatched(cluster, cro.Spec.Policy)
+		matched, err := isClusterMatched(cluster, cro.Spec.OverrideSpec.Policy)
 		if err != nil {
 			klog.ErrorS(err, "Invalid clusterResourceOverride", "clusterResourceOverride", klog.KObj(cro))
 			return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -157,9 +163,9 @@ func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx contex
 		return croFiltered[i].Name < croFiltered[j].Name
 	})
 
-	roFiltered := make([]*fleetv1alpha1.ResourceOverride, 0, len(roList))
+	roFiltered := make([]*placementv1alpha1.ResourceOverrideSnapshot, 0, len(roList))
 	for i, ro := range roList {
-		matched, err := isClusterMatched(cluster, ro.Spec.Policy)
+		matched, err := isClusterMatched(cluster, ro.Spec.OverrideSpec.Policy)
 		if err != nil {
 			klog.ErrorS(err, "Invalid resourceOverride", "resourceOverride", klog.KObj(ro))
 			return nil, nil, controller.NewUnexpectedBehaviorError(err)
@@ -179,15 +185,15 @@ func (r *Reconciler) pickFromResourceMatchedOverridesForTargetCluster(ctx contex
 	for i, o := range croFiltered {
 		croNames[i] = o.Name
 	}
-	roNames := make([]fleetv1beta1.NamespacedName, len(roFiltered))
+	roNames := make([]placementv1beta1.NamespacedName, len(roFiltered))
 	for i, o := range roFiltered {
-		roNames[i] = fleetv1beta1.NamespacedName{Name: o.Name, Namespace: o.Namespace}
+		roNames[i] = placementv1beta1.NamespacedName{Name: o.Name, Namespace: o.Namespace}
 	}
 	klog.V(2).InfoS("Found matched overrides for the binding", "binding", klog.KObj(binding), "matchedCROCount", len(croNames), "matchedROCount", len(roNames))
 	return croNames, roNames, nil
 }
 
-func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *fleetv1alpha1.OverridePolicy) (bool, error) {
+func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *placementv1alpha1.OverridePolicy) (bool, error) {
 	if policy == nil {
 		return false, errors.New("policy is nil")
 	}
