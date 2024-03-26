@@ -22,7 +22,8 @@ const (
 	testResourceSnapshotName         = "test-rs"
 	testSchedulingPolicySnapshotName = "test-sps"
 	testTargetCluster                = "test-cluster"
-	testReason                       = "testReason"
+	testReason1                      = "testReason1"
+	testReason2                      = "testReason2"
 
 	eventuallyTimeout    = time.Second * 10
 	consistentlyDuration = time.Second * 10
@@ -97,32 +98,53 @@ var _ = Describe("When updating clusterResourceBinding status", Serial, Ordered,
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - RolloutStarted", func() {
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingRolloutStarted)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingRolloutStarted, crb.Generation, metav1.ConditionTrue, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingRolloutStarted, crb.Generation, metav1.ConditionFalse, testReason1)
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - Overridden", func() {
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingOverridden)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingOverridden, crb.Generation, metav1.ConditionTrue, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingOverridden, crb.Generation, metav1.ConditionFalse, testReason1)
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - WorkCreated", func() {
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkCreated)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkCreated, crb.Generation, metav1.ConditionTrue, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkCreated, crb.Generation, metav1.ConditionFalse, testReason1)
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - Applied", func() {
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingApplied)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingApplied, crb.Generation, metav1.ConditionTrue, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingApplied, crb.Generation, metav1.ConditionFalse, testReason1)
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - Available", func() {
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingAvailable)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingAvailable, crb.Generation, metav1.ConditionTrue, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingAvailable, crb.Generation, metav1.ConditionFalse, testReason1)
 	})
 
-	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding generation changes", func() {
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
-		crb.Spec.State = fleetv1beta1.BindingStateBound
-		Expect(k8sClient.Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding")
+	It("Should enqueue the clusterResourcePlacement name for reconciling, when condition's observed generation changes", func() {
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingRolloutStarted, crb.Generation+1, metav1.ConditionFalse, testReason1)
+	})
 
-		By("Checking placement controller queue")
-		eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
+	It("Should enqueue the clusterResourcePlacement name for reconciling, when condition's reason changes", func() {
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingOverridden, crb.Generation, metav1.ConditionFalse, testReason2)
+	})
+
+	It("Should not enqueue the clusterResourcePlacement name for reconciling, when only condition's last transition time changes", func() {
+		crb := &fleetv1beta1.ClusterResourceBinding{}
+		By(fmt.Sprintf("Updating the clusterResourceBinding status - %s, %d, %s, %s", fleetv1beta1.ResourceBindingOverridden, crb.Generation, metav1.ConditionFalse, testReason2))
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
+		condition := metav1.Condition{
+			Type:               string(fleetv1beta1.ResourceBindingOverridden),
+			ObservedGeneration: crb.Generation,
+			Status:             metav1.ConditionFalse,
+			Reason:             testReason2,
+			LastTransitionTime: metav1.Now(),
+		}
+		crb.SetConditions(condition)
+		Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
+
+		consistentlyCheckPlacementControllerQueueIsEmpty()
 	})
 })
 
@@ -141,35 +163,22 @@ func clusterResourceBindingForTest() *fleetv1beta1.ClusterResourceBinding {
 	}
 }
 
-func validateWhenUpdateClusterResourceBindingStatusWithCondition(conditionType fleetv1beta1.ResourceBindingConditionType) {
+func validateWhenUpdateClusterResourceBindingStatusWithCondition(conditionType fleetv1beta1.ResourceBindingConditionType, observedGeneration int64, status metav1.ConditionStatus, reason string) {
 	crb := &fleetv1beta1.ClusterResourceBinding{}
-	By(fmt.Sprintf("Updating the clusterResourceBinding status - %s Successful", conditionType))
+	By(fmt.Sprintf("Updating the clusterResourceBinding status - %s, %d, %s, %s", conditionType, observedGeneration, status, reason))
 	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testCRBName}, crb)).Should(Succeed(), "failed to get cluster resource binding")
-	condition := &metav1.Condition{
+	condition := metav1.Condition{
 		Type:               string(conditionType),
-		ObservedGeneration: crb.Generation,
-		Status:             metav1.ConditionTrue,
-		Reason:             testReason,
+		ObservedGeneration: observedGeneration,
+		Status:             status,
+		Reason:             reason,
 		LastTransitionTime: metav1.Now(),
 	}
-	crb.Status.Conditions = append(crb.Status.Conditions, *condition)
+	crb.SetConditions(condition)
 	Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
 
 	By("Checking placement controller queue")
 	eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
-
-	fakePlacementController.ResetQueue()
-
-	By(fmt.Sprintf("Updating the clusterResourceBinding status - %s Failed", conditionType))
-	condition = crb.GetCondition(string(conditionType))
-	condition.ObservedGeneration = crb.Generation
-	condition.Status = metav1.ConditionFalse
-	crb.SetConditions(*condition)
-	Expect(k8sClient.Status().Update(ctx, crb)).Should(Succeed(), "failed to update cluster resource binding status")
-
-	By("Checking placement controller queue")
-	eventuallyCheckPlacementControllerQueue(crb.GetLabels()[fleetv1beta1.CRPTrackingLabel])
-
 	fakePlacementController.ResetQueue()
 }
 

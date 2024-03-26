@@ -89,7 +89,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				klog.ErrorS(err, "Failed to process update event")
 				return false
 			}
-			return isBindingUpdated(oldBinding, newBinding)
+			return areConditionsUpdated(oldBinding, newBinding)
 		},
 	}
 
@@ -99,44 +99,24 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func isBindingUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBinding) bool {
-	// Iterate through the conditions to find non-nil conditions for both old, new binding.
-	i := condition.RolloutStartedCondition
-	for j := condition.RolloutStartedCondition; j < condition.TotalCondition; j++ {
-		oldCond := oldBinding.GetCondition(string(j.ResourceBindingConditionType()))
-		newCond := newBinding.GetCondition(string(j.ResourceBindingConditionType()))
+func areConditionsUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBinding) bool {
+	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+		oldCond := oldBinding.GetCondition(string(i.ResourceBindingConditionType()))
+		newCond := newBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		if oldCond == nil && newCond == nil {
 			break
 		}
-		i++
-	}
-	if i == condition.RolloutStartedCondition {
-		// All conditions are nil.
-		return false
-	}
-	// Iterate through the non-nil conditions to check if the conditions are updated.
-	for j := condition.RolloutStartedCondition; j < i; j++ {
-		oldCond := oldBinding.GetCondition(string(j.ResourceBindingConditionType()))
-		newCond := newBinding.GetCondition(string(j.ResourceBindingConditionType()))
-		if isConditionUpdated(oldCond, newCond, oldBinding.Generation, newBinding.Generation) {
+		if isConditionUpdated(oldCond, newCond) {
 			return true
 		}
 	}
-	// If the condition is not updated, check if the binding's generation is updated.
-	return isGenerationUpdated(oldBinding.Generation, newBinding.Generation)
+	return false
 }
 
-func isGenerationUpdated(oldBindingGen, newBindingGen int64) bool {
-	return oldBindingGen != newBindingGen
-}
-
-func isConditionUpdated(oldCond, newCond *metav1.Condition, oldBindingGen, newBindingGen int64) bool {
+func isConditionUpdated(oldCond, newCond *metav1.Condition) bool {
 	if oldCond == nil || newCond == nil {
 		return true
 	}
-	// The condition's observed generation should be the same as the binding's generation, otherwise we return false since the condition is outdated.
-	if oldCond.ObservedGeneration != oldBindingGen || newCond.ObservedGeneration != newBindingGen {
-		return false
-	}
-	return oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
+	// We don't compare message because in general it's changed every time reason is changed. We also don't check lastTransitionTime for the same reason.
+	return oldCond.ObservedGeneration != newCond.ObservedGeneration || oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
 }
