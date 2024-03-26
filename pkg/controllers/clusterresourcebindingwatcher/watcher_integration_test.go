@@ -53,7 +53,7 @@ var _ = Describe("Test ClusterResourceBinding Watcher - create, delete events", 
 })
 
 // This container cannot be run in parallel with other ITs because it uses a shared fakePlacementController.
-var _ = Describe("Test ClusterResourceBinding Watcher - update events", Serial, func() {
+var _ = Describe("Test ClusterResourceBinding Watcher - update metadata", Serial, func() {
 	var crb *fleetv1beta1.ClusterResourceBinding
 	BeforeEach(func() {
 		fakePlacementController.ResetQueue()
@@ -81,7 +81,8 @@ var _ = Describe("Test ClusterResourceBinding Watcher - update events", Serial, 
 	})
 })
 
-var _ = Describe("When updating clusterResourceBinding status", Serial, Ordered, func() {
+// This container cannot be run in parallel with other ITs because it uses a shared fakePlacementController. These tests are also ordered.
+var _ = Describe("Test ClusterResourceBinding Watcher - update status", Serial, Ordered, func() {
 	var crb *fleetv1beta1.ClusterResourceBinding
 	BeforeAll(func() {
 		fakePlacementController.ResetQueue()
