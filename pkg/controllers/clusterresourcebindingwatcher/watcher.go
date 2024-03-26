@@ -76,8 +76,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // SetupWithManager sets up the controller with the manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	customPredicate := predicate.Funcs{
-		// Ignoring creation and deletion events because the clusterSchedulingPolicySnapshot status is updated when bindings are create/deleted.
-		// clusterSchedulingPolicySnapshot controller enqueue the CRP name for reconciling whenever clusterSchedulingPolicySnapshot is updated.
+		// Ignoring creation and deletion events because the clusterSchedulingPolicySnapshot status is updated when bindings are create/deleted clusterSchedulingPolicySnapshot
+		// controller enqueues the CRP name for reconciling whenever clusterSchedulingPolicySnapshot is updated.
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Ignore creation events.
 			return false
