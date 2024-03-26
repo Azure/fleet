@@ -9,6 +9,7 @@ package clusterresourcebindingwatcher
 import (
 	"context"
 	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -34,6 +35,14 @@ type Reconciler struct {
 // Reconcile reconciles the clusterResourceBinding.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	bindingRef := klog.KRef("", req.Name)
+
+	startTime := time.Now()
+	klog.V(2).InfoS("Reconciliation starts", "clusterResourceBinding", bindingRef)
+	defer func() {
+		latency := time.Since(startTime).Milliseconds()
+		klog.V(2).InfoS("Reconciliation ends", "clusterResourceBinding", bindingRef, "latency", latency)
+	}()
+
 	var binding fleetv1beta1.ClusterResourceBinding
 	if err := r.Client.Get(ctx, req.NamespacedName, &binding); err != nil {
 		klog.ErrorS(err, "Failed to get cluster resource binding", "clusterResourceBinding", bindingRef)
@@ -67,6 +76,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // SetupWithManager sets up the controller with the manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	customPredicate := predicate.Funcs{
+		// Ignoring creation and deletion events because the clusterSchedulingPolicySnapshot status is updated when bindings are create/deleted.
+		// clusterSchedulingPolicySnapshot controller enqueue the CRP name for reconciling whenever clusterSchedulingPolicySnapshot is updated.
 		CreateFunc: func(e event.CreateEvent) bool {
 			// Ignore creation events.
 			return false
