@@ -9,11 +9,9 @@ package validator
 import (
 	"errors"
 	"fmt"
-	"reflect"
-
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -367,12 +365,7 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 
 // validatePropertySelector validates the property selector
 func validatePropertySelector(propertySelector *placementv1beta1.PropertySelector) error {
-	if reflect.TypeOf(propertySelector.MatchExpressions).Kind() == reflect.Slice && reflect.TypeOf(propertySelector.MatchExpressions).Elem().Name() == "PropertySelectorRequirement" {
-		// selector.MatchExpressions is of type []PropertySelectorRequirement
-		return validatePropertySelectorRequirements(propertySelector.MatchExpressions)
-	}
-	// MatchExpression is not of type []PropertySelectorRequirement
-	return fmt.Errorf("invalid MatchExpressions type %T, should be []PropertySelectorRequirement", reflect.TypeOf(propertySelector.MatchExpressions))
+	return validatePropertySelectorRequirements(propertySelector.MatchExpressions)
 }
 
 func validatePropertySelectorRequirements(propertySelectorRequirement []placementv1beta1.PropertySelectorRequirement) error {
@@ -391,12 +384,13 @@ func validatePropertySelectorRequirements(propertySelectorRequirement []placemen
 			placementv1beta1.PropertySelectorLessThanOrEqualTo:    true,
 			placementv1beta1.PropertySelectorEqualTo:              true,
 			placementv1beta1.PropertySelectorNotEqualTo:           true}
-
+		// For now, the expected length of values for the operators in this list is always 1
 		if validOperators[propertySelectorRequirement.Operator] && len(propertySelectorRequirement.Values) != 1 {
 			allErr = append(allErr, fmt.Errorf("operator %s requires exactly one value, got %d", propertySelectorRequirement.Operator, len(propertySelectorRequirement.Values)))
 			return apiErrors.NewAggregate(allErr)
 		}
 
+		// Currently we expect the value to a valid resource.Quantity
 		for _, value := range propertySelectorRequirement.Values {
 			if _, err := resource.ParseQuantity(value); err != nil {
 				allErr = append(allErr, fmt.Errorf("invalid value %s for property %s: %w", value, propertySelectorRequirement.Name, err))
