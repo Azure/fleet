@@ -420,8 +420,10 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			r := &Reconciler{
-				propertyProvider: nrpp,
-				recorder:         utils.NewFakeRecorder(maxQueuedPropertyCollectionCalls + 1),
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: nrpp,
+				},
+				recorder: utils.NewFakeRecorder(maxQueuedPropertyCollectionCalls + 1),
 			}
 			for i := 0; i < maxQueuedPropertyCollectionCalls; i++ {
 				// Invoke the method with no expectations for returns.
@@ -433,7 +435,7 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 
 			for {
 				// Wait for the prev. calls to get queued.
-				if r.queuedPropertyCollectionCalls.Load() == int32(maxQueuedPropertyCollectionCalls) {
+				if r.propertyProviderCfg.queuedPropertyCollectionCalls.Load() == int32(maxQueuedPropertyCollectionCalls) {
 					break
 				}
 			}
@@ -494,8 +496,10 @@ func TestReportClusterPropertiesWithPropertyProviderTimedOut(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			r := &Reconciler{
-				propertyProvider: nrpp,
-				recorder:         utils.NewFakeRecorder(1),
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: nrpp,
+				},
+				recorder: utils.NewFakeRecorder(1),
 			}
 
 			err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc)
@@ -622,8 +626,10 @@ func TestReportClusterPropertiesWithPropertyProvider(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			r := &Reconciler{
-				propertyProvider: &dummyProvider{},
-				recorder:         utils.NewFakeRecorder(1),
+				propertyProviderCfg: &propertyProviderConfig{
+					propertyProvider: &dummyProvider{},
+				},
+				recorder: utils.NewFakeRecorder(1),
 			}
 
 			err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc)

@@ -35,6 +35,34 @@ import (
 	"go.goms.io/fleet/pkg/utils/condition"
 )
 
+// propertyProviderConfig is a group of settings for configuring the the property provider.
+type propertyProviderConfig struct {
+	// propertyProvider is the provider that collects and exposes cluster properties.
+	//
+	// Note that this can be set to nil; in that case, the controller will fall back to the
+	// built-in default behavior, which retrieve a few limited properties themselves,
+	// in consistency with the earlier Fleet versions.
+	propertyProvider propertyprovider.PropertyProvider
+	// queuedPropertyCollectionCalls is the number of on-going calls to the
+	// property provider code in an attempt to collect the latest cluster properties.
+	//
+	// Normally a call to the property provider should complete swiftly; however,
+	// there is no guarantee about this, and to avoid corner cases where calls to the
+	// property provider code pile up without getting a response, Fleet will limit
+	// the number of calls.
+	//
+	// This limit does not apply to the built-in default behavior when no property
+	// provider is set up.
+	queuedPropertyCollectionCalls atomic.Int32
+	// isPropertyProviderStarted is true if the property provider has been started.
+	//
+	// Note that this field is set exactly once under the protection of startPropertyProviderOnce
+	// before any reads; concurrent reads afterwards are safe.
+	isPropertyProviderStarted bool
+	// startPropertyProviderOnce is used to start the property provider exactly once.
+	startPropertyProviderOnce sync.Once
+}
+
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
 	hubClient client.Client
@@ -65,30 +93,9 @@ type Reconciler struct {
 	// For more information, see the property provider interface, specifically its
 	// Start() method.
 	globalCtx context.Context
-	// propertyProvider is the provider that collects and exposes cluster properties.
-	//
-	// Note that this can be set to nil; in that case, the controller will fall back to the
-	// built-in default behavior, which retrieve a few limited properties themselves,
-	// in consistency with the earlier Fleet versions.
-	propertyProvider propertyprovider.PropertyProvider
-	// queuedPropertyCollectionCalls is the number of on-going calls to the
-	// property provider code in an attempt to collect the latest cluster properties.
-	//
-	// Normally a call to the property provider should complete swiftly; however,
-	// there is no guarantee about this, and to avoid corner cases where calls to the
-	// property provider code pile up without getting a response, Fleet will limit
-	// the number of calls.
-	//
-	// This limit does not apply to the built-in default behavior when no property
-	// provider is set up.
-	queuedPropertyCollectionCalls atomic.Int32
-	// isPropertyProviderStarted is true if the property provider has been started.
-	//
-	// Note that this field is set exactly once under the protection of startPropertyProviderOnce
-	// before any reads; concurrent reads afterwards are safe.
-	isPropertyProviderStarted bool
-	// startPropertyProviderOnce is used to start the property provider exactly once.
-	startPropertyProviderOnce sync.Once
+
+	// The property provider configuration.
+	propertyProviderCfg *propertyProviderConfig
 
 	recorder record.EventRecorder
 }
@@ -168,7 +175,9 @@ func NewReconciler(globalCtx context.Context,
 		memberClient:       memberClient,
 		rawMemberClientSet: rawMemberClientSet,
 		workController:     workController,
-		propertyProvider:   propertyProvider,
+		propertyProviderCfg: &propertyProviderConfig{
+			propertyProvider: propertyProvider,
+		},
 	}, nil
 }
 
@@ -281,8 +290,8 @@ func (r *Reconciler) updateHealth(ctx context.Context, imc *clusterv1beta1.Inter
 
 // connectToPropertyProvider connects to the property provider to collect the latest cluster properties.
 func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
-	r.startPropertyProviderOnce.Do(func() {
-		if r.propertyProvider == nil {
+	r.propertyProviderCfg.startPropertyProviderOnce.Do(func() {
+		if r.propertyProviderCfg.propertyProvider == nil {
 			// No property provider is set up; fall back to the built-in default behavior.
 			return
 		}
@@ -295,7 +304,7 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 		// Attempt to start the property provider.
 		go func() {
 			defer close(startedCh)
-			if err := r.propertyProvider.Start(r.globalCtx, r.memberConfig); err != nil {
+			if err := r.propertyProviderCfg.propertyProvider.Start(r.globalCtx, r.memberConfig); err != nil {
 				klog.ErrorS(err, "Failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
 				startedCh <- err
 			}
@@ -318,12 +327,12 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 				klog.V(2).InfoS("Property provider started", "InternalMemberCluster", klog.KObj(imc))
 				reportPropertyProviderStartedCondition(imc, metav1.ConditionTrue, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
 				r.recorder.Event(imc, corev1.EventTypeNormal, ClusterPropertyProviderStartedReason, ClusterPropertyProviderStartedMessage)
-				r.isPropertyProviderStarted = true
+				r.propertyProviderCfg.isPropertyProviderStarted = true
 			}
 		}
 	})
 
-	if r.propertyProvider != nil && r.isPropertyProviderStarted {
+	if r.propertyProviderCfg.propertyProvider != nil && r.propertyProviderCfg.isPropertyProviderStarted {
 		// Attempt to collect latest cluster properties via the property provider.
 		klog.V(2).InfoS("Calling property provider for latest cluster properties", "InternalMemberCluster", klog.KObj(imc))
 		return r.reportClusterPropertiesWithPropertyProvider(ctx, imc)
@@ -332,8 +341,8 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 	// Fall back to the built-in default behavior.
 	klog.V(2).InfoS("Falling back to the built-in default behavior for cluster property collection",
 		"InternalMemberCluster", klog.KObj(imc),
-		"IsPropertyProviderInstalled", r.propertyProvider != nil,
-		"IsPropertyProviderStarted", r.isPropertyProviderStarted,
+		"IsPropertyProviderInstalled", r.propertyProviderCfg.propertyProvider != nil,
+		"IsPropertyProviderStarted", r.propertyProviderCfg.isPropertyProviderStarted,
 	)
 	if err := r.updateResourceStats(ctx, imc); err != nil {
 		klog.ErrorS(err, "Failed to report cluster properties using built-in mechanism", "InternalMemberCluster", klog.KObj(imc))
@@ -369,8 +378,8 @@ func reportPropertyProviderStartedCondition(imc *clusterv1beta1.InternalMemberCl
 // reportClusterPropertiesWithPropertyProvider collects the latest cluster properties from the property provider.
 func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
 	// Check if there are queued calls that have not returned yet.
-	ticket := r.queuedPropertyCollectionCalls.Add(1)
-	defer r.queuedPropertyCollectionCalls.Add(-1)
+	ticket := r.propertyProviderCfg.queuedPropertyCollectionCalls.Add(1)
+	defer r.propertyProviderCfg.queuedPropertyCollectionCalls.Add(-1)
 	if ticket > int32(maxQueuedPropertyCollectionCalls) {
 		// There are too many on-going calls to the property provider; report the failure
 		// and skip this collection attempt.
@@ -391,12 +400,18 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 	childCtx, childCancelFunc := context.WithDeadline(ctx, time.Now().Add(propertyProviderCollectionDeadline))
 	// Cancel the context any way to avoid leaks.
 	defer childCancelFunc()
+
+	// Note that the property provider might not be able to complete the reporting within the
+	// deadline, and the Collect() call, despite our best efforts, might not terminate as the
+	// context exits; to avoid the corner case where too many routines are being created without the
+	// results being collected, Fleet will limit the number of on-going calls to the property
+	// provider.
 	collectedCh := make(chan struct{})
 
 	var res propertyprovider.PropertyCollectionResponse
 	go func() {
 		defer close(collectedCh)
-		res = r.propertyProvider.Collect(childCtx)
+		res = r.propertyProviderCfg.propertyProvider.Collect(childCtx)
 	}()
 
 	select {
