@@ -395,7 +395,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			rps.Conditions = oldConditions
 		}
 		meta.SetStatusCondition(&rps.Conditions, scheduledCondition)
-		res, err := r.setResourcePlacementStatusPerCluster(ctx, crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rps)
+		res, err := r.setResourcePlacementStatusPerCluster(crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rps)
 		if err != nil {
 			return false, err
 		}
@@ -506,8 +506,7 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 //	TotalCondition
 //
 // )
-func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
-	crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
+func (r *Reconciler) setResourcePlacementStatusPerCluster(crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
 	if binding == nil {
 		meta.SetStatusCondition(&status.Conditions, RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 		return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
@@ -538,9 +537,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 				}
 			case AppliedCondition, AvailableCondition:
 				if bindingCond.Status == metav1.ConditionFalse {
-					if err := r.setFailedPlacementsPerCluster(ctx, crp, binding, status); err != nil {
-						return nil, err
-					}
+					status.FailedPlacements = binding.Status.FailedPlacements
 				}
 			}
 			cond := metav1.Condition{

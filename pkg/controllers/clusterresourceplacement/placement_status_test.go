@@ -6647,7 +6647,6 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 	tests := []struct {
 		name       string
 		binding    *fleetv1beta1.ClusterResourceBinding
-		works      []fleetv1beta1.Work
 		want       []metav1.ConditionStatus
 		wantStatus fleetv1beta1.ResourcePlacementStatus
 	}{
@@ -7051,6 +7050,23 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
+					FailedPlacements: []fleetv1beta1.FailedResourcePlacement{
+						{
+							ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+								Group:     "",
+								Version:   "v1",
+								Kind:      "ConfigMap",
+								Name:      "config-name",
+								Namespace: "config-namespace",
+								Envelope:  nil,
+							},
+							Condition: metav1.Condition{
+								Type:               fleetv1beta1.WorkConditionTypeApplied,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 1,
+							},
+						},
+					},
 					Conditions: []metav1.Condition{
 						{
 							Status:             metav1.ConditionTrue,
@@ -7075,46 +7091,6 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 							Type:               string(fleetv1beta1.ResourceBindingApplied),
 							Reason:             condition.ApplyFailedReason,
 							ObservedGeneration: 1,
-						},
-					},
-				},
-			},
-			works: []fleetv1beta1.Work{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "failed-work",
-						Namespace:  fmt.Sprintf(utils.NamespaceNameFormat, cluster),
-						Generation: 1,
-						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testName,
-							fleetv1beta1.ParentBindingLabel: bindingName,
-						},
-					},
-					Status: fleetv1beta1.WorkStatus{
-						ManifestConditions: []fleetv1beta1.ManifestCondition{
-							{
-								Identifier: fleetv1beta1.WorkResourceIdentifier{
-									Ordinal:   0,
-									Group:     "",
-									Version:   "v1",
-									Kind:      "ConfigMap",
-									Name:      "config-name",
-									Namespace: "config-namespace",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionFalse,
-									},
-								},
-							},
-						},
-						Conditions: []metav1.Condition{
-							{
-								Type:               fleetv1beta1.WorkConditionTypeApplied,
-								Status:             metav1.ConditionFalse,
-								ObservedGeneration: 1,
-							},
 						},
 					},
 				},
@@ -7147,8 +7123,9 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 							Namespace: "config-namespace",
 						},
 						Condition: metav1.Condition{
-							Type:   fleetv1beta1.WorkConditionTypeApplied,
-							Status: metav1.ConditionFalse,
+							Type:               fleetv1beta1.WorkConditionTypeApplied,
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
 						},
 					},
 				},
@@ -7203,6 +7180,22 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					TargetCluster:                    cluster,
 				},
 				Status: fleetv1beta1.ResourceBindingStatus{
+					FailedPlacements: []fleetv1beta1.FailedResourcePlacement{
+						{
+							ResourceIdentifier: fleetv1beta1.ResourceIdentifier{
+								Group:     "",
+								Version:   "v1",
+								Kind:      "ConfigMap",
+								Name:      "config-name",
+								Namespace: "config-namespace",
+							},
+							Condition: metav1.Condition{
+								Type:               fleetv1beta1.WorkConditionTypeAvailable,
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: 1,
+							},
+						},
+					},
 					Conditions: []metav1.Condition{
 						{
 							Status:             metav1.ConditionTrue,
@@ -7237,55 +7230,6 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 					},
 				},
 			},
-			works: []fleetv1beta1.Work{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "failed-work",
-						Namespace:  fmt.Sprintf(utils.NamespaceNameFormat, cluster),
-						Generation: 1,
-						Labels: map[string]string{
-							fleetv1beta1.CRPTrackingLabel:   testName,
-							fleetv1beta1.ParentBindingLabel: bindingName,
-						},
-					},
-					Status: fleetv1beta1.WorkStatus{
-						ManifestConditions: []fleetv1beta1.ManifestCondition{
-							{
-								Identifier: fleetv1beta1.WorkResourceIdentifier{
-									Ordinal:   0,
-									Group:     "",
-									Version:   "v1",
-									Kind:      "ConfigMap",
-									Name:      "config-name",
-									Namespace: "config-namespace",
-								},
-								Conditions: []metav1.Condition{
-									{
-										Type:   fleetv1beta1.WorkConditionTypeApplied,
-										Status: metav1.ConditionTrue,
-									},
-									{
-										Type:   fleetv1beta1.WorkConditionTypeAvailable,
-										Status: metav1.ConditionFalse,
-									},
-								},
-							},
-						},
-						Conditions: []metav1.Condition{
-							{
-								Type:               fleetv1beta1.WorkConditionTypeApplied,
-								Status:             metav1.ConditionTrue,
-								ObservedGeneration: 1,
-							},
-							{
-								Type:               fleetv1beta1.WorkConditionTypeAvailable,
-								Status:             metav1.ConditionFalse,
-								ObservedGeneration: 1,
-							},
-						},
-					},
-				},
-			},
 			want: []metav1.ConditionStatus{
 				metav1.ConditionTrue,
 				metav1.ConditionTrue,
@@ -7315,8 +7259,9 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 							Namespace: "config-namespace",
 						},
 						Condition: metav1.Condition{
-							Type:   fleetv1beta1.WorkConditionTypeAvailable,
-							Status: metav1.ConditionFalse,
+							Type:               fleetv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionFalse,
+							ObservedGeneration: 1,
 						},
 					},
 				},
@@ -7369,13 +7314,8 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 				},
 			}
 			scheme := serviceScheme(t)
-			var objects []client.Object
-			for i := range tc.works {
-				objects = append(objects, &tc.works[i])
-			}
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithObjects(objects...).
 				Build()
 			r := Reconciler{
 				Client:           fakeClient,
@@ -7384,7 +7324,7 @@ func TestSetResourcePlacementStatusPerCluster(t *testing.T) {
 				UseNewConditions: true,
 			}
 			status := fleetv1beta1.ResourcePlacementStatus{ClusterName: cluster}
-			got, err := r.setResourcePlacementStatusPerCluster(ctx, crp, resourceSnapshot, tc.binding, &status)
+			got, err := r.setResourcePlacementStatusPerCluster(crp, resourceSnapshot, tc.binding, &status)
 			if err != nil {
 				t.Fatalf("setResourcePlacementStatusPerCluster() got err %v, want nil", err)
 			}
