@@ -56,6 +56,12 @@ spec:
                   the resource to be placed already exists in the target cluster and
                   is owned by other appliers.
                 properties:
+                  allowCoOwnership:
+                    description: AllowCoOwnership defines whether it allows the resource
+                      in the target cluster co-owned by other non-fleet applier. If
+                      not, the resource apply will fail if its owner reference includes
+                      types other than `appliedWork`.
+                    type: boolean
                   serverSideApplyConfig:
                     description: ServerSideApplyConfig defines the configuration for
                       server side apply. It is honored only when type is ServerSideApply.
@@ -72,11 +78,11 @@ spec:
                         type: boolean
                     type: object
                   type:
-                    default: FailIfExists
+                    default: ClientSideApply
                     description: Type defines the type of strategy to use. Default
-                      to FailIfExists.
+                      to ClientSideApply.
                     enum:
-                    - FailIfExists
+                    - ClientSideApply
                     - ServerSideApply
                     type: string
                 type: object

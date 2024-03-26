@@ -427,15 +427,19 @@ type RolloutStrategy struct {
 }
 
 // ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
-// and is owned by other appliers.
+// and whether it's allowed to be co-owned by other non-fleet appliers.
 // Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
-	// Type defines the type of strategy to use. Default to FailIfExists.
-	// +kubebuilder:default=FailIfExists
-	// +kubebuilder:validation:Enum=FailIfExists;ServerSideApply
+	// Type defines the type of strategy to use. Default to ClientSideApply.
+	// +kubebuilder:default=ClientSideApply
+	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply
 	// +optional
 	Type ApplyStrategyType `json:"type,omitempty"`
+
+	// AllowCoOwnership defines whether it allows the resource in the target cluster co-owned by other non-fleet applier.
+	// If not, the resource apply will fail if its owner reference includes types other than `appliedWork`.
+	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
 	// +optional
@@ -448,9 +452,10 @@ type ApplyStrategy struct {
 type ApplyStrategyType string
 
 const (
-	// ApplyStrategyTypeFailIfExists will fail to apply a resource if it already exists in the target cluster and is owned
-	// by other appliers.
-	ApplyStrategyTypeFailIfExists ApplyStrategyType = "FailIfExists"
+	// ApplyStrategyTypeClientSideApply will use three-way merge patch similar to how `kubectl apply` does by storing
+	// last applied state in the `last-applied-configuration` annotation.
+	// When the `last-applied-configuration` annotation size is greater than 256kB, it falls back to the server-side apply.
+	ApplyStrategyTypeClientSideApply ApplyStrategyType = "ClientSideApply"
 
 	// ApplyStrategyTypeServerSideApply will use server-side apply to resolve conflicts between the resource to be placed
 	// and the existing resource in the target cluster.

@@ -353,7 +353,7 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 			strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				ApplyStrategy: &placementv1beta1.ApplyStrategy{
-					Type: placementv1beta1.ApplyStrategyTypeFailIfExists,
+					Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
 					ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{
 						ForceConflicts: false,
 					},
