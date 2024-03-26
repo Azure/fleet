@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/test/utils/controller"
@@ -73,7 +73,7 @@ var _ = BeforeSuite(func() {
 
 	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
-		Metrics: metricsserver.Options{
+		Metrics: server.Options{
 			BindAddress: "0",
 		},
 		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),

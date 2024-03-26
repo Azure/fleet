@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -46,11 +47,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	// Verify if the policy snapshot is currently active.
-	crpName, ok := binding.Labels[fleetv1beta1.CRPTrackingLabel]
-	if !ok {
+	// Fetch the CRP name from the CRPTrackingLabel on ClusterResourceBinding.
+	crpName := binding.Labels[fleetv1beta1.CRPTrackingLabel]
+	if len(crpName) == 0 {
 		// The CRPTrackingLabel label is not present; normally this should never occur.
-		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRPTrackingLabel is missing")),
+		klog.ErrorS(controller.NewUnexpectedBehaviorError(fmt.Errorf("CRPTrackingLabel is missing or value is empty")),
 			"CRPTrackingLabel is not present",
 			"clusterResourceBinding", bindingRef)
 		// This is not a situation that the controller can recover by itself. Should the label
@@ -88,13 +89,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				klog.ErrorS(err, "Failed to process update event")
 				return false
 			}
-
-			return isGenerationUpdated(oldBinding, newBinding) ||
-				isConditionUpdated(oldBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted)), newBinding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))) ||
-				isConditionUpdated(oldBinding.GetCondition(string(fleetv1beta1.ResourceBindingOverridden)), newBinding.GetCondition(string(fleetv1beta1.ResourceBindingOverridden))) ||
-				isConditionUpdated(oldBinding.GetCondition(string(fleetv1beta1.ResourceBindingWorkCreated)), newBinding.GetCondition(string(fleetv1beta1.ResourceBindingWorkCreated))) ||
-				isConditionUpdated(oldBinding.GetCondition(string(fleetv1beta1.ResourceBindingApplied)), newBinding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))) ||
-				isConditionUpdated(oldBinding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable)), newBinding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable)))
+			return isBindingUpdated(oldBinding, newBinding)
 		},
 	}
 
@@ -104,16 +99,44 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func isGenerationUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBinding) bool {
-	return oldBinding.Generation != newBinding.Generation
-}
-
-func isConditionUpdated(oldCondition, newCondition *metav1.Condition) bool {
-	if oldCondition == nil && newCondition == nil {
+func isBindingUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBinding) bool {
+	// Iterate through the conditions to find non-nil conditions for both old, new binding.
+	i := condition.RolloutStartedCondition
+	for j := condition.RolloutStartedCondition; j < condition.TotalCondition; j++ {
+		oldCond := oldBinding.GetCondition(string(j.ResourceBindingConditionType()))
+		newCond := newBinding.GetCondition(string(j.ResourceBindingConditionType()))
+		if oldCond == nil && newCond == nil {
+			break
+		}
+		i++
+	}
+	if i == condition.RolloutStartedCondition {
+		// All conditions are nil.
 		return false
 	}
-	if oldCondition == nil || newCondition == nil {
+	// Iterate through the non-nil conditions to check if the conditions are updated.
+	for j := condition.RolloutStartedCondition; j < i; j++ {
+		oldCond := oldBinding.GetCondition(string(j.ResourceBindingConditionType()))
+		newCond := newBinding.GetCondition(string(j.ResourceBindingConditionType()))
+		if isConditionUpdated(oldCond, newCond, oldBinding.Generation, newBinding.Generation) {
+			return true
+		}
+	}
+	// If the condition is not updated, check if the binding's generation is updated.
+	return isGenerationUpdated(oldBinding.Generation, newBinding.Generation)
+}
+
+func isGenerationUpdated(oldBindingGen, newBindingGen int64) bool {
+	return oldBindingGen != newBindingGen
+}
+
+func isConditionUpdated(oldCond, newCond *metav1.Condition, oldBindingGen, newBindingGen int64) bool {
+	if oldCond == nil || newCond == nil {
 		return true
 	}
-	return oldCondition.Status != newCondition.Status
+	// The condition's observed generation should be the same as the binding's generation, otherwise we return false since the condition is outdated.
+	if oldCond.ObservedGeneration != oldBindingGen || newCond.ObservedGeneration != newBindingGen {
+		return false
+	}
+	return oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
 }

@@ -374,7 +374,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 	}
 
 	// record the total count per status for each condition
-	var clusterConditionStatusRes [TotalCondition][TotalConditionStatus]int
+	var clusterConditionStatusRes [condition.TotalCondition][condition.TotalConditionStatus]int
 
 	for _, c := range selected {
 		var rps fleetv1beta1.ResourcePlacementStatus
@@ -402,11 +402,11 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		for i := range res {
 			switch res[i] {
 			case metav1.ConditionTrue:
-				clusterConditionStatusRes[i][TrueConditionStatus]++
+				clusterConditionStatusRes[i][condition.TrueConditionStatus]++
 			case metav1.ConditionFalse:
-				clusterConditionStatusRes[i][FalseConditionStatus]++
+				clusterConditionStatusRes[i][condition.FalseConditionStatus]++
 			case metav1.ConditionUnknown:
-				clusterConditionStatusRes[i][UnknownConditionStatus]++
+				clusterConditionStatusRes[i][condition.UnknownConditionStatus]++
 			}
 		}
 		placementStatuses = append(placementStatuses, rps)
@@ -440,15 +440,15 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 		return false, nil
 	}
 
-	for i := RolloutStartedCondition; i < TotalCondition; i++ {
-		if clusterConditionStatusRes[i][UnknownConditionStatus] > 0 {
-			crp.SetConditions(i.UnknownClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][UnknownConditionStatus]))
+	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+		if clusterConditionStatusRes[i][condition.UnknownConditionStatus] > 0 {
+			crp.SetConditions(i.UnknownClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.UnknownConditionStatus]))
 			break
-		} else if clusterConditionStatusRes[i][FalseConditionStatus] > 0 {
-			crp.SetConditions(i.FalseClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][FalseConditionStatus]))
+		} else if clusterConditionStatusRes[i][condition.FalseConditionStatus] > 0 {
+			crp.SetConditions(i.FalseClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.FalseConditionStatus]))
 			break
 		} else {
-			crp.SetConditions(i.TrueClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][TrueConditionStatus]))
+			crp.SetConditions(i.TrueClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.TrueConditionStatus]))
 		}
 	}
 	klog.V(2).InfoS("Populated the placement conditions", "clusterResourcePlacement", klog.KObj(crp))
@@ -509,11 +509,11 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 	crp *fleetv1beta1.ClusterResourcePlacement, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, binding *fleetv1beta1.ClusterResourceBinding, status *fleetv1beta1.ResourcePlacementStatus) ([]metav1.ConditionStatus, error) {
 	if binding == nil {
-		meta.SetStatusCondition(&status.Conditions, RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
+		meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 		return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
 	}
 
-	res := make([]metav1.ConditionStatus, 0, TotalCondition)
+	res := make([]metav1.ConditionStatus, 0, condition.TotalCondition)
 	// There are few cases:
 	// * if the resourceSnapshotName is not equal,
 	//     1. the status is false, it means the rollout is stuck.
@@ -521,7 +521,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 	// * if the resourceSnapshotName is equal,
 	//     just return the corresponding status.
 	if binding.Spec.ResourceSnapshotName == latestResourceSnapshot.Name {
-		for i := RolloutStartedCondition; i < TotalCondition; i++ {
+		for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 			bindingCond := binding.GetCondition(string(i.ResourceBindingConditionType()))
 			if !condition.IsConditionStatusTrue(bindingCond, binding.Generation) &&
 				!condition.IsConditionStatusFalse(bindingCond, binding.Generation) {
@@ -531,12 +531,12 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 			}
 
 			switch i {
-			case RolloutStartedCondition:
+			case condition.RolloutStartedCondition:
 				if bindingCond.Status == metav1.ConditionTrue {
 					status.ApplicableResourceOverrides = binding.Spec.ResourceOverrideSnapshots
 					status.ApplicableClusterResourceOverrides = binding.Spec.ClusterResourceOverrideSnapshots
 				}
-			case AppliedCondition, AvailableCondition:
+			case condition.AppliedCondition, condition.AvailableCondition:
 				if bindingCond.Status == metav1.ConditionFalse {
 					if err := r.setFailedPlacementsPerCluster(ctx, crp, binding, status); err != nil {
 						return nil, err
@@ -560,10 +560,10 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 		return res, nil
 	}
 	// handling stale binding if binding.Spec.ResourceSnapshotName != latestResourceSnapshot.Name
-	rolloutStartedCond := binding.GetCondition(string(RolloutStartedCondition.ResourceBindingConditionType()))
+	rolloutStartedCond := binding.GetCondition(string(condition.RolloutStartedCondition.ResourceBindingConditionType()))
 	if condition.IsConditionStatusFalse(rolloutStartedCond, binding.Generation) {
 		cond := metav1.Condition{
-			Type:               string(RolloutStartedCondition.ResourcePlacementConditionType()),
+			Type:               string(condition.RolloutStartedCondition.ResourcePlacementConditionType()),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: crp.Generation,
 			Reason:             condition.RolloutNotStartedYetReason,
@@ -575,7 +575,7 @@ func (r *Reconciler) setResourcePlacementStatusPerCluster(ctx context.Context,
 	}
 	// At this point, either the generation is not the one in the binding spec or the status is true/unknown.
 	// It means the rollout controller has not handled the binding yet.
-	meta.SetStatusCondition(&status.Conditions, RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
+	meta.SetStatusCondition(&status.Conditions, condition.RolloutStartedCondition.UnknownResourceConditionPerCluster(crp.Generation))
 	return []metav1.ConditionStatus{metav1.ConditionUnknown}, nil
 }
 
