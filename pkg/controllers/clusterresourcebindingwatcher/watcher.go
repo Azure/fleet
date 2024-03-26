@@ -128,6 +128,6 @@ func isConditionUpdated(oldCond, newCond *metav1.Condition) bool {
 	if oldCond == nil || newCond == nil {
 		return true
 	}
-	// We don't compare message because in general it's changed every time reason is changed. We also don't check lastTransitionTime for the same reason.
+	// We don't compare message because in general it's changed every time reason is changed. We also don't check lastTransitionTime for similar reason.
 	return oldCond.ObservedGeneration != newCond.ObservedGeneration || oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
 }
