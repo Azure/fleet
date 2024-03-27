@@ -379,7 +379,6 @@ func reportPropertyProviderStartedCondition(imc *clusterv1beta1.InternalMemberCl
 func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Context, imc *clusterv1beta1.InternalMemberCluster) error {
 	// Check if there are queued calls that have not returned yet.
 	ticket := r.propertyProviderCfg.queuedPropertyCollectionCalls.Add(1)
-	defer r.propertyProviderCfg.queuedPropertyCollectionCalls.Add(-1)
 	if ticket > int32(maxQueuedPropertyCollectionCalls) {
 		// There are too many on-going calls to the property provider; report the failure
 		// and skip this collection attempt.
@@ -411,6 +410,7 @@ func (r *Reconciler) reportClusterPropertiesWithPropertyProvider(ctx context.Con
 	var res propertyprovider.PropertyCollectionResponse
 	go func() {
 		defer close(collectedCh)
+		defer r.propertyProviderCfg.queuedPropertyCollectionCalls.Add(-1)
 		res = r.propertyProviderCfg.propertyProvider.Collect(childCtx)
 	}()
 
