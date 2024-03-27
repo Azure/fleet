@@ -16,21 +16,6 @@ func TestValidateResourceSelectors(t *testing.T) {
 		ro         fleetv1alpha1.ResourceOverride
 		wantErrMsg error
 	}{
-		"resource selected by empty name": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-						{
-							Group:   "group",
-							Version: "v1",
-							Kind:    "Kind",
-							Name:    "",
-						},
-					},
-				},
-			},
-			wantErrMsg: fmt.Errorf("resource name is required for resource selection"),
-		},
 		"duplicate resources selected": {
 			ro: fleetv1alpha1.ResourceOverride{
 				Spec: fleetv1alpha1.ResourceOverrideSpec{

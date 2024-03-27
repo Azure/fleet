@@ -31,12 +31,6 @@ func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
 	allErr := make([]error, 0)
 	for _, selector := range ro.Spec.ResourceSelectors {
-		// Check if the resource is being selected by resource name
-		if selector.Name == "" {
-			allErr = append(allErr, fmt.Errorf("resource name is required for resource selection %+v", selector))
-			continue
-		}
-
 		// Check if there are any duplicate selectors
 		if selectorMap[selector] {
 			allErr = append(allErr, fmt.Errorf("resource selector %+v already exists, and must be unique", selector))

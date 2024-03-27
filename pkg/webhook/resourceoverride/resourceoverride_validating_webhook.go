@@ -43,9 +43,9 @@ func Add(mgr manager.Manager) error {
 // Handle resourceOverrideValidator checks to see if resource override is valid
 func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var ro fleetv1alpha1.ResourceOverride
-	klog.V(2).InfoS("validating webhook handling resource override", "operation", req.Operation)
+	klog.V(2).InfoS("Validating webhook handling resource override", "operation", req.Operation)
 	if err := v.decoder.Decode(req, &ro); err != nil {
-		klog.ErrorS(err, "failed to decode resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
+		klog.ErrorS(err, "Failed to decode resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
@@ -57,23 +57,23 @@ func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Re
 
 	// Check if the override count limit has been reached, if there are at most 100 resource overrides
 	if req.Operation == admissionv1.Create && len(roList.Items) >= 100 {
-		klog.Errorf("resourceoverride limit has been reached: at most 100 resources can be created.")
-		return admission.Denied("resourceoverride limit has been reached: at most 100 resources can be created.")
+		klog.Errorf("ResourceOverride limit has been reached: at most 100 resources can be created.")
+		return admission.Denied("resourceOverride limit has been reached: at most 100 resources can be created.")
 	}
 
 	if err := validator.ValidateResourceOverride(ro, roList); err != nil {
-		klog.V(2).ErrorS(err, "resourceoverride has invalid fields, request is denied", "operation", req.Operation)
+		klog.V(2).ErrorS(err, "ResourceOverride has invalid fields, request is denied", "operation", req.Operation)
 		return admission.Denied(err.Error())
 	}
-	return admission.Allowed("resourceoverride has valid fields")
+	return admission.Allowed("resourceOverride has valid fields")
 }
 
 // listResourceOverride returns a list of cluster resource overrides.
 func listResourceOverride(ctx context.Context, client client.Client) (*fleetv1alpha1.ResourceOverrideList, error) {
 	roList := &fleetv1alpha1.ResourceOverrideList{}
 	if err := client.List(ctx, roList); err != nil {
-		klog.ErrorS(err, "failed to list resourceoverrides when validating")
-		return nil, fmt.Errorf("failed to list resourceoverrides, please retry the request: %w", err)
+		klog.ErrorS(err, "Failed to list resourceOverrides when validating")
+		return nil, fmt.Errorf("failed to list resourceOverrides, please retry the request: %w", err)
 	}
 	return roList, nil
 }
