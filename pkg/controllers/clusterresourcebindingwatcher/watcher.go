@@ -37,10 +37,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	bindingRef := klog.KRef("", req.Name)
 
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts", "clusterResourceBinding", bindingRef)
+	klog.V(2).InfoS("ClusterResourceBindingWatcher Reconciliation starts", "clusterResourceBinding", bindingRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends", "clusterResourceBinding", bindingRef, "latency", latency)
+		klog.V(2).InfoS("ClusterResourceBindingWatcher Reconciliation ends", "clusterResourceBinding", bindingRef, "latency", latency)
 	}()
 
 	var binding fleetv1beta1.ClusterResourceBinding
@@ -128,6 +128,6 @@ func isConditionUpdated(oldCond, newCond *metav1.Condition) bool {
 	if oldCond == nil || newCond == nil {
 		return true
 	}
-	// We don't compare message because in general it's changed every time reason is changed. We also don't check lastTransitionTime for similar reason.
+	// We don't compare message because in general it's changed every time reason is changed.
 	return oldCond.ObservedGeneration != newCond.ObservedGeneration || oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
 }
