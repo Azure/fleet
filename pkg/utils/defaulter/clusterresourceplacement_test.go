@@ -27,7 +27,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(5)),
@@ -46,7 +46,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(5)),
@@ -93,7 +93,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 				},
@@ -111,7 +111,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(10)),
@@ -149,7 +149,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(10)),
@@ -217,7 +217,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(10)),
@@ -243,7 +243,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(10)),
@@ -270,7 +270,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(10)),
@@ -296,7 +296,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 							UnavailablePeriodSeconds: ptr.To(15),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeFailIfExists,
+							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
 					RevisionHistoryLimit: ptr.To(int32(10)),

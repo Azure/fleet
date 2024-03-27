@@ -62,7 +62,7 @@ func SetDefaultsClusterResourcePlacement(obj *fleetv1beta1.ClusterResourcePlacem
 	}
 	if strategy.ApplyStrategy != nil {
 		if strategy.ApplyStrategy.Type == "" {
-			strategy.ApplyStrategy.Type = fleetv1beta1.ApplyStrategyTypeFailIfExists
+			strategy.ApplyStrategy.Type = fleetv1beta1.ApplyStrategyTypeClientSideApply
 		}
 		if strategy.ApplyStrategy.Type == fleetv1beta1.ApplyStrategyTypeServerSideApply {
 			if strategy.ApplyStrategy.ServerSideApplyConfig == nil {
