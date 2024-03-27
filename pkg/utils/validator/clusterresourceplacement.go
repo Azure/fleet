@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
@@ -286,6 +287,16 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
 		allErr = append(allErr, validateLabelSelector(clusterSelectorTerm.LabelSelector, "cluster selector"))
+
+		// Affinity is RequiredDuringSchedulingIgnoredDuringExecution, so check that PropertySorter is nil.
+		if clusterSelectorTerm.PropertySorter != nil {
+			allErr = append(allErr, fmt.Errorf("PropertySorter is not allowed for RequiredDuringSchedulingIgnoredDuringExecution affinity"))
+		}
+
+		// Affinity is RequiredDuringSchedulingIgnoredDuringExecution, so validate PropertySelector if exists
+		if clusterSelectorTerm.PropertySelector != nil {
+			allErr = append(allErr, validatePropertySelector(clusterSelectorTerm.PropertySelector))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -295,6 +306,11 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 	for _, preferredClusterSelector := range preferredClusterSelectors {
 		// API server validation on object occurs before webhook is triggered hence not validating weight.
 		allErr = append(allErr, validateLabelSelector(preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
+
+		// Affinity is PreferredDuringSchedulingIgnoredDuringExecution, so check that PropertySelector is nil.
+		if preferredClusterSelector.Preference.PropertySelector != nil {
+			allErr = append(allErr, fmt.Errorf("PropertySelector is not allowed for PreferredDuringSchedulingIgnoredDuringExecution affinity"))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -345,4 +361,97 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 	}
 
 	return apiErrors.NewAggregate(allErr)
+}
+
+// validatePropertySelector validates the property selector
+func validatePropertySelector(propertySelector *placementv1beta1.PropertySelector) error {
+	return validatePropertySelectorRequirements(propertySelector.MatchExpressions)
+}
+
+func validatePropertySelectorRequirements(propertySelectorRequirements []placementv1beta1.PropertySelectorRequirement) error {
+	var allErr []error
+	for i, req := range propertySelectorRequirements {
+		if err := validateName(req.Name); err != nil {
+			allErr = append(allErr, fmt.Errorf("invalid property name %s: %w", req.Name, err))
+		}
+		if err := validateOperator(req.Operator, req.Values); err != nil {
+			allErr = append(allErr, err)
+		}
+		if err := validateValues(req.Values); err != nil {
+			allErr = append(allErr, fmt.Errorf("invalid values for property %s: %w", req.Name, err))
+		}
+		if err := checkContradictions(i, req, propertySelectorRequirements); err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+	if len(allErr) > 0 {
+		return apiErrors.NewAggregate(allErr)
+	}
+	return nil
+}
+
+func validateName(name string) error {
+	if err := validation.IsQualifiedName(name); err != nil {
+		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
+	}
+	return nil
+}
+
+func validateOperator(op placementv1beta1.PropertySelectorOperator, values []string) error {
+	validOperators := map[placementv1beta1.PropertySelectorOperator]bool{
+		placementv1beta1.PropertySelectorGreaterThan:          true,
+		placementv1beta1.PropertySelectorGreaterThanOrEqualTo: true,
+		placementv1beta1.PropertySelectorLessThan:             true,
+		placementv1beta1.PropertySelectorLessThanOrEqualTo:    true,
+		placementv1beta1.PropertySelectorEqualTo:              true,
+		placementv1beta1.PropertySelectorNotEqualTo:           true,
+	}
+	if validOperators[op] && len(values) != 1 {
+		return fmt.Errorf("operator %s requires exactly one value, got %d", op, len(values))
+	}
+	return nil
+}
+
+func validateValues(values []string) error {
+	for _, value := range values {
+		if _, err := resource.ParseQuantity(value); err != nil {
+			return fmt.Errorf("value %s is not a valid resource.Quantity: %w", value, err)
+		}
+	}
+	return nil
+}
+
+func checkContradictions(index int, req placementv1beta1.PropertySelectorRequirement, reqs []placementv1beta1.PropertySelectorRequirement) error {
+	for i, otherReq := range reqs {
+		if i == index {
+			continue
+		}
+		if otherReq.Name != req.Name {
+			continue
+		}
+		switch req.Operator {
+		case placementv1beta1.PropertySelectorGreaterThan, placementv1beta1.PropertySelectorGreaterThanOrEqualTo:
+			if otherReq.Operator == placementv1beta1.PropertySelectorLessThan && otherReq.Values[0] >= req.Values[0] {
+				return fmt.Errorf("logical contradiction: %s must be greater than %s", req.Name, otherReq.Values[0])
+			}
+			if otherReq.Operator == placementv1beta1.PropertySelectorLessThanOrEqualTo && otherReq.Values[0] > req.Values[0] {
+				return fmt.Errorf("logical contradiction: %s must be greater than or equal to %s", req.Name, otherReq.Values[0])
+			}
+		case placementv1beta1.PropertySelectorLessThan, placementv1beta1.PropertySelectorLessThanOrEqualTo:
+			if otherReq.Operator == placementv1beta1.PropertySelectorGreaterThan && otherReq.Values[0] <= req.Values[0] {
+				return fmt.Errorf("logical contradiction: %s must be less than %s", req.Name, otherReq.Values[0])
+			}
+			if otherReq.Operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && otherReq.Values[0] < req.Values[0] {
+				return fmt.Errorf("logical contradiction: %s must be less than or equal to %s", req.Name, otherReq.Values[0])
+			}
+		case placementv1beta1.PropertySelectorEqualTo, placementv1beta1.PropertySelectorNotEqualTo:
+			if otherReq.Operator == placementv1beta1.PropertySelectorEqualTo && otherReq.Values[0] != req.Values[0] {
+				return fmt.Errorf("logical contradiction: %s must be equal to %s", req.Name, otherReq.Values[0])
+			}
+			if otherReq.Operator == placementv1beta1.PropertySelectorNotEqualTo && otherReq.Values[0] == req.Values[0] {
+				return fmt.Errorf("logical contradiction: %s must not be equal to %s", req.Name, otherReq.Values[0])
+			}
+		}
+	}
+	return nil
 }
