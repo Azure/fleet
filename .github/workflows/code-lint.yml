@@ -20,6 +20,8 @@ jobs:
 
   detect-noop:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       noop: ${{ steps.noop.outputs.should_skip }}
     steps:
@@ -33,6 +35,8 @@ jobs:
 
   staticcheck:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
