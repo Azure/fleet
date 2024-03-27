@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"go.goms.io/fleet/pkg/webhook/clusterresourceoverride"
 	"go.goms.io/fleet/pkg/webhook/clusterresourceplacement"
 	"go.goms.io/fleet/pkg/webhook/fleetresourcehandler"
 	"go.goms.io/fleet/pkg/webhook/membercluster"
@@ -17,4 +18,5 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, pod.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, membercluster.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.Add)
 }
