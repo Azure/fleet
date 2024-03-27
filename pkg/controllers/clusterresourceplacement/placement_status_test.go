@@ -5889,7 +5889,8 @@ func TestSetFailedPlacementsPerCluster(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "other-namespace",
+						Name:      "other-work",
+						Namespace: "other-namespace",
 						Labels: map[string]string{
 							fleetv1beta1.CRPTrackingLabel:   testName,
 							fleetv1beta1.ParentBindingLabel: bindingName,
