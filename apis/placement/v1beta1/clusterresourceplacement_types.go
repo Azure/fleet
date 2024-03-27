@@ -432,13 +432,17 @@ type RolloutStrategy struct {
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
 	// Type defines the type of strategy to use. Default to ClientSideApply.
+	// Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
+	// apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
 	// +kubebuilder:default=ClientSideApply
 	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply
 	// +optional
 	Type ApplyStrategyType `json:"type,omitempty"`
 
-	// AllowCoOwnership defines whether it allows the resource in the target cluster co-owned by other non-fleet applier.
-	// If not, the resource apply will fail if its owner reference includes types other than `appliedWork`.
+	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
+	// solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
+	// If true, apply the resource and add fleet as a co-owner.
+	// If false, leave the resource unchanged and fail the apply.
 	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
