@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/errors"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 func TestValidateResourceSelectors(t *testing.T) {
@@ -313,6 +315,195 @@ func TestValidateResourceOverride(t *testing.T) {
 
 			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
 				t.Errorf("ValidateResourceOverride() = %v, want %v", got, tt.wantErrMsg)
+			}
+		})
+	}
+}
+
+func TestValidateResourceOverridePath(t *testing.T) {
+	tests := map[string]struct {
+		ro         fleetv1alpha1.ResourceOverride
+		wantErrMsg error
+	}{
+		"valid resource override path": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "/labels/key",
+										Value:    "new-value",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"invalid resource override path - cannot override typeMeta fields": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/kind",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Errorf("invalid path %s: cannot override typeMeta fields", "/kind"),
+		},
+		"invalid resource override path - cannot override metadata fields": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/finalizers/0",
+										Value:    "kubernetes.io/scheduler-cleanup",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Errorf("invalid path %s: cannot override metadata fields", "/metadata/finalizers/0"),
+		},
+		"invalid resource override path - cannot override status fields": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/status/conditions/0/reason",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Errorf("invalid path %s: cannot override status fields", "/status/conditions/0/reason"),
+		},
+		"multiple invalid resource override paths, 1 valid": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/apiVersion",
+									},
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/annotations/0",
+										Value:    "key=value",
+									},
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "/status/conditions/0/reason",
+										Value:    "new-reason",
+									},
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "/metadata/creationTimestamp",
+										Value:    "2021-08-01T00:00:00Z",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: errors.NewAggregate([]error{fmt.Errorf("invalid path %s: cannot override typeMeta fields", "/apiVersion"),
+				fmt.Errorf("invalid path %s: cannot override status fields", "/status/conditions/0/reason"),
+				fmt.Errorf("invalid path %s: cannot override metadata fields", "/metadata/creationTimestamp")}),
+		},
+	}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			got := validateResourceOverridePath(tt.ro)
+			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
+				t.Fatalf("validateResourceOverridePath() = %v, want %v", got, tt.wantErrMsg)
+			}
+
+			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
+				t.Errorf("validateResourceOverridePath() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}

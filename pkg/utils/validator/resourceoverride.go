@@ -8,6 +8,7 @@ package validator
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/errors"
 
@@ -16,6 +17,7 @@ import (
 
 // ValidateResourceOverride validates resource override fields and returns error.
 func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+	allErr := make([]error, 0)
 	// Check if the resource is being selected by resource name
 	if err := validateResourceSelectors(ro); err != nil {
 		// Skip the resource limit check because the check is only valid if resource is selected by name
@@ -23,7 +25,15 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 	}
 
 	// Check if the override count limit for the resources has been reached
-	return validateResourceOverrideResourceLimit(ro, roList)
+	if err := validateResourceOverrideResourceLimit(ro, roList); err != nil {
+		allErr = append(allErr, err)
+	}
+
+	// Check if the resource override path is valid
+	if err := validateResourceOverridePath(ro); err != nil {
+		allErr = append(allErr, err)
+	}
+	return errors.NewAggregate(allErr)
 }
 
 // validateResourceSelectors checks if override is selecting resource by name.
@@ -65,6 +75,26 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 				continue
 			}
 			allErr = append(allErr, fmt.Errorf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", roSelector, ro.GetName(), overrideMap[roSelector]))
+		}
+	}
+	return errors.NewAggregate(allErr)
+}
+
+// validateResourceOverridePath checks if the resource override path is valid.
+func validateResourceOverridePath(ro fleetv1alpha1.ResourceOverride) error {
+	allErr := make([]error, 0)
+	for _, rule := range ro.Spec.Policy.OverrideRules {
+		for _, patch := range rule.JSONPatchOverrides {
+			switch {
+			case strings.Contains(patch.Path, "/kind") || strings.Contains(patch.Path, "/apiVersion"):
+				allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override typeMeta fields", patch.Path))
+			case strings.Contains(patch.Path, "/metadata") && !strings.Contains(patch.Path, "/metadata/annotations") && !strings.Contains(patch.Path, "/metadata/labels"):
+				allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override metadata fields", patch.Path))
+			case strings.Contains(patch.Path, "/status"):
+				allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override status fields", patch.Path))
+			default:
+				continue
+			}
 		}
 	}
 	return errors.NewAggregate(allErr)
