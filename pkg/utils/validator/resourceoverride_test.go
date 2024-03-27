@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/errors"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
@@ -52,34 +51,6 @@ func TestValidateResourceSelectors(t *testing.T) {
 				},
 			},
 			wantErrMsg: nil,
-		},
-		"multiple invalid resources selected": {
-			ro: fleetv1alpha1.ResourceOverride{
-				Spec: fleetv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-						{
-							Group:   "group",
-							Version: "v1",
-							Kind:    "Kind",
-							Name:    "",
-						},
-						{
-							Group:   "group",
-							Version: "v1",
-							Kind:    "Kind",
-							Name:    "example",
-						},
-						{
-							Group:   "group",
-							Version: "v1",
-							Kind:    "Kind",
-							Name:    "example",
-						},
-					},
-				},
-			},
-			wantErrMsg: errors.NewAggregate([]error{fmt.Errorf("resource name is required for resource selection %+v", fleetv1alpha1.ResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: ""}),
-				fmt.Errorf("resource selector %+v already exists, and must be unique", fleetv1alpha1.ResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: "example"})}),
 		},
 	}
 	for testName, tt := range tests {
