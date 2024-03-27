@@ -2556,7 +2556,6 @@ func TestSetPlacementStatus_useNewConditions(t *testing.T) {
 		latestPolicySnapshot    *fleetv1beta1.ClusterSchedulingPolicySnapshot
 		latestResourceSnapshot  *fleetv1beta1.ClusterResourceSnapshot
 		clusterResourceBindings []fleetv1beta1.ClusterResourceBinding
-		works                   []fleetv1beta1.Work
 		want                    bool
 		wantStatus              *fleetv1beta1.ClusterResourcePlacementStatus
 		wantErr                 error
@@ -5132,9 +5131,6 @@ func TestSetPlacementStatus_useNewConditions(t *testing.T) {
 			var objects []client.Object
 			for i := range tc.clusterResourceBindings {
 				objects = append(objects, &tc.clusterResourceBindings[i])
-			}
-			for i := range tc.works {
-				objects = append(objects, &tc.works[i])
 			}
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
