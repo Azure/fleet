@@ -427,15 +427,23 @@ type RolloutStrategy struct {
 }
 
 // ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
-// and is owned by other appliers.
+// and whether it's allowed to be co-owned by other non-fleet appliers.
 // Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
-	// Type defines the type of strategy to use. Default to FailIfExists.
-	// +kubebuilder:default=FailIfExists
-	// +kubebuilder:validation:Enum=FailIfExists;ServerSideApply
+	// Type defines the type of strategy to use. Default to ClientSideApply.
+	// Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
+	// apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
+	// +kubebuilder:default=ClientSideApply
+	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply
 	// +optional
 	Type ApplyStrategyType `json:"type,omitempty"`
+
+	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
+	// solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
+	// If true, apply the resource and add fleet as a co-owner.
+	// If false, leave the resource unchanged and fail the apply.
+	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
 	// +optional
@@ -448,9 +456,10 @@ type ApplyStrategy struct {
 type ApplyStrategyType string
 
 const (
-	// ApplyStrategyTypeFailIfExists will fail to apply a resource if it already exists in the target cluster and is owned
-	// by other appliers.
-	ApplyStrategyTypeFailIfExists ApplyStrategyType = "FailIfExists"
+	// ApplyStrategyTypeClientSideApply will use three-way merge patch similar to how `kubectl apply` does by storing
+	// last applied state in the `last-applied-configuration` annotation.
+	// When the `last-applied-configuration` annotation size is greater than 256kB, it falls back to the server-side apply.
+	ApplyStrategyTypeClientSideApply ApplyStrategyType = "ClientSideApply"
 
 	// ApplyStrategyTypeServerSideApply will use server-side apply to resolve conflicts between the resource to be placed
 	// and the existing resource in the target cluster.
