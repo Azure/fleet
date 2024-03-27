@@ -386,10 +386,9 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 	nrpp := &noReturnProvider{hold: h}
 
 	testCases := []struct {
-		name      string
-		imc       *clusterv1beta1.InternalMemberCluster
-		wantIMC   *clusterv1beta1.InternalMemberCluster
-		wantErred bool
+		name    string
+		imc     *clusterv1beta1.InternalMemberCluster
+		wantIMC *clusterv1beta1.InternalMemberCluster
 	}{
 		{
 			name: "too many calls",
@@ -439,8 +438,8 @@ func TestReportClusterPropertiesWithPropertyProviderTooManyCalls(t *testing.T) {
 					break
 				}
 			}
-			err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc)
-			if err == nil {
+
+			if err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc); err == nil {
 				t.Fatalf("reportClusterPropertiesWithPropertyProvider(), got no error, want error")
 			}
 
@@ -462,10 +461,9 @@ func TestReportClusterPropertiesWithPropertyProviderTimedOut(t *testing.T) {
 	nrpp := &noReturnProvider{hold: h}
 
 	testCases := []struct {
-		name      string
-		imc       *clusterv1beta1.InternalMemberCluster
-		wantIMC   *clusterv1beta1.InternalMemberCluster
-		wantErred bool
+		name    string
+		imc     *clusterv1beta1.InternalMemberCluster
+		wantIMC *clusterv1beta1.InternalMemberCluster
 	}{
 		{
 			name: "timed out",
@@ -502,8 +500,7 @@ func TestReportClusterPropertiesWithPropertyProviderTimedOut(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			}
 
-			err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc)
-			if err == nil {
+			if err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc); err == nil {
 				t.Fatalf("reportClusterPropertiesWithPropertyProvider(), got no error, want error")
 			}
 
@@ -632,8 +629,7 @@ func TestReportClusterPropertiesWithPropertyProvider(t *testing.T) {
 				recorder: utils.NewFakeRecorder(1),
 			}
 
-			err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc)
-			if err != nil {
+			if err := r.reportClusterPropertiesWithPropertyProvider(ctx, tc.imc); err != nil {
 				t.Fatalf("reportClusterPropertiesWithPropertyProvider(), got error %v, want no error", err)
 			}
 

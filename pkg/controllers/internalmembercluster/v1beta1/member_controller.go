@@ -37,6 +37,11 @@ import (
 
 // propertyProviderConfig is a group of settings for configuring the the property provider.
 type propertyProviderConfig struct {
+	// The configuration of the member cluster.
+	//
+	// This is passed to the property provider so that it can connect to the member cluster
+	// as well.
+	memberConfig *rest.Config
 	// propertyProvider is the provider that collects and exposes cluster properties.
 	//
 	// Note that this can be set to nil; in that case, the controller will fall back to the
@@ -65,12 +70,7 @@ type propertyProviderConfig struct {
 
 // Reconciler reconciles a InternalMemberCluster object in the member cluster.
 type Reconciler struct {
-	hubClient client.Client
-	// The configuration of the member cluster.
-	//
-	// This is passed to the property provider so that it can connect to the member cluster
-	// as well.
-	memberConfig *rest.Config
+	hubClient    client.Client
 	memberClient client.Client
 	// rawMemberClientSet is the Kubernetes client built using the client-go package, as opposed
 	// to the ones built using the controller-runtime package.
@@ -171,11 +171,11 @@ func NewReconciler(globalCtx context.Context,
 	return &Reconciler{
 		globalCtx:          globalCtx,
 		hubClient:          hubClient,
-		memberConfig:       memberCfg,
 		memberClient:       memberClient,
 		rawMemberClientSet: rawMemberClientSet,
 		workController:     workController,
 		propertyProviderCfg: &propertyProviderConfig{
+			memberConfig:     memberCfg,
 			propertyProvider: propertyProvider,
 		},
 	}, nil
@@ -304,7 +304,7 @@ func (r *Reconciler) connectToPropertyProvider(ctx context.Context, imc *cluster
 		// Attempt to start the property provider.
 		go func() {
 			defer close(startedCh)
-			if err := r.propertyProviderCfg.propertyProvider.Start(r.globalCtx, r.memberConfig); err != nil {
+			if err := r.propertyProviderCfg.propertyProvider.Start(r.globalCtx, r.propertyProviderCfg.memberConfig); err != nil {
 				klog.ErrorS(err, "Failed to start property provider", "InternalMemberCluster", klog.KObj(imc))
 				startedCh <- err
 			}
