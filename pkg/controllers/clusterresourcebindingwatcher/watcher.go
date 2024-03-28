@@ -113,9 +113,7 @@ func areConditionsUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBi
 	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 		oldCond := oldBinding.GetCondition(string(i.ResourceBindingConditionType()))
 		newCond := newBinding.GetCondition(string(i.ResourceBindingConditionType()))
-		if oldCond == nil && newCond == nil {
-			break
-		}
+		// oldCond.ObservedGeneration will always be less than or equal to newCond.ObservedGeneration.
 		if !condition.EqualCondition(oldCond, newCond) {
 			return true
 		}
