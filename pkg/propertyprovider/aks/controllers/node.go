@@ -3,6 +3,8 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
+// Package controllers feature a number of controllers that are in use
+// by the AKS property provider.
 package controllers
 
 import (
@@ -28,10 +30,10 @@ type NodeReconciler struct {
 func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nodeRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts", "node", nodeRef)
+	klog.V(2).InfoS("Reconciliation starts for node objects in the AKS property provider", "node", nodeRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends", "node", nodeRef, "latency", latency)
+		klog.V(2).InfoS("Reconciliation ends for node objects in the AKS property provider", "node", nodeRef, "latency", latency)
 	}()
 
 	// Retrieve the node object.
@@ -50,7 +52,7 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			return ctrl.Result{}, nil
 		}
 		// For other errors, retry the reconciliation.
-		klog.V(2).ErrorS(err, "Failed to get the node object", "node", nodeRef)
+		klog.ErrorS(err, "Failed to get the node object", "node", nodeRef)
 		return ctrl.Result{}, err
 	}
 

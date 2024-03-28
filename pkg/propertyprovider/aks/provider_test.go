@@ -335,18 +335,18 @@ func TestCollect(t *testing.T) {
 			ctx := context.Background()
 
 			// Build the trackers manually for testing purposes.
-			nt := trackers.NewNodeTracker(&dummyPricingProvider{})
-			pt := trackers.NewPodTracker()
+			nodeTracker := trackers.NewNodeTracker(&dummyPricingProvider{})
+			podTracker := trackers.NewPodTracker()
 			for idx := range tc.nodes {
-				nt.AddOrUpdate(&tc.nodes[idx])
+				nodeTracker.AddOrUpdate(&tc.nodes[idx])
 			}
 			for idx := range tc.pods {
-				pt.AddOrUpdate(&tc.pods[idx])
+				podTracker.AddOrUpdate(&tc.pods[idx])
 			}
 
 			p := &PropertyProvider{
-				nt: nt,
-				pt: pt,
+				nodeTracker: nodeTracker,
+				podTracker:  podTracker,
 			}
 			res := p.Collect(ctx)
 			if diff := cmp.Diff(res, tc.wantMetricCollectionResponse, ignoreObservationTimeFieldInPropertyValue); diff != "" {

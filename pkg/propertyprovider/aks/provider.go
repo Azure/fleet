@@ -68,8 +68,8 @@ const (
 // PropertyProvider is the AKS property provider for Fleet.
 type PropertyProvider struct {
 	// The trackers.
-	pt *trackers.PodTracker
-	nt *trackers.NodeTracker
+	podTracker  *trackers.PodTracker
+	nodeTracker *trackers.NodeTracker
 
 	// The region where the AKS property provider resides.
 	//
@@ -115,7 +115,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 	p.mgr = mgr
 
 	if err != nil {
-		klog.Errorf("Failed to start AKS property provider: %v", err)
+		klog.ErrorS(err, "Failed to start AKS property provider")
 		return err
 	}
 
@@ -127,34 +127,36 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		//
 		// This incurs the slightly higher overhead, however, as auto-discovery runs only
 		// once, the performance impact is negligible.
-		if err := p.autoDiscoverRegionAndSetupTrackers(ctx, mgr.GetAPIReader()); err != nil {
+		discoveredRegion, err := p.autoDiscoverRegionAndSetupTrackers(ctx, mgr.GetAPIReader())
+		if err != nil {
+			klog.ErrorS(err, "Failed to auto-discover region for the AKS property provider")
 			return err
 		}
-	} else {
-		klog.V(2).Infof("Starting with the specified region %s", *p.region)
-		pp := trackers.NewAKSKarpenterPricingClient(ctx, *p.region)
-		p.pt = trackers.NewPodTracker()
-		p.nt = trackers.NewNodeTracker(pp)
+		p.region = discoveredRegion
 	}
+	klog.V(2).Infof("Starting with the specified region %s", *p.region)
+	pp := trackers.NewAKSKarpenterPricingClient(ctx, *p.region)
+	p.podTracker = trackers.NewPodTracker()
+	p.nodeTracker = trackers.NewNodeTracker(pp)
 
 	// Set up the node and pod reconcilers.
 	klog.V(2).Info("Starting the node reconciler")
 	nodeReconciler := &controllers.NodeReconciler{
-		NT:     p.nt,
+		NT:     p.nodeTracker,
 		Client: mgr.GetClient(),
 	}
 	if err := nodeReconciler.SetupWithManager(mgr); err != nil {
-		klog.Errorf("Failed to start the node reconciler in the AKS property provider: %v", err)
+		klog.ErrorS(err, "Failed to start the node reconciler in the AKS property provider")
 		return err
 	}
 
 	klog.V(2).Info("Starting the pod reconciler")
 	podReconciler := &controllers.PodReconciler{
-		PT:     p.pt,
+		PT:     p.podTracker,
 		Client: mgr.GetClient(),
 	}
 	if err := podReconciler.SetupWithManager(mgr); err != nil {
-		klog.Errorf("Failed to start the pod reconciler in the AKS property provider: %v", err)
+		klog.ErrorS(err, "Failed to start the pod reconciler in the AKS property provider")
 		return err
 	}
 
@@ -165,7 +167,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 	go func() {
 		// This call will block until the context exits.
 		if err := mgr.Start(ctx); err != nil {
-			klog.Errorf("Failed to start the AKS property provider controller manager: %v", err)
+			klog.ErrorS(err, "Failed to start the AKS property provider controller manager")
 		}
 	}()
 
@@ -190,12 +192,14 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 	// Collect the non-resource properties.
 	properties := make(map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue)
 	properties[NodeCountProperty] = clusterv1beta1.PropertyValue{
-		Value:           fmt.Sprintf("%d", p.nt.NodeCount()),
+		Value:           fmt.Sprintf("%d", p.nodeTracker.NodeCount()),
 		ObservationTime: metav1.Now(),
 	}
 
-	perCPUCost, perGBMemoryCost, err := p.nt.Costs()
+	perCPUCost, perGBMemoryCost, err := p.nodeTracker.Costs()
 	if err != nil {
+		// Note that the last transition time is not tracked here, as the provider does not
+		// track the previously returned condition. A timestamp will be added in the upper layer.
 		conds = append(conds, metav1.Condition{
 			Type:    PropertyCollectionSucceededConditionType,
 			Status:  metav1.ConditionFalse,
@@ -215,10 +219,10 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 
 	// Collect the resource properties.
 	resources := clusterv1beta1.ResourceUsage{}
-	resources.Capacity = p.nt.TotalCapacity()
-	resources.Allocatable = p.nt.TotalAllocatable()
+	resources.Capacity = p.nodeTracker.TotalCapacity()
+	resources.Allocatable = p.nodeTracker.TotalAllocatable()
 
-	requested := p.pt.TotalRequested()
+	requested := p.podTracker.TotalRequested()
 	available := make(corev1.ResourceList)
 	for rn := range resources.Allocatable {
 		left := resources.Allocatable[rn].DeepCopy()
@@ -241,6 +245,8 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 
 	// If no errors are found, report a success as a condition.
 	if len(conds) == 0 {
+		// Note that the last transition time is not tracked here, as the provider does not
+		// track the previously returned condition. A timestamp will be added in the upper layer.
 		conds = append(conds, metav1.Condition{
 			Type:    PropertyCollectionSucceededConditionType,
 			Status:  metav1.ConditionTrue,
@@ -257,9 +263,8 @@ func (p *PropertyProvider) Collect(_ context.Context) propertyprovider.PropertyC
 	}
 }
 
-// autoDiscoverRegionAndSetupTrackers auto-discovers the region of the AKS cluster and sets up
-// the pricing client for the node tracker.
-func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Context, c client.Reader) error {
+// autoDiscoverRegionAndSetupTrackers auto-discovers the region of the AKS cluster.
+func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Context, c client.Reader) (*string, error) {
 	klog.V(2).Info("Auto-discover region for the AKS property provider")
 	// Auto-discover the region by listing the nodes.
 	nodeList := &corev1.NodeList{}
@@ -272,7 +277,7 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 		// This should never happen.
 		err := fmt.Errorf("failed to create a label requirement: %w", err)
 		klog.Error(err)
-		return err
+		return nil, err
 	}
 	listOptions := client.ListOptions{
 		LabelSelector: labels.NewSelector().Add(*req),
@@ -281,14 +286,14 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 	if err := c.List(ctx, nodeList, &listOptions); err != nil {
 		err := fmt.Errorf("failed to list nodes with the region label: %w", err)
 		klog.Error(err)
-		return err
+		return nil, err
 	}
 
 	// If no nodes are found, return an error.
 	if len(nodeList.Items) == 0 {
 		err := fmt.Errorf("no nodes found with the region label")
 		klog.Error(err)
-		return err
+		return nil, err
 	}
 
 	// Extract the region from the first node via the region label.
@@ -298,14 +303,11 @@ func (p *PropertyProvider) autoDiscoverRegionAndSetupTrackers(ctx context.Contex
 		// The region label is absent; normally this should never occur.
 		err := fmt.Errorf("region label is absent on node %s", node.Name)
 		klog.Error(err)
-		return err
+		return nil, err
 	}
 	klog.V(2).InfoS("Auto-discovered region for the AKS property provider", "region", nodeRegion)
 
-	pp := trackers.NewAKSKarpenterPricingClient(ctx, nodeRegion)
-	p.pt = trackers.NewPodTracker()
-	p.nt = trackers.NewNodeTracker(pp)
-	return nil
+	return &nodeRegion, nil
 }
 
 // New returns a new AKS property provider using the default pricing provider, which is,
@@ -323,11 +325,12 @@ func New(region *string) propertyprovider.PropertyProvider {
 // NewWithPricingProvider returns a new AKS property provider with the given
 // pricing provider.
 //
-// This is mostly used for testing purposes.
+// This is mostly used for allow plugging in of alternate pricing providers (one that
+// does not use the Karpenter client), and for testing purposes.
 func NewWithPricingProvider(pp trackers.PricingProvider) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
-		pt:     trackers.NewPodTracker(),
-		nt:     trackers.NewNodeTracker(pp),
-		region: ptr.To("preset"),
+		podTracker:  trackers.NewPodTracker(),
+		nodeTracker: trackers.NewNodeTracker(pp),
+		region:      ptr.To("preset"),
 	}
 }

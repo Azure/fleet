@@ -3,6 +3,8 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
+// Package controllers feature a number of controllers that are in use
+// by the AKS property provider.
 package controllers
 
 import (
@@ -33,10 +35,10 @@ type PodReconciler struct {
 func (p *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	podRef := klog.KRef(req.Namespace, req.Name)
 	startTime := time.Now()
-	klog.V(2).InfoS("Reconciliation starts", "pod", podRef)
+	klog.V(2).InfoS("Reconciliation starts for pod objects in the AKS property provider", "pod", podRef)
 	defer func() {
 		latency := time.Since(startTime).Milliseconds()
-		klog.V(2).InfoS("Reconciliation ends", "pod", podRef, "latency", latency)
+		klog.V(2).InfoS("Reconciliation ends for pod objects in the AKS property provider", "pod", podRef, "latency", latency)
 	}()
 
 	// Retrieve the pod object.
@@ -55,7 +57,7 @@ func (p *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 
 		// For other errors, retry the reconciliation.
-		klog.V(2).ErrorS(err, "Failed to get the pod object", "pod", podRef)
+		klog.ErrorS(err, "Failed to get the pod object", "pod", podRef)
 		return ctrl.Result{}, err
 	}
 
