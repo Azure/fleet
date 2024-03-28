@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -25,6 +26,7 @@ import (
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
@@ -189,7 +191,14 @@ func TestE2E(t *testing.T) {
 }
 
 func beforeSuiteForAllProcesses() {
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	// setup logger
+	logger := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+	klog.SetLogger(logger)
+	ctrllog.SetLogger(logger)
+	By("Setup klog")
+	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(fs)
+	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
 	// Check if the required environment variable, which specifies the path to kubeconfig file, has been set.
 	Expect(os.Getenv(kubeConfigPathEnvVarName)).NotTo(BeEmpty(), "Required environment variable KUBECONFIG is not set")
