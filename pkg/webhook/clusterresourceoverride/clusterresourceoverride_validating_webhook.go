@@ -44,6 +44,7 @@ func Add(mgr manager.Manager) error {
 func (v *clusterResourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var cro fleetv1alpha1.ClusterResourceOverride
 	klog.V(2).InfoS("Validating webhook handling cluster resource override", "operation", req.Operation)
+
 	if err := v.decoder.Decode(req, &cro); err != nil {
 		klog.ErrorS(err, "Failed to decode cluster resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
 		return admission.Errored(http.StatusBadRequest, err)

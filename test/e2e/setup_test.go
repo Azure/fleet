@@ -202,6 +202,9 @@ func TestMain(m *testing.M) {
 	if err := fleetnetworkingv1alpha1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (networking) to the runtime scheme: %v", err)
 	}
+	if err := placementv1alpha1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)
+	}
 
 	// Add built-in APIs and extensions to the scheme.
 	if err := k8sscheme.AddToScheme(scheme); err != nil {
