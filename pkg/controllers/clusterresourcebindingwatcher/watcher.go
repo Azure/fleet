@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -117,17 +116,9 @@ func areConditionsUpdated(oldBinding, newBinding *fleetv1beta1.ClusterResourceBi
 		if oldCond == nil && newCond == nil {
 			break
 		}
-		if isConditionUpdated(oldCond, newCond) {
+		if !condition.EqualCondition(oldCond, newCond) {
 			return true
 		}
 	}
 	return false
-}
-
-func isConditionUpdated(oldCond, newCond *metav1.Condition) bool {
-	if oldCond == nil || newCond == nil {
-		return true
-	}
-	// We don't compare message because in general it's changed every time reason is changed.
-	return oldCond.ObservedGeneration != newCond.ObservedGeneration || oldCond.Status != newCond.Status || oldCond.Reason != newCond.Reason
 }
