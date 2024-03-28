@@ -20,8 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/test/utils/informer"
 	"go.goms.io/fleet/test/utils/resource"
@@ -33,13 +33,13 @@ var (
 
 func serviceScheme(t *testing.T) *runtime.Scheme {
 	scheme := runtime.NewScheme()
-	if err := fleetv1beta1.AddToScheme(scheme); err != nil {
+	if err := placementv1beta1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add placement v1beta1 scheme: %v", err)
 	}
 	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add cluster v1beta1 scheme: %v", err)
 	}
-	if err := fleetv1alpha1.AddToScheme(scheme); err != nil {
+	if err := placementv1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatalf("Failed to add v1alpha1 scheme: %v", err)
 	}
 	return scheme
@@ -69,181 +69,214 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		master    *fleetv1beta1.ClusterResourceSnapshot
-		snapshots []fleetv1beta1.ClusterResourceSnapshot
-		croList   []fleetv1alpha1.ClusterResourceOverride
-		roList    []fleetv1alpha1.ResourceOverride
-		wantCRO   []*fleetv1alpha1.ClusterResourceOverride
-		wantRO    []*fleetv1alpha1.ResourceOverride
+		master    *placementv1beta1.ClusterResourceSnapshot
+		snapshots []placementv1beta1.ClusterResourceSnapshot
+		croList   []placementv1alpha1.ClusterResourceOverrideSnapshot
+		roList    []placementv1alpha1.ResourceOverrideSnapshot
+		wantCRO   []*placementv1alpha1.ClusterResourceOverrideSnapshot
+		wantRO    []*placementv1alpha1.ResourceOverrideSnapshot
 	}{
 		{
 			name: "single resource snapshot selecting empty resources",
-			master: &fleetv1beta1.ClusterResourceSnapshot{
+			master: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
 					},
 					Annotations: map[string]string{
-						fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
-						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 					},
 				},
 			},
-			croList: []fleetv1alpha1.ClusterResourceOverride{
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{},
 				},
 			},
-			wantCRO: []*fleetv1alpha1.ClusterResourceOverride{},
-			wantRO:  []*fleetv1alpha1.ResourceOverride{},
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{},
+			wantRO:  []*placementv1alpha1.ResourceOverrideSnapshot{},
 		},
 		{
 			name: "single resource snapshot with no matched overrides",
-			master: &fleetv1beta1.ClusterResourceSnapshot{
+			master: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
 					},
 					Annotations: map[string]string{
-						fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
-						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 					},
 				},
-				Spec: fleetv1beta1.ResourceSnapshotSpec{
-					SelectedResources: []fleetv1beta1.ResourceContent{
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
 						*resource.ServiceResourceContentForTest(t),
 					},
 				},
 			},
-			croList: []fleetv1alpha1.ClusterResourceOverride{
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "ClusterRole",
-								Name:    "test-cluster-role",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "test-cluster-role",
+								},
 							},
 						},
 					},
 				},
 			},
-			roList: []fleetv1alpha1.ResourceOverride{
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "ro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "Role",
-								Name:    "test-role",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "Role",
+									Name:    "test-role",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantCRO: []*fleetv1alpha1.ClusterResourceOverride{},
-			wantRO:  []*fleetv1alpha1.ResourceOverride{},
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{},
+			wantRO:  []*placementv1alpha1.ResourceOverrideSnapshot{},
 		},
 		{
 			name: "single resource snapshot with matched cro and ro",
-			master: &fleetv1beta1.ClusterResourceSnapshot{
+			master: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
 					},
 					Annotations: map[string]string{
-						fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
-						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 					},
 				},
-				Spec: fleetv1beta1.ResourceSnapshotSpec{
-					SelectedResources: []fleetv1beta1.ResourceContent{
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
 						*resource.ServiceResourceContentForTest(t),
 					},
 				},
 			},
-			croList: []fleetv1alpha1.ClusterResourceOverride{
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "svc-namespace",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
 							},
 						},
 					},
 				},
 			},
-			roList: []fleetv1alpha1.ResourceOverride{
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantCRO: []*fleetv1alpha1.ClusterResourceOverride{
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "svc-namespace",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantRO: []*fleetv1alpha1.ResourceOverride{
+			wantRO: []*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
@@ -251,74 +284,141 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple resource snapshots with matched cro and ro",
-			master: &fleetv1beta1.ClusterResourceSnapshot{
+			name: "single resource snapshot with matched stale cro and ro snapshot",
+			master: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
 					},
 					Annotations: map[string]string{
-						fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
-						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 					},
 				},
-				Spec: fleetv1beta1.ResourceSnapshotSpec{
-					SelectedResources: []fleetv1beta1.ResourceContent{
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
+						*resource.ServiceResourceContentForTest(t),
+					},
+				},
+			},
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
+							},
+						},
+					},
+				},
+			},
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{},
+			wantRO:  []*placementv1alpha1.ResourceOverrideSnapshot{},
+		},
+		{
+			name: "multiple resource snapshots with matched cro and ro",
+			master: &placementv1beta1.ClusterResourceSnapshot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Labels: map[string]string{
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
+					},
+					Annotations: map[string]string{
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "3",
+					},
+				},
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
 						*resource.NamespaceResourceContentForTest(t),
 						*resource.ServiceResourceContentForTest(t),
 					},
 				},
 			},
-			snapshots: []fleetv1beta1.ClusterResourceSnapshot{
+			snapshots: []placementv1beta1.ClusterResourceSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
+						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 0),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel: "0",
+							placementv1beta1.CRPTrackingLabel:   crpName,
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
+							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "0",
 						},
 					},
-					Spec: fleetv1beta1.ResourceSnapshotSpec{
-						SelectedResources: []fleetv1beta1.ResourceContent{
+					Spec: placementv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []placementv1beta1.ResourceContent{
 							*resource.DeploymentResourceContentForTest(t),
 						},
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
+						Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameWithSubindexFmt, crpName, 0, 1),
 						Labels: map[string]string{
-							fleetv1beta1.ResourceIndexLabel: "0",
-							fleetv1beta1.CRPTrackingLabel:   crpName,
+							placementv1beta1.ResourceIndexLabel: "0",
+							placementv1beta1.CRPTrackingLabel:   crpName,
 						},
 						Annotations: map[string]string{
-							fleetv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
+							placementv1beta1.SubindexOfResourceSnapshotAnnotation: "1",
 						},
 					},
-					Spec: fleetv1beta1.ResourceSnapshotSpec{
-						SelectedResources: []fleetv1beta1.ResourceContent{
+					Spec: placementv1beta1.ResourceSnapshotSpec{
+						SelectedResources: []placementv1beta1.ResourceContent{
 							*resource.ClusterRoleResourceContentForTest(t),
 						},
 					},
 				},
 			},
-			croList: []fleetv1alpha1.ClusterResourceOverride{
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "ClusterRole",
-								Name:    "not-exist",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "not-exist",
+								},
 							},
 						},
 					},
@@ -326,38 +426,48 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "ClusterRole",
-								Name:    "clusterrole-name",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "clusterrole-name",
+								},
 							},
 						},
 					},
 				},
 			},
-			roList: []fleetv1alpha1.ResourceOverride{
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "not-exist",
-							},
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "not-exist",
+								},
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
@@ -366,49 +476,64 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "deployment-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "deployment-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "deployment-name",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantCRO: []*fleetv1alpha1.ClusterResourceOverride{
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "rbac.authorization.k8s.io",
-								Version: "v1",
-								Kind:    "ClusterRole",
-								Name:    "clusterrole-name",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "rbac.authorization.k8s.io",
+									Version: "v1",
+									Kind:    "ClusterRole",
+									Name:    "clusterrole-name",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantRO: []*fleetv1alpha1.ResourceOverride{
+			wantRO: []*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "deployment-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "deployment-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "deployment-name",
+								},
 							},
 						},
 					},
@@ -417,20 +542,25 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Deployment",
-								Name:    "not-exist",
-							},
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Deployment",
+									Name:    "not-exist",
+								},
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
@@ -440,36 +570,41 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 		{
 			// not supported in the first phase
 			name: "single resource snapshot with multiple matched cro and ro",
-			master: &fleetv1beta1.ClusterResourceSnapshot{
+			master: &placementv1beta1.ClusterResourceSnapshot{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(fleetv1beta1.ResourceSnapshotNameFmt, crpName, 0),
+					Name: fmt.Sprintf(placementv1beta1.ResourceSnapshotNameFmt, crpName, 0),
 					Labels: map[string]string{
-						fleetv1beta1.ResourceIndexLabel: "0",
-						fleetv1beta1.CRPTrackingLabel:   crpName,
+						placementv1beta1.ResourceIndexLabel: "0",
+						placementv1beta1.CRPTrackingLabel:   crpName,
 					},
 					Annotations: map[string]string{
-						fleetv1beta1.ResourceGroupHashAnnotation:         "abc",
-						fleetv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
+						placementv1beta1.ResourceGroupHashAnnotation:         "abc",
+						placementv1beta1.NumberOfResourceSnapshotsAnnotation: "1",
 					},
 				},
-				Spec: fleetv1beta1.ResourceSnapshotSpec{
-					SelectedResources: []fleetv1beta1.ResourceContent{
+				Spec: placementv1beta1.ResourceSnapshotSpec{
+					SelectedResources: []placementv1beta1.ResourceContent{
 						*resource.ServiceResourceContentForTest(t),
 					},
 				},
 			},
-			croList: []fleetv1alpha1.ClusterResourceOverride{
+			croList: []placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "svc-namespace",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
 							},
 						},
 					},
@@ -477,32 +612,42 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "svc-namespace",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
 							},
 						},
 					},
 				},
 			},
-			roList: []fleetv1alpha1.ResourceOverride{
+			roList: []placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
@@ -511,31 +656,41 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantCRO: []*fleetv1alpha1.ClusterResourceOverride{
+			wantCRO: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "svc-namespace",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
 							},
 						},
 					},
@@ -543,32 +698,42 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						ClusterResourceSelectors: []fleetv1beta1.ClusterResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Namespace",
-								Name:    "svc-namespace",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Namespace",
+									Name:    "svc-namespace",
+								},
 							},
 						},
 					},
 				},
 			},
-			wantRO: []*fleetv1alpha1.ResourceOverride{
+			wantRO: []*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
@@ -577,14 +742,19 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						ResourceSelectors: []fleetv1alpha1.ResourceSelector{
-							{
-								Group:   "",
-								Version: "v1",
-								Kind:    "Service",
-								Name:    "svc-name",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							ResourceSelectors: []placementv1alpha1.ResourceSelector{
+								{
+									Group:   "",
+									Version: "v1",
+									Kind:    "Service",
+									Name:    "svc-name",
+								},
 							},
 						},
 					},
@@ -620,10 +790,10 @@ func TestFetchAllMatchingOverridesForResourceSnapshot(t *testing.T) {
 			}
 			options := []cmp.Option{
 				cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"),
-				cmpopts.SortSlices(func(o1, o2 fleetv1alpha1.ClusterResourceOverride) bool {
+				cmpopts.SortSlices(func(o1, o2 placementv1alpha1.ClusterResourceOverride) bool {
 					return o1.Name < o2.Name
 				}),
-				cmpopts.SortSlices(func(o1, o2 fleetv1alpha1.ResourceOverride) bool {
+				cmpopts.SortSlices(func(o1, o2 placementv1alpha1.ResourceOverride) bool {
 					if o1.Namespace == o2.Namespace {
 						return o1.Name < o2.Name
 					}
@@ -645,10 +815,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 	tests := []struct {
 		name    string
 		cluster *clusterv1beta1.MemberCluster
-		croList []*fleetv1alpha1.ClusterResourceOverride
-		roList  []*fleetv1alpha1.ResourceOverride
+		croList []*placementv1alpha1.ClusterResourceOverrideSnapshot
+		roList  []*placementv1alpha1.ResourceOverrideSnapshot
 		wantCRO []string
-		wantRO  []fleetv1beta1.NamespacedName
+		wantRO  []placementv1beta1.NamespacedName
 		wantErr error
 	}{
 		{
@@ -662,16 +832,115 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 			wantRO:  nil,
 		},
 		{
-			name: "cluster not found",
-			croList: []*fleetv1alpha1.ClusterResourceOverride{
+			name: "non-latest override snapshots",
+			cluster: &clusterv1beta1.MemberCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster-1",
+				},
+			},
+			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-1",
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{}, // empty cluster label selects all clusters
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
+							},
+						},
+					},
+				},
+			},
+			roList: []*placementv1alpha1.ResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-1",
+						Namespace: "svc-namespace",
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ro-2",
+						Namespace: "deployment-namespace",
+					},
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCRO: []string{"cro-1", "cro-2"},
+			wantRO: []placementv1beta1.NamespacedName{
+				{
+					Namespace: "deployment-namespace",
+					Name:      "ro-2",
+				},
+				{
+					Namespace: "svc-namespace",
+					Name:      "ro-1",
+				},
+			},
+		},
+		{
+			name: "cluster not found",
+			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
+					},
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
 							},
 						},
 					},
@@ -691,22 +960,27 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					Name: "cluster-1",
 				},
 			},
-			croList: []*fleetv1alpha1.ClusterResourceOverride{
+			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{}, // empty cluster label selects all clusters
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -720,26 +994,36 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{}, // empty cluster label selects all clusters
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
 							},
 						},
 					},
 				},
 			},
-			roList: []*fleetv1alpha1.ResourceOverride{
+			roList: []*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "svc-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{}, // empty cluster label selects all clusters
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
 							},
 						},
 					},
@@ -748,18 +1032,23 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "deployment-namespace",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{}, // empty cluster label selects all clusters
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{}, // empty cluster label selects all clusters
+								},
 							},
 						},
 					},
 				},
 			},
 			wantCRO: []string{"cro-1", "cro-2"},
-			wantRO: []fleetv1beta1.NamespacedName{
+			wantRO: []placementv1beta1.NamespacedName{
 				{
 					Namespace: "deployment-namespace",
 					Name:      "ro-2",
@@ -781,21 +1070,26 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					},
 				},
 			},
-			croList: []*fleetv1alpha1.ClusterResourceOverride{
+			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -809,17 +1103,22 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-2",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value2",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value2",
+														},
 													},
 												},
 											},
@@ -831,22 +1130,27 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					},
 				},
 			},
-			roList: []*fleetv1alpha1.ResourceOverride{
+			roList: []*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "test",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -861,17 +1165,22 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -884,7 +1193,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 				},
 			},
 			wantCRO: []string{"cro-1"},
-			wantRO: []fleetv1beta1.NamespacedName{
+			wantRO: []placementv1beta1.NamespacedName{
 				{
 					Namespace: "test",
 					Name:      "ro-1",
@@ -906,21 +1215,26 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					},
 				},
 			},
-			croList: []*fleetv1alpha1.ClusterResourceOverride{
+			croList: []*placementv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value2",
+					Spec: placementv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value2",
+														},
 													},
 												},
 											},
@@ -932,22 +1246,27 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 					},
 				},
 			},
-			roList: []*fleetv1alpha1.ResourceOverride{
+			roList: []*placementv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-1",
 						Namespace: "test",
+						Labels: map[string]string{
+							placementv1beta1.IsLatestSnapshotLabel: "true",
+						},
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key4": "value1",
+					Spec: placementv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
+							Policy: &placementv1alpha1.OverridePolicy{
+								OverrideRules: []placementv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &placementv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key4": "value1",
+														},
 													},
 												},
 											},
@@ -960,7 +1279,7 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 				},
 			},
 			wantCRO: []string{},
-			wantRO:  []fleetv1beta1.NamespacedName{},
+			wantRO:  []placementv1beta1.NamespacedName{},
 		},
 	}
 	for _, tc := range tests {
@@ -974,11 +1293,11 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 			r := Reconciler{
 				Client: fakeClient,
 			}
-			binding := &fleetv1beta1.ClusterResourceBinding{
+			binding := &placementv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "binding-1",
 				},
-				Spec: fleetv1beta1.ResourceBindingSpec{
+				Spec: placementv1beta1.ResourceBindingSpec{
 					TargetCluster: "cluster-1",
 				},
 			}

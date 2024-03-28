@@ -738,8 +738,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 		allBindings                 []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName  string
 		crp                         *fleetv1beta1.ClusterResourcePlacement
-		matchedCROs                 []*fleetv1alpha1.ClusterResourceOverride
-		matchedROs                  []*fleetv1alpha1.ResourceOverride
+		matchedCROs                 []*fleetv1alpha1.ClusterResourceOverrideSnapshot
+		matchedROs                  []*fleetv1alpha1.ResourceOverrideSnapshot
 		clusters                    []clusterv1beta1.MemberCluster
 		wantTobeUpdatedBindings     []int
 		wantDesiredBindingsSpec     []fleetv1beta1.ResourceBindingSpec // used to construct the want toBeUpdatedBindings
@@ -791,8 +791,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedROs:              []*fleetv1alpha1.ResourceOverride{},
-			matchedCROs:             []*fleetv1alpha1.ClusterResourceOverride{},
+			matchedROs:              []*fleetv1alpha1.ResourceOverrideSnapshot{},
+			matchedCROs:             []*fleetv1alpha1.ClusterResourceOverrideSnapshot{},
 			wantTobeUpdatedBindings: []int{0},
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
@@ -810,21 +810,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -836,22 +838,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 				},
 			},
-			matchedROs: []*fleetv1alpha1.ResourceOverride{
+			matchedROs: []*fleetv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -898,21 +902,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -924,22 +930,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 				},
 			},
-			matchedROs: []*fleetv1alpha1.ResourceOverride{
+			matchedROs: []*fleetv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -975,21 +983,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -1001,22 +1011,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 				},
 			},
-			matchedROs: []*fleetv1alpha1.ResourceOverride{
+			matchedROs: []*fleetv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -1282,21 +1294,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
 			latestResourceSnapshotName: "snapshot-1",
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
