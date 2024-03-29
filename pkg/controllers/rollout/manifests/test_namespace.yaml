@@ -4,3 +4,4 @@ metadata:
   name: app
   labels:
     fleet.azure.com/name: test
+    region: east

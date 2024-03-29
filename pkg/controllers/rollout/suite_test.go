@@ -16,6 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	kruisev1alpha1 "github.com/openkruise/kruise/apis/apps/v1alpha1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -30,6 +31,8 @@ import (
 
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/utils/validator"
+	"go.goms.io/fleet/test/utils/informer"
 )
 
 var (
@@ -90,6 +93,20 @@ var _ = BeforeSuite(func() {
 		Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(4))),
 	})
 	Expect(err).Should(Succeed())
+
+	RestMapper := mgr.GetRESTMapper()
+	Expect(RestMapper).NotTo(BeNil())
+	validator.RestMapper = RestMapper
+	validator.ResourceInformer = &informer.FakeManager{
+		APIResources: map[schema.GroupVersionKind]bool{
+			{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Namespace",
+			}: true,
+		},
+		IsClusterScopedResource: true,
+	}
 
 	// make sure the k8s client is same as the controller client, or we can have cache delay
 	By("set k8s client same as the controller manager")

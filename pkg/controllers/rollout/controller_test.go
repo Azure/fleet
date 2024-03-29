@@ -1430,7 +1430,7 @@ func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.Placem
 				{
 					Group:   corev1.GroupName,
 					Version: "v1",
-					Kind:    "Service",
+					Kind:    "Namespace",
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"region": "east"},
 					},
