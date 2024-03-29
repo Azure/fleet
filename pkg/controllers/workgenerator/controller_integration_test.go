@@ -38,8 +38,8 @@ var (
 )
 
 const (
-	timeout  = time.Second * 6
-	duration = time.Second * 20
+	timeout  = time.Second * 20
+	duration = time.Second * 10
 	interval = time.Millisecond * 250
 )
 
@@ -104,28 +104,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 			}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
 			By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
 			// check the binding status
-			wantStatus := fleetv1beta1.ResourceBindingStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(fleetv1beta1.ResourceBindingBound),
-						Status:             metav1.ConditionTrue,
-						Reason:             allWorkSyncedReason,
-						ObservedGeneration: binding.GetGeneration(),
-					},
-					{
-						Status:             metav1.ConditionFalse,
-						Type:               string(fleetv1beta1.ResourceBindingApplied),
-						Reason:             workNotAppliedReason,
-						ObservedGeneration: binding.Generation,
-					},
-				},
-			}
-			var diff string
-			Eventually(func() string {
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-				diff = cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
-				return diff
-			}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+			verifyBindingStatusSyncedNotApplied(binding)
 		})
 
 		It("Should only creat work after all the resource snapshots are created", func() {
@@ -177,35 +156,23 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 
 		It("Should handle the case that the snapshot is deleted", func() {
-			// generate master resource snapshot name but not create it
+			// generate master resource snapshot
 			masterSnapshot := generateResourceSnapshot(1, 1, 0, [][]byte{
 				testClonesetCRD, testNameSpace, testCloneset,
 			})
-			// create a scheduled binding pointing to the non exist master resource snapshot
+			Expect(k8sClient.Create(ctx, masterSnapshot)).Should(Succeed())
+			By(fmt.Sprintf("master resource snapshot `%s` created", masterSnapshot.Name))
+			// create a scheduled binding pointing to the master resource snapshot
 			binding = generateClusterResourceBinding(fleetv1beta1.BindingStateBound, masterSnapshot.Name, memberClusterName)
 			Expect(k8sClient.Create(ctx, binding)).Should(Succeed())
 			By(fmt.Sprintf("resource binding  %s created", binding.Name))
-			// check the work is not created since there is no resource snapshot
+			// check the work is created
 			work := fleetv1beta1.Work{}
-			Consistently(func() bool {
-				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
-				return apierrors.IsNotFound(err)
-			}, duration, interval).Should(BeTrue(), "controller should not create work in hub cluster until all resources are created")
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
+			}, duration, interval).Should(Succeed(), "controller should create work in hub cluster")
 			// check the binding status
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-			wantStatus := fleetv1beta1.ResourceBindingStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(fleetv1beta1.ResourceBindingBound),
-						Status:             metav1.ConditionFalse,
-						Reason:             syncWorkFailedReason,
-						ObservedGeneration: binding.GetGeneration(),
-					},
-				},
-			}
-			diff := cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
-			Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
-			Expect(binding.GetCondition(string(fleetv1beta1.ResourceBindingBound)).Message).Should(Equal(errResourceSnapshotNotFound.Error()))
+			verifyBindingStatusSyncedNotApplied(binding)
 			// delete the binding
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, binding)).Should(Succeed())
@@ -216,6 +183,11 @@ var _ = Describe("Test Work Generator Controller", func() {
 				return apierrors.IsNotFound(err)
 			}, timeout, interval).Should(BeTrue(), "Expect the work to be deleted in the hub cluster")
 			By(fmt.Sprintf("work %s is deleted in %s", work.Name, work.Namespace))
+			// check the work is deleted
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
+				return apierrors.IsNotFound(err)
+			}, duration, interval).Should(BeTrue(), "controller should delete work in hub cluster")
 		})
 
 		Context("Test Bound ClusterResourceBinding with a single resource snapshot", func() {
@@ -286,50 +258,15 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status that it should be marked as work not applied eventually
-				wantStatus := fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingBound),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkSyncedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionFalse,
-							Reason:             workNotAppliedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-					},
-				}
-				Eventually(func() string {
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-					return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
-				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+				verifyBindingStatusSyncedNotApplied(binding)
 				// mark the work applied
 				markWorkApplied(&work)
 				// check the binding status that it should be marked as applied true eventually
-				wantStatus = fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingBound),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkSyncedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkAppliedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-					},
-				}
-				Eventually(func() string {
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-					diff = cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
-					return diff
-				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+				verifyBindStatusAppliedNotAvailable(binding)
+				// mark the work available
+				markWorkAvailable(&work)
+				// check the binding status that it should be marked as available true eventually
+				verifyBindStatusAvail(binding)
 			})
 
 			It("Should treat the unscheduled binding as bound", func() {
@@ -356,27 +293,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff := cmp.Diff(expectedManifest, work.Spec.Workload.Manifests)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work manifest(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status
-				wantMC := fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingBound),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkSyncedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionFalse,
-							Reason:             workNotAppliedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-					},
-				}
-				Eventually(func() string {
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-					diff = cmp.Diff(wantMC, binding.Status, ignoreConditionOption)
-					return diff
-				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+				verifyBindingStatusSyncedNotApplied(binding)
 			})
 		})
 
@@ -405,7 +322,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 				Eventually(func() error {
 					return k8sClient.Get(ctx, types.NamespacedName{Name: fmt.Sprintf(fleetv1beta1.FirstWorkNameFmt, testCRPName), Namespace: namespaceName}, &work)
 				}, timeout, interval).Should(Succeed(), "Failed to get the expected work in hub cluster")
-				By(fmt.Sprintf("work %s is created in %s", work.Name, work.Namespace))
+				By(fmt.Sprintf("normal work %s is created in %s", work.Name, work.Namespace))
 				//inspect the work
 				wantWork := fleetv1beta1.Work{
 					ObjectMeta: metav1.ObjectMeta{
@@ -438,14 +355,14 @@ var _ = Describe("Test Work Generator Controller", func() {
 				}
 				diff := cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				//inspect the envelope work
 				var workList fleetv1beta1.WorkList
 				fetchEnvelopedWork(&workList, binding)
-				work = workList.Items[0]
-				By(fmt.Sprintf("envelope work %s is created in %s", work.Name, work.Namespace))
-				//inspect the envelope work
+				envWork := workList.Items[0]
+				By(fmt.Sprintf("enveloped work %s is created in %s", envWork.Name, envWork.Namespace))
 				wantWork = fleetv1beta1.Work{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      work.Name,
+						Name:      envWork.Name,
 						Namespace: namespaceName,
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -474,8 +391,18 @@ var _ = Describe("Test Work Generator Controller", func() {
 						},
 					},
 				}
-				diff = cmp.Diff(wantWork, work, ignoreWorkOption, ignoreTypeMeta)
-				Expect(diff).Should(BeEmpty(), fmt.Sprintf("envelop work(%s) mismatch (-want +got):\n%s", work.Name, diff))
+				diff = cmp.Diff(wantWork, envWork, ignoreWorkOption, ignoreTypeMeta)
+				Expect(diff).Should(BeEmpty(), fmt.Sprintf("enveloped work(%s) mismatch (-want +got):\n%s", envWork.Name, diff))
+				// mark the enveloped work applied
+				markWorkApplied(&work)
+				markWorkApplied(&envWork)
+				// check the binding status that it should be marked as applied true eventually
+				verifyBindStatusAppliedNotAvailable(binding)
+				// mark the enveloped work available
+				markWorkAvailable(&work)
+				markWorkAvailable(&envWork)
+				// check the binding status that it should be marked as available true eventually
+				verifyBindStatusAvail(binding)
 			})
 
 			It("Should modify the enveloped work object with the same name", func() {
@@ -718,52 +645,21 @@ var _ = Describe("Test Work Generator Controller", func() {
 				diff = cmp.Diff(wantWork, secondWork, ignoreWorkOption, ignoreTypeMeta)
 				Expect(diff).Should(BeEmpty(), fmt.Sprintf("work(%s) mismatch (-want +got):\n%s", work.Name, diff))
 				// check the binding status that it should be marked as applied false
-				wantStatus := fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingBound),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkSyncedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionFalse,
-							Reason:             workNotAppliedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-					},
-				}
-				Eventually(func() string {
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-					diff = cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
-					return diff
-				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+				verifyBindingStatusSyncedNotApplied(binding)
 				// mark both the work applied
 				markWorkApplied(&work)
+				// only one work applied is still just sync
+				verifyBindingStatusSyncedNotApplied(binding)
 				markWorkApplied(&secondWork)
 				// check the binding status that it should be marked as applied true eventually
-				wantStatus = fleetv1beta1.ResourceBindingStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:               string(fleetv1beta1.ResourceBindingBound),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkSyncedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
-							Status:             metav1.ConditionTrue,
-							Reason:             allWorkAppliedReason,
-							ObservedGeneration: binding.GetGeneration(),
-						},
-					},
-				}
-				Eventually(func() string {
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-					diff = cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
-					return diff
-				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
+				verifyBindStatusAppliedNotAvailable(binding)
+				// mark both the work applied
+				markWorkAvailable(&work)
+				// only one work available is still just applied
+				verifyBindStatusAppliedNotAvailable(binding)
+				markWorkAvailable(&secondWork)
+				// check the binding status that it should be marked as applied true eventually
+				verifyBindStatusAvail(binding)
 			})
 
 			It("Should update existing work and create more work in the target namespace when resource snapshots change", func() {
@@ -950,7 +846,6 @@ var _ = Describe("Test Work Generator Controller", func() {
 
 					return nil
 				}, timeout, interval).Should(Succeed(), "Failed to clean out all the works")
-
 				// check the binding is deleted
 				Eventually(func() bool {
 					err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)
@@ -961,6 +856,87 @@ var _ = Describe("Test Work Generator Controller", func() {
 		})
 	})
 })
+
+func verifyBindingStatusSyncedNotApplied(binding *fleetv1beta1.ClusterResourceBinding) {
+	Eventually(func() string {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+		wantStatus := fleetv1beta1.ResourceBindingStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ResourceBindingBound),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Status:             metav1.ConditionFalse,
+					Type:               string(fleetv1beta1.ResourceBindingApplied),
+					Reason:             workNotAppliedReason,
+					ObservedGeneration: binding.Generation,
+				},
+			},
+		}
+		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+}
+
+func verifyBindStatusAppliedNotAvailable(binding *fleetv1beta1.ClusterResourceBinding) {
+	Eventually(func() string {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+		wantStatus := fleetv1beta1.ResourceBindingStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ResourceBindingBound),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(fleetv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkAppliedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(fleetv1beta1.ResourceBindingAvailable),
+					Status:             metav1.ConditionFalse,
+					Reason:             workNotAvailableReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+			},
+		}
+		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+}
+
+func verifyBindStatusAvail(binding *fleetv1beta1.ClusterResourceBinding) {
+	Eventually(func() string {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+		wantStatus := fleetv1beta1.ResourceBindingStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(fleetv1beta1.ResourceBindingBound),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(fleetv1beta1.ResourceBindingApplied),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkAppliedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(fleetv1beta1.ResourceBindingAvailable),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkAvailableReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+			},
+		}
+		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
+	}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n", binding.Name))
+}
 
 func fetchEnvelopedWork(workList *fleetv1beta1.WorkList, binding *fleetv1beta1.ClusterResourceBinding) {
 	// try to locate the work that contains enveloped object
@@ -1028,16 +1004,27 @@ func generateResourceSnapshot(resourceIndex, numberResource, subIndex int, rawCo
 }
 
 func markWorkApplied(work *fleetv1beta1.Work) {
-	work.Status.Conditions = []metav1.Condition{
-		{
-			Status:             metav1.ConditionTrue,
-			Type:               fleetv1beta1.WorkConditionTypeApplied,
-			Reason:             "appliedManifest",
-			Message:            "fake apply manifest",
-			ObservedGeneration: work.Generation,
-			LastTransitionTime: metav1.Now(),
-		},
-	}
+	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               fleetv1beta1.WorkConditionTypeApplied,
+		Reason:             "appliedManifest",
+		Message:            "fake apply manifest",
+		ObservedGeneration: work.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
 	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
 	By(fmt.Sprintf("resource work `%s` is marked as applied", work.Name))
+}
+
+func markWorkAvailable(work *fleetv1beta1.Work) {
+	meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+		Status:             metav1.ConditionTrue,
+		Type:               fleetv1beta1.WorkConditionTypeAvailable,
+		Reason:             "availableManifest",
+		Message:            "fake available manifest",
+		ObservedGeneration: work.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
+	Expect(k8sClient.Status().Update(ctx, work)).Should(Succeed())
+	By(fmt.Sprintf("resource work `%s` is marked as available", work.Name))
 }

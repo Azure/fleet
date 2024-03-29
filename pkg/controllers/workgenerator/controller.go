@@ -48,11 +48,13 @@ import (
 )
 
 const (
-	allWorkSyncedReason  = "AllWorkSynced"
-	syncWorkFailedReason = "SyncWorkFailed"
-	workNeedSyncedReason = "StillNeedToSyncWork"
-	workNotAppliedReason = "NotAllWorkHasBeenApplied"
-	allWorkAppliedReason = "AllWorkHasBeenApplied"
+	allWorkSyncedReason    = "AllWorkSynced"
+	syncWorkFailedReason   = "SyncWorkFailed"
+	workNeedSyncedReason   = "StillNeedToSyncWork"
+	workNotAppliedReason   = "NotAllWorkHaveBeenApplied"
+	allWorkAppliedReason   = "AllWorkHaveBeenApplied"
+	workNotAvailableReason = "NotAllWorkAreAvailable"
+	allWorkAvailableReason = "AllWorkAreAvailable"
 )
 
 var (
@@ -138,7 +140,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			})
 		} else {
 			// try to gather the resource binding applied status if we didn't update any associated work spec this time
-			resourceBinding.SetConditions(buildAllWorkAppliedCondition(works, &resourceBinding))
+			appliedCond := buildAllWorkAppliedCondition(works, &resourceBinding)
+			resourceBinding.SetConditions(appliedCond)
+			// only try to gather the available status if all the work objects are applied
+			if appliedCond.Status == metav1.ConditionTrue {
+				resourceBinding.SetConditions(buildAllWorkAvailableCondition(works, &resourceBinding))
+			}
 		}
 	}
 
@@ -175,7 +182,6 @@ func (r *Reconciler) handleDelete(ctx context.Context, resourceBinding *fleetv1b
 	// background/foreground cascade deletion. This may render the finalizer unnecessary.
 	for workName := range works {
 		work := works[workName]
-
 		if err := r.Client.Delete(ctx, work); err != nil && !apierrors.IsNotFound(err) {
 			return controllerruntime.Result{}, controller.NewAPIServerError(false, err)
 		}
@@ -511,18 +517,21 @@ func getWorkNamePrefixFromSnapshotName(resourceSnapshot *fleetv1beta1.ClusterRes
 
 func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
 	allApplied := true
+	var notAppliedWork string
 	for _, work := range works {
 		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeApplied), work.GetGeneration()) {
 			allApplied = false
+			notAppliedWork = work.Name
 			break
 		}
 	}
 	if allApplied {
-		klog.V(2).InfoS("All works associated with the binding is applied", "binding", klog.KObj(binding))
+		klog.V(2).InfoS("All works associated with the binding are applied", "binding", klog.KObj(binding))
 		return metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Reason:             allWorkAppliedReason,
+			Message:            "All corresponding work objects are applied",
 			ObservedGeneration: binding.GetGeneration(),
 		}
 	}
@@ -530,7 +539,36 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
 		Reason:             workNotAppliedReason,
-		Message:            "not all corresponding work objects are applied",
+		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
+		ObservedGeneration: binding.GetGeneration(),
+	}
+}
+
+func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
+	allAvailable := true
+	var notAvailableWork string
+	for _, work := range works {
+		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable), work.GetGeneration()) {
+			allAvailable = false
+			notAvailableWork = work.Name
+			break
+		}
+	}
+	if allAvailable {
+		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
+		return metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Reason:             allWorkAvailableReason,
+			Message:            "All corresponding work objects are available",
+			ObservedGeneration: binding.GetGeneration(),
+		}
+	}
+	return metav1.Condition{
+		Status:             metav1.ConditionFalse,
+		Type:               string(fleetv1beta1.ResourceBindingAvailable),
+		Reason:             workNotAvailableReason,
+		Message:            fmt.Sprintf("work object %s is not available", notAvailableWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
 }
