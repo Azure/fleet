@@ -30,7 +30,7 @@ func TestApplyUnstructured(t *testing.T) {
 		allowCoOwnership bool
 		manifest         *unstructured.Unstructured
 		owners           []metav1.OwnerReference
-		doeExist         bool // return whether the deployment exists
+		doesExist        bool // return whether the deployment exists
 		works            []placementv1beta1.Work
 		wantApplyAction  ApplyAction
 		wantErr          error
@@ -87,7 +87,7 @@ func TestApplyUnstructured(t *testing.T) {
 					Name:       "work2",
 				},
 			},
-			doeExist: true,
+			doesExist: true,
 			works: []placementv1beta1.Work{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -126,7 +126,7 @@ func TestApplyUnstructured(t *testing.T) {
 					Name:       "work2",
 				},
 			},
-			doeExist: true,
+			doesExist: true,
 			works: []placementv1beta1.Work{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -165,7 +165,7 @@ func TestApplyUnstructured(t *testing.T) {
 					Name:       "work1",
 				},
 			},
-			doeExist:        true,
+			doesExist:       true,
 			wantApplyAction: manifestServerSideAppliedAction,
 		},
 		{
@@ -187,7 +187,7 @@ func TestApplyUnstructured(t *testing.T) {
 					Name:       "work1",
 				},
 			},
-			doeExist:        true,
+			doesExist:       true,
 			wantApplyAction: manifestAlreadyOwnedByOthers,
 			wantErr:         controller.ErrUserError,
 		},
@@ -203,7 +203,7 @@ func TestApplyUnstructured(t *testing.T) {
 				return true, tc.manifest.DeepCopy(), nil
 			})
 			dynamicClient.PrependReactor("get", "*", func(action testingclient.Action) (handled bool, ret runtime.Object, err error) {
-				if tc.doeExist {
+				if tc.doesExist {
 					res := tc.manifest.DeepCopy()
 					res.SetOwnerReferences(tc.owners)
 					return true, res, nil

@@ -95,10 +95,12 @@ func validateOwnerReference(ctx context.Context, hubClient client.Client, namesp
 		return applyConflictBetweenPlacements, controller.NewUserError(err)
 	}
 
-	// check if the existing manifest is managed by the work
+	// skip if the current resource is not derived from the work and co-ownership is disallowed
+	// Note: if the co-ownership is added afterwards, e.g., by a controller using on the user-side, all resource changes
+	// will fail to be updated.
 	if !strategy.AllowCoOwnership && !isManifestManagedByWork(ownerRefs) {
-		err := fmt.Errorf("resource exists and is not managed by the fleet controller")
-		klog.ErrorS(err, "Co-ownership is not allowed", "ownerRefs", ownerRefs)
+		err := fmt.Errorf("resource exists and is not managed by the fleet controller and co-ownernship is disallowed")
+		klog.ErrorS(err, "Skip applying a manifest managed by non-fleet applier", "ownerRefs", ownerRefs)
 		return manifestAlreadyOwnedByOthers, controller.NewUserError(err)
 	}
 	return "", nil
