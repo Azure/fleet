@@ -40,7 +40,7 @@ func Add(mgr manager.Manager) error {
 	return nil
 }
 
-// Handle resourceOverrideValidator checks to see if resource override is valid
+// Handle resourceOverrideValidator checks to see if resource override is valid.
 func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	var ro fleetv1alpha1.ResourceOverride
 	klog.V(2).InfoS("Validating webhook handling resource override", "operation", req.Operation)
@@ -49,13 +49,13 @@ func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Re
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// List of resource overrides
+	// List of resource overrides.
 	roList, err := listResourceOverride(ctx, v.client)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// Check if the override count limit has been reached, if there are at most 100 resource overrides
+	// Check if the override count limit has been reached, if there are at most 100 resource overrides.
 	if req.Operation == admissionv1.Create && len(roList.Items) >= 100 {
 		klog.Errorf("ResourceOverride limit has been reached: at most 100 resources can be created.")
 		return admission.Denied("resourceOverride limit has been reached: at most 100 resources can be created.")

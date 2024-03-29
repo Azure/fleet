@@ -16,13 +16,13 @@ import (
 
 // ValidateResourceOverride validates resource override fields and returns error.
 func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
-	// Check if the resource is being selected by resource name
+	// Check if the resource is being selected by resource name.
 	if err := validateResourceSelectors(ro); err != nil {
-		// Skip the resource limit check because the check is only valid if resource is selected by name
+		// Skip the resource limit check because the check is only valid if resource selectors are valid.
 		return err
 	}
 
-	// Check if the override count limit for the resources has been reached
+	// Check if the override count limit for the resources has been reached.
 	return validateResourceOverrideResourceLimit(ro, roList)
 }
 
@@ -31,7 +31,7 @@ func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
 	allErr := make([]error, 0)
 	for _, selector := range ro.Spec.ResourceSelectors {
-		// Check if there are any duplicate selectors
+		// Check if there are any duplicate selectors.
 		if selectorMap[selector] {
 			allErr = append(allErr, fmt.Errorf("resource selector %+v already exists, and must be unique", selector))
 		}
@@ -43,12 +43,12 @@ func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 // validateResourceOverrideResourceLimit checks if there is only 1 resource override per resource,
 // assuming the resource will be selected by the name only.
 func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
-	// Check if roList is nil or empty, no need to check for resource limit
+	// Check if roList is nil or empty, no need to check for resource limit.
 	if roList == nil || len(roList.Items) == 0 {
 		return nil
 	}
 	overrideMap := make(map[fleetv1alpha1.ResourceSelector]string)
-	// Add overrides and its selectors to the map
+	// Add overrides and its selectors to the map.
 	for _, override := range roList.Items {
 		selectors := override.Spec.ResourceSelectors
 		for _, selector := range selectors {
@@ -57,10 +57,10 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 	}
 
 	allErr := make([]error, 0)
-	// Check if any of the ro selectors exist in the override map
+	// Check if any of the ro selectors exist in the override map.
 	for _, roSelector := range ro.Spec.ResourceSelectors {
 		if overrideMap[roSelector] != "" {
-			// Ignore the same resource override
+			// Ignore the same resource override.
 			if ro.GetName() == overrideMap[roSelector] {
 				continue
 			}
