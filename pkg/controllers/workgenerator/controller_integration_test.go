@@ -874,12 +874,6 @@ func verifyBindingStatusSyncedNotApplied(binding *fleetv1beta1.ClusterResourceBi
 					Reason:             workNotAppliedReason,
 					ObservedGeneration: binding.Generation,
 				},
-				{
-					Type:               string(fleetv1beta1.ResourceBindingAvailable),
-					Status:             metav1.ConditionFalse,
-					Reason:             workNotAvailableReason,
-					ObservedGeneration: binding.GetGeneration(),
-				},
 			},
 		}
 		return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)

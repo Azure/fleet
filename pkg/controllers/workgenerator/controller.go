@@ -140,7 +140,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			})
 		} else {
 			// try to gather the resource binding applied status if we didn't update any associated work spec this time
-			resourceBinding.SetConditions(buildAllWorkAppliedCondition(works, &resourceBinding), buildAllWorkAvailableCondition(works, &resourceBinding))
+			appliedCond := buildAllWorkAppliedCondition(works, &resourceBinding)
+			resourceBinding.SetConditions(appliedCond)
+			// only try to gather the available status if all the work objects are applied
+			if appliedCond.Status == metav1.ConditionTrue {
+				resourceBinding.SetConditions(buildAllWorkAvailableCondition(works, &resourceBinding))
+			}
 		}
 	}
 
@@ -526,6 +531,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
 			Reason:             allWorkAppliedReason,
+			Message:            "All corresponding work objects are applied",
 			ObservedGeneration: binding.GetGeneration(),
 		}
 	}
@@ -533,7 +539,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
 		Reason:             workNotAppliedReason,
-		Message:            fmt.Sprintf("work object %s is not applied", notAppliedWork),
+		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
 }
@@ -655,7 +661,7 @@ func (r *Reconciler) SetupWithManager(mgr controllerruntime.Manager) error {
 
 				// we only need to handle the case the applied or available condition is changed between the
 				// new and old work objects. Otherwise, it won't affect the binding applied condition
-				if condition.EqualCondition(newAppliedStatus, oldAppliedStatus) && condition.EqualCondition(newAvailableStatus, oldAvailableStatus) {
+				if condition.EqualCondition(oldAppliedStatus, newAppliedStatus) && condition.EqualCondition(oldAvailableStatus, newAvailableStatus) {
 					klog.V(2).InfoS("The work applied or available condition didn't flip between true and false, no need to reconcile", "oldWork", klog.KObj(oldWork), "newWork", klog.KObj(newWork))
 					return
 				}
