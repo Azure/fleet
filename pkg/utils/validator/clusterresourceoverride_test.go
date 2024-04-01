@@ -392,3 +392,24 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateClusterResourceOverrideRuleSelector(t *testing.T) {
+	tests := map[string]struct {
+		cro        fleetv1alpha1.ClusterResourceOverride
+		wantErrMsg error
+	}{
+		// TODO: Add test cases.
+	}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			got := validateClusterResourceOverrideRuleSelector(tt.cro)
+			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
+				t.Fatalf("validateClusterResourceOverrideRuleSelector() = %v, want %v", got, tt.wantErrMsg)
+			}
+
+			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
+				t.Errorf("validateClusterResourceOverrideRuleSelector() = %v, want %v", got, tt.wantErrMsg)
+			}
+		})
+	}
+}
