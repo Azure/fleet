@@ -116,36 +116,10 @@ jobs:
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
-  
-  e2e-tests-with-aks-property-provider:
-    runs-on: ubuntu-latest
-    needs: [
-      detect-noop,
-    ]
-    if: needs.detect-noop.outputs.noop != 'true'
-    steps:
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
-      
-      - name: Install Ginkgo CLI
-        run: |
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.9.5
-      
-      - name: Install Kind
-        # Before updating the kind version to use, verify that the current kind image
-        # is still supported by the version.
-        run: |
-          go install sigs.k8s.io/kind@v0.20.0
-
-      - name: Run e2e tests
-        run: |
-          make e2e-tests
-        env:
-          KUBECONFIG: '/home/runner/.kube/config'
-          HUB_SERVER_URL: 'https://172.19.0.2:6443'
+          # Temporarily enable the AKS property provider for the E2E tests, in order
+          # to verify the property-based scheduling experience.
+          #
+          # TO-DO (chenyu1): to ensure a vendor-neutral experience, switch to a dummy
+          # property provider once the AKS one is split out.
           PROPERTY_PROVIDER: 'aks'
+

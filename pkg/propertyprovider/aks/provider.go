@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -119,25 +118,32 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		return err
 	}
 
-	if p.region == nil || len(*p.region) == 0 {
-		klog.V(2).Info("Auto-discover region as none has been specified")
-		// Note that an API reader is passed here for the purpose of auto-discovering region
-		// information from AKS nodes; at this time the cache from the controller manager
-		// has not been initialized yet and as a result cached client is not yet available.
-		//
-		// This incurs the slightly higher overhead, however, as auto-discovery runs only
-		// once, the performance impact is negligible.
-		discoveredRegion, err := p.autoDiscoverRegionAndSetupTrackers(ctx, mgr.GetAPIReader())
-		if err != nil {
-			klog.ErrorS(err, "Failed to auto-discover region for the AKS property provider")
-			return err
+	klog.V(2).Info("Setting up the node tracker")
+	if p.nodeTracker == nil {
+		klog.V(2).Info("No pricing provider is set up; using the default AKS Karpenter pricing client")
+
+		if p.region == nil || len(*p.region) == 0 {
+			klog.V(2).Info("Auto-discover region as none has been specified")
+			// Note that an API reader is passed here for the purpose of auto-discovering region
+			// information from AKS nodes; at this time the cache from the controller manager
+			// has not been initialized yet and as a result cached client is not yet available.
+			//
+			// This incurs the slightly higher overhead, however, as auto-discovery runs only
+			// once, the performance impact is negligible.
+			discoveredRegion, err := p.autoDiscoverRegionAndSetupTrackers(ctx, mgr.GetAPIReader())
+			if err != nil {
+				klog.ErrorS(err, "Failed to auto-discover region for the AKS property provider")
+				return err
+			}
+			p.region = discoveredRegion
 		}
-		p.region = discoveredRegion
+		klog.V(2).Infof("Starting with the region set to %s", *p.region)
+		pp := trackers.NewAKSKarpenterPricingClient(ctx, *p.region)
+		p.nodeTracker = trackers.NewNodeTracker(pp)
 	}
-	klog.V(2).Infof("Starting with the region set to %s", *p.region)
-	pp := trackers.NewAKSKarpenterPricingClient(ctx, *p.region)
+
+	klog.V(2).Info("Setting up the pod tracker")
 	p.podTracker = trackers.NewPodTracker()
-	p.nodeTracker = trackers.NewNodeTracker(pp)
 
 	// Set up the node and pod reconcilers.
 	klog.V(2).Info("Starting the node reconciler")
@@ -329,8 +335,6 @@ func New(region *string) propertyprovider.PropertyProvider {
 // does not use the Karpenter client), and for testing purposes.
 func NewWithPricingProvider(pp trackers.PricingProvider) propertyprovider.PropertyProvider {
 	return &PropertyProvider{
-		podTracker:  trackers.NewPodTracker(),
 		nodeTracker: trackers.NewNodeTracker(pp),
-		region:      ptr.To("preset"),
 	}
 }
