@@ -79,3 +79,33 @@ func validateClusterResourceOverrideResourceLimit(cro fleetv1alpha1.ClusterResou
 	}
 	return errors.NewAggregate(allErr)
 }
+
+// validateClusterResourceOverrideRuleSelector checks if override is selecting resource by name.
+func validateClusterResourceOverrideRuleSelector(cro fleetv1alpha1.ClusterResourceOverride) error {
+	selectorMap := make(map[fleetv1beta1.ClusterResourceSelector]bool)
+	allErr := make([]error, 0)
+	for _, rule := range cro.Spec.Policy.OverrideRules {
+		if rule.ClusterSelector == nil {
+			continue
+		}
+		for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
+			// Check that only label selector is supported
+			if selector.LabelSelector != nil {
+				allErr = append(allErr, fmt.Errorf("label selector is only supported for resource selection %+v", selector))
+				continue
+			}
+			if selector.Name == "" {
+				allErr = append(allErr, fmt.Errorf("resource name is required for resource selection %+v", selector))
+				continue
+			}
+
+			// Check if there are any duplicate selectors
+			if selectorMap[selector] {
+				allErr = append(allErr, fmt.Errorf("resource selector %+v already exists, and must be unique", selector))
+			}
+			selectorMap[selector] = true
+		}
+	}
+	return errors.NewAggregate(allErr)
+
+}

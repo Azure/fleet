@@ -26,7 +26,7 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 	return validateResourceOverrideResourceLimit(ro, roList)
 }
 
-// validateResourceSelectors checks if override is selecting resource by name.
+// validateResourceSelectors checks if override is selecting a unique resource.
 func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
 	allErr := make([]error, 0)
