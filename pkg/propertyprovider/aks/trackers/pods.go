@@ -128,5 +128,6 @@ func (pt *PodTracker) TotalRequested() corev1.ResourceList {
 	pt.mu.RLock()
 	defer pt.mu.RUnlock()
 
-	return pt.totalRequested
+	// Return a deep copy to avoid leaks and consequent potential data race.
+	return pt.totalRequested.DeepCopy()
 }

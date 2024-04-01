@@ -26,6 +26,9 @@ type PropertyCollectionResponse struct {
 	// available capacity.
 	Resources clusterv1beta1.ResourceUsage
 	// Conditions is an array of conditions that explains the property collection status.
+	//
+	// Last transition time of each added condition is omitted if set and will instead be added
+	// by the Fleet member agent.
 	Conditions []metav1.Condition
 }
 
