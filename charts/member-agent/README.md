@@ -40,5 +40,7 @@ helm upgrade member-agent member-agent/ --namespace fleet-system
 | resources                | The resource request/limits for the container image   | limits: "2" CPU, 4Gi, requests: 100m CPU, 128Mi |
 | namespace                | Namespace that this Helm chart is installed on.       | `fleet-system`                                  |
 | logVerbosity             | Log level. Uses V logs (klog)                         | `3`                                             |
+| propertyProvider         | The property provider to use with the member agent    | ``                                              |
+| region                   | The region where the member cluster resides           | ``                                              |
 
 ## Contributing Changes

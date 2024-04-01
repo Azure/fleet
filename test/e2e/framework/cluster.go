@@ -17,6 +17,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+
+	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
 )
 
 var (
@@ -33,13 +35,15 @@ type Cluster struct {
 	PresentingServiceAccountInHubClusterName string
 	HubURL                                   string
 	RestMapper                               meta.RESTMapper
+	PricingProvider                          trackers.PricingProvider
 }
 
-func NewCluster(name, svcAccountName string, scheme *runtime.Scheme) *Cluster {
+func NewCluster(name, svcAccountName string, scheme *runtime.Scheme, pp trackers.PricingProvider) *Cluster {
 	return &Cluster{
 		Scheme:                                   scheme,
 		ClusterName:                              name,
 		PresentingServiceAccountInHubClusterName: svcAccountName,
+		PricingProvider:                          pp,
 	}
 }
 

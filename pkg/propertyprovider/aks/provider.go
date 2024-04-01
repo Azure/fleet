@@ -119,7 +119,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		return err
 	}
 
-	if p.region == nil {
+	if p.region == nil || len(*p.region) == 0 {
 		klog.V(2).Info("Auto-discover region as none has been specified")
 		// Note that an API reader is passed here for the purpose of auto-discovering region
 		// information from AKS nodes; at this time the cache from the controller manager
@@ -134,7 +134,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 		}
 		p.region = discoveredRegion
 	}
-	klog.V(2).Infof("Starting with the specified region %s", *p.region)
+	klog.V(2).Infof("Starting with the region set to %s", *p.region)
 	pp := trackers.NewAKSKarpenterPricingClient(ctx, *p.region)
 	p.podTracker = trackers.NewPodTracker()
 	p.nodeTracker = trackers.NewNodeTracker(pp)
