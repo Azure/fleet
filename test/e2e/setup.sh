@@ -15,7 +15,7 @@ declare -a MEMBER_CLUSTERS=()
 
 for (( i=1;i<=MEMBER_CLUSTER_COUNT;i++ ))
 do
-  MEMBER_CLUSTERS+=("cluster-$i")
+    MEMBER_CLUSTERS+=("cluster-$i")
 done
 
 export REGISTRY="${REGISTRY:-ghcr.io}"
@@ -44,6 +44,8 @@ AKS_NODE_REGIONS=("westus" "northeurope" "eastasia")
 # (total/allocatable capacity = host capacity).
 AKS_NODE_SKUS=("Standard_A4_v2" "Standard_B4ms" "Standard_D8s_v5" "Standard_E16_v5" "Standard_M16ms")
 AKS_SKU_COUNT=${#AKS_NODE_SKUS[@]}
+# The number of clusters that has pre-defined configuration for testing purposes. 
+RESERVED_CLUSTER_COUNT=3
 
 # Create the kind clusters
 echo "Creating the kind clusters..."
@@ -52,9 +54,13 @@ echo "Creating the kind clusters..."
 kind create cluster --name $HUB_CLUSTER --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
 
 # Create the member clusters
-for i in "${MEMBER_CLUSTERS[@]}"
+for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
-  kind create cluster --name  "$i" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG --config ./kindconfigs/$i.yaml
+    if [ "$i" -lt $RESERVED_CLUSTER_COUNT ]; then
+        kind create cluster --name  "${MEMBER_CLUSTERS[$i]}" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG --config ./kindconfigs/${MEMBER_CLUSTERS[$i]}.yaml
+    else
+        kind create cluster --name  "${MEMBER_CLUSTERS[$i]}" --image=$KIND_IMAGE --kubeconfig=$KUBECONFIG
+    fi
 done
 
 # Set up the nodes in the member clusters, if the AKS property provider is used.
@@ -62,7 +68,7 @@ if [ "$PROPERTY_PROVIDER" = "aks" ]
 then
     echo "Setting up nodes in each member cluster..."
 
-    for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
+    for (( i=0; i<$RESERVED_CLUSTER_COUNT; i++ ));
     do
         kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
         NODE_NAMES=$(kubectl get nodes -o 'jsonpath={.items[*].metadata.name}')
@@ -163,20 +169,37 @@ HUB_SERVER_URL="https://$(docker inspect $HUB_CLUSTER-control-plane --format='{{
 for (( i=0; i<${MEMBER_CLUSTER_COUNT}; i++ ));
 do
     kind export kubeconfig --name "${MEMBER_CLUSTERS[$i]}"
-    helm install member-agent ../../charts/member-agent/ \
-        --set config.hubURL=$HUB_SERVER_URL \
-        --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
-        --set image.tag=$TAG \
-        --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
-        --set refreshtoken.tag=$TAG \
-        --set image.pullPolicy=Never \
-        --set refreshtoken.pullPolicy=Never \
-        --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
-        --set logVerbosity=5 \
-        --set namespace=fleet-system \
-        --set enableV1Alpha1APIs=false \
-        --set enableV1Beta1APIs=true \
-        --set propertyProvider=$PROPERTY_PROVIDER \
-        --set region=${REGIONS[$i]}
+    if [ "$i" -lt $RESERVED_CLUSTER_COUNT ]; then
+        helm install member-agent ../../charts/member-agent/ \
+            --set config.hubURL=$HUB_SERVER_URL \
+            --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
+            --set image.tag=$TAG \
+            --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
+            --set refreshtoken.tag=$TAG \
+            --set image.pullPolicy=Never \
+            --set refreshtoken.pullPolicy=Never \
+            --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
+            --set logVerbosity=5 \
+            --set namespace=fleet-system \
+            --set enableV1Alpha1APIs=false \
+            --set enableV1Beta1APIs=true \
+            --set propertyProvider=$PROPERTY_PROVIDER \
+            --set region=${REGIONS[$i]}
+    else
+        helm install member-agent ../../charts/member-agent/ \
+            --set config.hubURL=$HUB_SERVER_URL \
+            --set image.repository=$REGISTRY/$MEMBER_AGENT_IMAGE \
+            --set image.tag=$TAG \
+            --set refreshtoken.repository=$REGISTRY/$REFRESH_TOKEN_IMAGE \
+            --set refreshtoken.tag=$TAG \
+            --set image.pullPolicy=Never \
+            --set refreshtoken.pullPolicy=Never \
+            --set config.memberClusterName="kind-${MEMBER_CLUSTERS[$i]}" \
+            --set logVerbosity=5 \
+            --set namespace=fleet-system \
+            --set enableV1Alpha1APIs=false \
+            --set enableV1Beta1APIs=true \
+            --set propertyProvider=$PROPERTY_PROVIDER
+    fi
 done
 
