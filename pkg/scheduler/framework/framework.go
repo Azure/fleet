@@ -898,7 +898,7 @@ func (f *framework) runSchedulingCycleForPickNPlacementType(
 	//   longer picked in the current run.
 	//
 	// Fields in the returned bindings are fulfilled and/or refreshed as applicable.
-	klog.V(2).InfoS("Cross-referencing bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef)
+	klog.V(2).InfoS("Cross-referencing bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef, "numOfClustersToPick", numOfClustersToPick)
 	toCreate, toDelete, toPatch, err := crossReferencePickedClustersAndDeDupBindings(crpName, policy, picked, unscheduled, obsolete)
 	if err != nil {
 		klog.ErrorS(err, "Failed to cross-reference bindings with picked clusters", "clusterSchedulingPolicySnapshot", policyRef)
