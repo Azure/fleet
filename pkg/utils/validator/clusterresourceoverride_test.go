@@ -266,6 +266,30 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 }
 
 func TestValidateClusterResourceOverride(t *testing.T) {
+	validPolicy := &fleetv1alpha1.OverridePolicy{
+		OverrideRules: []fleetv1alpha1.OverrideRule{
+			{
+				ClusterSelector: &fleetv1beta1.ClusterSelector{
+					ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key": "value",
+								},
+							},
+						},
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key1": "value1",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 	tests := map[string]struct {
 		cro        fleetv1alpha1.ClusterResourceOverride
 		croList    *fleetv1alpha1.ClusterResourceOverrideList
@@ -282,6 +306,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 							Name:    "test-cluster-role",
 						},
 					},
+					Policy: validPolicy,
 				},
 			},
 			croList:    &fleetv1alpha1.ClusterResourceOverrideList{},
@@ -304,6 +329,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 							Name:    "example",
 						},
 					},
+					Policy: validPolicy,
 				},
 			},
 			croList: &fleetv1alpha1.ClusterResourceOverrideList{},
@@ -324,6 +350,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 							Name:    "duplicate-example",
 						},
 					},
+					Policy: validPolicy,
 				},
 			},
 			croList: &fleetv1alpha1.ClusterResourceOverrideList{
@@ -339,6 +366,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 									Name:    "duplicate-example",
 								},
 							},
+							Policy: validPolicy,
 						},
 					},
 				},
@@ -357,6 +385,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 							Name:    "test-cluster-role",
 						},
 					},
+					Policy: validPolicy,
 				},
 			},
 			croList:    &fleetv1alpha1.ClusterResourceOverrideList{},
@@ -373,10 +402,40 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 							Name:    "test-cluster-role",
 						},
 					},
+					Policy: validPolicy,
 				},
 			},
 			croList:    nil,
 			wantErrMsg: nil,
+		},
+		"invalid cluster resource override - fail validateClusterResourceOverrideRuleSelector": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											PropertySelector: &fleetv1beta1.PropertySelector{
+												MatchExpressions: []fleetv1beta1.PropertySelectorRequirement{
+													{
+														Name:     "example",
+														Operator: fleetv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values:   []string{"1"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			croList:    &fleetv1alpha1.ClusterResourceOverrideList{},
+			wantErrMsg: fmt.Errorf("label selector is only supported for resource selection"),
 		},
 	}
 	for testName, tt := range tests {
@@ -398,7 +457,144 @@ func TestValidateClusterResourceOverrideRuleSelector(t *testing.T) {
 		cro        fleetv1alpha1.ClusterResourceOverride
 		wantErrMsg error
 	}{
-		// TODO: Add test cases.
+		"all label selectors": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key1": "value1",
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key2": "value2",
+												},
+											},
+										},
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key3": "value3",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"unsupported selector type": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											PropertySelector: &fleetv1beta1.PropertySelector{
+												MatchExpressions: []fleetv1beta1.PropertySelectorRequirement{
+													{
+														Name:     "example",
+														Operator: fleetv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values:   []string{"1"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Errorf("label selector is only supported for resource selection"),
+		},
+		"no cluster selector": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"multiple rules": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+										{
+											PropertySorter: &fleetv1beta1.PropertySorter{
+												Name:      "example",
+												SortOrder: fleetv1beta1.Descending,
+											},
+										},
+									},
+								},
+							},
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											PropertySelector: &fleetv1beta1.PropertySelector{
+												MatchExpressions: []fleetv1beta1.PropertySelectorRequirement{
+													{
+														Name:     "example",
+														Operator: fleetv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values:   []string{"1"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: fmt.Errorf("label selector is only supported for resource selection"),
+		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {

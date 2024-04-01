@@ -33,7 +33,7 @@ func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, 
 
 	// Check if override rule is using label selector
 	if err := validateClusterResourceOverrideRuleSelector(cro); err != nil {
-		allErr = make([]error, 0)
+		allErr = append(allErr, err)
 	}
 
 	return errors.NewAggregate(allErr)
