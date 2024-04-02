@@ -120,7 +120,7 @@ func (p *PropertyProvider) Start(ctx context.Context, config *rest.Config) error
 
 	klog.V(2).Info("Setting up the node tracker")
 	if p.nodeTracker == nil {
-		klog.V(2).Info("No pricing provider is set up; using the default AKS Karpenter pricing client")
+		klog.V(2).Info("Building a node tracker using the default AKS Karpenter pricing client")
 
 		if p.region == nil || len(*p.region) == 0 {
 			klog.V(2).Info("Auto-discover region as none has been specified")

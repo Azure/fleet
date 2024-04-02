@@ -15,7 +15,7 @@ declare -a MEMBER_CLUSTERS=()
 
 for (( i=1;i<=MEMBER_CLUSTER_COUNT;i++ ))
 do
-    MEMBER_CLUSTERS+=("cluster-$i")
+  MEMBER_CLUSTERS+=("cluster-$i")
 done
 
 export REGISTRY="${REGISTRY:-ghcr.io}"
