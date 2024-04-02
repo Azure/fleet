@@ -16,6 +16,8 @@ import (
 
 // ValidateResourceOverride validates resource override fields and returns error.
 func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+	allErr := make([]error, 0)
+
 	// Check if the resource is being selected by resource name.
 	if err := validateResourceSelectors(ro); err != nil {
 		// Skip the resource limit check because the check is only valid if resource selectors are valid.
@@ -23,7 +25,16 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 	}
 
 	// Check if the override count limit for the resources has been reached.
-	return validateResourceOverrideResourceLimit(ro, roList)
+	if err := validateResourceOverrideResourceLimit(ro, roList); err != nil {
+		allErr = append(allErr, err)
+	}
+
+	// Check if override rule is using label selector
+	if err := validateResourceOverrideRuleSelector(ro); err != nil {
+		allErr = append(allErr, err)
+	}
+
+	return errors.NewAggregate(allErr)
 }
 
 // validateResourceSelectors checks if override is selecting a unique resource.
@@ -65,6 +76,23 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 				continue
 			}
 			allErr = append(allErr, fmt.Errorf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", roSelector, ro.GetName(), overrideMap[roSelector]))
+		}
+	}
+	return errors.NewAggregate(allErr)
+}
+
+// validateResourceOverrideRuleSelector checks if override rule is selecting resource by name.
+func validateResourceOverrideRuleSelector(ro fleetv1alpha1.ResourceOverride) error {
+	allErr := make([]error, 0)
+	for _, rule := range ro.Spec.Policy.OverrideRules {
+		if rule.ClusterSelector == nil {
+			continue
+		}
+		for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
+			// Check that only label selector is supported
+			if selector.LabelSelector == nil || selector.PropertySelector != nil || selector.PropertySorter != nil {
+				allErr = append(allErr, fmt.Errorf("label selector is only supported for resource selection %+v", selector))
+			}
 		}
 	}
 	return errors.NewAggregate(allErr)

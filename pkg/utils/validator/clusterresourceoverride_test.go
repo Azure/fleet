@@ -290,6 +290,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 			},
 		},
 	}
+
 	tests := map[string]struct {
 		cro        fleetv1alpha1.ClusterResourceOverride
 		croList    *fleetv1alpha1.ClusterResourceOverrideList

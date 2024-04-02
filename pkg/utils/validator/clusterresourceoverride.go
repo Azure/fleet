@@ -27,7 +27,6 @@ func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, 
 
 	// Check if the override count limit for the resources has been reached
 	if err := validateClusterResourceOverrideResourceLimit(cro, croList); err != nil {
-		// Skip other checks because
 		allErr = append(allErr, err)
 	}
 
