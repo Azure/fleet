@@ -16,22 +16,9 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 		obj     *fleetv1beta1.ClusterResourcePlacement
 		wantObj *fleetv1beta1.ClusterResourcePlacement
 	}{
-		"ClusterResourcePlacement with nil placement Policy": {
+		"ClusterResourcePlacement with nil Spec": {
 			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(5)),
-				},
+				Spec: fleetv1beta1.ClusterResourcePlacementSpec{},
 			},
 			wantObj: &fleetv1beta1.ClusterResourcePlacement{
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
@@ -41,220 +28,27 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 					Strategy: fleetv1beta1.RolloutStrategy{
 						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
 						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
+							MaxUnavailable:           ptr.To(intstr.FromString(DefaultMaxUnavailableValue)),
+							MaxSurge:                 ptr.To(intstr.FromString(DefaultMaxSurgeValue)),
+							UnavailablePeriodSeconds: ptr.To(DefaultUnavailablePeriodSeconds),
 						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
 						},
 					},
-					RevisionHistoryLimit: ptr.To(int32(5)),
+					RevisionHistoryLimit: ptr.To(int32(DefaultRevisionHistoryLimitValue)),
 				},
 			},
 		},
-		"ClusterResourcePlacement with nil Strategy": {
+		"ClusterResourcePlacement with nil TopologySpreadConstraints & Tolerations fields": {
 			obj: &fleetv1beta1.ClusterResourcePlacement{
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					RevisionHistoryLimit: ptr.To(int32(5)),
-				},
-			},
-			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString(fleetv1beta1.DefaultMaxUnavailableValue)),
-							MaxSurge:                 ptr.To(intstr.FromString(fleetv1beta1.DefaultMaxSurgeValue)),
-							UnavailablePeriodSeconds: ptr.To(fleetv1beta1.DefaultUnavailablePeriodSeconds),
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(5)),
-				},
-			},
-		},
-		"ClusterResourcePlacement with nil RevisionLimit": {
-			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
-						},
-					},
-				},
-			},
-			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(10)),
-				},
-			},
-		},
-		"ClusterResourcePlacement with nil ApplyStrategy Type": {
-			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{},
-					},
-					RevisionHistoryLimit: ptr.To(int32(10)),
-				},
-			},
-			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(10)),
-				},
-			},
-		},
-		"ClusterResourcePlacement with ApplyStrategyTypeServerSideApply": {
-			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
-						},
-					},
-				},
-			},
-			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type:                  fleetv1beta1.ApplyStrategyTypeServerSideApply,
-							ServerSideApplyConfig: &fleetv1beta1.ServerSideApplyConfig{},
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(10)),
-				},
-			},
-		},
-		"ClusterResourcePlacement with nil TopologySpreadConstraints fields": {
-			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
 						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
 							{
-								TopologyKey:       "kubernetes.io/hostname",
-								MaxSkew:           ptr.To(int32(fleetv1beta1.DefaultMaxSkewValue)),
-								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+								TopologyKey: "kubernetes.io/hostname",
 							},
 						},
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(10)),
-				},
-			},
-			wantObj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
-						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
-							{
-								TopologyKey:       "kubernetes.io/hostname",
-								MaxSkew:           ptr.To(int32(fleetv1beta1.DefaultMaxSkewValue)),
-								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
-							},
-						},
-					},
-					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString("%15")),
-							MaxSurge:                 ptr.To(intstr.FromString("%15")),
-							UnavailablePeriodSeconds: ptr.To(15),
-						},
-						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
-							Type: fleetv1beta1.ApplyStrategyTypeClientSideApply,
-						},
-					},
-					RevisionHistoryLimit: ptr.To(int32(10)),
-				},
-			},
-		},
-		"ClusterResourcePlacement with nil Tolerations fields": {
-			obj: &fleetv1beta1.ClusterResourcePlacement{
-				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
 						Tolerations: []fleetv1beta1.Toleration{
 							{
 								Key:   "key",
@@ -279,7 +73,13 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 			wantObj: &fleetv1beta1.ClusterResourcePlacement{
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
 					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickNPlacementType,
+						TopologySpreadConstraints: []fleetv1beta1.TopologySpreadConstraint{
+							{
+								TopologyKey:       "kubernetes.io/hostname",
+								MaxSkew:           ptr.To(int32(DefaultMaxSkewValue)),
+								WhenUnsatisfiable: fleetv1beta1.DoNotSchedule,
+							},
+						},
 						Tolerations: []fleetv1beta1.Toleration{
 							{
 								Key:      "key",
@@ -307,7 +107,7 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			SetDefaultsClusterResourcePlacement(tt.obj)
-			if diff := cmp.Diff(tt.obj, tt.wantObj); diff != "" {
+			if diff := cmp.Diff(tt.wantObj, tt.obj); diff != "" {
 				t.Errorf("SetDefaultsClusterResourcePlacement() mismatch (-want +got):\n%s", diff)
 			}
 		})

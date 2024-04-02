@@ -29,6 +29,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
 )
@@ -141,7 +142,7 @@ func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fl
 // clusterSchedulingPolicySnapshot status and work status.
 // If the error type is ErrUnexpectedBehavior, the controller will skip the reconciling.
 func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (ctrl.Result, error) {
-	revisionLimit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+	revisionLimit := int32(defaulter.DefaultRevisionHistoryLimitValue)
 	crpKObj := klog.KObj(crp)
 	oldCRP := crp.DeepCopy()
 	if crp.Spec.RevisionHistoryLimit != nil {
