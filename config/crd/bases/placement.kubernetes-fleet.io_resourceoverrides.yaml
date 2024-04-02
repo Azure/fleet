@@ -56,7 +56,8 @@ spec:
                           description: ClusterSelectors selects the target clusters.
                             The resources will be overridden before applying to the
                             matching clusters. If ClusterSelector is not set, it means
-                            selecting ALL the member clusters.
+                            selecting ALL the member clusters. For now, only labelSelector
+                            is supported.
                           properties:
                             clusterSelectorTerms:
                               description: ClusterSelectorTerms is a list of cluster
@@ -226,7 +227,7 @@ spec:
                               value:
                                 description: Value defines the content to be applied
                                   on the target location. Value should be empty when
-                                  operator is remove.
+                                  operator is `remove`.
                                 x-kubernetes-preserve-unknown-fields: true
                             required:
                             - op

@@ -69,6 +69,7 @@ type OverrideRule struct {
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
 	// If ClusterSelector is not set, it means selecting ALL the member clusters.
+	// For now, only labelSelector is supported.
 	// +optional
 	ClusterSelector *placementv1beta1.ClusterSelector `json:"clusterSelector,omitempty"`
 
@@ -148,7 +149,7 @@ type JSONPatchOverride struct {
 	// +required
 	Path string `json:"path"`
 	// Value defines the content to be applied on the target location.
-	// Value should be empty when operator is remove.
+	// Value should be empty when operator is `remove`.
 	// +optional
 	Value apiextensionsv1.JSON `json:"value,omitempty"`
 }
