@@ -31,8 +31,10 @@ func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, 
 	}
 
 	// Check if override rule is using label selector
-	if err := validateClusterResourceOverrideRuleSelector(cro); err != nil {
-		allErr = append(allErr, err)
+	if cro.Spec.Policy != nil {
+		if err := validateClusterResourceOverridePolicy(cro); err != nil {
+			allErr = append(allErr, err)
+		}
 	}
 
 	return errors.NewAggregate(allErr)
@@ -91,17 +93,25 @@ func validateClusterResourceOverrideResourceLimit(cro fleetv1alpha1.ClusterResou
 	return errors.NewAggregate(allErr)
 }
 
-// validateClusterResourceOverrideRuleSelector checks if override rule is selecting resource by name.
-func validateClusterResourceOverrideRuleSelector(cro fleetv1alpha1.ClusterResourceOverride) error {
+// validateClusterResourceOverridePolicy checks if override rule is selecting resource by name.
+func validateClusterResourceOverridePolicy(cro fleetv1alpha1.ClusterResourceOverride) error {
 	allErr := make([]error, 0)
 	for _, rule := range cro.Spec.Policy.OverrideRules {
 		if rule.ClusterSelector == nil {
 			continue
+		} else if len(rule.ClusterSelector.ClusterSelectorTerms) == 0 {
+			allErr = append(allErr, fmt.Errorf("clusterSelector must have at least one term"))
 		}
 		for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
 			// Check that only label selector is supported
-			if selector.LabelSelector == nil || selector.PropertySelector != nil || selector.PropertySorter != nil {
-				allErr = append(allErr, fmt.Errorf("label selector is only supported for resource selection %+v", selector))
+			if selector.PropertySelector != nil || selector.PropertySorter != nil {
+				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
+				continue
+			}
+			if selector.LabelSelector == nil {
+				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
+			} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
+				allErr = append(allErr, err)
 			}
 		}
 	}

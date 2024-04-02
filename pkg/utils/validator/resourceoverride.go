@@ -30,8 +30,10 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 	}
 
 	// Check if override rule is using label selector
-	if err := validateResourceOverrideRuleSelector(ro); err != nil {
-		allErr = append(allErr, err)
+	if ro.Spec.Policy != nil {
+		if err := validateResourceOverridePolicy(ro); err != nil {
+			allErr = append(allErr, err)
+		}
 	}
 
 	return errors.NewAggregate(allErr)
@@ -81,17 +83,26 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 	return errors.NewAggregate(allErr)
 }
 
-// validateResourceOverrideRuleSelector checks if override rule is selecting resource by name.
-func validateResourceOverrideRuleSelector(ro fleetv1alpha1.ResourceOverride) error {
+// validateResourceOverridePolicy checks if override rule is selecting resource by name.
+func validateResourceOverridePolicy(ro fleetv1alpha1.ResourceOverride) error {
 	allErr := make([]error, 0)
 	for _, rule := range ro.Spec.Policy.OverrideRules {
 		if rule.ClusterSelector == nil {
 			continue
+		} else if len(rule.ClusterSelector.ClusterSelectorTerms) == 0 {
+			allErr = append(allErr, fmt.Errorf("clusterSelector must have at least one term"))
 		}
+
 		for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
 			// Check that only label selector is supported
-			if selector.LabelSelector == nil || selector.PropertySelector != nil || selector.PropertySorter != nil {
-				allErr = append(allErr, fmt.Errorf("label selector is only supported for resource selection %+v", selector))
+			if selector.PropertySelector != nil || selector.PropertySorter != nil {
+				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
+				continue
+			}
+			if selector.LabelSelector == nil {
+				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
+			} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
+				allErr = append(allErr, err)
 			}
 		}
 	}

@@ -1,15 +1,15 @@
 package validator
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
-	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
 func TestValidateResourceSelectors(t *testing.T) {
@@ -335,7 +335,7 @@ func TestValidateResourceOverride(t *testing.T) {
 			roList:     nil,
 			wantErrMsg: nil,
 		},
-		"invalid cluster resource override - fail validateClusterResourceOverrideRuleSelector": {
+		"invalid cluster resource override - fail validateResourceOverridePolicy with unsupported type ": {
 			ro: fleetv1alpha1.ResourceOverride{
 				Spec: fleetv1alpha1.ResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -362,7 +362,80 @@ func TestValidateResourceOverride(t *testing.T) {
 				},
 			},
 			roList:     &fleetv1alpha1.ResourceOverrideList{},
-			wantErrMsg: fmt.Errorf("label selector is only supported for resource selection"),
+			wantErrMsg: fmt.Errorf("only labelSelector is supported"),
+		},
+		"invalid resource override - fail validateResourceOverridePolicy with nil label selector": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: nil,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: errors.New("labelSelector is required"),
+		},
+		"invalid cluster resource override - fail validateResourceOverridePolicy with empty terms": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: errors.New("clusterSelector must have at least one term"),
+		},
+		"valid cluster resource override - empty match labels & match expressions": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{MatchLabels: nil},
+										},
+									},
+								},
+							},
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{MatchExpressions: nil},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"valid cluster resource override - no policy": {
+			ro: fleetv1alpha1.ResourceOverride{
+				Spec: fleetv1alpha1.ResourceOverrideSpec{
+					Policy: nil,
+				},
+			},
+			wantErrMsg: nil,
 		},
 	}
 	for testName, tt := range tests {
@@ -379,7 +452,7 @@ func TestValidateResourceOverride(t *testing.T) {
 	}
 }
 
-func TestValidateResourceOverrideRuleSelector(t *testing.T) {
+func TestValidateResourceOverridePolicy(t *testing.T) {
 	tests := map[string]struct {
 		ro         fleetv1alpha1.ResourceOverride
 		wantErrMsg error
@@ -461,7 +534,7 @@ func TestValidateResourceOverrideRuleSelector(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: fmt.Errorf("label selector is only supported for resource selection"),
+			wantErrMsg: fmt.Errorf("only labelSelector is supported"),
 		},
 		"no cluster selector": {
 			ro: fleetv1alpha1.ResourceOverride{
@@ -475,7 +548,7 @@ func TestValidateResourceOverrideRuleSelector(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"multiple rules": {
+		"nil label selector": {
 			ro: fleetv1alpha1.ResourceOverride{
 				Spec: fleetv1alpha1.ResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -483,36 +556,7 @@ func TestValidateResourceOverrideRuleSelector(t *testing.T) {
 							{
 								ClusterSelector: &fleetv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-										{
-											LabelSelector: &metav1.LabelSelector{
-												MatchLabels: map[string]string{
-													"key": "value",
-												},
-											},
-										},
-										{
-											PropertySorter: &fleetv1beta1.PropertySorter{
-												Name:      "example",
-												SortOrder: fleetv1beta1.Descending,
-											},
-										},
-									},
-								},
-							},
-							{
-								ClusterSelector: &fleetv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-										{
-											PropertySelector: &fleetv1beta1.PropertySelector{
-												MatchExpressions: []fleetv1beta1.PropertySelectorRequirement{
-													{
-														Name:     "example",
-														Operator: fleetv1beta1.PropertySelectorGreaterThanOrEqualTo,
-														Values:   []string{"1"},
-													},
-												},
-											},
-										},
+										{},
 									},
 								},
 							},
@@ -520,18 +564,18 @@ func TestValidateResourceOverrideRuleSelector(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: fmt.Errorf("label selector is only supported for resource selection"),
+			wantErrMsg: errors.New("labelSelector is required"),
 		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := validateResourceOverrideRuleSelector(tt.ro)
+			got := validateResourceOverridePolicy(tt.ro)
 			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
-				t.Fatalf("validateResourceOverrideRuleSelector() = %v, want %v", got, tt.wantErrMsg)
+				t.Fatalf("validateResourceOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
 			}
 
 			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-				t.Errorf("validateResourceOverrideRuleSelector() = %v, want %v", got, tt.wantErrMsg)
+				t.Errorf("validateResourceOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}
