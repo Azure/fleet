@@ -131,7 +131,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
 			Reason:             syncWorkFailedReason,
-			Message:            syncErr.Error(),
+			Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", syncErr),
 			ObservedGeneration: resourceBinding.Generation,
 		})
 	} else {
@@ -147,6 +147,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
 			Reason:             allWorkSyncedReason,
 			ObservedGeneration: resourceBinding.Generation,
+			Message:            "All of the works are synchronized to the latest",
 		})
 		if workUpdated {
 			// revert the applied condition if we made any changes to the work
@@ -154,7 +155,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
 				Reason:             workNeedSyncedReason,
-				Message:            "The work needs to be synced first",
+				Message:            "In the processing of synchronizing the work to the member cluster",
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
@@ -182,8 +183,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		// This error can also happen if the user uses a customized rollout controller that does not share the same informer cache with this controller.
 		return controllerruntime.Result{Requeue: true}, nil
 	}
-	// requeue if we did an update, or we failed to sync the work
-	return controllerruntime.Result{Requeue: workUpdated}, syncErr
+	// requeue if we failed to sync the work
+	// If we update the works, their status will be changed and will be detected by the watch event.
+	return controllerruntime.Result{}, syncErr
 }
 
 // handleDelete handle a deleting binding
