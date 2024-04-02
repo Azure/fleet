@@ -11,20 +11,18 @@ import (
 	"sort"
 	"strconv"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/overrider"
 )
 
 // fetchAllMatchingOverridesForResourceSnapshot fetches all the matching overrides which are attached to the selected resources.
@@ -198,18 +196,12 @@ func isClusterMatched(cluster clusterv1beta1.MemberCluster, policy *placementv1a
 		return false, errors.New("policy is nil")
 	}
 	for _, rule := range policy.OverrideRules {
-		if rule.ClusterSelector == nil { // it means matching all the member clusters
-			return true, nil
+		matched, err := overrider.IsClusterMatched(cluster, rule)
+		if err != nil {
+			return false, err
 		}
-
-		for _, term := range rule.ClusterSelector.ClusterSelectorTerms {
-			selector, err := metav1.LabelSelectorAsSelector(term.LabelSelector)
-			if err != nil {
-				return false, err
-			}
-			if selector.Matches(labels.Set(cluster.Labels)) {
-				return true, nil
-			}
+		if matched {
+			return true, nil
 		}
 	}
 	return false, nil

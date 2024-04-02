@@ -6,6 +6,7 @@ Licensed under the MIT license.
 package v1alpha1
 
 import (
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -139,17 +140,17 @@ type ResourceSelector struct {
 // JSONPatchOverride applies a JSON patch on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
 type JSONPatchOverride struct {
 	// Operator defines the operation on the target field.
-	// +kubebuilder:validation:Enum=Add;Remove;Replace
+	// +kubebuilder:validation:Enum=add;remove;replace
 	// +required
-	Operator JSONPatchOverrideOperator `json:"operator"`
+	Operator JSONPatchOverrideOperator `json:"op"`
 	// Path defines the target location.
 	// Note: override will fail if the resource path does not exist.
 	// +required
 	Path string `json:"path"`
 	// Value defines the content to be applied on the target location.
-	// Value should be empty when operator is Remove.
+	// Value should be empty when operator is remove.
 	// +optional
-	Value string `json:"value,omitempty"`
+	Value apiextensionsv1.JSON `json:"value,omitempty"`
 }
 
 // JSONPatchOverrideOperator defines the supported JSON patch operator.
@@ -164,13 +165,13 @@ const (
 	//   A JSON Patch override:
 	//
 	//   [
-	//     { "operator": "add", "path": "/foo/1", "value": "qux" }
+	//     { "op": "add", "path": "/foo/1", "value": "qux" }
 	//   ]
 	//
 	//   The resulting JSON document:
 	//
 	//   { "foo": [ "bar", "qux", "baz" ] }
-	JSONPatchOverrideOpAdd JSONPatchOverrideOperator = "Add"
+	JSONPatchOverrideOpAdd JSONPatchOverrideOperator = "add"
 	// JSONPatchOverrideOpRemove removes the value from the target location.
 	// An example target JSON document:
 	//
@@ -181,13 +182,13 @@ const (
 	//   A JSON Patch override:
 	//
 	//   [
-	//     { "operator": "remove", "path": "/baz" }
+	//     { "op": "remove", "path": "/baz" }
 	//   ]
 	//
 	//   The resulting JSON document:
 	//
 	//   { "foo": "bar" }
-	JSONPatchOverrideOpRemove JSONPatchOverrideOperator = "Remove"
+	JSONPatchOverrideOpRemove JSONPatchOverrideOperator = "remove"
 	// JSONPatchOverrideOpReplace replaces the value at the target location with a new value.
 	// An example target JSON document:
 	//
@@ -199,7 +200,7 @@ const (
 	//   A JSON Patch override:
 	//
 	//   [
-	//     { "operator": "replace", "path": "/baz", "value": "boo" }
+	//     { "op": "replace", "path": "/baz", "value": "boo" }
 	//   ]
 	//
 	//   The resulting JSON document:
@@ -208,7 +209,7 @@ const (
 	//     "baz": "boo",
 	//     "foo": "bar"
 	//   }
-	JSONPatchOverrideOpReplace JSONPatchOverrideOperator = "Replace"
+	JSONPatchOverrideOpReplace JSONPatchOverrideOperator = "replace"
 )
 
 // ClusterResourceOverrideList contains a list of ClusterResourceOverride.
