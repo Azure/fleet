@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -76,7 +78,7 @@ var (
 )
 
 // SetupControllers set up the customized controllers we developed
-func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
+func SetupControllers(ctx context.Context, scheme *runtime.Scheme, wg *sync.WaitGroup, mgr ctrl.Manager, config *rest.Config, opts *options.Options) error {
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		klog.ErrorS(err, "unable to create the dynamic client")
@@ -132,7 +134,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	}
 
 	// the manager for all the dynamically created informers
-	dynamicInformerManager := informer.NewInformerManager(dynamicClient, opts.ResyncPeriod.Duration, ctx.Done())
+	dynamicInformerManager := informer.NewInformerManager(dynamicClient, scheme, opts.ResyncPeriod.Duration, ctx.Done())
 	validator.ResourceInformer = dynamicInformerManager // webhook needs this to check resource scope
 
 	// Set up  a custom controller to reconcile cluster resource placement
