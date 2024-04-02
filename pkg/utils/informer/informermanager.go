@@ -8,14 +8,20 @@ package informer
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sync"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+
+	Cache "sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // InformerManager manages dynamic shared informer for all resources, include Kubernetes resource and
@@ -33,7 +39,7 @@ type Manager interface {
 	AddStaticResource(resource APIResourceMeta, handler cache.ResourceEventHandler)
 
 	// IsInformerSynced checks if the resource's informer is synced.
-	IsInformerSynced(resource schema.GroupVersionResource) bool
+	IsInformerSynced(resource schema.GroupVersionKind) bool
 
 	// Start will run all informers, the informers will keep running until the channel closed.
 	// It is intended to be called after create new informer(s), and it's safe to call multi times.
@@ -61,15 +67,23 @@ type Manager interface {
 
 // NewInformerManager constructs a new instance of informerManagerImpl.
 // defaultResync with value '0' means no re-sync.
-func NewInformerManager(client dynamic.Interface, defaultResync time.Duration, parentCh <-chan struct{}) Manager {
+func NewInformerManager(client dynamic.Interface, scheme *runtime.Scheme, defaultResync time.Duration, parentCh <-chan struct{}) Manager {
 	// TODO: replace this with plain context
 	ctx, cancel := ContextForChannel(parentCh)
+
+	// Get the rest config
+	cfg := config.GetConfigOrDie()
+	c, err := Cache.New(cfg, Cache.Options{Scheme: scheme, SyncPeriod: &defaultResync})
+	if err != nil {
+		klog.V(2).ErrorS(err, "Failed to create informer cache")
+	}
 	return &informerManagerImpl{
-		dynamicClient:   client,
-		ctx:             ctx,
-		cancel:          cancel,
-		informerFactory: dynamicinformer.NewDynamicSharedInformerFactory(client, defaultResync),
-		apiResources:    make(map[schema.GroupVersionKind]*APIResourceMeta),
+		dynamicClient: client,
+		ctx:           ctx,
+		cancel:        cancel,
+		cache:         c,
+		scheme:        scheme,
+		apiResources:  make(map[schema.GroupVersionKind]*APIResourceMeta),
 	}
 }
 
@@ -87,9 +101,8 @@ type APIResourceMeta struct {
 	// isStaticResource indicates if the resource is a static resource that won't be deleted.
 	isStaticResource bool
 
-	// isPresent indicates if the resource is still present in the system. We need this because
-	// the dynamicInformerFactory does not support a good way to remove/stop an informer.
-	isPresent bool
+	// Registration is the resource event handler registration after it has been added.
+	Registration cache.ResourceEventHandlerRegistration
 }
 
 // informerManagerImpl implements the InformerManager interface
@@ -101,9 +114,8 @@ type informerManagerImpl struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// informerFactory is the client-go built-in informer factory that can create an informer given a gvr.
-	informerFactory dynamicinformer.DynamicSharedInformerFactory
-
+	cache  Cache.Cache
+	scheme *runtime.Scheme
 	// the apiResources map collects all the api resources we watch
 	apiResources  map[schema.GroupVersionKind]*APIResourceMeta
 	resourcesLock sync.RWMutex
@@ -111,22 +123,27 @@ type informerManagerImpl struct {
 
 func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta, handler cache.ResourceEventHandler, listComplete bool) {
 	newGVKs := make(map[schema.GroupVersionKind]bool, len(dynResources))
-
 	addInformerFunc := func(newRes APIResourceMeta) {
-		dynRes, exist := s.apiResources[newRes.GroupVersionKind]
+		_, exist := s.apiResources[newRes.GroupVersionKind]
 		if !exist {
-			newRes.isPresent = true
+			// TODO: how to add GVK to scheme?
+			informer, err := s.cache.GetInformerForKind(s.ctx, newRes.GroupVersionKind)
+			if err != nil {
+				klog.ErrorS(err, "Failed to create informer for resource", "gvk", newRes.GroupVersionKind, "err", err)
+				return
+			}
+
+			// if AddEventHandler returns an error, it is because the informer has stopped and cannot be restarted
+			if newRes.Registration, err = informer.AddEventHandler(handler); err != nil {
+				if s.ctx.Err() != nil {
+					// context is done, so the error is expected
+					return
+				}
+				panic(err)
+			}
+
 			s.apiResources[newRes.GroupVersionKind] = &newRes
-			// TODO (rzhang): remember the ResourceEventHandlerRegistration and remove it when the resource is deleted
-			// TODO: handle error which only happens if the informer is stopped
-			_, _ = s.informerFactory.ForResource(newRes.GroupVersionResource).Informer().AddEventHandler(handler)
-			klog.InfoS("Added an informer for a new resource", "res", newRes)
-		} else if !dynRes.isPresent {
-			// we just mark it as enabled as we should not add another eventhandler to the informer as it's still
-			// in the informerFactory
-			// TODO: add the Event handler back
-			dynRes.isPresent = true
-			klog.InfoS("Reactivated an informer for a reappeared resource", "res", dynRes)
+			klog.V(2).InfoS("Added an informer for a new resource", "res", s.apiResources[newRes.GroupVersionKind])
 		}
 	}
 
@@ -145,12 +162,36 @@ func (s *informerManagerImpl) AddDynamicResources(dynResources []APIResourceMeta
 	}
 
 	// mark the disappeared dynResources from the handler map
+	var keysToDelete []schema.GroupVersionKind
 	for gvk, dynRes := range s.apiResources {
-		if !newGVKs[gvk] && !dynRes.isStaticResource && dynRes.isPresent {
-			// TODO: Remove the Event handler from the informer using the resourceEventHandlerRegistration during creat
-			dynRes.isPresent = false
-			klog.InfoS("Disabled an informer for a disappeared resource", "res", dynRes)
+		if !newGVKs[gvk] && !dynRes.isStaticResource {
+			informer, err := s.cache.GetInformerForKind(s.ctx, dynRes.GroupVersionKind)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get informer for resource", "gvk", dynRes.GroupVersionKind, "err", err)
+				return
+			}
+			if err := informer.RemoveEventHandler(dynRes.Registration); err != nil {
+				if s.ctx.Err() == nil {
+					// context is not done, so the error is unexpected
+					panic(err)
+				}
+				return
+			}
+			obj, err := s.scheme.New(gvk)
+			if err != nil {
+				klog.V(2).ErrorS(err, "Could not get object of a disappeared resource", "res", dynRes)
+			}
+			err = s.cache.RemoveInformer(s.ctx, obj.(client.Object))
+			if err != nil {
+				klog.V(2).ErrorS(err, "Could not remove informer manager for resource", "res", dynRes)
+			}
+			klog.V(2).InfoS("Disabled an informer for a disappeared resource", "res", dynRes)
+			keysToDelete = append(keysToDelete, gvk)
 		}
+	}
+	// delete the disappeared resources from the map
+	for _, gvk := range keysToDelete {
+		delete(s.apiResources, gvk)
 	}
 }
 
@@ -165,20 +206,40 @@ func (s *informerManagerImpl) AddStaticResource(resource APIResourceMeta, handle
 
 	resource.isStaticResource = true
 	s.apiResources[resource.GroupVersionKind] = &resource
-	_, _ = s.informerFactory.ForResource(resource.GroupVersionResource).Informer().AddEventHandler(handler)
+	informer, err := s.cache.GetInformerForKind(s.ctx, resource.GroupVersionKind)
+	if err != nil {
+		klog.V(2).ErrorS(err, "Failed to create informer for resource", "gvk", resource.GroupVersionKind)
+	}
+	resource.Registration, err = informer.AddEventHandler(handler)
+	if err != nil {
+		klog.V(2).ErrorS(err, "Failed to add event handler for resource", "gvk", resource.GroupVersionKind)
+	}
 }
 
-func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionResource) bool {
+func (s *informerManagerImpl) IsInformerSynced(resource schema.GroupVersionKind) bool {
 	// TODO: use a lazy initialized sync map to reduce the number of informer sync look ups
-	return s.informerFactory.ForResource(resource).Informer().HasSynced()
+	informer, err := s.cache.GetInformerForKind(s.ctx, resource)
+	if err != nil {
+		klog.V(2).ErrorS(err, "Failed to get informer for resource", "gvk", resource)
+	}
+	return informer.HasSynced()
 }
 
 func (s *informerManagerImpl) Lister(resource schema.GroupVersionResource) cache.GenericLister {
-	return s.informerFactory.ForResource(resource).Lister()
+	indexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{
+		resource.String(): func(obj interface{}) ([]string, error) {
+			return []string{obj.(*unstructured.Unstructured).GetKind()}, nil
+		},
+	})
+	gr := schema.GroupResource{Resource: resource.Resource, Group: resource.Group}
+	return cache.NewGenericLister(indexer, gr)
 }
 
 func (s *informerManagerImpl) Start() {
-	s.informerFactory.Start(s.ctx.Done())
+	err := s.cache.Start(s.ctx)
+	if err != nil {
+		klog.V(2).ErrorS(err, "Failed to start informer manager")
+	}
 }
 
 func (s *informerManagerImpl) GetClient() dynamic.Interface {
@@ -186,7 +247,7 @@ func (s *informerManagerImpl) GetClient() dynamic.Interface {
 }
 
 func (s *informerManagerImpl) WaitForCacheSync() {
-	s.informerFactory.WaitForCacheSync(s.ctx.Done())
+	s.cache.WaitForCacheSync(s.ctx)
 }
 
 func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersionResource {
@@ -195,7 +256,7 @@ func (s *informerManagerImpl) GetNameSpaceScopedResources() []schema.GroupVersio
 
 	res := make([]schema.GroupVersionResource, 0, len(s.apiResources))
 	for _, resource := range s.apiResources {
-		if resource.isPresent && !resource.isStaticResource && !resource.IsClusterScoped {
+		if !resource.isStaticResource && !resource.IsClusterScoped {
 			res = append(res, resource.GroupVersionResource)
 		}
 	}

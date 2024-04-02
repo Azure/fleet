@@ -143,10 +143,10 @@ func (r *Reconciler) fetchClusterScopedResources(selector fleetv1beta1.ClusterRe
 		Kind:    selector.Kind,
 	}
 	if !r.InformerManager.IsClusterScopedResources(gvk) {
-		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s: %+v is not a cluster scoped resource", placeName, restMapping.Resource))
+		return nil, controller.NewUserError(fmt.Errorf("invalid placement %s: %+v is not a cluster scoped resource", placeName, gvk))
 	}
-	if !r.InformerManager.IsInformerSynced(gvr) {
-		return nil, controller.NewExpectedBehaviorError(fmt.Errorf("informer cache for %+v is not synced yet", restMapping.Resource))
+	if !r.InformerManager.IsInformerSynced(gvk) {
+		return nil, controller.NewExpectedBehaviorError(fmt.Errorf("informer cache for %+v is not synced yet", gvk))
 	}
 
 	lister := r.InformerManager.Lister(gvr)
@@ -273,9 +273,9 @@ func (r *Reconciler) fetchAllResourcesInOneNamespace(namespaceName string, place
 		if !r.shouldSelectResource(gvr) {
 			continue
 		}
-		if !r.InformerManager.IsInformerSynced(gvr) {
-			return nil, controller.NewExpectedBehaviorError(fmt.Errorf("informer cache for %+v is not synced yet", gvr))
-		}
+		//if !r.InformerManager.IsInformerSynced(gvr) {
+		//	return nil, controller.NewExpectedBehaviorError(fmt.Errorf("informer cache for %+v is not synced yet", gvr))
+		//}
 		lister := r.InformerManager.Lister(gvr)
 		objs, err := lister.ByNamespace(namespaceName).List(labels.Everything())
 		if err != nil {
