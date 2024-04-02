@@ -115,6 +115,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	if syncErr != nil {
 		klog.ErrorS(syncErr, "Failed to sync all the works", "resourceBinding", bindingRef)
+		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionFalse,
 			Type:               string(fleetv1beta1.ResourceBindingBound),
@@ -122,10 +123,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			Message:            syncErr.Error(),
 			ObservedGeneration: resourceBinding.Generation,
 		})
+		resourceBinding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionFalse,
+			Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
+			Reason:             syncWorkFailedReason,
+			Message:            syncErr.Error(),
+			ObservedGeneration: resourceBinding.Generation,
+		})
 	} else {
+		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingBound),
+			Reason:             allWorkSyncedReason,
+			ObservedGeneration: resourceBinding.Generation,
+		})
+		resourceBinding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
 			Reason:             allWorkSyncedReason,
 			ObservedGeneration: resourceBinding.Generation,
 		})
@@ -568,7 +583,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingAvailable),
 		Reason:             workNotAvailableReason,
-		Message:            fmt.Sprintf("work object %s is not available", notAvailableWork),
+		Message:            fmt.Sprintf("Work object %s is not available", notAvailableWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
 }
