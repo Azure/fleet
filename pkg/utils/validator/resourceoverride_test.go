@@ -452,7 +452,7 @@ func TestValidateResourceOverride(t *testing.T) {
 	}
 }
 
-func TestValidateResourceOverridePolicy(t *testing.T) {
+func TestValidateOverridePolicy(t *testing.T) {
 	tests := map[string]struct {
 		ro         fleetv1alpha1.ResourceOverride
 		wantErrMsg error
@@ -569,13 +569,13 @@ func TestValidateResourceOverridePolicy(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := validateResourceOverridePolicy(tt.ro)
+			got := validateOverridePolicy(tt.ro.Spec.Policy)
 			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
-				t.Fatalf("validateResourceOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
+				t.Fatalf("validateOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
 			}
 
 			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-				t.Errorf("validateResourceOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
+				t.Errorf("validateOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}

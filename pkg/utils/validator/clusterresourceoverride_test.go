@@ -525,27 +525,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-	}
-	for testName, tt := range tests {
-		t.Run(testName, func(t *testing.T) {
-			got := ValidateClusterResourceOverride(tt.cro, tt.croList)
-			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
-				t.Fatalf("ValidateClusterResourceOverride() = %v, want %v", got, tt.wantErrMsg)
-			}
-
-			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-				t.Errorf("ValidateClusterResourceOverride() = %v, want %v", got, tt.wantErrMsg)
-			}
-		})
-	}
-}
-
-func TestValidateClusterResourceOverridePolicy(t *testing.T) {
-	tests := map[string]struct {
-		cro        fleetv1alpha1.ClusterResourceOverride
-		wantErrMsg error
-	}{
-		"all label selectors": {
+		"valid cluster resource override - policy with all label selectors": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -596,7 +576,7 @@ func TestValidateClusterResourceOverridePolicy(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"unsupported selector type": {
+		"invalid cluster resource override - policy with unsupported selector type": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -624,7 +604,7 @@ func TestValidateClusterResourceOverridePolicy(t *testing.T) {
 			},
 			wantErrMsg: errors.New("only labelSelector is supported"),
 		},
-		"no cluster selector": {
+		"valid cluster resource override - policy with no cluster selector": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -636,7 +616,7 @@ func TestValidateClusterResourceOverridePolicy(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"multiple rules": {
+		"invalid cluster resource override - policy with multiple rules": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -683,7 +663,7 @@ func TestValidateClusterResourceOverridePolicy(t *testing.T) {
 			},
 			wantErrMsg: errors.New("only labelSelector is supported"),
 		},
-		"nil label selector": {
+		"valid cluster resource override - policy with nil label selector": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -704,13 +684,13 @@ func TestValidateClusterResourceOverridePolicy(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := validateClusterResourceOverridePolicy(tt.cro)
+			got := ValidateClusterResourceOverride(tt.cro, tt.croList)
 			if gotErr, wantErr := got != nil, tt.wantErrMsg != nil; gotErr != wantErr {
-				t.Fatalf("validateClusterResourceOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
+				t.Fatalf("ValidateClusterResourceOverride() = %v, want %v", got, tt.wantErrMsg)
 			}
 
 			if got != nil && !strings.Contains(got.Error(), tt.wantErrMsg.Error()) {
-				t.Errorf("validateClusterResourceOverridePolicy() = %v, want %v", got, tt.wantErrMsg)
+				t.Errorf("ValidateClusterResourceOverride() = %v, want %v", got, tt.wantErrMsg)
 			}
 		})
 	}

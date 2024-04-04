@@ -31,7 +31,7 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 
 	// Check if override rule is using label selector
 	if ro.Spec.Policy != nil {
-		if err := validateResourceOverridePolicy(ro); err != nil {
+		if err := validateOverridePolicy(ro.Spec.Policy); err != nil {
 			allErr = append(allErr, err)
 		}
 	}
@@ -83,10 +83,10 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 	return errors.NewAggregate(allErr)
 }
 
-// validateResourceOverridePolicy checks if override rule is selecting resource by name.
-func validateResourceOverridePolicy(ro fleetv1alpha1.ResourceOverride) error {
+// validateOverridePolicy checks if override rule is selecting resource by name.
+func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 	allErr := make([]error, 0)
-	for _, rule := range ro.Spec.Policy.OverrideRules {
+	for _, rule := range policy.OverrideRules {
 		if rule.ClusterSelector == nil {
 			continue
 		} else if len(rule.ClusterSelector.ClusterSelectorTerms) == 0 {
