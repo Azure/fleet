@@ -605,8 +605,69 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "toleration value needs to be empty, when operator is Exists",
 		},
+		"valid placement policy - PickAll with property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+												Values:   []string{"1"},
+											},
+											{
+												Name:     "cpu",
+												Operator: placementv1beta1.PropertySelectorGreaterThan,
+												Values:   []string{"500m"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"invalid placement policy - PickAll with invalid property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"1", "2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "operator Eq requires exactly one value, got 2",
+		},
 	}
-
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
 			gotErr := validatePlacementPolicy(testCase.policy)
@@ -730,41 +791,6 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			},
 			wantErr:    true,
 			wantErrMsg: "operator Eq requires exactly one value, got 2",
-		},
-		"invalid placement policy - PickN with property selector logical contradictions in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
-			policy: &placementv1beta1.PlacementPolicy{
-				PlacementType:    placementv1beta1.PickNPlacementType,
-				NumberOfClusters: &positiveNumberOfClusters,
-				Affinity: &placementv1beta1.Affinity{
-					ClusterAffinity: &placementv1beta1.ClusterAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-								{
-									LabelSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{"test-key1": "test-value1"},
-									},
-									PropertySelector: &placementv1beta1.PropertySelector{
-										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-											{
-												Name:     "version",
-												Operator: placementv1beta1.PropertySelectorEqualTo,
-												Values:   []string{"1"},
-											},
-											{
-												Name:     "version",
-												Operator: placementv1beta1.PropertySelectorNotEqualTo,
-												Values:   []string{"1"},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantErr:    true,
-			wantErrMsg: "logical contradiction: version must not be equal to 1",
 		},
 		"valid placement policy - PickN with property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
 			policy: &placementv1beta1.PlacementPolicy{

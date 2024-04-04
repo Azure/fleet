@@ -370,7 +370,7 @@ func validatePropertySelector(propertySelector *placementv1beta1.PropertySelecto
 
 func validatePropertySelectorRequirements(propertySelectorRequirements []placementv1beta1.PropertySelectorRequirement) error {
 	var allErr []error
-	for i, req := range propertySelectorRequirements {
+	for _, req := range propertySelectorRequirements {
 		if err := validateName(req.Name); err != nil {
 			allErr = append(allErr, fmt.Errorf("invalid property name %s: %w", req.Name, err))
 		}
@@ -380,9 +380,7 @@ func validatePropertySelectorRequirements(propertySelectorRequirements []placeme
 		if err := validateValues(req.Values); err != nil {
 			allErr = append(allErr, fmt.Errorf("invalid values for property %s: %w", req.Name, err))
 		}
-		if err := checkContradictions(i, req, propertySelectorRequirements); err != nil {
-			allErr = append(allErr, err)
-		}
+		// TODO: Check for logical contradictions
 	}
 	if len(allErr) > 0 {
 		return apiErrors.NewAggregate(allErr)
@@ -398,6 +396,7 @@ func validateName(name string) error {
 }
 
 func validateOperator(op placementv1beta1.PropertySelectorOperator, values []string) error {
+	// TODO: Restructure for Eq (bundle operator and value validation logic)
 	validOperators := map[placementv1beta1.PropertySelectorOperator]bool{
 		placementv1beta1.PropertySelectorGreaterThan:          true,
 		placementv1beta1.PropertySelectorGreaterThanOrEqualTo: true,
@@ -416,41 +415,6 @@ func validateValues(values []string) error {
 	for _, value := range values {
 		if _, err := resource.ParseQuantity(value); err != nil {
 			return fmt.Errorf("value %s is not a valid resource.Quantity: %w", value, err)
-		}
-	}
-	return nil
-}
-
-func checkContradictions(index int, req placementv1beta1.PropertySelectorRequirement, reqs []placementv1beta1.PropertySelectorRequirement) error {
-	for i, otherReq := range reqs {
-		if i == index {
-			continue
-		}
-		if otherReq.Name != req.Name {
-			continue
-		}
-		switch req.Operator {
-		case placementv1beta1.PropertySelectorGreaterThan, placementv1beta1.PropertySelectorGreaterThanOrEqualTo:
-			if otherReq.Operator == placementv1beta1.PropertySelectorLessThan && otherReq.Values[0] >= req.Values[0] {
-				return fmt.Errorf("logical contradiction: %s must be greater than %s", req.Name, otherReq.Values[0])
-			}
-			if otherReq.Operator == placementv1beta1.PropertySelectorLessThanOrEqualTo && otherReq.Values[0] > req.Values[0] {
-				return fmt.Errorf("logical contradiction: %s must be greater than or equal to %s", req.Name, otherReq.Values[0])
-			}
-		case placementv1beta1.PropertySelectorLessThan, placementv1beta1.PropertySelectorLessThanOrEqualTo:
-			if otherReq.Operator == placementv1beta1.PropertySelectorGreaterThan && otherReq.Values[0] <= req.Values[0] {
-				return fmt.Errorf("logical contradiction: %s must be less than %s", req.Name, otherReq.Values[0])
-			}
-			if otherReq.Operator == placementv1beta1.PropertySelectorGreaterThanOrEqualTo && otherReq.Values[0] < req.Values[0] {
-				return fmt.Errorf("logical contradiction: %s must be less than or equal to %s", req.Name, otherReq.Values[0])
-			}
-		case placementv1beta1.PropertySelectorEqualTo, placementv1beta1.PropertySelectorNotEqualTo:
-			if otherReq.Operator == placementv1beta1.PropertySelectorEqualTo && otherReq.Values[0] != req.Values[0] {
-				return fmt.Errorf("logical contradiction: %s must be equal to %s", req.Name, otherReq.Values[0])
-			}
-			if otherReq.Operator == placementv1beta1.PropertySelectorNotEqualTo && otherReq.Values[0] == req.Values[0] {
-				return fmt.Errorf("logical contradiction: %s must not be equal to %s", req.Name, otherReq.Values[0])
-			}
 		}
 	}
 	return nil
