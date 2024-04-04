@@ -23,14 +23,14 @@ func TestIsClusterMatched(t *testing.T) {
 		want    bool
 	}{
 		{
-			name: "matched overrides with empty cluster label",
+			name: "matched overrides with nil cluster selector",
 			cluster: clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster-1",
 				},
 			},
-			rule: placementv1alpha1.OverrideRule{}, // empty cluster label selects all clusters
-			want: true,
+			rule: placementv1alpha1.OverrideRule{}, // nil cluster selector selects no clusters
+			want: false,
 		},
 		{
 			name: "rule with empty cluster selector",
@@ -40,12 +40,12 @@ func TestIsClusterMatched(t *testing.T) {
 				},
 			},
 			rule: placementv1alpha1.OverrideRule{
-				ClusterSelector: &placementv1beta1.ClusterSelector{},
+				ClusterSelector: &placementv1beta1.ClusterSelector{}, // empty cluster label selects all clusters
 			},
-			want: false,
+			want: true,
 		},
 		{
-			name: "rule with empty cluster selector",
+			name: "rule with empty cluster selector terms",
 			cluster: clusterv1beta1.MemberCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster-1",
@@ -53,10 +53,10 @@ func TestIsClusterMatched(t *testing.T) {
 			},
 			rule: placementv1alpha1.OverrideRule{
 				ClusterSelector: &placementv1beta1.ClusterSelector{
-					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
+					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{}, // empty cluster label terms selects all clusters
 				},
 			},
-			want: false,
+			want: true,
 		},
 		{
 			name: "rule with nil cluster label selector",

@@ -125,20 +125,9 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid clusterResourceOverrideSnapshot", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
 			continue // should not happen
 		}
-		for _, rule := range snapshot.Spec.OverrideSpec.Policy.OverrideRules {
-			matched, err := overrider.IsClusterMatched(cluster, rule)
-			if err != nil {
-				klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid override rule", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
-				return controller.NewUserError(err) // should not happen though
-			}
-			if !matched {
-				continue
-			}
-
-			if err := applyJSONPatchOverride(resource, rule.JSONPatchOverrides); err != nil {
-				klog.ErrorS(err, "Failed to apply JSON patch override", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
-				return controller.NewUserError(err)
-			}
+		if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
+			klog.ErrorS(err, "Failed to apply the override rules", "clusterResourceOverrideSnapshot", klog.KObj(snapshot))
+			return err
 		}
 	}
 	klog.V(2).InfoS("Applied clusterResourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
@@ -160,23 +149,31 @@ func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, 
 				klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid resourceOverrideSnapshot", "resourceOverrideSnapshot", klog.KObj(snapshot))
 				continue // should not happen
 			}
-			for _, rule := range snapshot.Spec.OverrideSpec.Policy.OverrideRules {
-				matched, err := overrider.IsClusterMatched(cluster, rule)
-				if err != nil {
-					klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid override rule", "resourceOverrideSnapshot", klog.KObj(snapshot))
-					return controller.NewUserError(err) // should not happen though
-				}
-				if !matched {
-					continue
-				}
-
-				if err := applyJSONPatchOverride(resource, rule.JSONPatchOverrides); err != nil {
-					klog.ErrorS(err, "Failed to apply JSON patch override", "resourceOverrideSnapshot", klog.KObj(snapshot))
-					return controller.NewUserError(err)
-				}
+			if err := applyOverrideRules(resource, cluster, snapshot.Spec.OverrideSpec.Policy.OverrideRules); err != nil {
+				klog.ErrorS(err, "Failed to apply the override rules", "resourceOverrideSnapshot", klog.KObj(snapshot))
+				return err
 			}
 		}
 		klog.V(2).InfoS("Applied resourceOverrideSnapshots", "resource", klog.KObj(&uResource), "numberOfOverrides", len(croMap[key]))
+	}
+	return nil
+}
+
+func applyOverrideRules(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster, rules []placementv1alpha1.OverrideRule) error {
+	for _, rule := range rules {
+		matched, err := overrider.IsClusterMatched(cluster, rule)
+		if err != nil {
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid override rule")
+			return controller.NewUserError(err) // should not happen though and should be rejected by the webhook
+		}
+		if !matched {
+			continue
+		}
+
+		if err := applyJSONPatchOverride(resource, rule.JSONPatchOverrides); err != nil {
+			klog.ErrorS(err, "Failed to apply JSON patch override")
+			return controller.NewUserError(err)
+		}
 	}
 	return nil
 }

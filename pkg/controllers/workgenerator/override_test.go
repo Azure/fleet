@@ -1007,7 +1007,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 											},
 										},
 										{
-											ClusterSelector: nil, // selecting all the clusters
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // selecting all the clusters
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
@@ -1109,7 +1109,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 								Policy: &placementv1alpha1.OverridePolicy{
 									OverrideRules: []placementv1alpha1.OverrideRule{
 										{
-											ClusterSelector: nil, // matching all the clusters
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
@@ -1233,7 +1233,7 @@ func TestApplyOverrides_namespacedScopeResource(t *testing.T) {
 								Policy: &placementv1alpha1.OverridePolicy{
 									OverrideRules: []placementv1alpha1.OverrideRule{
 										{
-											ClusterSelector: nil, // matching all the clusters
+											ClusterSelector: &placementv1beta1.ClusterSelector{}, // matching all the clusters
 											JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 												{
 													Operator: placementv1alpha1.JSONPatchOverrideOpReplace,

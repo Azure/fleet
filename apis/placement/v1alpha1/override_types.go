@@ -68,7 +68,8 @@ type OverridePolicy struct {
 type OverrideRule struct {
 	// ClusterSelectors selects the target clusters.
 	// The resources will be overridden before applying to the matching clusters.
-	// If ClusterSelector is not set, it means selecting ALL the member clusters.
+	// An empty clusterSelector selects ALL the member clusters.
+	// A null clusterSelector selects NO member clusters.
 	// For now, only labelSelector is supported.
 	// +optional
 	ClusterSelector *placementv1beta1.ClusterSelector `json:"clusterSelector,omitempty"`

@@ -18,8 +18,12 @@ import (
 
 // IsClusterMatched checks if the cluster is matched with the override rules.
 func IsClusterMatched(cluster clusterv1beta1.MemberCluster, rule placementv1alpha1.OverrideRule) (bool, error) {
-	if rule.ClusterSelector == nil { // it means matching all the member clusters
-		return true, nil
+	if rule.ClusterSelector == nil { // it means matching no member clusters
+		return false, nil
+	}
+
+	if len(rule.ClusterSelector.ClusterSelectorTerms) == 0 {
+		return true, nil // it means matching all member clusters
 	}
 
 	for _, term := range rule.ClusterSelector.ClusterSelectorTerms {

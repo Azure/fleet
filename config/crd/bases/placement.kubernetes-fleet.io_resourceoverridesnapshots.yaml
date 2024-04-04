@@ -68,9 +68,10 @@ spec:
                             clusterSelector:
                               description: ClusterSelectors selects the target clusters.
                                 The resources will be overridden before applying to
-                                the matching clusters. If ClusterSelector is not set,
-                                it means selecting ALL the member clusters. For now,
-                                only labelSelector is supported.
+                                the matching clusters. An empty clusterSelector selects
+                                ALL the member clusters. A null clusterSelector selects
+                                NO member clusters. For now, only labelSelector is
+                                supported.
                               properties:
                                 clusterSelectorTerms:
                                   description: ClusterSelectorTerms is a list of cluster
