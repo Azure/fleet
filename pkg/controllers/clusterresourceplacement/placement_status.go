@@ -292,7 +292,7 @@ func buildFailedResourcePlacements(work *fleetv1beta1.Work) (isPending bool, res
 	}
 
 	if appliedCond.Status == metav1.ConditionTrue {
-		klog.V(3).InfoS("The work is applied successfully by the member cluster", "work", workKObj, "workGeneration")
+		klog.V(3).InfoS("The work is applied successfully by the member cluster", "work", workKObj, "workGeneration", work.GetGeneration())
 		return false, nil
 	}
 
