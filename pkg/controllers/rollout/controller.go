@@ -412,7 +412,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 
 	// the list of bindings that are to be updated by this rolling phase
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
-	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates) == 0 {
+	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates)+len(applyFailedUpdateCandidates) == 0 {
 		return toBeUpdatedBindingList, nil, false, nil
 	}
 
