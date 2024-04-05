@@ -16,6 +16,8 @@ import (
 
 // ValidateResourceOverride validates resource override fields and returns error.
 func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+	allErr := make([]error, 0)
+
 	// Check if the resource is being selected by resource name.
 	if err := validateResourceSelectors(ro); err != nil {
 		// Skip the resource limit check because the check is only valid if resource selectors are valid.
@@ -23,10 +25,21 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 	}
 
 	// Check if the override count limit for the resources has been reached.
-	return validateResourceOverrideResourceLimit(ro, roList)
+	if err := validateResourceOverrideResourceLimit(ro, roList); err != nil {
+		allErr = append(allErr, err)
+	}
+
+	// Check if override rule is using label selector
+	if ro.Spec.Policy != nil {
+		if err := validateOverridePolicy(ro.Spec.Policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+
+	return errors.NewAggregate(allErr)
 }
 
-// validateResourceSelectors checks if override is selecting resource by name.
+// validateResourceSelectors checks if override is selecting a unique resource.
 func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
 	allErr := make([]error, 0)
@@ -65,6 +78,32 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 				continue
 			}
 			allErr = append(allErr, fmt.Errorf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", roSelector, ro.GetName(), overrideMap[roSelector]))
+		}
+	}
+	return errors.NewAggregate(allErr)
+}
+
+// validateOverridePolicy checks if override rule is selecting resource by name.
+func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
+	allErr := make([]error, 0)
+	for _, rule := range policy.OverrideRules {
+		if rule.ClusterSelector == nil {
+			continue
+		} else if len(rule.ClusterSelector.ClusterSelectorTerms) == 0 {
+			allErr = append(allErr, fmt.Errorf("clusterSelector must have at least one term"))
+		}
+
+		for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
+			// Check that only label selector is supported
+			if selector.PropertySelector != nil || selector.PropertySorter != nil {
+				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
+				continue
+			}
+			if selector.LabelSelector == nil {
+				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
+			} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
+				allErr = append(allErr, err)
+			}
 		}
 	}
 	return errors.NewAggregate(allErr)

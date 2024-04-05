@@ -17,14 +17,27 @@ import (
 
 // ValidateClusterResourceOverride validates cluster resource override fields and returns error.
 func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, croList *fleetv1alpha1.ClusterResourceOverrideList) error {
+	allErr := make([]error, 0)
+
 	// Check if the resource is being selected by resource name
 	if err := validateClusterResourceSelectors(cro); err != nil {
-		// Skip the resource limit check because the check is only valid if resource is selected by name
+		// Skip other checks because the check is only valid if resource is selected by name
 		return err
 	}
 
 	// Check if the override count limit for the resources has been reached
-	return validateClusterResourceOverrideResourceLimit(cro, croList)
+	if err := validateClusterResourceOverrideResourceLimit(cro, croList); err != nil {
+		allErr = append(allErr, err)
+	}
+
+	// Check if override rule is using label selector
+	if cro.Spec.Policy != nil {
+		if err := validateOverridePolicy(cro.Spec.Policy); err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+
+	return errors.NewAggregate(allErr)
 }
 
 // validateClusterResourceSelectors checks if override is selecting resource by name.
