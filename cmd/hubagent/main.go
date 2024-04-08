@@ -27,6 +27,7 @@ import (
 	workv1alpha1 "sigs.k8s.io/work-api/pkg/apis/v1alpha1"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
+
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -69,7 +70,9 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 	klog.InitFlags(nil)
 
-	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics, fleetmetrics.PlacementApplyFailedCount, fleetmetrics.PlacementApplySucceedCount)
+	metrics.Registry.MustRegister(fleetmetrics.JoinResultMetrics, fleetmetrics.LeaveResultMetrics,
+		fleetmetrics.PlacementApplyFailedCount, fleetmetrics.PlacementApplySucceedCount,
+		fleetmetrics.SchedulingCycleDurationMilliseconds, fleetmetrics.SchedulerActiveWorkers)
 }
 
 func main() {

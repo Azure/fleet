@@ -1079,7 +1079,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                false,
 		},
-		"test bound with failed to apply bindings": {
+		"test bound with only failed to apply binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
+			wantTobeUpdatedBindings: []int{0},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+			},
+			wantNeedRoll: true,
+		},
+		"test bound with failed to apply binding, unselected bound bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),

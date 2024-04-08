@@ -134,11 +134,17 @@ var _ = Describe("Test Work Generator Controller", func() {
 						Reason:             syncWorkFailedReason,
 						ObservedGeneration: binding.GetGeneration(),
 					},
+					{
+						Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
+						Status:             metav1.ConditionFalse,
+						Reason:             syncWorkFailedReason,
+						ObservedGeneration: binding.GetGeneration(),
+					},
 				},
 			}
 			diff := cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
 			Expect(diff).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got):\n%s", binding.Name, diff))
-			Expect(binding.GetCondition(string(fleetv1beta1.ResourceBindingBound)).Message).Should(ContainSubstring("resource snapshots are still being created for the masterResourceSnapshot"))
+			Expect(binding.GetCondition(string(fleetv1beta1.ResourceBindingWorkCreated)).Message).Should(ContainSubstring("resource snapshots are still being created for the masterResourceSnapshot"))
 			// create the second resource snapshot
 			secondSnapshot := generateResourceSnapshot(1, 2, 1, [][]byte{
 				testClonesetCRD, testNameSpace, testCloneset,
@@ -215,9 +221,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					if err := k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding); err != nil {
 						return false
 					}
-					// only check the bound status as the applied status reason changes depends on where the reconcile logic is
+					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingBound)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				// check the work is created by now
 				work := fleetv1beta1.Work{}
@@ -428,9 +434,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					if binding.GetGeneration() <= 1 {
 						return false
 					}
-					// only check the bound status as the applied status reason changes depends on where the reconcile logic is
+					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingBound)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
 				// check the work that contains none enveloped object is updated
@@ -533,9 +539,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 					if binding.GetGeneration() <= 1 {
 						return false
 					}
-					// only check the bound status as the applied status reason changes depends on where the reconcile logic is
+					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingBound)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(fleetv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
 				// check the enveloped work is deleted
@@ -869,6 +875,12 @@ func verifyBindingStatusSyncedNotApplied(binding *fleetv1beta1.ClusterResourceBi
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
+					Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
 					Status:             metav1.ConditionFalse,
 					Type:               string(fleetv1beta1.ResourceBindingApplied),
 					Reason:             workNotAppliedReason,
@@ -887,6 +899,12 @@ func verifyBindStatusAppliedNotAvailable(binding *fleetv1beta1.ClusterResourceBi
 			Conditions: []metav1.Condition{
 				{
 					Type:               string(fleetv1beta1.ResourceBindingBound),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
 					Status:             metav1.ConditionTrue,
 					Reason:             allWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
@@ -916,6 +934,12 @@ func verifyBindStatusAvail(binding *fleetv1beta1.ClusterResourceBinding) {
 			Conditions: []metav1.Condition{
 				{
 					Type:               string(fleetv1beta1.ResourceBindingBound),
+					Status:             metav1.ConditionTrue,
+					Reason:             allWorkSyncedReason,
+					ObservedGeneration: binding.GetGeneration(),
+				},
+				{
+					Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
 					Status:             metav1.ConditionTrue,
 					Reason:             allWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
