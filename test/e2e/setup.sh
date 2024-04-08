@@ -24,7 +24,7 @@ export OUTPUT_TYPE="${OUTPUT_TYPE:-type=docker}"
 export HUB_AGENT_IMAGE="${HUB_AGENT_IMAGE:-hub-agent}"
 export MEMBER_AGENT_IMAGE="${MEMBER_AGENT_IMAGE:-member-agent}"
 export REFRESH_TOKEN_IMAGE="${REFRESH_TOKEN_IMAGE:-refresh-token}"
-export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-aks}"
+export PROPERTY_PROVIDER="${PROPERTY_PROVIDER:-azure}"
 export USE_PREDEFINED_REGIONS="${USE_PREDEFINED_REGIONS:-false}"
 # The pre-defined regions; if the AKS property provider is used.
 #
@@ -64,7 +64,7 @@ do
 done
 
 # Set up the nodes in the member clusters, if the AKS property provider is used.
-if [ "$PROPERTY_PROVIDER" = "aks" ]
+if [ "$PROPERTY_PROVIDER" = "azure" ]
 then
     echo "Setting up nodes in each member cluster..."
 

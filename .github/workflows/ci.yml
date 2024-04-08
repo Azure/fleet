@@ -121,5 +121,5 @@ jobs:
           #
           # TO-DO (chenyu1): to ensure a vendor-neutral experience, switch to a dummy
           # property provider once the AKS one is split out.
-          PROPERTY_PROVIDER: 'aks'
+          PROPERTY_PROVIDER: 'azure'
 

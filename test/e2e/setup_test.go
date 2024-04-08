@@ -60,7 +60,7 @@ const (
 
 	kubeConfigPathEnvVarName       = "KUBECONFIG"
 	propertyProviderEnvVarName     = "PROPERTY_PROVIDER"
-	aksPropertyProviderEnvVarValue = "aks"
+	aksPropertyProviderEnvVarValue = "azure"
 )
 
 const (

@@ -52,6 +52,11 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
+const (
+	// The list of available property provider names.
+	aksPropertyProvider = "azure"
+)
+
 var (
 	scheme               = runtime.NewScheme()
 	useCertificateAuth   = flag.Bool("use-ca-auth", false, "Use key and certificate to authenticate the member agent.")
@@ -346,7 +351,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 		// Set up a provider provider (if applicable).
 		var pp propertyprovider.PropertyProvider
 		switch {
-		case propertyProvider != nil && *propertyProvider == "aks":
+		case propertyProvider != nil && *propertyProvider == aksPropertyProvider:
 			klog.V(2).Info("setting up the AKS property provider")
 			// Note that the property provider, though initialized here, is not started until
 			// the specific instance wins the leader election.
