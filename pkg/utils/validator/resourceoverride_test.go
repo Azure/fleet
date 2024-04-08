@@ -446,7 +446,7 @@ func TestValidateResourceOverride(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"invalid resource override - multiple invalid override paths, 1 valid": {
+		"invalid resource override - multiple invalid override paths": {
 			ro: placementv1alpha1.ResourceOverride{
 				Spec: placementv1alpha1.ResourceOverrideSpec{
 					Policy: &placementv1alpha1.OverridePolicy{
@@ -489,9 +489,13 @@ func TestValidateResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("invalid path %s: cannot override typeMeta fields", "/apiVersion"),
-				fmt.Errorf("invalid path %s: cannot override status fields", "/status/conditions/0/reason"),
-				fmt.Errorf("invalid path %s: cannot override metadata fields", "/metadata/creationTimestamp")}),
+			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields",
+				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/apiVersion"}),
+				fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
+					placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpReplace, Path: "/status/conditions/0/reason", Value: apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)}}),
+				fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields",
+					placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpReplace, Path: "/metadata/creationTimestamp", Value: apiextensionsv1.JSON{Raw: []byte(`"2021-08-01T00:00:00Z"`)}}),
+			}),
 		},
 	}
 	for testName, tt := range tests {
@@ -642,12 +646,11 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 		jsonPatchOverrides []placementv1alpha1.JSONPatchOverride
 		wantErrMsg         error
 	}{
-		"valid resource override path": {
+		"valid json override patch": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 				{
-					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "/metadata/labels/",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+					Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+					Path:     "/metadata/labels/label1",
 				},
 			},
 			wantErrMsg: nil,
@@ -659,7 +662,8 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 					Path:     "/kind",
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid path %s: cannot override typeMeta fields", "/kind"),
+			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields",
+				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/kind"}),
 		},
 		"invalid resource override path - cannot override metadata fields": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
@@ -669,7 +673,8 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"kubernetes.io/scheduler-cleanup"`)},
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid path %s: cannot override metadata fields", "/metadata/finalizers/0"),
+			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields",
+				placementv1alpha1.JSONPatchOverride{Operator: "add", Path: "/metadata/finalizers/0", Value: apiextensionsv1.JSON{Raw: []byte(`"kubernetes.io/scheduler-cleanup"`)}}),
 		},
 		"invalid resource override path - cannot override status fields": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
@@ -678,7 +683,19 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 					Path:     "/status/conditions/0/reason",
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid path %s: cannot override status fields", "/status/conditions/0/reason"),
+			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
+				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/status/conditions/0/reason"}),
+		},
+		"invalid resource override path - remove with value": {
+			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+					Path:     "/metadata/labels/label1",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
+				},
+			},
+			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %v: remove operation cannot have value",
+				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/metadata/labels/label1", Value: apiextensionsv1.JSON{Raw: []byte(`"value"`)}}),
 		},
 	}
 	for testName, tt := range tests {

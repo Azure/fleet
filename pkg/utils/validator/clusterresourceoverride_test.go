@@ -732,9 +732,13 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("invalid path %s: cannot override typeMeta fields", "/apiVersion"),
-				fmt.Errorf("invalid path %s: cannot override status fields", "/status/conditions/0/reason"),
-				fmt.Errorf("invalid path %s: cannot override metadata fields", "/metadata/creationTimestamp")}),
+			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields",
+				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/apiVersion"}),
+				fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
+					placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpReplace, Path: "/status/conditions/0/reason", Value: apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)}}),
+				fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields",
+					placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpReplace, Path: "/metadata/creationTimestamp", Value: apiextensionsv1.JSON{Raw: []byte(`"2021-08-01T00:00:00Z"`)}}),
+			}),
 		},
 	}
 	for testName, tt := range tests {

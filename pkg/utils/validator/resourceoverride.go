@@ -118,13 +118,15 @@ func validateJSONPatchOverride(jsonPatchOverrides []placementv1alpha1.JSONPatchO
 	for _, patch := range jsonPatchOverrides {
 		switch {
 		case strings.Contains(patch.Path, "/kind") || strings.Contains(patch.Path, "/apiVersion"):
-			allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override typeMeta fields", patch.Path))
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields", patch))
 		case strings.Contains(patch.Path, "/metadata") && !strings.Contains(patch.Path, "/metadata/annotations") && !strings.Contains(patch.Path, "/metadata/labels"):
-			allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override metadata fields", patch.Path))
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields", patch))
 		case strings.Contains(patch.Path, "/status"):
-			allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override status fields", patch.Path))
-		default:
-			continue
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields", patch))
+		}
+
+		if patch.Operator == placementv1alpha1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %v: remove operation cannot have value", patch))
 		}
 	}
 	return errors.NewAggregate(allErr)
