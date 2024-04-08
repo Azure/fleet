@@ -88,21 +88,19 @@ func validateOverridePolicy(policy *placementv1alpha1.OverridePolicy) error {
 	allErr := make([]error, 0)
 	for _, rule := range policy.OverrideRules {
 		if rule.ClusterSelector == nil {
-			continue
-		} else if len(rule.ClusterSelector.ClusterSelectorTerms) == 0 {
-			allErr = append(allErr, fmt.Errorf("clusterSelector must have at least one term"))
-		}
-
-		for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
-			// Check that only label selector is supported
-			if selector.PropertySelector != nil || selector.PropertySorter != nil {
-				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
-				continue
-			}
-			if selector.LabelSelector == nil {
-				allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
-			} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
-				allErr = append(allErr, err)
+			allErr = append(allErr, fmt.Errorf("invalid overrideRule %v: clusterSelector is required", rule))
+		} else {
+			for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
+				// Check that only label selector is supported
+				if selector.PropertySelector != nil || selector.PropertySorter != nil {
+					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: only labelSelector is supported", selector))
+					continue
+				}
+				if selector.LabelSelector == nil {
+					allErr = append(allErr, fmt.Errorf("invalid clusterSelector %v: labelSelector is required", selector))
+				} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
+					allErr = append(allErr, err)
+				}
 			}
 		}
 		if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {

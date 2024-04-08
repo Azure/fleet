@@ -740,6 +740,20 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 					placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpReplace, Path: "/metadata/creationTimestamp", Value: apiextensionsv1.JSON{Raw: []byte(`"2021-08-01T00:00:00Z"`)}}),
 			}),
 		},
+		"valid cluster resource override - empty cluster selector": {
+			cro: placementv1alpha1.ClusterResourceOverride{
+				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &placementv1alpha1.OverridePolicy{
+						OverrideRules: []placementv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &placementv1beta1.ClusterSelector{},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {

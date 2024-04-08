@@ -393,6 +393,20 @@ func TestValidateResourceOverride(t *testing.T) {
 			},
 			wantErrMsg: errors.New("labelSelector is required"),
 		},
+		"valid resource override - empty cluster selector": {
+			ro: placementv1alpha1.ResourceOverride{
+				Spec: placementv1alpha1.ResourceOverrideSpec{
+					Policy: &placementv1alpha1.OverridePolicy{
+						OverrideRules: []placementv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &placementv1beta1.ClusterSelector{},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
+		},
 		"invalid resource override - fail validateResourceOverridePolicy with empty terms": {
 			ro: placementv1alpha1.ResourceOverride{
 				Spec: placementv1alpha1.ResourceOverrideSpec{
@@ -601,7 +615,35 @@ func TestValidateOverridePolicy(t *testing.T) {
 				Spec: placementv1alpha1.ResourceOverrideSpec{
 					Policy: &placementv1alpha1.OverridePolicy{
 						OverrideRules: []placementv1alpha1.OverrideRule{
-							{},
+							{
+								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+										Path:     "/metadata/labels/new-label",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: errors.New("clusterSelector is required"),
+		},
+		"empty cluster selector": {
+			ro: placementv1alpha1.ResourceOverride{
+				Spec: placementv1alpha1.ResourceOverrideSpec{
+					Policy: &placementv1alpha1.OverridePolicy{
+						OverrideRules: []placementv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &placementv1beta1.ClusterSelector{},
+								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/metadata/labels/new-label",
+									},
+								},
+							},
 						},
 					},
 				},
