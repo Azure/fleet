@@ -8,14 +8,15 @@ package validator
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/errors"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 // ValidateResourceOverride validates resource override fields and returns error.
-func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+func ValidateResourceOverride(ro placementv1alpha1.ResourceOverride, roList *placementv1alpha1.ResourceOverrideList) error {
 	allErr := make([]error, 0)
 
 	// Check if the resource is being selected by resource name.
@@ -29,7 +30,6 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 		allErr = append(allErr, err)
 	}
 
-	// Check if override rule is using label selector
 	if ro.Spec.Policy != nil {
 		if err := validateOverridePolicy(ro.Spec.Policy); err != nil {
 			allErr = append(allErr, err)
@@ -40,8 +40,8 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 }
 
 // validateResourceSelectors checks if override is selecting a unique resource.
-func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
-	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
+func validateResourceSelectors(ro placementv1alpha1.ResourceOverride) error {
+	selectorMap := make(map[placementv1alpha1.ResourceSelector]bool)
 	allErr := make([]error, 0)
 	for _, selector := range ro.Spec.ResourceSelectors {
 		// Check if there are any duplicate selectors.
@@ -55,12 +55,12 @@ func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 
 // validateResourceOverrideResourceLimit checks if there is only 1 resource override per resource,
 // assuming the resource will be selected by the name only.
-func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
+func validateResourceOverrideResourceLimit(ro placementv1alpha1.ResourceOverride, roList *placementv1alpha1.ResourceOverrideList) error {
 	// Check if roList is nil or empty, no need to check for resource limit.
 	if roList == nil || len(roList.Items) == 0 {
 		return nil
 	}
-	overrideMap := make(map[fleetv1alpha1.ResourceSelector]string)
+	overrideMap := make(map[placementv1alpha1.ResourceSelector]string)
 	// Add overrides and its selectors to the map.
 	for _, override := range roList.Items {
 		selectors := override.Spec.ResourceSelectors
@@ -84,7 +84,7 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 }
 
 // validateOverridePolicy checks if override rule is selecting resource by name.
-func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
+func validateOverridePolicy(policy *placementv1alpha1.OverridePolicy) error {
 	allErr := make([]error, 0)
 	for _, rule := range policy.OverrideRules {
 		if rule.ClusterSelector == nil {
@@ -104,6 +104,27 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 			} else if err := validateLabelSelector(selector.LabelSelector, "cluster selector"); err != nil {
 				allErr = append(allErr, err)
 			}
+		}
+		if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
+			allErr = append(allErr, err)
+		}
+	}
+	return errors.NewAggregate(allErr)
+}
+
+// validateJSONPatchOverride checks if JSON patch override is valid.
+func validateJSONPatchOverride(jsonPatchOverrides []placementv1alpha1.JSONPatchOverride) error {
+	allErr := make([]error, 0)
+	for _, patch := range jsonPatchOverrides {
+		switch {
+		case strings.Contains(patch.Path, "/kind") || strings.Contains(patch.Path, "/apiVersion"):
+			allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override typeMeta fields", patch.Path))
+		case strings.Contains(patch.Path, "/metadata") && !strings.Contains(patch.Path, "/metadata/annotations") && !strings.Contains(patch.Path, "/metadata/labels"):
+			allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override metadata fields", patch.Path))
+		case strings.Contains(patch.Path, "/status"):
+			allErr = append(allErr, fmt.Errorf("invalid path %s: cannot override status fields", patch.Path))
+		default:
+			continue
 		}
 	}
 	return errors.NewAggregate(allErr)

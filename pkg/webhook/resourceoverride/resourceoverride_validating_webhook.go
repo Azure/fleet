@@ -18,14 +18,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating resourceoverride resources.
-	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, fleetv1alpha1.GroupVersion.Group, fleetv1alpha1.GroupVersion.Version, "resourceoverride")
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1alpha1.GroupVersion.Group, placementv1alpha1.GroupVersion.Version, "resourceoverride")
 )
 
 type resourceOverrideValidator struct {
@@ -42,7 +42,7 @@ func Add(mgr manager.Manager) error {
 
 // Handle resourceOverrideValidator checks to see if resource override is valid.
 func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	var ro fleetv1alpha1.ResourceOverride
+	var ro placementv1alpha1.ResourceOverride
 	klog.V(2).InfoS("Validating webhook handling resource override", "operation", req.Operation)
 	if err := v.decoder.Decode(req, &ro); err != nil {
 		klog.ErrorS(err, "Failed to decode resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
@@ -69,8 +69,8 @@ func (v *resourceOverrideValidator) Handle(ctx context.Context, req admission.Re
 }
 
 // listResourceOverride returns a list of cluster resource overrides.
-func listResourceOverride(ctx context.Context, client client.Client) (*fleetv1alpha1.ResourceOverrideList, error) {
-	roList := &fleetv1alpha1.ResourceOverrideList{}
+func listResourceOverride(ctx context.Context, client client.Client) (*placementv1alpha1.ResourceOverrideList, error) {
+	roList := &placementv1alpha1.ResourceOverrideList{}
 	if err := client.List(ctx, roList); err != nil {
 		klog.ErrorS(err, "Failed to list resourceOverrides when validating")
 		return nil, fmt.Errorf("failed to list resourceOverrides, please retry the request: %w", err)
