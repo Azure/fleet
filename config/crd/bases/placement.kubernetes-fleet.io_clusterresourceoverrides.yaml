@@ -140,7 +140,7 @@ spec:
                           description: ClusterSelectors selects the target clusters.
                             The resources will be overridden before applying to the
                             matching clusters. An empty clusterSelector selects ALL
-                            the member clusters. A null clusterSelector selects NO
+                            the member clusters. A nil clusterSelector selects NO
                             member clusters. For now, only labelSelector is supported.
                           properties:
                             clusterSelectorTerms:
