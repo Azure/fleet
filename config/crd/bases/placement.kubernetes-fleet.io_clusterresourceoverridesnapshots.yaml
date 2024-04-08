@@ -154,8 +154,10 @@ spec:
                             clusterSelector:
                               description: ClusterSelectors selects the target clusters.
                                 The resources will be overridden before applying to
-                                the matching clusters. If ClusterSelector is not set,
-                                it means selecting ALL the member clusters.
+                                the matching clusters. An empty clusterSelector selects
+                                ALL the member clusters. A nil clusterSelector selects
+                                NO member clusters. For now, only labelSelector is
+                                supported.
                               properties:
                                 clusterSelectorTerms:
                                   description: ClusterSelectorTerms is a list of cluster
@@ -315,13 +317,13 @@ spec:
                                 description: JSONPatchOverride applies a JSON patch
                                   on the selected resources following [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902).
                                 properties:
-                                  operator:
+                                  op:
                                     description: Operator defines the operation on
                                       the target field.
                                     enum:
-                                    - Add
-                                    - Remove
-                                    - Replace
+                                    - add
+                                    - remove
+                                    - replace
                                     type: string
                                   path:
                                     description: 'Path defines the target location.
@@ -331,10 +333,10 @@ spec:
                                   value:
                                     description: Value defines the content to be applied
                                       on the target location. Value should be empty
-                                      when operator is Remove.
-                                    type: string
+                                      when operator is `remove`.
+                                    x-kubernetes-preserve-unknown-fields: true
                                 required:
-                                - operator
+                                - op
                                 - path
                                 type: object
                               maxItems: 20

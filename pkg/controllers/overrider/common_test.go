@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -50,7 +51,7 @@ func getClusterResourceOverrideSpec() fleetv1alpha1.ClusterResourceOverrideSpec 
 						{
 							Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
 							Path:     "spec.replica",
-							Value:    "3",
+							Value:    apiextensionsv1.JSON{Raw: []byte("3")},
 						},
 					},
 				},

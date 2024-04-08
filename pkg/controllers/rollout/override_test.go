@@ -847,7 +847,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 									{
 										ClusterSelector: &placementv1beta1.ClusterSelector{
 											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -874,7 +877,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},
@@ -891,7 +897,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},
@@ -906,7 +915,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},
@@ -939,7 +951,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},
@@ -972,7 +987,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 									{
 										ClusterSelector: &placementv1beta1.ClusterSelector{
 											ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
@@ -1002,7 +1020,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ClusterResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},
@@ -1022,7 +1043,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},
@@ -1040,7 +1064,10 @@ func TestPickFromResourceMatchedOverridesForTargetCluster(t *testing.T) {
 						OverrideSpec: placementv1alpha1.ResourceOverrideSpec{
 							Policy: &placementv1alpha1.OverridePolicy{
 								OverrideRules: []placementv1alpha1.OverrideRule{
-									{}, // empty cluster label selects all clusters
+									{
+										// empty cluster label selector selects all clusters
+										ClusterSelector: &placementv1beta1.ClusterSelector{},
+									},
 								},
 							},
 						},

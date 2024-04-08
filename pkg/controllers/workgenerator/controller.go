@@ -44,6 +44,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/informer"
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
@@ -69,6 +70,9 @@ type Reconciler struct {
 	// the max number of concurrent reconciles per controller.
 	MaxConcurrentReconciles int
 	recorder                record.EventRecorder
+	// the informer contains the cache for all the resources we need.
+	// to check the resource scope
+	InformerManager informer.Manager
 }
 
 // Reconcile triggers a single binding reconcile round.
