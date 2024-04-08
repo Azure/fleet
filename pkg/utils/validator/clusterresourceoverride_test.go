@@ -494,7 +494,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: errors.New("clusterSelector must have at least one term"),
+			wantErrMsg: nil,
 		},
 		"valid cluster resource override - empty match labels & match expressions": {
 			cro: placementv1alpha1.ClusterResourceOverride{
@@ -622,7 +622,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: nil,
+			wantErrMsg: errors.New("clusterSelector is required"),
 		},
 		"invalid cluster resource override - policy with multiple rules": {
 			cro: placementv1alpha1.ClusterResourceOverride{

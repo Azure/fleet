@@ -421,7 +421,7 @@ func TestValidateResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: errors.New("clusterSelector must have at least one term"),
+			wantErrMsg: nil,
 		},
 		"valid resource override - empty match labels & match expressions": {
 			ro: placementv1alpha1.ResourceOverride{
