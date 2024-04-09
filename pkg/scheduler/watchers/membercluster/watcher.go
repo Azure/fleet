@@ -60,7 +60,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//        has changed; and/or
 	//     b) an unexpected development which originally leads the scheduler to disregard the cluster
 	//     (e.g., agents not joining, network partition, etc.) has been resolved.
-	//	   c) the cluster, has a taint removed from it and now is eligible for scheduling.
+	//     c) the cluster, has a taint removed from it and now is eligible for scheduling.
 	//
 	//  2. a cluster, originally eligible for resource placement, becomes ineligible for some reason.
 	//
