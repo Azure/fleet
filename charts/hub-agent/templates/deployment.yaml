@@ -34,6 +34,8 @@ spec:
             - --concurrent-resource-change-syncs={{ .Values.ConcurrentResourceChangeSyncs }}
             - --log_file_max_size={{ .Values.logFileMaxSize }}
             - --max-fleet-size={{ .Values.MaxFleetSizeSupported }}
+            - --hub-api-qps={{ .Values.hubAPIQPS }}
+            - --hub-api-burst={{ .Values.hubAPIBurst }}
           ports:
             - name: metrics
               containerPort: 8080
