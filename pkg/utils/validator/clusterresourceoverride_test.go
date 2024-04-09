@@ -622,7 +622,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: errors.New("clusterSelector is required"),
+			wantErrMsg: nil,
 		},
 		"invalid cluster resource override - policy with multiple rules": {
 			cro: placementv1alpha1.ClusterResourceOverride{

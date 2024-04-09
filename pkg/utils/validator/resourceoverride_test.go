@@ -628,7 +628,7 @@ func TestValidateOverridePolicy(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: errors.New("clusterSelector is required"),
+			wantErrMsg: nil,
 		},
 		"empty cluster selector": {
 			ro: placementv1alpha1.ResourceOverride{
@@ -691,21 +691,31 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 		"valid json override patch": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 				{
-					Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-					Path:     "/metadata/labels/label1",
+					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/spec/clusterResourceSelector/kind",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"ClusterRole"`)},
 				},
 			},
 			wantErrMsg: nil,
 		},
-		"invalid resource override path - cannot override typeMeta fields": {
+		"invalid resource override path - cannot override typeMeta fields (kind)": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 				{
 					Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
 					Path:     "/kind",
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields",
-				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/kind"}),
+			wantErrMsg: errors.New("cannot override typeMeta fields"),
+		},
+		"invalid resource override path - cannot override typeMeta fields (apiVersion)": {
+			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/apiVersion",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
+				},
+			},
+			wantErrMsg: errors.New("cannot override typeMeta fields"),
 		},
 		"invalid resource override path - cannot override metadata fields": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
@@ -715,8 +725,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"kubernetes.io/scheduler-cleanup"`)},
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields",
-				placementv1alpha1.JSONPatchOverride{Operator: "add", Path: "/metadata/finalizers/0", Value: apiextensionsv1.JSON{Raw: []byte(`"kubernetes.io/scheduler-cleanup"`)}}),
+			wantErrMsg: errors.New("cannot override metadata fields"),
 		},
 		"invalid resource override path - cannot override status fields": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
@@ -725,8 +734,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 					Path:     "/status/conditions/0/reason",
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
-				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/status/conditions/0/reason"}),
+			wantErrMsg: errors.New("cannot override status fields"),
 		},
 		"invalid resource override path - remove with value": {
 			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
@@ -736,8 +744,26 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 				},
 			},
-			wantErrMsg: fmt.Errorf("invalid JSONPatchOverride %v: remove operation cannot have value",
-				placementv1alpha1.JSONPatchOverride{Operator: placementv1alpha1.JSONPatchOverrideOpRemove, Path: "/metadata/labels/label1", Value: apiextensionsv1.JSON{Raw: []byte(`"value"`)}}),
+			wantErrMsg: errors.New("remove operation cannot have value"),
+		},
+		"valid resource override path - correct metadata field": {
+			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpAdd,
+					Path:     "/metadata/annotations/new-annotation",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"valid resource override path - apiVersion used as label": {
+			jsonPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+				{
+					Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+					Path:     "/metadata/labels/apiVersion",
+				},
+			},
+			wantErrMsg: nil,
 		},
 	}
 	for testName, tt := range tests {

@@ -87,9 +87,7 @@ func validateResourceOverrideResourceLimit(ro placementv1alpha1.ResourceOverride
 func validateOverridePolicy(policy *placementv1alpha1.OverridePolicy) error {
 	allErr := make([]error, 0)
 	for _, rule := range policy.OverrideRules {
-		if rule.ClusterSelector == nil {
-			allErr = append(allErr, fmt.Errorf("invalid overrideRule %v: clusterSelector is required", rule))
-		} else {
+		if rule.ClusterSelector != nil {
 			for _, selector := range rule.ClusterSelector.ClusterSelectorTerms {
 				// Check that only label selector is supported
 				if selector.PropertySelector != nil || selector.PropertySorter != nil {
@@ -114,17 +112,21 @@ func validateOverridePolicy(policy *placementv1alpha1.OverridePolicy) error {
 func validateJSONPatchOverride(jsonPatchOverrides []placementv1alpha1.JSONPatchOverride) error {
 	allErr := make([]error, 0)
 	for _, patch := range jsonPatchOverrides {
-		switch {
-		case strings.Contains(patch.Path, "/kind") || strings.Contains(patch.Path, "/apiVersion"):
+		path := strings.Split(patch.Path, "/")[1:]
+
+		switch path[0] {
+		case "kind", "apiVersion":
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields", patch))
-		case strings.Contains(patch.Path, "/metadata") && !strings.Contains(patch.Path, "/metadata/annotations") && !strings.Contains(patch.Path, "/metadata/labels"):
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields", patch))
-		case strings.Contains(patch.Path, "/status"):
+		case "metadata":
+			if path[1] != "annotations" && path[1] != "labels" {
+				allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields", patch))
+			}
+		case "status":
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields", patch))
 		}
 
 		if patch.Operator == placementv1alpha1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %v: remove operation cannot have value", patch))
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: remove operation cannot have value", patch))
 		}
 	}
 	return errors.NewAggregate(allErr)
