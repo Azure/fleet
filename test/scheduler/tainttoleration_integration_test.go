@@ -127,6 +127,80 @@ var _ = Describe("scheduling CRPs on member clusters with taints & tolerations",
 		})
 	})
 
+	// This is a serial test as adding taints can affect other tests.
+	Context("pick all valid cluster with no taints, ignore valid cluster with taints, then remove taints after which CRP selects all clusters", Serial, Ordered, func() {
+		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+		policySnapshotName := fmt.Sprintf(policySnapshotNameTemplate, crpName, 1)
+		taintClusters := []string{memberCluster1EastProd, memberCluster4CentralProd, memberCluster7WestCanary}
+		selectedClusters1 := []string{memberCluster2EastProd, memberCluster3EastCanary, memberCluster5CentralProd, memberCluster6WestProd}
+		unSelectedClusters1 := []string{memberCluster1EastProd, memberCluster4CentralProd, memberCluster7WestCanary, memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
+		selectedClusters2 := []string{memberCluster1EastProd, memberCluster2EastProd, memberCluster3EastCanary, memberCluster4CentralProd, memberCluster5CentralProd, memberCluster6WestProd, memberCluster7WestCanary}
+		unSelectedClusters2 := []string{memberCluster8UnhealthyEastProd, memberCluster9LeftCentralProd}
+
+		BeforeAll(func() {
+			// Ensure that no bindings have been created so far.
+			noBindingsCreatedActual := noBindingsCreatedForCRPActual(crpName)
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+
+			// Add taints to some member clusters 1, 4, 7 from all regions.
+			addTaintsToMemberClusters(taintClusters, buildTaints(taintClusters))
+
+			// Create a CRP with no scheduling policy specified, along with its associated policy snapshot, with no tolerations specified.
+			createNilSchedulingPolicyCRPWithPolicySnapshot(crpName, policySnapshotName, nil)
+		})
+
+		It("should add scheduler cleanup finalizer to the CRP", func() {
+			finalizerAddedActual := crpSchedulerFinalizerAddedActual(crpName)
+			Eventually(finalizerAddedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to add scheduler cleanup finalizer to CRP")
+		})
+
+		It("should create scheduled bindings for all healthy clusters with no taints", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(selectedClusters1, zeroScoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for unhealthy clusters, healthy cluster with taints", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(unSelectedClusters1, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(selectedClusters1, unSelectedClusters1, policySnapshotName)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		It("remove taints from member clusters", func() {
+			// Remove taints
+			removeTaintsFromMemberClusters(taintClusters)
+		})
+
+		It("should create scheduled bindings for all healthy clusters with no taints", func() {
+			scheduledBindingsCreatedActual := scheduledBindingsCreatedOrUpdatedForClustersActual(selectedClusters2, zeroScoreByCluster, crpName, policySnapshotName)
+			Eventually(scheduledBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+			Consistently(scheduledBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to create the expected set of bindings")
+		})
+
+		It("should not create any binding for unhealthy clusters, healthy cluster with taints", func() {
+			noBindingsCreatedActual := noBindingsCreatedForClustersActual(unSelectedClusters2, crpName)
+			Eventually(noBindingsCreatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+			Consistently(noBindingsCreatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Some bindings have been created unexpectedly")
+		})
+
+		It("should report status correctly", func() {
+			statusUpdatedActual := pickAllPolicySnapshotStatusUpdatedActual(selectedClusters2, unSelectedClusters2, policySnapshotName)
+			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update status")
+			Consistently(statusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update status")
+		})
+
+		AfterAll(func() {
+			// Delete the CRP.
+			ensureCRPAndAllRelatedResourcesDeletion(crpName)
+		})
+	})
+
 	// This is a serial test as adding taints, tolerations can affect other tests.
 	Context("pick all valid cluster with tolerated taints, ignore valid clusters with taints, CRP has some matching tolerations on creation", Serial, Ordered, func() {
 		crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())

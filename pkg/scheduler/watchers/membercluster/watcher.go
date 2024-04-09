@@ -78,7 +78,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//   - CRPs of the PickN placement type, which have not been fully scheduled yet, may be
 	//     able to select this cluster, and gets a step closer to being fully scheduled;
 	//   - CRPs of the PickFixed placement type, which have not been fully scheduled yet, may
-	//     be able to select this cluster, and gets a step closer to being fully scheduled;
+	//     be able to select this cluster, and gets a step closer to being fully scheduled, 1c)
+	//     doesn't apply to this scenario since taints are not honored for PickFixed CRPs.
 	//
 	// * 2a) and 2b) require no attention on the scheduler's end, specifically:
 	//   - CRPs which have already selected this cluster, regardless of its placement type, cannot
