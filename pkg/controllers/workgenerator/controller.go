@@ -105,6 +105,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		return controllerruntime.Result{}, nil
 	}
 
+	// Getting the member cluster before the adding the finalizer if there is no finalizer present.
+	// If the member cluster is not found and finalizer is not present, we skip the reconciliation and no work will be created.
+	// In this case, no need to add the finalizer to make sure we clean up all the works.
 	cluster := clusterv1beta1.MemberCluster{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: resourceBinding.Spec.TargetCluster}, &cluster); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -220,6 +223,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 	if errors.Is(syncErr, controller.ErrUserError) {
 		// Stop retry when the error is caused by user error
+		// For example, user provides an invalid overrides or cannot extract the resources from config map.
 		klog.ErrorS(syncErr, "Stopped retrying the resource binding", "resourceBinding", bindingRef)
 		return controllerruntime.Result{}, nil
 	}

@@ -136,6 +136,16 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed())
 
+	createOverrides()
+
+	go func() {
+		defer GinkgoRecover()
+		err = mgr.Start(ctx)
+		Expect(err).Should(Succeed(), "failed to run manager")
+	}()
+})
+
+func createOverrides() {
 	appNamespace = corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: appNamespaceName,
@@ -280,13 +290,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(ctx, &invalidClusterResourceOverrideSnapshot)).Should(Succeed(), "Failed to create the cro-2")
 	By(fmt.Sprintf("Invalid cluster resource override snapshot %s created", invalidClusterResourceOverrideSnapshotName))
-
-	go func() {
-		defer GinkgoRecover()
-		err = mgr.Start(ctx)
-		Expect(err).Should(Succeed(), "failed to run manager")
-	}()
-})
+}
 
 var _ = AfterSuite(func() {
 	defer klog.Flush()
