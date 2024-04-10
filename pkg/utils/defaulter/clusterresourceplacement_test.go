@@ -111,21 +111,11 @@ func TestSetDefaultsClusterResourcePlacement(t *testing.T) {
 		"ClusterResourcePlacement with serverside apply config not set": {
 			obj: &fleetv1beta1.ClusterResourcePlacement{
 				Spec: fleetv1beta1.ClusterResourcePlacementSpec{
-					Policy: &fleetv1beta1.PlacementPolicy{
-						PlacementType: fleetv1beta1.PickAllPlacementType,
-					},
 					Strategy: fleetv1beta1.RolloutStrategy{
-						Type: fleetv1beta1.RollingUpdateRolloutStrategyType,
-						RollingUpdate: &fleetv1beta1.RollingUpdateConfig{
-							MaxUnavailable:           ptr.To(intstr.FromString(DefaultMaxUnavailableValue)),
-							MaxSurge:                 ptr.To(intstr.FromString(DefaultMaxSurgeValue)),
-							UnavailablePeriodSeconds: ptr.To(DefaultUnavailablePeriodSeconds),
-						},
 						ApplyStrategy: &fleetv1beta1.ApplyStrategy{
 							Type: fleetv1beta1.ApplyStrategyTypeServerSideApply,
 						},
 					},
-					RevisionHistoryLimit: ptr.To(int32(DefaultRevisionHistoryLimitValue)),
 				},
 			},
 			wantObj: &fleetv1beta1.ClusterResourcePlacement{
