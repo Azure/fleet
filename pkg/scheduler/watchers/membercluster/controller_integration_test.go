@@ -444,7 +444,7 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 		})
 	})
 
-	Context("ready cluster has taint added & removed", func() {
+	Context("ready cluster has taint added, updated & removed", func() {
 		BeforeAll(func() {
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
@@ -461,6 +461,28 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 			Expect(hubClient.Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster taints")
 			Consistently(noKeyEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Workqueue is not empty")
 
+			// Retrieve the cluster.
+			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
+
+			// Update taint on cluster.
+			memberCluster.Spec.Taints = []clusterv1beta1.Taint{
+				{
+					Key:    "key2",
+					Value:  "value2",
+					Effect: corev1.TaintEffectNoSchedule,
+				},
+			}
+			Expect(hubClient.Update(ctx, memberCluster)).Should(Succeed(), "Failed to update member cluster taints")
+		})
+
+		It("should enqueue CRPs for cluster removed taint (case 1c)", func() {
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			keyCollector.Reset()
+		})
+
+		It("remove taint from cluster", func() {
+			memberCluster := &clusterv1beta1.MemberCluster{}
 			// Retrieve the cluster.
 			Expect(hubClient.Get(ctx, types.NamespacedName{Name: clusterName1}, memberCluster)).To(Succeed(), "Failed to get member cluster")
 
