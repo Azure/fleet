@@ -208,6 +208,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 			Client:                  mgr.GetClient(),
 			UncachedReader:          mgr.GetAPIReader(),
 			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/30) * math.Ceil(float64(opts.MaxConcurrentClusterPlacement)/10)),
+			InformerManager:         dynamicInformerManager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up rollout controller")
 			return err
@@ -218,6 +219,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 		if err := (&workgenerator.Reconciler{
 			Client:                  mgr.GetClient(),
 			MaxConcurrentReconciles: int(math.Ceil(float64(opts.MaxFleetSizeSupported)/10) * math.Ceil(float64(opts.MaxConcurrentClusterPlacement)/10)),
+			InformerManager:         dynamicInformerManager,
 		}).SetupWithManager(mgr); err != nil {
 			klog.ErrorS(err, "Unable to set up work generator")
 			return err

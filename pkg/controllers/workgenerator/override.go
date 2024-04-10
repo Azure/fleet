@@ -93,6 +93,10 @@ func (r *Reconciler) fetchResourceOverrideSnapshots(ctx context.Context, resourc
 }
 
 func (r *Reconciler) applyOverrides(resource *placementv1beta1.ResourceContent, cluster clusterv1beta1.MemberCluster, croMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ClusterResourceOverrideSnapshot, roMap map[placementv1beta1.ResourceIdentifier][]*placementv1alpha1.ResourceOverrideSnapshot) error {
+	if len(croMap) == 0 && len(roMap) == 0 {
+		return nil
+	}
+
 	var uResource unstructured.Unstructured
 	if err := uResource.UnmarshalJSON(resource.Raw); err != nil {
 		klog.ErrorS(err, "Work has invalid content", "selectedResource", resource.Raw)

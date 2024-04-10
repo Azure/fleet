@@ -416,7 +416,6 @@ func TestFetchResourceOverrideSnapshot(t *testing.T) {
 	}
 }
 
-// TODO add tests for cluster-scoped resources for ApplyOverrides
 func TestApplyOverrides_clusterScopedResource(t *testing.T) {
 	fakeInformer := informer.FakeManager{
 		APIResources: map[schema.GroupVersionKind]bool{

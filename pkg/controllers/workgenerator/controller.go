@@ -17,7 +17,7 @@ import (
 
 	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
@@ -100,8 +101,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	// we only care about the bound bindings. We treat unscheduled bindings as bound until they are deleted.
 	if resourceBinding.Spec.State != fleetv1beta1.BindingStateBound && resourceBinding.Spec.State != fleetv1beta1.BindingStateUnscheduled {
-		klog.V(2).InfoS("Skip reconcile clusterResourceBinding that is not bound", "state", resourceBinding.Spec.State, "resourceBinding", bindingRef)
+		klog.V(2).InfoS("Skip reconciling clusterResourceBinding that is not bound", "state", resourceBinding.Spec.State, "resourceBinding", bindingRef)
 		return controllerruntime.Result{}, nil
+	}
+
+	cluster := clusterv1beta1.MemberCluster{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: resourceBinding.Spec.TargetCluster}, &cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("Skip reconciling clusterResourceBinding when the cluster is deleted", "memberCluster", resourceBinding.Spec.TargetCluster, "clusterResourceBinding", bindingRef)
+			return controllerruntime.Result{}, nil
+		}
+		klog.ErrorS(err, "Failed to get the memberCluster", "memberCluster", resourceBinding.Spec.TargetCluster, "clusterResourceBinding", bindingRef)
+		return controllerruntime.Result{}, controller.NewAPIServerError(true, err)
 	}
 
 	// make sure that the resource binding obj has a finalizer
@@ -110,30 +121,61 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	}
 
 	workUpdated := false
+	overrideSucceeded := false
 	// list all the corresponding works
 	works, syncErr := r.listAllWorksAssociated(ctx, &resourceBinding)
 	if syncErr == nil {
 		// generate and apply the workUpdated works if we have all the works
-		workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works)
+		overrideSucceeded, workUpdated, syncErr = r.syncAllWork(ctx, &resourceBinding, works, cluster)
+	}
+
+	if overrideSucceeded {
+		overrideReason := condition.OverriddenSucceededReason
+		if len(resourceBinding.Spec.ClusterResourceOverrideSnapshots) == 0 &&
+			len(resourceBinding.Spec.ResourceOverrideSnapshots) == 0 {
+			overrideReason = condition.OverrideNotSpecifiedReason
+		}
+		resourceBinding.SetConditions(metav1.Condition{
+			Status:             metav1.ConditionTrue,
+			Type:               string(fleetv1beta1.ResourceBindingOverridden),
+			Reason:             overrideReason,
+			Message:            "Successfully applied the override rules on the resources",
+			ObservedGeneration: resourceBinding.Generation,
+		})
 	}
 
 	if syncErr != nil {
 		klog.ErrorS(syncErr, "Failed to sync all the works", "resourceBinding", bindingRef)
-		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-		resourceBinding.SetConditions(metav1.Condition{
-			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ResourceBindingBound),
-			Reason:             syncWorkFailedReason,
-			Message:            syncErr.Error(),
-			ObservedGeneration: resourceBinding.Generation,
-		})
-		resourceBinding.SetConditions(metav1.Condition{
-			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
-			Reason:             syncWorkFailedReason,
-			Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", syncErr),
-			ObservedGeneration: resourceBinding.Generation,
-		})
+		errorMessage := syncErr.Error()
+		if err := errors.Unwrap(syncErr); err == nil { // check if Nil and then unwrap
+			errorMessage = err.Error()
+		}
+
+		if !overrideSucceeded {
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingOverridden),
+				Reason:             condition.OverriddenFailedReason,
+				Message:            fmt.Sprintf("Failed to apply the override rules on the resources: %s", errorMessage),
+				ObservedGeneration: resourceBinding.Generation,
+			})
+		} else {
+			// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingBound),
+				Reason:             syncWorkFailedReason,
+				Message:            errorMessage,
+				ObservedGeneration: resourceBinding.Generation,
+			})
+			resourceBinding.SetConditions(metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
+				Reason:             syncWorkFailedReason,
+				Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", errorMessage),
+				ObservedGeneration: resourceBinding.Generation,
+			})
+		}
 	} else {
 		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
 		resourceBinding.SetConditions(metav1.Condition{
@@ -174,6 +216,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		klog.ErrorS(updateErr, "Failed to update the resourceBinding status", "resourceBinding", bindingRef)
 		return controllerruntime.Result{}, controller.NewUpdateIgnoreConflictError(updateErr)
 	}
+	if errors.Is(syncErr, controller.ErrUserError) {
+		// Stop retry when the error is caused by user error
+		klog.ErrorS(syncErr, "Stopped retrying the resource binding", "resourceBinding", bindingRef)
+		return controllerruntime.Result{}, nil
+	}
+
 	if errors.Is(syncErr, errResourceSnapshotNotFound) {
 		// This error usually indicates that the resource snapshot is deleted since the rollout controller which fills
 		// the resource snapshot share the same informer cache with this controller. We don't need to retry in this case
@@ -260,8 +308,10 @@ func (r *Reconciler) listAllWorksAssociated(ctx context.Context, resourceBinding
 }
 
 // syncAllWork generates all the work for the resourceSnapshot and apply them to the corresponding target cluster.
-// it returns if we actually made any changes on the hub cluster.
-func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work) (bool, error) {
+// it returns
+// 1: if we apply the overrides successfully
+// 2: if we actually made any changes on the hub cluster
+func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1beta1.ClusterResourceBinding, existingWorks map[string]*fleetv1beta1.Work, cluster clusterv1beta1.MemberCluster) (bool, bool, error) {
 	updateAny := atomic.NewBool(false)
 	resourceBindingRef := klog.KObj(resourceBinding)
 
@@ -269,7 +319,17 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 	resourceSnapshots, err := r.fetchAllResourceSnapshots(ctx, resourceBinding)
 	if err != nil {
 		// TODO(RZ): handle errResourceNotFullyCreated error so we don't need to wait for all the snapshots to be created
-		return false, err
+		return false, false, err
+	}
+
+	croMap, err := r.fetchClusterResourceOverrideSnapshots(ctx, resourceBinding)
+	if err != nil {
+		return false, false, err
+	}
+
+	roMap, err := r.fetchResourceOverrideSnapshots(ctx, resourceBinding)
+	if err != nil {
+		return false, false, err
 	}
 
 	// issue all the create/update requests for the corresponding works for each snapshot in parallel
@@ -282,23 +342,28 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		workNamePrefix, err := getWorkNamePrefixFromSnapshotName(snapshot)
 		if err != nil {
 			klog.ErrorS(err, "Encountered a mal-formatted resource snapshot", "resourceSnapshot", klog.KObj(snapshot))
-			return false, err
+			return false, false, err
 		}
 		var simpleManifests []fleetv1beta1.Manifest
-		for _, selectedResource := range snapshot.Spec.SelectedResources {
+		for j := range snapshot.Spec.SelectedResources {
+			selectedResource := snapshot.Spec.SelectedResources[j]
+			if err := r.applyOverrides(&selectedResource, cluster, croMap, roMap); err != nil {
+				return false, false, err
+			}
+
 			// we need to special treat configMap with envelopeConfigMapAnnotation annotation,
 			// so we need to check the GVK and annotation of the selected resource
 			var uResource unstructured.Unstructured
 			if err := uResource.UnmarshalJSON(selectedResource.Raw); err != nil {
 				klog.ErrorS(err, "work has invalid content", "snapshot", klog.KObj(snapshot), "selectedResource", selectedResource.Raw)
-				return false, controller.NewUnexpectedBehaviorError(err)
+				return true, false, controller.NewUnexpectedBehaviorError(err)
 			}
 			if uResource.GetObjectKind().GroupVersionKind() == utils.ConfigMapGVK &&
 				len(uResource.GetAnnotations()[fleetv1beta1.EnvelopeConfigMapAnnotation]) != 0 {
 				// get a work object for the enveloped configMap
 				work, err := r.getConfigMapEnvelopWorkObj(ctx, workNamePrefix, resourceBinding, snapshot, &uResource)
 				if err != nil {
-					return false, err
+					return true, false, err
 				}
 				activeWork[work.Name] = work
 				newWork = append(newWork, work)
@@ -317,10 +382,10 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 		newWork = append(newWork, work)
 
 		// issue all the create/update requests for the corresponding works for each snapshot in parallel
-		for i := range newWork {
-			work := newWork[i]
+		for ni := range newWork {
+			w := newWork[ni]
 			errs.Go(func() error {
-				updated, err := r.upsertWork(cctx, work, existingWorks[work.Name].DeepCopy(), snapshot)
+				updated, err := r.upsertWork(cctx, w, existingWorks[w.Name].DeepCopy(), snapshot)
 				if err != nil {
 					return err
 				}
@@ -353,10 +418,10 @@ func (r *Reconciler) syncAllWork(ctx context.Context, resourceBinding *fleetv1be
 
 	// wait for all the create/update/delete requests to finish
 	if updateErr := errs.Wait(); updateErr != nil {
-		return false, updateErr
+		return true, false, updateErr
 	}
 	klog.V(2).InfoS("Successfully synced all the work associated with the resourceBinding", "updateAny", updateAny.Load(), "resourceBinding", resourceBindingRef)
-	return updateAny.Load(), nil
+	return true, updateAny.Load(), nil
 }
 
 // fetchAllResourceSnapshots gathers all the resource snapshots for the resource binding.
@@ -596,7 +661,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 
 func extractResFromConfigMap(uConfigMap *unstructured.Unstructured) ([]fleetv1beta1.Manifest, error) {
 	manifests := make([]fleetv1beta1.Manifest, 0)
-	var configMap v1.ConfigMap
+	var configMap corev1.ConfigMap
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(uConfigMap.Object, &configMap)
 	if err != nil {
 		return nil, err
