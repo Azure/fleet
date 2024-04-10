@@ -147,8 +147,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 	if syncErr != nil {
 		klog.ErrorS(syncErr, "Failed to sync all the works", "resourceBinding", bindingRef)
 		errorMessage := syncErr.Error()
-		if err := errors.Unwrap(syncErr); err == nil { // check if Nil and then unwrap
-			errorMessage = err.Error()
+		// unwrap will return nil if syncErr is not wrapped
+		// the wrapped error string format is "%w: %s" so that remove ": " from messages
+		if err := errors.Unwrap(syncErr); err != nil && len(err.Error()) > 2 {
+			errorMessage = errorMessage[len(err.Error())+2:]
 		}
 
 		if !overrideSucceeded {

@@ -1095,6 +1095,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					}
 					return cmp.Diff(wantStatus, binding.Status, ignoreConditionOption)
 				}, timeout, interval).Should(BeEmpty(), fmt.Sprintf("binding(%s) mismatch (-want +got)", binding.Name))
+				Expect(binding.GetCondition(string(placementv1beta1.ResourceBindingOverridden)).Message).Should(ContainSubstring("Failed to apply the override rules on the resources: add operation does not apply"))
 			})
 		})
 
