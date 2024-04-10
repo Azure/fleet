@@ -470,8 +470,8 @@ var _ = Describe("scheduler member cluster source controller", Serial, Ordered, 
 		})
 
 		It("should enqueue CRPs for cluster removed taint (case 1c)", func() {
-			Eventually(qualifiedKeysEnqueuedActual(), eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
-			Consistently(qualifiedKeysEnqueuedActual(), consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Eventually(qualifiedKeysEnqueuedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Keys are not enqueued as expected")
+			Consistently(qualifiedKeysEnqueuedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Keys are not enqueued as expected")
 		})
 
 		AfterAll(func() {
