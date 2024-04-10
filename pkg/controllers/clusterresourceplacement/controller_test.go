@@ -28,6 +28,7 @@ import (
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/test/utils/resource"
 )
 
@@ -727,7 +728,7 @@ func TestGetOrCreateClusterSchedulingPolicySnapshot(t *testing.T) {
 				Scheme:   scheme,
 				Recorder: record.NewFakeRecorder(10),
 			}
-			limit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+			limit := int32(defaulter.DefaultRevisionHistoryLimitValue)
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
 			}
@@ -2360,7 +2361,7 @@ func TestGetOrCreateClusterResourceSnapshot(t *testing.T) {
 				Scheme:   scheme,
 				Recorder: record.NewFakeRecorder(10),
 			}
-			limit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+			limit := int32(defaulter.DefaultRevisionHistoryLimitValue)
 			if tc.revisionHistoryLimit != nil {
 				limit = *tc.revisionHistoryLimit
 			}
