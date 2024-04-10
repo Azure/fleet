@@ -18,7 +18,7 @@ const (
 	// DefaultMaxUnavailableValue is the default value of MaxUnavailable in the rolling update config.
 	DefaultMaxUnavailableValue = "25%"
 
-	// 	DefaultMaxSurgeValue is the default value of MaxSurge in the rolling update config.
+	// DefaultMaxSurgeValue is the default value of MaxSurge in the rolling update config.
 	DefaultMaxSurgeValue = "25%"
 
 	// DefaultUnavailablePeriodSeconds is the default period of time we consider a newly applied workload as unavailable.
