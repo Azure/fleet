@@ -36,7 +36,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 // Reconciler recomputes the cluster resource binding.
@@ -124,11 +123,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	defaulter.SetDefaultsClusterResourcePlacement(&crp)
-	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
-	if err = validator.ValidateClusterResourcePlacement(&crp); err != nil {
-		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, controller.NewUnexpectedBehaviorError(err)
-	}
 
 	matchedCRO, matchedRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(ctx, crp.Name, latestResourceSnapshot)
 	if err != nil {

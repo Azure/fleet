@@ -115,7 +115,7 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 			}
 		} else {
 			err := fmt.Errorf("cannot perform resource scope check for now, please retry")
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "resource informer is not synced")
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "resource informer is nil")
 			allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
 		}
 	}
