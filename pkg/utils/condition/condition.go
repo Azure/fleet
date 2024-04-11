@@ -32,6 +32,9 @@ const (
 	// OverriddenPendingReason is the reason string of placement condition when the selected resources are pending to override.
 	OverriddenPendingReason = "OverriddenPending"
 
+	// OverrideNotSpecifiedReason is the reason string of placement condition when no override is specified.
+	OverrideNotSpecifiedReason = "NoOverrideSpecified"
+
 	// OverriddenFailedReason is the reason string of placement condition when the selected resources fail to be overridden.
 	OverriddenFailedReason = "OverriddenFailed"
 
