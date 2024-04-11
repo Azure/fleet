@@ -158,10 +158,10 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return true
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
-		// simulate that some of the bindings are applied
+		// simulate that some of the bindings are available
 		firstApplied := 3
 		for i := 0; i < firstApplied; i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		// simulate another scheduling decision, pick some cluster to unselect from the bottom of the list
 		var newTarget int32 = 9
@@ -170,10 +170,10 @@ var _ = Describe("Test the rollout Controller", func() {
 		secondRoundBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		stillScheduled := 6
-		// simulate that some of the bindings are applied
-		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as applied.
+		// simulate that some of the bindings are available
+		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as available.
 		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		for i := int(targetCluster - 1); i >= stillScheduled; i-- {
 			binding := bindings[i]
@@ -185,9 +185,9 @@ var _ = Describe("Test the rollout Controller", func() {
 		for i := 0; i < stillScheduled; i++ {
 			secondRoundBindings = append(secondRoundBindings, bindings[i])
 		}
-		// simulate that some of the bindings are applied
+		// simulate that some of the bindings are available
 		for i := firstApplied; i < int(newTarget); i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		newScheduled := int(newTarget) - stillScheduled
 		for i := 0; i < newScheduled; i++ {
@@ -210,9 +210,9 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return true
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
-		// simulate that the new bindings are applied
+		// simulate that the new bindings are available
 		for i := 0; i < len(secondRoundBindings); i++ {
-			markBindingApplied(secondRoundBindings[i], true)
+			markBindingAvailable(secondRoundBindings[i])
 		}
 		// check that the unselected bindings are deleted
 		Eventually(func() bool {
@@ -256,10 +256,10 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return true
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
-		// simulate that some of the bindings are applied
+		// simulate that some of the bindings are available
 		firstApplied := 3
 		for i := 0; i < firstApplied; i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		// simulate another scheduling decision, pick some cluster to unselect from the bottom of the list
 		var newTarget int32 = 9
@@ -269,9 +269,9 @@ var _ = Describe("Test the rollout Controller", func() {
 		deletedBindings := make([]*fleetv1beta1.ClusterResourceBinding, 0)
 		stillScheduled := 6
 		// simulate that some of the bindings are applied
-		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as applied.
+		// moved to before being set to unscheduled, otherwise, the rollout controller will try to delete the bindings before we mark them as available.
 		for i := int(newTarget); i < int(targetCluster); i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		for i := int(targetCluster - 1); i >= stillScheduled; i-- {
 			binding := bindings[i]
@@ -284,9 +284,9 @@ var _ = Describe("Test the rollout Controller", func() {
 		for i := 0; i < stillScheduled; i++ {
 			secondRoundBindings = append(secondRoundBindings, bindings[i])
 		}
-		// simulate that some of the bindings are applied
+		// simulate that some of the bindings are available
 		for i := firstApplied; i < int(newTarget); i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		// create the newly scheduled bindings
 		newScheduled := int(newTarget) - stillScheduled
@@ -319,9 +319,9 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return true
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
-		// simulate that the new bindings are applied
+		// simulate that the new bindings are available
 		for i := 0; i < len(secondRoundBindings); i++ {
-			markBindingApplied(secondRoundBindings[i], true)
+			markBindingAvailable(secondRoundBindings[i])
 		}
 		// check that the unselected bindings are deleted
 		Eventually(func() bool {
@@ -343,8 +343,8 @@ var _ = Describe("Test the rollout Controller", func() {
 					return false
 				}
 				if binding.Spec.ResourceSnapshotName == newMasterSnapshot.Name {
-					// simulate the work generator to make the newly updated bindings to be applied
-					markBindingApplied(binding, true)
+					// simulate the work generator to make the newly updated bindings to be available
+					markBindingAvailable(binding)
 				} else {
 					misMatch = true
 				}
@@ -485,10 +485,10 @@ var _ = Describe("Test the rollout Controller", func() {
 			}
 			return true
 		}, timeout, interval).Should(BeTrue(), "rollout controller should roll all the bindings to Bound state")
-		// simulate that some of the bindings are applied successfully
+		// simulate that some of the bindings are available successfully
 		applySuccessfully := 3
 		for i := 0; i < applySuccessfully; i++ {
-			markBindingApplied(bindings[i], true)
+			markBindingAvailable(bindings[i])
 		}
 		// simulate that some of the bindings fail to apply
 		for i := applySuccessfully; i < int(targetCluster); i++ {
@@ -511,8 +511,8 @@ var _ = Describe("Test the rollout Controller", func() {
 					allMatch = false
 				}
 				if binding.Spec.ResourceSnapshotName == newMasterSnapshot.Name {
-					// simulate the work generator to make the newly updated bindings to be applied successfully
-					markBindingApplied(binding, true)
+					// simulate the work generator to make the newly updated bindings to be available
+					markBindingAvailable(binding)
 				} else {
 					allMatch = false
 				}
@@ -526,6 +526,26 @@ var _ = Describe("Test the rollout Controller", func() {
 	// TODO: should count the deleting bindings as can be Unavailable.
 
 })
+
+func markBindingAvailable(binding *fleetv1beta1.ClusterResourceBinding) {
+	Eventually(func() error {
+		binding.SetConditions(metav1.Condition{
+			Type:               string(fleetv1beta1.ResourceBindingAvailable),
+			Status:             metav1.ConditionTrue,
+			Reason:             "ready",
+			ObservedGeneration: binding.Generation,
+		})
+		if err := k8sClient.Status().Update(ctx, binding); err != nil {
+			if apierrors.IsConflict(err) {
+				// get the binding again to avoid conflict
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
+			}
+			return err
+		}
+		return nil
+	}, timeout, interval).Should(Succeed(), "should update the binding status successfully")
+	By(fmt.Sprintf("resource binding `%s` is marked as available", binding.Name))
+}
 
 func markBindingApplied(binding *fleetv1beta1.ClusterResourceBinding, success bool) {
 	applyCondition := metav1.Condition{

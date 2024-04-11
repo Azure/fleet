@@ -69,7 +69,9 @@ const (
 	workNotAvailableYetReason     = "WorkNotAvailableYet"
 	workAvailabilityUnknownReason = "WorkAvailabilityUnknown"
 	workAvailableReason           = "WorkAvailable"
-	workNotTrackableReason        = "WorkNotTrackable"
+	// WorkNotTrackableReason is the reason string of condition when the manifest is already up to date but we don't have
+	// a way to track its availabilities.
+	WorkNotTrackableReason = "WorkNotTrackable"
 	// ManifestApplyFailedReason is the reason string of condition when it failed to apply manifest.
 	ManifestApplyFailedReason = "ManifestApplyFailed"
 	// ApplyConflictBetweenPlacementsReason is the reason string of condition when the manifest is owned by multiple placements,
@@ -879,7 +881,7 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 		availableCondition.Reason = workAvailableReason
 		availableCondition.Message = "Work is available now"
 	} else {
-		availableCondition.Reason = workNotTrackableReason
+		availableCondition.Reason = WorkNotTrackableReason
 		availableCondition.Message = "Work's availability is not trackable"
 	}
 	return []metav1.Condition{applyCondition, availableCondition}

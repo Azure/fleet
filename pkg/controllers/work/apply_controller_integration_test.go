@@ -110,7 +110,7 @@ var _ = Describe("Work Controller", func() {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: workNotTrackableReason,
+					Reason: WorkNotTrackableReason,
 				},
 			}
 			Expect(controller.CompareConditions(expected, resultWork.Status.Conditions)).Should(BeEmpty())

@@ -32,6 +32,7 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
@@ -482,8 +483,19 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 // A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
 	// find the latest applied condition that has the same generation as the binding
-	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-	if condition.IsConditionStatusTrue(appliedCondition, binding.GetGeneration()) {
+	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
+		if availableCondition.Reason != work.WorkNotTrackableReason {
+			return 0, true
+		}
+		appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
+		if !condition.IsConditionStatusTrue(appliedCondition, binding.GetGeneration()) {
+			// should never happen
+			err := fmt.Errorf("not true applied condition but available condition is true")
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Encountered an invalid binding condition", "binding", klog.KObj(binding), "appliedCondition", appliedCondition)
+			return -1, false
+		}
+
 		waitTime := appliedCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
 		if waitTime < 0 {
 			return 0, true
