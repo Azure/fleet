@@ -60,6 +60,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//        has changed; and/or
 	//     b) an unexpected development which originally leads the scheduler to disregard the cluster
 	//     (e.g., agents not joining, network partition, etc.) has been resolved.
+	//     c) the cluster, has a taint removed from it and now is eligible for scheduling.
 	//
 	//  2. a cluster, originally eligible for resource placement, becomes ineligible for some reason.
 	//
@@ -72,12 +73,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	//
 	// Among the cases,
 	//
-	// * 1a) and 1b) require attention on the scheduler's end, specifically:
+	// * 1a), 1b) and 1c) require attention on the scheduler's end, specifically:
 	//   - CRPs of the PickAll placement type may be able to select this cluster now;
 	//   - CRPs of the PickN placement type, which have not been fully scheduled yet, may be
 	//     able to select this cluster, and gets a step closer to being fully scheduled;
 	//   - CRPs of the PickFixed placement type, which have not been fully scheduled yet, may
-	//     be able to select this cluster, and gets a step closer to being fully scheduled;
+	//     be able to select this cluster, and gets a step closer to being fully scheduled, 1c)
+	//     doesn't apply to this scenario since taints are not honored for PickFixed CRPs.
 	//
 	// * 2a) and 2b) require no attention on the scheduler's end, specifically:
 	//   - CRPs which have already selected this cluster, regardless of its placement type, cannot
@@ -141,7 +143,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// Enqueue the CRPs.
 	//
 	// Note that all the CRPs in the system are enqueued; technically speaking, for situation
-	// 1a) and 1b), PickN CRPs that have been fully scheduled needs no further processing, however,
+	// 1a), 1b) and 1c), PickN CRPs that have been fully scheduled needs no further processing, however,
 	// for simplicity reasons, this controller will not distinguish between the cases.
 	for idx := range crps {
 		crp := &crps[idx]
@@ -208,6 +210,12 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return true
 			}
 
+			// Capture taint update/delete changes.
+			if isTaintsUpdatedOrDeleted(oldCluster.Spec.Taints, newCluster.Spec.Taints) {
+				klog.V(2).InfoS("A member cluster taint update/delete has been detected", "memberCluster", clusterKObj)
+				return true
+			}
+
 			// Capture non-resource property changes.
 			//
 			// Observation time refreshes is not considered as a change.
@@ -264,4 +272,17 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&clusterv1beta1.MemberCluster{}).
 		WithEventFilter(customPredicate).
 		Complete(r)
+}
+
+func isTaintsUpdatedOrDeleted(oldTaints []clusterv1beta1.Taint, newTaints []clusterv1beta1.Taint) bool {
+	newTaintsMap := make(map[clusterv1beta1.Taint]bool)
+	for _, newTaint := range newTaints {
+		newTaintsMap[newTaint] = true
+	}
+	for _, oldTaint := range oldTaints {
+		if !newTaintsMap[oldTaint] {
+			return true
+		}
+	}
+	return false
 }
