@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1beta1
+package v1
 
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -13,7 +13,6 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-cluster},shortName=imc
 // +kubebuilder:subresource:status
-// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
 // InternalMemberCluster is used by hub agent to notify the member agents about the member cluster state changes, and is used by the member agents to report their status.

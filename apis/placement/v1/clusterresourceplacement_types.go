@@ -3,7 +3,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1beta1
+package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +27,6 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
-// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status`,name="Scheduled",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration`,name="ScheduledGen",type=string
