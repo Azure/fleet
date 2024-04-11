@@ -1,0 +1,9 @@
+# Important: due to kind limitations
+# (kind node always has resource capacity == host resource capacity) and the way our planned test
+# cases (resource and non-resource properties) are designed, modification of this setup might lead
+# to test failures.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
