@@ -35,9 +35,9 @@ affinity: {}
 enableV1Alpha1APIs: false
 enableV1Beta1APIs: true
 
-hubAPIQPS: 20
-hubAPIBurst: 100
-MaxConcurrentClusterPlacement: 10
+hubAPIQPS: 1000
+hubAPIBurst: 1000
+MaxConcurrentClusterPlacement: 100
 ConcurrentResourceChangeSyncs: 20
 logFileMaxSize: 1000000
 MaxFleetSizeSupported: 100
