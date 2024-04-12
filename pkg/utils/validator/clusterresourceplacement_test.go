@@ -6,15 +6,20 @@ Licensed under the MIT license.
 package validator
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
 	testinformer "go.goms.io/fleet/test/utils/informer"
 )
@@ -29,7 +34,40 @@ var (
 		Kind:    "ClusterRole",
 		Name:    "test-cluster-role",
 	}
+	ClusterRoleGVK = schema.GroupVersionKind{
+		Group:   rbacv1.GroupName,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "ClusterRole",
+	}
+	ClusterRoleGVR = schema.GroupVersionResource{
+		Group:    rbacv1.GroupName,
+		Version:  rbacv1.SchemeGroupVersion.Version,
+		Resource: "clusterroles",
+	}
 )
+
+// This interface is needed for testMapper abstract class.
+type testMapper struct {
+	meta.RESTMapper
+}
+
+func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
+	if gk.Kind == "ClusterRole" {
+		return &meta.RESTMapping{
+			Resource:         ClusterRoleGVR,
+			GroupVersionKind: ClusterRoleGVK,
+			Scope:            nil,
+		}, nil
+	}
+	if gk.Kind == "Deployment" {
+		return &meta.RESTMapping{
+			Resource:         utils.DeploymentGVR,
+			GroupVersionKind: utils.DeploymentGVK,
+			Scope:            nil,
+		}, nil
+	}
+	return nil, errors.New("test error: mapping does not exist")
+}
 
 func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
@@ -199,9 +237,10 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 
 func TestValidateClusterResourcePlacement(t *testing.T) {
 	tests := map[string]struct {
-		crp        *placementv1beta1.ClusterResourcePlacement
-		wantErr    bool
-		wantErrMsg string
+		crp              *placementv1beta1.ClusterResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+		wantErrMsg       string
 	}{
 		"valid CRP": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
@@ -215,6 +254,9 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				IsClusterScopedResource: true},
 			wantErr: false,
 		},
 		"CRP with invalid name": {
@@ -229,7 +271,10 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
-			wantErr:    true,
+			wantErr: true,
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				IsClusterScopedResource: true},
 			wantErrMsg: "the name field cannot have length exceeding 63",
 		},
 		"invalid Resource Selector with name & label selector": {
@@ -254,12 +299,72 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				IsClusterScopedResource: true},
 			wantErr:    true,
 			wantErrMsg: "the labelSelector and name fields are mutually exclusive in selector",
+		},
+		"invalid Resource Selector with invalid GVK": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "invalidKind",
+							Name:    "test-invalidKind",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
+			wantErr:          true,
+			wantErrMsg:       "failed to get GVR of the selector",
+		},
+		"invalid Resource Selector with not ClusterScopedResource": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "apps",
+							Kind:    "Deployment",
+							Version: "v1",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			},
+			wantErr: true,
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false},
+			wantErrMsg: "resource is not found in schema (please retry) or it is not a cluster scoped resource",
+		},
+		"nil resource informer": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+				},
+			},
+			resourceInformer: nil,
+			wantErr:          true,
+			wantErrMsg:       "cannot perform resource scope check for now, please retry",
 		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
+			RestMapper = testMapper{}
+			ResourceInformer = testCase.resourceInformer
 			gotErr := ValidateClusterResourcePlacement(testCase.crp)
 			if (gotErr != nil) != testCase.wantErr {
 				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
