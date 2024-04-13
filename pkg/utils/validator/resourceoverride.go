@@ -12,11 +12,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/errors"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
 
 // ValidateResourceOverride validates resource override fields and returns error.
-func ValidateResourceOverride(ro placementv1alpha1.ResourceOverride, roList *placementv1alpha1.ResourceOverrideList) error {
+func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
 	allErr := make([]error, 0)
 
 	// Check if the resource is being selected by resource name.
@@ -40,8 +40,8 @@ func ValidateResourceOverride(ro placementv1alpha1.ResourceOverride, roList *pla
 }
 
 // validateResourceSelectors checks if override is selecting a unique resource.
-func validateResourceSelectors(ro placementv1alpha1.ResourceOverride) error {
-	selectorMap := make(map[placementv1alpha1.ResourceSelector]bool)
+func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
+	selectorMap := make(map[fleetv1alpha1.ResourceSelector]bool)
 	allErr := make([]error, 0)
 	for _, selector := range ro.Spec.ResourceSelectors {
 		// Check if there are any duplicate selectors.
@@ -55,12 +55,12 @@ func validateResourceSelectors(ro placementv1alpha1.ResourceOverride) error {
 
 // validateResourceOverrideResourceLimit checks if there is only 1 resource override per resource,
 // assuming the resource will be selected by the name only.
-func validateResourceOverrideResourceLimit(ro placementv1alpha1.ResourceOverride, roList *placementv1alpha1.ResourceOverrideList) error {
+func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, roList *fleetv1alpha1.ResourceOverrideList) error {
 	// Check if roList is nil or empty, no need to check for resource limit.
 	if roList == nil || len(roList.Items) == 0 {
 		return nil
 	}
-	overrideMap := make(map[placementv1alpha1.ResourceSelector]string)
+	overrideMap := make(map[fleetv1alpha1.ResourceSelector]string)
 	// Add overrides and its selectors to the map.
 	for _, override := range roList.Items {
 		selectors := override.Spec.ResourceSelectors
@@ -84,7 +84,7 @@ func validateResourceOverrideResourceLimit(ro placementv1alpha1.ResourceOverride
 }
 
 // validateOverridePolicy checks if override rule is selecting resource by name.
-func validateOverridePolicy(policy *placementv1alpha1.OverridePolicy) error {
+func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 	allErr := make([]error, 0)
 	for _, rule := range policy.OverrideRules {
 		if rule.ClusterSelector != nil {
@@ -109,7 +109,7 @@ func validateOverridePolicy(policy *placementv1alpha1.OverridePolicy) error {
 }
 
 // validateJSONPatchOverride checks if JSON patch override is valid.
-func validateJSONPatchOverride(jsonPatchOverrides []placementv1alpha1.JSONPatchOverride) error {
+func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverride) error {
 	allErr := make([]error, 0)
 	for _, patch := range jsonPatchOverrides {
 		path := strings.Split(patch.Path, "/")[1:]
@@ -125,7 +125,7 @@ func validateJSONPatchOverride(jsonPatchOverrides []placementv1alpha1.JSONPatchO
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields", patch))
 		}
 
-		if patch.Operator == placementv1alpha1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
+		if patch.Operator == fleetv1alpha1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: remove operation cannot have value", patch))
 		}
 	}

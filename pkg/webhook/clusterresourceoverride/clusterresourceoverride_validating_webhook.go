@@ -18,14 +18,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
+	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 var (
 	// ValidationPath is the webhook service path which admission requests are routed to for validating ClusterResourceOverride resources.
-	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, placementv1alpha1.GroupVersion.Group, placementv1alpha1.GroupVersion.Version, "clusterresourceoverride")
+	ValidationPath = fmt.Sprintf(utils.ValidationPathFmt, fleetv1alpha1.GroupVersion.Group, fleetv1alpha1.GroupVersion.Version, "clusterresourceoverride")
 )
 
 type clusterResourceOverrideValidator struct {
@@ -42,7 +42,7 @@ func Add(mgr manager.Manager) error {
 
 // Handle clusterResourceOverrideValidator checks to see if cluster resource override is valid
 func (v *clusterResourceOverrideValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	var cro placementv1alpha1.ClusterResourceOverride
+	var cro fleetv1alpha1.ClusterResourceOverride
 	klog.V(2).InfoS("Validating webhook handling cluster resource override", "operation", req.Operation)
 	if err := v.decoder.Decode(req, &cro); err != nil {
 		klog.ErrorS(err, "Failed to decode cluster resource override object for validating fields", "userName", req.UserInfo.Username, "groups", req.UserInfo.Groups)
@@ -69,8 +69,8 @@ func (v *clusterResourceOverrideValidator) Handle(ctx context.Context, req admis
 }
 
 // listClusterResourceOverride returns a list of cluster resource overrides.
-func listClusterResourceOverride(ctx context.Context, client client.Client) (*placementv1alpha1.ClusterResourceOverrideList, error) {
-	croList := &placementv1alpha1.ClusterResourceOverrideList{}
+func listClusterResourceOverride(ctx context.Context, client client.Client) (*fleetv1alpha1.ClusterResourceOverrideList, error) {
+	croList := &fleetv1alpha1.ClusterResourceOverrideList{}
 	if err := client.List(ctx, croList); err != nil {
 		klog.ErrorS(err, "Failed to list clusterResourceOverrides when validating")
 		return nil, fmt.Errorf("failed to list clusterResourceOverrides, please retry the request: %w", err)
