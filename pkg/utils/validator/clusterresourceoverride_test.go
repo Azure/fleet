@@ -480,7 +480,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 			},
 			wantErrMsg: errors.New("labelSelector is required"),
 		},
-		"invalid cluster resource override - fail validateClusterResourceOverridePolicy with empty terms": {
+		"valid cluster resource override - empty cluster selector terms": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{

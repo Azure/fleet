@@ -582,7 +582,7 @@ func TestValidateOverridePolicy(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"unsupported selector type": {
+		"unsupported selector type - property selector": {
 			ro: fleetv1alpha1.ResourceOverride{
 				Spec: fleetv1alpha1.ResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -736,7 +736,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			},
 			wantErrMsg: errors.New("cannot override status fields"),
 		},
-		"invalid resource override path - remove with value": {
+		"invalid json override patch - remove with value": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
@@ -746,7 +746,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			},
 			wantErrMsg: errors.New("remove operation cannot have value"),
 		},
-		"valid resource override path - correct metadata field": {
+		"valid json override patch - correct metadata field": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
@@ -761,6 +761,16 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
 					Path:     "/metadata/labels/apiVersion",
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"invalid json override patch - case sensitive check": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/Kind",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 				},
 			},
 			wantErrMsg: nil,
