@@ -22,11 +22,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 
-	"go.goms.io/fleet/pkg/utils/condition"
-
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -614,7 +614,7 @@ func TestIsBindingReady(t *testing.T) {
 		wantReady       bool
 		wantWaitTime    time.Duration
 	}{
-		"binding applied before the ready time cut off should return ready": {
+		"binding available (trackable) is ready": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -622,12 +622,10 @@ func TestIsBindingReady(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 10,
-							LastTransitionTime: metav1.Time{
-								Time: now.Add(-time.Millisecond),
-							},
+							Reason:             "any",
 						},
 					},
 				},
@@ -636,7 +634,7 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       true,
 			wantWaitTime:    0,
 		},
-		"binding applied after the ready time cut off should return not ready with a wait time": {
+		"binding available (not trackable) before the ready time cut off should return ready": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -644,12 +642,36 @@ func TestIsBindingReady(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 10,
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(-time.Millisecond),
+							},
+							Reason: work.WorkNotTrackableReason,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
+		"binding available (not trackable) after the ready time cut off should return not ready with a wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 10,
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(time.Millisecond),
 							},
+							Reason: work.WorkNotTrackableReason,
 						},
 					},
 				},
@@ -658,7 +680,7 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    time.Millisecond,
 		},
-		"binding not applied should return not ready with a negative wait time": {
+		"binding not available should return not ready with a negative wait time": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -668,7 +690,7 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    -1,
 		},
-		"binding applied for a previous generation should return not ready with a negative wait time": {
+		"binding available for a previous generation should return not ready with a negative wait time": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -676,7 +698,7 @@ func TestIsBindingReady(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 9, //not the current generation
 							LastTransitionTime: metav1.Time{

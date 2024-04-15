@@ -766,7 +766,7 @@ func TestGenerateWorkCondition(t *testing.T) {
 				{
 					Type:   fleetv1beta1.WorkConditionTypeAvailable,
 					Status: metav1.ConditionTrue,
-					Reason: workNotTrackableReason,
+					Reason: WorkNotTrackableReason,
 				},
 			},
 		},
