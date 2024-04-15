@@ -8,6 +8,7 @@ package validator
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -112,16 +113,24 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverride) error {
 	allErr := make([]error, 0)
 	for _, patch := range jsonPatchOverrides {
-		path := strings.Split(patch.Path, "/")[1:]
 
-		switch path[0] {
-		case "kind", "apiVersion":
+		if patch.Path == "" {
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path cannot be empty", patch))
+		}
+
+		if match, _ := regexp.MatchString(`^(/[^/]+)+$`, patch.Path); !match {
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path cannot contain consecutive slashes", patch))
+		}
+
+		if patch.Path == "/kind" || patch.Path == "/apiVersion" {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields", patch))
-		case "metadata":
-			if path[1] != "annotations" && path[1] != "labels" {
-				allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields", patch))
-			}
-		case "status":
+		}
+
+		if strings.HasPrefix(patch.Path, "/metadata") && !strings.HasPrefix(patch.Path, "/metadata/annotations") && !strings.HasPrefix(patch.Path, "/metadata/labels") {
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields except annotations and labels", patch))
+		}
+
+		if match, _ := regexp.MatchString(`^/status([/][a-zA-Z0-9_-]+)*$`, patch.Path); match {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields", patch))
 		}
 

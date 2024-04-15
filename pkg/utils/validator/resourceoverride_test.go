@@ -765,7 +765,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"invalid json override patch - case sensitive check": {
+		"valid json override patch - case sensitive check": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
@@ -774,6 +774,36 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 				},
 			},
 			wantErrMsg: nil,
+		},
+		"invalid json override patch - cannot override status field": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/status",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+				},
+			},
+			wantErrMsg: errors.New("cannot override status fields"),
+		},
+		"valid json override patch - apiVersion within path": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/apiVersionabc",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"invalid jason override patch - empty path": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "///kind",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
+				},
+			},
+			wantErrMsg: errors.New("path cannot contain consecutive slashes"),
 		},
 	}
 	for testName, tt := range tests {
