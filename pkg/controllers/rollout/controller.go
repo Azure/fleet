@@ -480,7 +480,8 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 }
 
 // isBindingReady checks if a binding is considered ready.
-// A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
+// A binding with not trackable resources is considered ready if the binding's current spec has been available before
+// the ready cutoff time.
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
 	// find the latest applied condition that has the same generation as the binding
 	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
@@ -488,22 +489,17 @@ func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOf
 		if availableCondition.Reason != work.WorkNotTrackableReason {
 			return 0, true
 		}
-		appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-		if !condition.IsConditionStatusTrue(appliedCondition, binding.GetGeneration()) {
-			// should never happen
-			err := fmt.Errorf("not true applied condition but available condition is true")
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Encountered an invalid binding condition", "binding", klog.KObj(binding), "appliedCondition", appliedCondition)
-			return -1, false
-		}
 
-		waitTime := appliedCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
+		// For the not trackable work, the available condition should be set to true when the work has been applied.
+		// So here we check the available condition transition time.
+		waitTime := availableCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
 		if waitTime < 0 {
 			return 0, true
 		}
 		// return the time we need to wait for it to be ready in this case
 		return waitTime, false
 	}
-	// we don't know when the current spec is applied yet, return a negative wait time
+	// we don't know when the current spec is available yet, return a negative wait time
 	return -1, false
 }
 
