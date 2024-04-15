@@ -41,16 +41,17 @@ const (
 	// OverriddenSucceededReason is the reason string of placement condition when the selected resources are overridden successfully.
 	OverriddenSucceededReason = "OverriddenSucceeded"
 
-	// WorkCreatedUnknownReason is the reason string of placement condition when the work is pending to be created.
-	WorkCreatedUnknownReason = "WorkCreatedUnknown"
+	// WorkSynchronizedUnknownReason is the reason string of placement condition when the work is pending to be created
+	// or updated.
+	WorkSynchronizedUnknownReason = "WorkSynchronizedUnknown"
 
-	// WorkNotCreatedYetReason is the reason string of placement condition when not all corresponding works are created
-	// in the target cluster's namespace yet.
-	WorkNotCreatedYetReason = "WorkNotCreatedYet"
+	// WorkNotSynchronizedYetReason is the reason string of placement condition when not all corresponding works are created
+	// or updated in the target cluster's namespace yet.
+	WorkNotSynchronizedYetReason = "WorkNotSynchronizedYet"
 
-	// WorkCreatedReason is the reason string of placement condition when all corresponding works are created in the target
-	// cluster's namespace successfully.
-	WorkCreatedReason = "OverriddenSucceeded"
+	// WorkSynchronizedReason is the reason string of placement condition when all corresponding works are created or updated
+	// in the target cluster's namespace successfully.
+	WorkSynchronizedReason = "WorkSynchronized"
 
 	// ApplyPendingReason is the reason string of placement condition when the selected resources are pending to apply.
 	ApplyPendingReason = "ApplyPending"
@@ -121,7 +122,7 @@ type resourceCondition int
 const (
 	RolloutStartedCondition resourceCondition = iota
 	OverriddenCondition
-	WorkCreatedCondition
+	WorkSynchronizedCondition
 	AppliedCondition
 	AvailableCondition
 	TotalCondition
@@ -131,7 +132,7 @@ func (c resourceCondition) EventReasonForTrue() string {
 	return []string{
 		"PlacementRolloutStarted",
 		"PlacementOverriddenSucceeded",
-		"PlacementWorkCreated",
+		"PlacementWorkSynchronized",
 		"PlacementApplied",
 		"PlacementAvailable",
 	}[c]
@@ -141,7 +142,7 @@ func (c resourceCondition) EventMessageForTrue() string {
 	return []string{
 		"Started rolling out the latest resources",
 		"Placement has been successfully overridden",
-		"Work(s) have been created successfully for the selected cluster(s)",
+		"Work(s) have been created or updated successfully for the selected cluster(s)",
 		"Resources have been applied to the selected cluster(s)",
 		"Resources are available on the selected cluster(s)",
 	}[c]
@@ -152,7 +153,7 @@ func (c resourceCondition) ResourcePlacementConditionType() fleetv1beta1.Resourc
 	return []fleetv1beta1.ResourcePlacementConditionType{
 		fleetv1beta1.ResourceRolloutStartedConditionType,
 		fleetv1beta1.ResourceOverriddenConditionType,
-		fleetv1beta1.ResourceWorkCreatedConditionType,
+		fleetv1beta1.ResourceWorkSynchronizedConditionType,
 		fleetv1beta1.ResourcesAppliedConditionType,
 		fleetv1beta1.ResourcesAvailableConditionType,
 	}[c]
@@ -163,7 +164,7 @@ func (c resourceCondition) ResourceBindingConditionType() fleetv1beta1.ResourceB
 	return []fleetv1beta1.ResourceBindingConditionType{
 		fleetv1beta1.ResourceBindingRolloutStarted,
 		fleetv1beta1.ResourceBindingOverridden,
-		fleetv1beta1.ResourceBindingWorkCreated,
+		fleetv1beta1.ResourceBindingWorkSynchronized,
 		fleetv1beta1.ResourceBindingApplied,
 		fleetv1beta1.ResourceBindingAvailable,
 	}[c]
@@ -174,7 +175,7 @@ func (c resourceCondition) ClusterResourcePlacementConditionType() fleetv1beta1.
 	return []fleetv1beta1.ClusterResourcePlacementConditionType{
 		fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType,
 		fleetv1beta1.ClusterResourcePlacementOverriddenConditionType,
-		fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType,
+		fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType,
 		fleetv1beta1.ClusterResourcePlacementAppliedConditionType,
 		fleetv1beta1.ClusterResourcePlacementAvailableConditionType,
 	}[c]
@@ -199,8 +200,8 @@ func (c resourceCondition) UnknownResourceConditionPerCluster(generation int64) 
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ResourceWorkCreatedConditionType),
-			Reason:             WorkCreatedUnknownReason,
+			Type:               string(fleetv1beta1.ResourceWorkSynchronizedConditionType),
+			Reason:             WorkSynchronizedUnknownReason,
 			Message:            "In the process of creating or updating the work object(s) in the hub cluster",
 			ObservedGeneration: generation,
 		},
@@ -240,8 +241,8 @@ func (c resourceCondition) UnknownClusterResourcePlacementCondition(generation i
 		},
 		{
 			Status:             metav1.ConditionUnknown,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
-			Reason:             WorkCreatedUnknownReason,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Reason:             WorkSynchronizedUnknownReason,
 			Message:            fmt.Sprintf("There are still %d cluster(s) in the process of creating or updating the work object(s) in the hub cluster", clusterCount),
 			ObservedGeneration: generation,
 		},
@@ -281,8 +282,8 @@ func (c resourceCondition) FalseClusterResourcePlacementCondition(generation int
 		},
 		{
 			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
-			Reason:             WorkNotCreatedYetReason,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Reason:             WorkNotSynchronizedYetReason,
 			Message:            fmt.Sprintf("There are %d cluster(s) which have not finished creating or updating work(s) yet", clusterCount),
 			ObservedGeneration: generation,
 		},
@@ -322,8 +323,8 @@ func (c resourceCondition) TrueClusterResourcePlacementCondition(generation int6
 		},
 		{
 			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
-			Reason:             WorkCreatedReason,
+			Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Reason:             WorkSynchronizedReason,
 			Message:            fmt.Sprintf("Works(s) are succcesfully created or updated in the %d target clusters' namespaces", clusterCount),
 			ObservedGeneration: generation,
 		},
