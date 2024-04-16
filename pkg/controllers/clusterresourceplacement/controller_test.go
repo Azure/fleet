@@ -3220,7 +3220,7 @@ func TestIsRolloutComplete_withNewConditions(t *testing.T) {
 				},
 				{
 					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
 				},
 			},
@@ -3289,7 +3289,7 @@ func TestIsRolloutComplete_withNewConditions(t *testing.T) {
 				},
 				{
 					Status:             metav1.ConditionFalse,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
 				},
 			},
@@ -3315,7 +3315,7 @@ func TestIsRolloutComplete_withNewConditions(t *testing.T) {
 				},
 				{
 					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
 				},
 			},
@@ -3351,7 +3351,7 @@ func TestIsRolloutComplete_withNewConditions(t *testing.T) {
 				},
 				{
 					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkCreatedConditionType),
+					Type:               string(fleetv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
 					ObservedGeneration: crpGeneration,
 				},
 			},

@@ -175,7 +175,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			})
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
+				Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 				Reason:             syncWorkFailedReason,
 				Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", errorMessage),
 				ObservedGeneration: resourceBinding.Generation,
@@ -191,7 +191,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 		})
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceBindingWorkCreated),
+			Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
 			Reason:             allWorkSyncedReason,
 			ObservedGeneration: resourceBinding.Generation,
 			Message:            "All of the works are synchronized to the latest",
