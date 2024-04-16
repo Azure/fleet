@@ -483,7 +483,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 			workResourcesPlacedActual := func() error {
 				return validateWorkNamespaceOnCluster(memberCluster, workNamespaceName)
 			}
-			Eventually(workResourcesPlacedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place work namespace %s on member cluster %s", workNamespaceName, memberCluster.ClusterName)
+			Expect(workResourcesPlacedActual()).Should(Succeed(), "Failed to place work namespace %s on member cluster %s", workNamespaceName, memberCluster.ClusterName)
 		}
 	})
 
@@ -855,7 +855,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 
 var _ = Describe("validating CRP when placing cluster scope resource (other than namespace)", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	clusterRoleName := fmt.Sprintf("test-cluserrole-%d", GinkgoParallelProcess())
+	clusterRoleName := fmt.Sprintf("reader-%d", GinkgoParallelProcess())
 
 	BeforeAll(func() {
 		By("creating cluster role")
