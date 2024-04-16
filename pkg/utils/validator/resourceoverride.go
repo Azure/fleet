@@ -112,13 +112,18 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 // validateJSONPatchOverride checks if JSON patch override is valid.
 func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverride) error {
 	allErr := make([]error, 0)
+	slashPattern := regexp.MustCompile(`//+`)
+	statusPattern := regexp.MustCompile(`^/status([/][a-zA-Z0-9_-]+)*$`)
 	for _, patch := range jsonPatchOverrides {
-
 		if patch.Path == "" {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path cannot be empty", patch))
 		}
 
-		if match, _ := regexp.MatchString(`^(/[^/]+)+$`, patch.Path); !match {
+		if !strings.HasPrefix(patch.Path, "/") {
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path must start with /", patch))
+		}
+
+		if slashPattern.MatchString(patch.Path) {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path cannot contain consecutive slashes", patch))
 		}
 
@@ -130,7 +135,7 @@ func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverr
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields except annotations and labels", patch))
 		}
 
-		if match, _ := regexp.MatchString(`^/status([/][a-zA-Z0-9_-]+)*$`, patch.Path); match {
+		if statusPattern.MatchString(patch.Path) {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields", patch))
 		}
 

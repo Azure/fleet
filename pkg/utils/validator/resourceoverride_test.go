@@ -494,8 +494,8 @@ func TestValidateResourceOverride(t *testing.T) {
 									},
 									{
 										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-										Path:     "/metadata/creationTimestamp",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"2021-08-01T00:00:00Z"`)},
+										Path:     "/////kind///",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
 									},
 								},
 							},
@@ -507,8 +507,8 @@ func TestValidateResourceOverride(t *testing.T) {
 				fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpRemove, Path: "/apiVersion"}),
 				fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
 					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpReplace, Path: "/status/conditions/0/reason", Value: apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)}}),
-				fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields",
-					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpReplace, Path: "/metadata/creationTimestamp", Value: apiextensionsv1.JSON{Raw: []byte(`"2021-08-01T00:00:00Z"`)}}),
+				fmt.Errorf("invalid JSONPatchOverride %s: path cannot contain consecutive slashes",
+					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpReplace, Path: "/////kind///", Value: apiextensionsv1.JSON{Raw: []byte(`"value"`)}}),
 			}),
 		},
 	}
@@ -727,7 +727,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			},
 			wantErrMsg: errors.New("cannot override metadata fields"),
 		},
-		"invalid resource override path - cannot override status fields": {
+		"invalid resource override path - cannot override any status field": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
@@ -775,7 +775,7 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"invalid json override patch - cannot override status field": {
+		"invalid json override patch - cannot override status": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
@@ -799,11 +799,50 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "///kind",
+					Path:     "",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
+				},
+			},
+			wantErrMsg: errors.New("path cannot be empty"),
+		},
+		"invalid json override patch - slashes only": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/////",
 					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
 				},
 			},
 			wantErrMsg: errors.New("path cannot contain consecutive slashes"),
+		},
+		"invalid json override patch - path must start with /": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "spec.resourceSelectors/selectors/0/name",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
+				},
+			},
+			wantErrMsg: errors.New("path must start with /"),
+		},
+		"valid json override patch - apiVersion within field": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+					Path:     "/apiVersionabc",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
+				},
+			},
+			wantErrMsg: nil,
+		},
+		"invalid json override patch - cannot override metadata fields (finalizer)": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+					Path:     "/metadata/finalizers",
+				},
+			},
+			wantErrMsg: errors.New("cannot override metadata fields"),
 		},
 	}
 	for testName, tt := range tests {
