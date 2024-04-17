@@ -32,11 +32,11 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 // Reconciler recomputes the cluster resource binding.
@@ -124,11 +124,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
 	defaulter.SetDefaultsClusterResourcePlacement(&crp)
-	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
-	if err = validator.ValidateClusterResourcePlacement(&crp); err != nil {
-		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, controller.NewUnexpectedBehaviorError(err)
-	}
 
 	matchedCRO, matchedRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(ctx, crp.Name, latestResourceSnapshot)
 	if err != nil {
@@ -479,19 +474,26 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 }
 
 // isBindingReady checks if a binding is considered ready.
-// A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
+// A binding with not trackable resources is considered ready if the binding's current spec has been available before
+// the ready cutoff time.
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
 	// find the latest applied condition that has the same generation as the binding
-	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-	if condition.IsConditionStatusTrue(appliedCondition, binding.GetGeneration()) {
-		waitTime := appliedCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
+	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
+		if availableCondition.Reason != work.WorkNotTrackableReason {
+			return 0, true
+		}
+
+		// For the not trackable work, the available condition should be set to true when the work has been applied.
+		// So here we check the available condition transition time.
+		waitTime := availableCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
 		if waitTime < 0 {
 			return 0, true
 		}
 		// return the time we need to wait for it to be ready in this case
 		return waitTime, false
 	}
-	// we don't know when the current spec is applied yet, return a negative wait time
+	// we don't know when the current spec is available yet, return a negative wait time
 	return -1, false
 }
 

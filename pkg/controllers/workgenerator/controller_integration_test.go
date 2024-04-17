@@ -273,7 +273,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					}
 					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				// check the work is created by now
 				work := placementv1beta1.Work{}
@@ -491,7 +491,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					}
 					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
 				// check the work that contains none enveloped object is updated
@@ -596,7 +596,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					}
 					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				By(fmt.Sprintf("resource binding  %s is reconciled", binding.Name))
 				// check the enveloped work is deleted
@@ -963,7 +963,7 @@ var _ = Describe("Test Work Generator Controller", func() {
 					}
 					// only check the work created status as the applied status reason changes depends on where the reconcile logic is
 					return condition.IsConditionStatusTrue(
-						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkCreated)), binding.GetGeneration())
+						meta.FindStatusCondition(binding.Status.Conditions, string(placementv1beta1.ResourceBindingWorkSynchronized)), binding.GetGeneration())
 				}, timeout, interval).Should(BeTrue(), fmt.Sprintf("binding(%s) condition should be true", binding.Name))
 				// check the work is created by now
 				work := placementv1beta1.Work{}
@@ -1214,7 +1214,7 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
-					Type:               string(placementv1beta1.ResourceBindingWorkCreated),
+					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
 					Reason:             allWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
@@ -1253,7 +1253,7 @@ func verifyBindStatusAppliedNotAvailable(binding *placementv1beta1.ClusterResour
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
-					Type:               string(placementv1beta1.ResourceBindingWorkCreated),
+					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
 					Reason:             allWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
@@ -1298,7 +1298,7 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
-					Type:               string(placementv1beta1.ResourceBindingWorkCreated),
+					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
 					Reason:             allWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),

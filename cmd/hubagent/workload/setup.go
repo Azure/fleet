@@ -134,6 +134,7 @@ func SetupControllers(ctx context.Context, wg *sync.WaitGroup, mgr ctrl.Manager,
 	// the manager for all the dynamically created informers
 	dynamicInformerManager := informer.NewInformerManager(dynamicClient, opts.ResyncPeriod.Duration, ctx.Done())
 	validator.ResourceInformer = dynamicInformerManager // webhook needs this to check resource scope
+	validator.RestMapper = mgr.GetRESTMapper()          // webhook needs this to validate GVK of resource selector
 
 	// Set up  a custom controller to reconcile cluster resource placement
 	crpc := &clusterresourceplacement.Reconciler{

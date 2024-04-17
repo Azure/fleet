@@ -109,8 +109,8 @@ var _ = Describe("Test ClusterResourceBinding Watcher - update status", Serial, 
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - WorkCreated", func() {
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkCreated, crb.Generation, metav1.ConditionTrue, testReason1)
-		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkCreated, crb.Generation, metav1.ConditionFalse, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkSynchronized, crb.Generation, metav1.ConditionTrue, testReason1)
+		validateWhenUpdateClusterResourceBindingStatusWithCondition(fleetv1beta1.ResourceBindingWorkSynchronized, crb.Generation, metav1.ConditionFalse, testReason1)
 	})
 
 	It("Should enqueue the clusterResourcePlacement name for reconciling, when clusterResourceBinding status changes - Applied", func() {

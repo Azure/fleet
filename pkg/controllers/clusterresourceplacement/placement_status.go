@@ -500,7 +500,7 @@ func (r *Reconciler) buildClusterResourceBindings(ctx context.Context, crp *flee
 //
 //	RolloutStartedCondition resourceCondition = iota
 //	OverriddenCondition
-//	WorkCreatedCondition
+//	WorkSynchronizedCondition
 //	AppliedCondition
 //	AvailableCondition
 //	TotalCondition

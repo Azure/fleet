@@ -129,15 +129,15 @@ const (
 	// - "True" means the corresponding work CR is created in the target cluster's namespace.
 	// - "False" means the corresponding work CR is not created yet.
 	// - "Unknown" means it is unknown.
-	// TODO, will be replaced by "WorkCreated"
+	// TODO, will be replaced by "WorkSynchronized"
 	ResourceBindingBound ResourceBindingConditionType = "Bound"
 
-	// ResourceBindingWorkCreated indicates the work created condition of the given resources.
+	// ResourceBindingWorkSynchronized indicates the work synchronized condition of the given resources.
 	// Its condition status can be one of the following:
-	// - "True" means all corresponding works are created in the target cluster's namespace.
-	// - "False" means not all corresponding works are created in the target cluster's namespace yet.
+	// - "True" means all corresponding works are created or updated in the target cluster's namespace.
+	// - "False" means not all corresponding works are created or updated in the target cluster's namespace yet.
 	// - "Unknown" means it is unknown.
-	ResourceBindingWorkCreated ResourceBindingConditionType = "WorkCreated"
+	ResourceBindingWorkSynchronized ResourceBindingConditionType = "WorkSynchronized"
 
 	// ResourceBindingApplied indicates the applied condition of the given resources.
 	// Its condition status can be one of the following:
