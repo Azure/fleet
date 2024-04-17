@@ -699,7 +699,7 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
 	// - "False" means all the selected resources have not been synchronized under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
-	// To be deprecated, it will be replaced by ClusterResourcePlacementRolloutStarted and ClusterResourcePlacementWorkCreated
+	// To be deprecated, it will be replaced by ClusterResourcePlacementRolloutStarted and ClusterResourcePlacementWorkSynchronized
 	// conditions.
 	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
 
@@ -720,15 +720,15 @@ const (
 	// - "Unknown" means we haven't finished the override yet.
 	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
 
-	// ClusterResourcePlacementWorkCreatedConditionType indicates whether the selected resources are created under
-	// the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
+	// ClusterResourcePlacementWorkSynchronizedConditionType indicates whether the selected resources are created or updated
+	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
 	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully created under the per-cluster namespaces
+	// - "True" means all the selected resources are successfully created or updated under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
-	// - "False" means all the selected resources have not been created under the per-cluster namespaces
+	// - "False" means all the selected resources have not been created or updated under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
 	// - "Unknown" means we haven't started processing the work yet.
-	ClusterResourcePlacementWorkCreatedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkCreated"
+	ClusterResourcePlacementWorkSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkSynchronized"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
@@ -758,24 +758,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
-	// TODO, use "Scheduled" instead.
-	ResourceScheduledConditionType ResourcePlacementConditionType = "ResourceScheduled"
-
-	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
-	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
-	// the placement.
-	// Its condition status can be one of the following:
-	// - "True" means we have successfully created the latest corresponding work(s) or updated the existing work(s) to
-	// the latest.
-	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
-	// yet.
-	// There are few possibilities:
-	// - In the processing state
-	// - Rollout controller has decided not to create or update the resources in this cluster for now to honor the
-	// rollout strategy configurations specified in the placement.
-	// - Work is not created/updated because of the unknown reasons.
-	// To be deprecated, it will be replaced by RolloutStarted and WorkCreated conditions.
-	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+	ResourceScheduledConditionType ResourcePlacementConditionType = "Scheduled"
 
 	// ResourceRolloutStartedConditionType indicates whether the selected resources start rolling out or
 	// not.
@@ -795,7 +778,7 @@ const (
 	// - "Unknown" means we haven't finished the override yet.
 	ResourceOverriddenConditionType ResourcePlacementConditionType = "Overridden"
 
-	// ResourceWorkCreatedConditionType indicates whether we have created or updated the corresponding work object(s)
+	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
 	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
 	// the placement.
 	// Its condition status can be one of the following:
@@ -804,15 +787,14 @@ const (
 	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
 	// yet.
 	// - "Unknown" means we haven't finished creating work yet.
-	ResourceWorkCreatedConditionType ResourcePlacementConditionType = "WorkCreated"
+	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the apply yet.
-	// TODO: use "Applied" instead.
-	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
+	ResourcesAppliedConditionType ResourcePlacementConditionType = "Applied"
 
 	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
 	// Its condition status can be one of the following:
