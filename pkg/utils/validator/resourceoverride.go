@@ -7,11 +7,11 @@ Licensed under the MIT license.
 package validator
 
 import (
+	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/errors"
+	apierrors "k8s.io/apimachinery/pkg/util/errors"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 )
@@ -37,7 +37,7 @@ func ValidateResourceOverride(ro fleetv1alpha1.ResourceOverride, roList *fleetv1
 		}
 	}
 
-	return errors.NewAggregate(allErr)
+	return apierrors.NewAggregate(allErr)
 }
 
 // validateResourceSelectors checks if override is selecting a unique resource.
@@ -51,7 +51,7 @@ func validateResourceSelectors(ro fleetv1alpha1.ResourceOverride) error {
 		}
 		selectorMap[selector] = true
 	}
-	return errors.NewAggregate(allErr)
+	return apierrors.NewAggregate(allErr)
 }
 
 // validateResourceOverrideResourceLimit checks if there is only 1 resource override per resource,
@@ -81,7 +81,7 @@ func validateResourceOverrideResourceLimit(ro fleetv1alpha1.ResourceOverride, ro
 			allErr = append(allErr, fmt.Errorf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", roSelector, ro.GetName(), overrideMap[roSelector]))
 		}
 	}
-	return errors.NewAggregate(allErr)
+	return apierrors.NewAggregate(allErr)
 }
 
 // validateOverridePolicy checks if override rule is selecting resource by name.
@@ -102,46 +102,62 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 				}
 			}
 		}
-		if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
+		if rule.JSONPatchOverrides == nil {
+			allErr = append(allErr, fmt.Errorf("invalid OverrideRule %v: JSONPatchOverrides cannot be nil", rule))
+		} else if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
 			allErr = append(allErr, err)
 		}
 	}
-	return errors.NewAggregate(allErr)
+	return apierrors.NewAggregate(allErr)
 }
 
 // validateJSONPatchOverride checks if JSON patch override is valid.
 func validateJSONPatchOverride(jsonPatchOverrides []fleetv1alpha1.JSONPatchOverride) error {
+	if len(jsonPatchOverrides) == 0 {
+		return errors.New("invalid JSONPatchOverrides: JSONPatchOverrides cannot be empty")
+	}
+
 	allErr := make([]error, 0)
-	slashPattern := regexp.MustCompile(`//+`)
-	statusPattern := regexp.MustCompile(`^/status([/][a-zA-Z0-9_-]+)*$`)
 	for _, patch := range jsonPatchOverrides {
-		if patch.Path == "" {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path cannot be empty", patch))
-		}
-
-		if !strings.HasPrefix(patch.Path, "/") {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path must start with /", patch))
-		}
-
-		if slashPattern.MatchString(patch.Path) {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: path cannot contain consecutive slashes", patch))
-		}
-
-		if patch.Path == "/kind" || patch.Path == "/apiVersion" {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override typeMeta fields", patch))
-		}
-
-		if strings.HasPrefix(patch.Path, "/metadata") && !strings.HasPrefix(patch.Path, "/metadata/annotations") && !strings.HasPrefix(patch.Path, "/metadata/labels") {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override metadata fields except annotations and labels", patch))
-		}
-
-		if statusPattern.MatchString(patch.Path) {
-			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields", patch))
+		if err := validateJSONPatchOverridePath(patch.Path); err != nil {
+			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: %w", patch, err))
 		}
 
 		if patch.Operator == fleetv1alpha1.JSONPatchOverrideOpRemove && len(patch.Value.Raw) != 0 {
 			allErr = append(allErr, fmt.Errorf("invalid JSONPatchOverride %s: remove operation cannot have value", patch))
 		}
 	}
-	return errors.NewAggregate(allErr)
+	return apierrors.NewAggregate(allErr)
+}
+
+func validateJSONPatchOverridePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path cannot be empty")
+	}
+
+	if !strings.HasPrefix(path, "/") {
+		return fmt.Errorf("path must start with /")
+	}
+
+	// The path begins with a slash, and at least there will be two elements.
+	parts := strings.Split(path, "/")[1:]
+	switch parts[0] {
+	case "kind", "apiVersion":
+		return fmt.Errorf("cannot override typeMeta fields")
+	case "metadata":
+		if len(path) == 1 {
+			return fmt.Errorf("cannot override metadata fields")
+		} else if parts[1] != "annotations" && parts[1] != "labels" {
+			return fmt.Errorf("cannot override metadata fields except annotations and labels")
+		}
+	case "status":
+		return fmt.Errorf("cannot override status fields")
+	}
+
+	for i := range parts {
+		if len(strings.TrimSpace(parts[i])) == 0 {
+			return fmt.Errorf("path cannot contain empty string")
+		}
+	}
+	return nil
 }
