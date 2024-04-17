@@ -42,6 +42,7 @@ import (
 
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
@@ -639,20 +640,32 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding *fleetv1beta1.ClusterResourceBinding) metav1.Condition {
 	allAvailable := true
 	var notAvailableWork string
-	for _, work := range works {
-		if !condition.IsConditionStatusTrue(meta.FindStatusCondition(work.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable), work.GetGeneration()) {
+	var notTrackableWork string
+	for _, w := range works {
+		cond := meta.FindStatusCondition(w.Status.Conditions, fleetv1beta1.WorkConditionTypeAvailable)
+		if !condition.IsConditionStatusTrue(cond, w.GetGeneration()) {
 			allAvailable = false
-			notAvailableWork = work.Name
+			notAvailableWork = w.Name
 			break
+		}
+		if cond.Reason == work.WorkNotTrackableReason {
+			notTrackableWork = w.Name
 		}
 	}
 	if allAvailable {
 		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
+		reason := allWorkAvailableReason
+		message := "All corresponding work objects are available"
+		if len(notTrackableWork) > 0 {
+			reason = work.WorkNotTrackableReason
+			message = fmt.Sprintf("The availability of work object %s is not trackable", notTrackableWork)
+		}
+
 		return metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingAvailable),
-			Reason:             allWorkAvailableReason,
-			Message:            "All corresponding work objects are available",
+			Reason:             reason,
+			Message:            message,
 			ObservedGeneration: binding.GetGeneration(),
 		}
 	}
