@@ -35,7 +35,7 @@ affinity: {}
 enableV1Alpha1APIs: false
 enableV1Beta1APIs: true
 
-hubAPIQPS: 1000
+hubAPIQPS: 250
 hubAPIBurst: 1000
 MaxConcurrentClusterPlacement: 100
 ConcurrentResourceChangeSyncs: 20
