@@ -102,9 +102,8 @@ func validateOverridePolicy(policy *fleetv1alpha1.OverridePolicy) error {
 				}
 			}
 		}
-		if rule.JSONPatchOverrides == nil {
-			allErr = append(allErr, fmt.Errorf("invalid OverrideRule %v: JSONPatchOverrides cannot be nil", rule))
-		} else if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
+
+		if err := validateJSONPatchOverride(rule.JSONPatchOverrides); err != nil {
 			allErr = append(allErr, err)
 		}
 	}

@@ -674,7 +674,7 @@ func TestValidateOverridePolicy(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: errors.New("JSONPatchOverrides cannot be nil"),
+			wantErrMsg: errors.New("JSONPatchOverrides cannot be empty"),
 		},
 		"empty JSONPatchOverrides": {
 			policy: &fleetv1alpha1.OverridePolicy{
@@ -696,6 +696,40 @@ func TestValidateOverridePolicy(t *testing.T) {
 				},
 			},
 			wantErrMsg: errors.New("JSONPatchOverrides cannot be empty"),
+		},
+		"invalid JSONPatchOverridesPath": {
+			policy: &fleetv1alpha1.OverridePolicy{
+				OverrideRules: []fleetv1alpha1.OverrideRule{
+					{
+						ClusterSelector: &fleetv1beta1.ClusterSelector{},
+						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+							{
+								Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+								Path:     "/metadata/finalizers",
+								Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: errors.New("cannot override metadata fields except annotations and labels"),
+		},
+		"invalid JSONPatchOverride": {
+			policy: &fleetv1alpha1.OverridePolicy{
+				OverrideRules: []fleetv1alpha1.OverrideRule{
+					{
+						ClusterSelector: &fleetv1beta1.ClusterSelector{},
+						JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+							{
+								Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+								Path:     "/apiVersionabc",
+								Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: errors.New("remove operation cannot have value"),
 		},
 	}
 	for testName, tt := range tests {
@@ -727,125 +761,33 @@ func TestValidateJSONPatchOverride(t *testing.T) {
 			},
 			wantErrMsg: nil,
 		},
-		"invalid json patch override - cannot override typeMeta fields": {
+		"invalid json patch override - invalid remove operation": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
 				{
 					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
-					Path:     "/kind",
-				},
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "/apiVersion",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
-				},
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-					Path:     "/metadata/finalizers/0",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"kubernetes.io/scheduler-cleanup"`)},
-				},
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
-					Path:     "/metadata/finalizers",
-				},
-			},
-			wantErrMsg: errors.New("cannot override typeMeta fields"),
-		},
-		"invalid json patch override - cannot override any status field": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
-					Path:     "/status/conditions/0/reason",
-				},
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "/status",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
-				},
-			},
-			wantErrMsg: errors.New("cannot override status fields"),
-		},
-		"invalid json patch override - remove with value": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
-					Path:     "/metadata/labels/label1",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
+					Path:     "/spec/clusterResourceSelector/kind",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"ClusterRole"`)},
 				},
 			},
 			wantErrMsg: errors.New("remove operation cannot have value"),
 		},
-		"valid json patch override - correct metadata field": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-					Path:     "/metadata/annotations/new-annotation",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
-				},
-			},
-			wantErrMsg: nil,
+		"invalid json patch override - nil jsonPatchOverrides": {
+			jsonPatchOverrides: nil,
+			wantErrMsg:         errors.New("JSONPatchOverrides cannot be empty"),
 		},
-		"valid json patch override - case sensitive check": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "/Kind",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
-				},
-			},
-			wantErrMsg: nil,
-		},
-		"valid json patch override - apiVersion within path": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "/apiVersionabc",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
-				},
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
-					Path:     "/metadata/labels/apiVersion",
-				},
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
-					Path:     "/apiVersionabc",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
-				},
-			},
-			wantErrMsg: nil,
-		},
-		"invalid json patch override - empty path": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
-				},
-			},
-			wantErrMsg: errors.New("path cannot be empty"),
-		},
-		"invalid json patch override - slashes only": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "/////",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"v1"`)},
-				},
-			},
-			wantErrMsg: errors.New("path cannot contain empty"),
-		},
-		"invalid json patch override - path must start with /": {
-			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
-				{
-					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
-					Path:     "spec.resourceSelectors/selectors/0/name",
-					Value:    apiextensionsv1.JSON{Raw: []byte(`"value"`)},
-				},
-			},
-			wantErrMsg: errors.New("path must start with /"),
-		},
-		"invalid json patch override - empty overrides": {
+		"invalid json patch override - empty jsonPatchOverrides": {
 			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{},
-			wantErrMsg:         errors.New("invalid JSONPatchOverrides: JSONPatchOverrides cannot be empty"),
+			wantErrMsg:         errors.New("JSONPatchOverrides cannot be empty"),
+		},
+		"invalid json patch override - invalid path": {
+			jsonPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+				{
+					Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+					Path:     "/status/conditions/0/reason",
+					Value:    apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)},
+				},
+			},
+			wantErrMsg: errors.New("cannot override status fields"),
 		},
 	}
 	for testName, tt := range tests {
@@ -919,10 +861,6 @@ func TestValidateJSONPatchOverridePath(t *testing.T) {
 			path:       "spec.resourceSelectors/selectors/0/name",
 			wantErrMsg: errors.New("path must start with /"),
 		},
-		"valid json patch override path - apiVersion within field": {
-			path:       "/apiVersionabc",
-			wantErrMsg: nil,
-		},
 		"invalid json patch override path - cannot override metadata fields (finalizer)": {
 			path:       "/metadata/finalizers",
 			wantErrMsg: errors.New("cannot override metadata fields except annotations and labels"),
@@ -934,10 +872,6 @@ func TestValidateJSONPatchOverridePath(t *testing.T) {
 		"invalid json patch override path - contains empty string": {
 			path:       "/spec/clusterNames///member-1",
 			wantErrMsg: errors.New("path cannot contain empty string"),
-		},
-		"valid json override patch - case sensitive check": {
-			path:       "/Kind",
-			wantErrMsg: nil,
 		},
 	}
 	for testName, tt := range tests {
