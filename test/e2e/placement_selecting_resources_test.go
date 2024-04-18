@@ -428,9 +428,9 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 
 var _ = Describe("validating CRP when adding resources in a matching namespace", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-	ns := appNamespace()
 
 	BeforeAll(func() {
+		ns := appNamespace()
 		By(fmt.Sprintf("creating namespace %s", ns.Name))
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
@@ -467,7 +467,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 		wantSelectedResourceIdentifiers := []placementv1beta1.ResourceIdentifier{
 			{
 				Kind:    "Namespace",
-				Name:    ns.Name,
+				Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
 				Version: "v1",
 			},
 		}
