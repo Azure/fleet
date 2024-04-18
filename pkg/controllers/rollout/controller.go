@@ -141,7 +141,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, nil
+		// There will be a corner case that rollout controller succeeds to update the binding spec to the latest one, but
+		// fail to update the binding conditions.
+		// Here it will reconcile the binding status.
+		return runtime.Result{}, r.checkAndUpdateStaleBindingsStatus(ctx, allBindings)
 	}
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings), "numberOfStaleBindings", len(staleBoundBindings))
 
@@ -160,6 +163,29 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
 	return runtime.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, toBeUpdatedBindings)
+}
+
+func (r *Reconciler) checkAndUpdateStaleBindingsStatus(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
+	if len(bindings) == 0 {
+		return nil
+	}
+	// issue all the update requests in parallel
+	errs, cctx := errgroup.WithContext(ctx)
+	for i := 0; i < len(bindings); i++ {
+		binding := bindings[i]
+		if binding.Spec.State != fleetv1beta1.BindingStateScheduled && binding.Spec.State != fleetv1beta1.BindingStateBound {
+			continue
+		}
+		rolloutStartedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+		if condition.IsConditionStatusTrue(rolloutStartedCondition, binding.Generation) {
+			continue
+		}
+		klog.V(2).InfoS("Found a stale binding status and set rolloutStartedCondition to true", "binding", klog.KObj(binding))
+		errs.Go(func() error {
+			return r.updateBindingStatus(cctx, binding, true)
+		})
+	}
+	return errs.Wait()
 }
 
 // fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the master clusterResourceSnapshot.
