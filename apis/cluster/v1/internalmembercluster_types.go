@@ -53,6 +53,9 @@ type InternalMemberClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Properties is an array of properties observed for the member cluster.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// populated when a property provider is enabled in the deployment.
 	// +optional
 	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
 

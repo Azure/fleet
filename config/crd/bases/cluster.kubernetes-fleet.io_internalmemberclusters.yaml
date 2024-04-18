@@ -249,8 +249,10 @@ spec:
                   - observationTime
                   - value
                   type: object
-                description: Properties is an array of properties observed for the
-                  member cluster.
+                description: "Properties is an array of properties observed for the
+                  member cluster. \n This field is beta-level; it is for the property-based
+                  scheduling feature and is only populated when a property provider
+                  is enabled in the deployment."
                 type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
@@ -281,7 +283,9 @@ spec:
                       of all the nodes on a member cluster. \n A node's available
                       capacity is the amount of resource that has not been used yet,
                       i.e., available capacity = allocatable capacity - capacity that
-                      has been requested by workloads."
+                      has been requested by workloads. \n This field is beta-level;
+                      it is for the property-based scheduling feature and is only
+                      populated when a property provider is enabled in the deployment."
                     type: object
                   capacity:
                     additionalProperties:
@@ -537,8 +541,10 @@ spec:
                   - observationTime
                   - value
                   type: object
-                description: Properties is an array of properties observed for the
-                  member cluster.
+                description: "Properties is an array of properties observed for the
+                  member cluster. \n This field is beta-level; it is for the property-based
+                  scheduling feature and is only populated when a property provider
+                  is enabled in the deployment."
                 type: object
               resourceUsage:
                 description: The current observed resource usage of the member cluster.
@@ -569,7 +575,9 @@ spec:
                       of all the nodes on a member cluster. \n A node's available
                       capacity is the amount of resource that has not been used yet,
                       i.e., available capacity = allocatable capacity - capacity that
-                      has been requested by workloads."
+                      has been requested by workloads. \n This field is beta-level;
+                      it is for the property-based scheduling feature and is only
+                      populated when a property provider is enabled in the deployment."
                     type: object
                   capacity:
                     additionalProperties:

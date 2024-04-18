@@ -50,6 +50,8 @@ type MemberClusterSpec struct {
 	HeartbeatPeriodSeconds int32 `json:"heartbeatPeriodSeconds,omitempty"`
 
 	// If specified, the MemberCluster's taints.
+	//
+	// This field is beta-level and is for the taints and tolerations feature.
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Taints []Taint `json:"taints,omitempty"`
@@ -86,6 +88,9 @@ type MemberClusterStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
 
 	// Properties is an array of properties observed for the member cluster.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// populated when a property provider is enabled in the deployment.
 	// +optional
 	Properties map[PropertyName]PropertyValue `json:"properties,omitempty"`
 

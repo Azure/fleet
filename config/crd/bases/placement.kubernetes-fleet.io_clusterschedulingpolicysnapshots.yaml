@@ -148,7 +148,10 @@ spec:
                                         in the same term, the results are AND'd. \n
                                         At this moment, PropertySelector can only
                                         be used with `RequiredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         matchExpressions:
                                           description: MatchExpressions is an array
@@ -207,7 +210,10 @@ spec:
                                         their observed property values. \n At this
                                         moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         name:
                                           description: Name is the name of the property
@@ -315,7 +321,10 @@ spec:
                                         in the same term, the results are AND'd. \n
                                         At this moment, PropertySelector can only
                                         be used with `RequiredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         matchExpressions:
                                           description: MatchExpressions is an array
@@ -374,7 +383,10 @@ spec:
                                         their observed property values. \n At this
                                         moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         name:
                                           description: Name is the name of the property
@@ -786,7 +798,10 @@ spec:
                                         in the same term, the results are AND'd. \n
                                         At this moment, PropertySelector can only
                                         be used with `RequiredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         matchExpressions:
                                           description: MatchExpressions is an array
@@ -845,7 +860,10 @@ spec:
                                         their observed property values. \n At this
                                         moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         name:
                                           description: Name is the name of the property
@@ -953,7 +971,10 @@ spec:
                                         in the same term, the results are AND'd. \n
                                         At this moment, PropertySelector can only
                                         be used with `RequiredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         matchExpressions:
                                           description: MatchExpressions is an array
@@ -1012,7 +1033,10 @@ spec:
                                         their observed property values. \n At this
                                         moment, PropertySorter can only be used with
                                         `PreferredDuringSchedulingIgnoredDuringExecution`
-                                        affinity terms."
+                                        affinity terms. \n This field is beta-level;
+                                        it is for the property-based scheduling feature
+                                        and is only functional when a property provider
+                                        is enabled in the deployment."
                                       properties:
                                         name:
                                           description: Name is the name of the property
@@ -1060,8 +1084,9 @@ spec:
                     - PickFixed
                     type: string
                   tolerations:
-                    description: If specified, the ClusterResourcePlacement's Tolerations.
-                      Tolerations cannot be updated or deleted.
+                    description: "If specified, the ClusterResourcePlacement's Tolerations.
+                      Tolerations cannot be updated or deleted. \n This field is beta-level
+                      and is for the taints and tolerations feature."
                     items:
                       description: Toleration allows ClusterResourcePlacement to tolerate
                         any taint that matches the triple <key,value,effect> using
