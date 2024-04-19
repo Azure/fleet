@@ -145,7 +145,7 @@ func validateJSONPatchOverridePath(path string) error {
 		return fmt.Errorf("cannot override typeMeta fields")
 	case "metadata":
 		if len(parts) == 1 {
-			return fmt.Errorf("cannot override metadata fields")
+			return fmt.Errorf("cannot override field metadata")
 		} else if parts[1] != "annotations" && parts[1] != "labels" {
 			return fmt.Errorf("cannot override metadata fields except annotations and labels")
 		}

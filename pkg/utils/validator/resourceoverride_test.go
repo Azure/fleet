@@ -875,7 +875,7 @@ func TestValidateJSONPatchOverridePath(t *testing.T) {
 		},
 		"invalid json patch override path - metadata field": {
 			path:       "/metadata",
-			wantErrMsg: errors.New("cannot override metadata fields"),
+			wantErrMsg: errors.New("cannot override field metadata"),
 		},
 	}
 	for testName, tt := range tests {
