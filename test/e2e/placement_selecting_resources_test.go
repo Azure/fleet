@@ -430,8 +430,8 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		By("creating namespace")
 		ns := appNamespace()
+		By(fmt.Sprintf("creating namespace %s", ns.Name))
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -695,9 +695,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		By("creating work resources on hub cluster")
 		createWorkResources()
 
-		By("creating work namespace on member cluster")
 		ns := appNamespace()
-
+		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
 		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -1347,7 +1346,7 @@ func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters(targetMemberCluster
 		memberCluster := targetMemberClusters[idx]
 
 		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
-		Eventually(secretsPlacedActual(), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
+		Eventually(secretsPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
 	}
 }
 
