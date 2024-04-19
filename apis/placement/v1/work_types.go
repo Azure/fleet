@@ -19,7 +19,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1beta1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -129,7 +129,6 @@ type ManifestCondition struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,categories={fleet,fleet-placement}
-// +kubebuilder:storageversion
 
 // Work is the Schema for the works API.
 type Work struct {

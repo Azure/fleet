@@ -19,7 +19,7 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT license.
 */
 
-package v1beta1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +71,6 @@ type AppliedResourceMeta struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={fleet,fleet-placement}
 // +kubebuilder:object:root=true
-// +kubebuilder:storageversion
 
 // AppliedWork represents an applied work on managed cluster that is placed
 // on a managed cluster. An appliedwork links to a work on a hub recording resources
