@@ -1190,9 +1190,9 @@ var _ = Describe("Test Work Generator Controller", func() {
 func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResourceBinding, hasOverride, workSync bool) {
 	Eventually(func() string {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: binding.Name}, binding)).Should(Succeed())
-		appliedReason := workNotAppliedReason
+		appliedReason := condition.WorkNotAppliedReason
 		if workSync {
-			appliedReason = workNeedSyncedReason
+			appliedReason = condition.WorkNeedSyncedReason
 		}
 		overrideReason := condition.OverrideNotSpecifiedReason
 		if hasOverride {
@@ -1210,13 +1210,13 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 				{
 					Type:               string(placementv1beta1.ResourceBindingBound),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkSyncedReason,
+					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkSyncedReason,
+					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
@@ -1249,25 +1249,25 @@ func verifyBindStatusAppliedNotAvailable(binding *placementv1beta1.ClusterResour
 				{
 					Type:               string(placementv1beta1.ResourceBindingBound),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkSyncedReason,
+					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkSyncedReason,
+					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingApplied),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkAppliedReason,
+					Reason:             condition.AllWorkAppliedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingAvailable),
 					Status:             metav1.ConditionFalse,
-					Reason:             workNotAvailableReason,
+					Reason:             condition.WorkNotAvailableReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 			},
@@ -1294,25 +1294,25 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 				{
 					Type:               string(placementv1beta1.ResourceBindingBound),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkSyncedReason,
+					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkSyncedReason,
+					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingApplied),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkAppliedReason,
+					Reason:             condition.AllWorkAppliedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
 					Type:               string(placementv1beta1.ResourceBindingAvailable),
 					Status:             metav1.ConditionTrue,
-					Reason:             allWorkAvailableReason,
+					Reason:             condition.AllWorkAvailableReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 			},

@@ -18,7 +18,9 @@ import (
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacement"
+	"go.goms.io/fleet/pkg/controllers/work"
 	scheduler "go.goms.io/fleet/pkg/scheduler/framework"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 
@@ -99,21 +101,62 @@ func crpSyncFailedConditions(generation int64) []metav1.Condition {
 			ObservedGeneration: generation,
 		},
 		{
-			Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-			Status:             metav1.ConditionFalse,
-			Reason:             clusterresourceplacement.SynchronizePendingReason,
+			Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
 			ObservedGeneration: generation,
 		},
 		{
-			Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
-			Status:             metav1.ConditionUnknown,
-			Reason:             clusterresourceplacement.ApplyPendingReason,
+			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.WorkSynchronizedReason,
 			ObservedGeneration: generation,
 		},
 	}
 }
 
-func crpRolloutFailedConditions(generation int64) []metav1.Condition {
+func crpAppliedFailedConditions(generation int64) []metav1.Condition {
+	return []metav1.Condition{
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             scheduler.FullyScheduledReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
+			Status:             metav1.ConditionFalse,
+			Reason:             condition.ApplyFailedReason,
+			ObservedGeneration: generation,
+		},
+	}
+}
+
+func crpScheduleFailedConditions(generation int64) []metav1.Condition {
 	return []metav1.Condition{
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
@@ -122,16 +165,34 @@ func crpRolloutFailedConditions(generation int64) []metav1.Condition {
 			Reason:             scheduler.NotFullyScheduledReason,
 		},
 		{
-			Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+			Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
 			ObservedGeneration: generation,
-			Reason:             clusterresourceplacement.SynchronizeSucceededReason,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
+			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
 			Status:             metav1.ConditionTrue,
+			Reason:             condition.ApplySucceededReason,
 			ObservedGeneration: generation,
-			Reason:             clusterresourceplacement.ApplySucceededReason,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementAvailableConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.AvailableReason,
+			ObservedGeneration: generation,
 		},
 	}
 }
@@ -145,15 +206,33 @@ func crpRolloutCompletedConditions(generation int64) []metav1.Condition {
 			ObservedGeneration: generation,
 		},
 		{
-			Type:               string(placementv1beta1.ClusterResourcePlacementSynchronizedConditionType),
+			Type:               string(placementv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.SynchronizeSucceededReason,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementWorkSynchronizedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.WorkSynchronizedReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ClusterResourcePlacementAppliedConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.ApplySucceededReason,
+			Reason:             condition.ApplySucceededReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ClusterResourcePlacementAvailableConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.AvailableReason,
 			ObservedGeneration: generation,
 		},
 	}
@@ -164,19 +243,13 @@ func resourcePlacementSyncPendingConditions(generation int64) []metav1.Condition
 		{
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
+			Reason:             condition.ScheduleSucceededReason,
 			ObservedGeneration: generation,
 		},
 		{
-			Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
+			Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
 			Status:             metav1.ConditionFalse,
-			Reason:             clusterresourceplacement.WorkSynchronizePendingReason,
-			ObservedGeneration: generation,
-		},
-		{
-			Type:               string(placementv1beta1.ResourcesAppliedConditionType),
-			Status:             metav1.ConditionUnknown,
-			Reason:             clusterresourceplacement.ResourceApplyPendingReason,
+			Reason:             condition.RolloutNotStartedYetReason,
 			ObservedGeneration: generation,
 		},
 	}
@@ -187,42 +260,77 @@ func resourcePlacementApplyFailedConditions(generation int64) []metav1.Condition
 		{
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
+			Reason:             condition.ScheduleSucceededReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.WorkSynchronizeSucceededReason,
+			Reason:             condition.AllWorkSyncedReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 			Status:             metav1.ConditionFalse,
-			Reason:             clusterresourceplacement.ResourceApplyFailedReason,
+			Reason:             condition.WorkNotAppliedReason,
 			ObservedGeneration: generation,
 		},
 	}
 }
 
-func resourcePlacementRolloutCompletedConditions(generation int64) []metav1.Condition {
+func resourcePlacementRolloutCompletedConditions(generation int64, resourceIsTrackable bool) []metav1.Condition {
+	availableConditionReason := work.WorkNotTrackableReason
+	if resourceIsTrackable {
+		availableConditionReason = condition.AllWorkAvailableReason
+	}
+
 	return []metav1.Condition{
 		{
 			Type:               string(placementv1beta1.ResourceScheduledConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.ResourceScheduleSucceededReason,
+			Reason:             condition.ScheduleSucceededReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceRolloutStartedConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.RolloutStartedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourceOverriddenConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             condition.OverrideNotSpecifiedReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ResourceWorkSynchronizedConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.WorkSynchronizeSucceededReason,
+			Reason:             condition.AllWorkSyncedReason,
 			ObservedGeneration: generation,
 		},
 		{
 			Type:               string(placementv1beta1.ResourcesAppliedConditionType),
 			Status:             metav1.ConditionTrue,
-			Reason:             clusterresourceplacement.ResourceApplySucceededReason,
+			Reason:             condition.AllWorkAppliedReason,
+			ObservedGeneration: generation,
+		},
+		{
+			Type:               string(placementv1beta1.ResourcesAvailableConditionType),
+			Status:             metav1.ConditionTrue,
+			Reason:             availableConditionReason,
 			ObservedGeneration: generation,
 		},
 	}
@@ -262,6 +370,7 @@ func crpStatusUpdatedActual(
 	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
 	wantSelectedClusters, wantUnselectedClusters []string,
 	wantObservedResourceIndex string,
+	resourceIsTrackable bool,
 ) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
@@ -275,7 +384,7 @@ func crpStatusUpdatedActual(
 		for _, name := range wantSelectedClusters {
 			wantPlacementStatus = append(wantPlacementStatus, placementv1beta1.ResourcePlacementStatus{
 				ClusterName: name,
-				Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation),
+				Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, resourceIsTrackable),
 			})
 		}
 		for i := 0; i < len(wantUnselectedClusters); i++ {
@@ -284,9 +393,35 @@ func crpStatusUpdatedActual(
 			})
 		}
 
-		wantCRPConditions := crpRolloutCompletedConditions(crp.Generation)
+		var wantCRPConditions []metav1.Condition
+		if len(wantSelectedClusters) > 0 {
+			wantCRPConditions = crpRolloutCompletedConditions(crp.Generation)
+		} else {
+			wantCRPConditions = []metav1.Condition{
+				// we don't set the remaining resource conditions.
+				{
+					Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+					Status:             metav1.ConditionTrue,
+					Reason:             scheduler.FullyScheduledReason,
+					ObservedGeneration: crp.Generation,
+				},
+			}
+		}
+
 		if len(wantUnselectedClusters) > 0 {
-			wantCRPConditions = crpRolloutFailedConditions(crp.Generation)
+			if len(wantSelectedClusters) > 0 {
+				wantCRPConditions = crpScheduleFailedConditions(crp.Generation)
+			} else {
+				wantCRPConditions = []metav1.Condition{
+					// we don't set the remaining resource conditions.
+					{
+						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
+						Status:             metav1.ConditionFalse,
+						ObservedGeneration: crp.Generation,
+						Reason:             scheduler.NotFullyScheduledReason,
+					},
+				}
+			}
 		}
 
 		// Note that the CRP controller will only keep decisions regarding unselected clusters for a CRP if:

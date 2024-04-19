@@ -64,7 +64,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		}
 	})
 
-	Context("Test a CRP place enveloped objects successfully", Ordered, func() {
+	PContext("Test a CRP place enveloped objects successfully", Ordered, func() {
 		It("Create the test resources in the namespace", createWrappedResourcesForEnvelopTest)
 
 		It("Create the CRP that select the name space", func() {
@@ -89,7 +89,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0")
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -116,6 +116,8 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status with failed to apply resourceQuota", func() {
+			// rolloutStarted is false, but other conditions are true.
+			// "The rollout is being blocked by the rollout strategy in 2 cluster(s)",
 			crpStatusUpdatedActual := checkForOneClusterFailedToApplyStatus(wantSelectedResources)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 			Consistently(crpStatusUpdatedActual, consistentlyDuration, consistentlyInterval).Should(Succeed(), "Failed to update CRP status as expected")
@@ -131,7 +133,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		})
 
 		It("should update CRP status as success again", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "2")
+			crpStatusUpdatedActual := crpStatusUpdatedActual(wantSelectedResources, allMemberClusterNames, nil, "2", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

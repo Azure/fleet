@@ -16,9 +16,6 @@ import (
 
 // A group of condition reason string which is used to populate the placement condition.
 const (
-	// ScheduleSucceededReason is the reason string of placement condition if scheduling succeeded.
-	ScheduleSucceededReason = "Scheduled"
-
 	// RolloutStartedUnknownReason is the reason string of placement condition if rollout status is
 	// unknown.
 	RolloutStartedUnknownReason = "RolloutStartedUnknown"
@@ -73,6 +70,33 @@ const (
 	AvailableReason = "ResourceAvailable"
 )
 
+// A group of condition reason string which is used to populate the placement condition per cluster.
+const (
+	// ScheduleSucceededReason is the reason string of placement condition if scheduling succeeded.
+	ScheduleSucceededReason = "Scheduled"
+
+	// AllWorkSyncedReason is the reason string of placement condition if all works are synchronized.
+	AllWorkSyncedReason = "AllWorkSynced"
+
+	// SyncWorkFailedReason is the reason string of placement condition if some works failed to synchronize.
+	SyncWorkFailedReason = "SyncWorkFailed"
+
+	// WorkNeedSyncedReason is the reason string of placement condition if some works are in the processing of synchronizing.
+	WorkNeedSyncedReason = "StillNeedToSyncWork"
+
+	// WorkNotAppliedReason is the reason string of placement condition if some works are not applied.
+	WorkNotAppliedReason = "NotAllWorkHaveBeenApplied"
+
+	// AllWorkAppliedReason is the reason string of placement condition if all works are applied.
+	AllWorkAppliedReason = "AllWorkHaveBeenApplied"
+
+	// WorkNotAvailableReason is the reason string of placement condition if some works are not available.
+	WorkNotAvailableReason = "NotAllWorkAreAvailable"
+
+	// AllWorkAvailableReason is the reason string of placement condition if all works are available.
+	AllWorkAvailableReason = "AllWorkAreAvailable"
+)
+
 // EqualCondition compares one condition with another; it ignores the LastTransitionTime and Message fields,
 // and will consider the ObservedGeneration values from the two conditions a match if the current
 // condition is newer.
@@ -113,14 +137,14 @@ func IsConditionStatusFalse(cond *metav1.Condition, latestGeneration int64) bool
 	return cond != nil && cond.Status == metav1.ConditionFalse && cond.ObservedGeneration == latestGeneration
 }
 
-// resourceCondition is all the resource related condition, for example, scheduled condition is not included.
-type resourceCondition int
+// ResourceCondition is all the resource related condition, for example, scheduled condition is not included.
+type ResourceCondition int
 
 // The following conditions are in ordered.
 // Once the placement is scheduled, it will be divided into following stages.
 // Used to populate the CRP conditions.
 const (
-	RolloutStartedCondition resourceCondition = iota
+	RolloutStartedCondition ResourceCondition = iota
 	OverriddenCondition
 	WorkSynchronizedCondition
 	AppliedCondition
@@ -128,7 +152,7 @@ const (
 	TotalCondition
 )
 
-func (c resourceCondition) EventReasonForTrue() string {
+func (c ResourceCondition) EventReasonForTrue() string {
 	return []string{
 		"PlacementRolloutStarted",
 		"PlacementOverriddenSucceeded",
@@ -138,7 +162,7 @@ func (c resourceCondition) EventReasonForTrue() string {
 	}[c]
 }
 
-func (c resourceCondition) EventMessageForTrue() string {
+func (c ResourceCondition) EventMessageForTrue() string {
 	return []string{
 		"Started rolling out the latest resources",
 		"Placement has been successfully overridden",
@@ -149,7 +173,7 @@ func (c resourceCondition) EventMessageForTrue() string {
 }
 
 // ResourcePlacementConditionType returns the resource condition type per cluster used by cluster resource placement.
-func (c resourceCondition) ResourcePlacementConditionType() fleetv1beta1.ResourcePlacementConditionType {
+func (c ResourceCondition) ResourcePlacementConditionType() fleetv1beta1.ResourcePlacementConditionType {
 	return []fleetv1beta1.ResourcePlacementConditionType{
 		fleetv1beta1.ResourceRolloutStartedConditionType,
 		fleetv1beta1.ResourceOverriddenConditionType,
@@ -160,7 +184,7 @@ func (c resourceCondition) ResourcePlacementConditionType() fleetv1beta1.Resourc
 }
 
 // ResourceBindingConditionType returns the binding condition type used by cluster resource binding.
-func (c resourceCondition) ResourceBindingConditionType() fleetv1beta1.ResourceBindingConditionType {
+func (c ResourceCondition) ResourceBindingConditionType() fleetv1beta1.ResourceBindingConditionType {
 	return []fleetv1beta1.ResourceBindingConditionType{
 		fleetv1beta1.ResourceBindingRolloutStarted,
 		fleetv1beta1.ResourceBindingOverridden,
@@ -171,7 +195,7 @@ func (c resourceCondition) ResourceBindingConditionType() fleetv1beta1.ResourceB
 }
 
 // ClusterResourcePlacementConditionType returns the CRP condition type used by CRP.
-func (c resourceCondition) ClusterResourcePlacementConditionType() fleetv1beta1.ClusterResourcePlacementConditionType {
+func (c ResourceCondition) ClusterResourcePlacementConditionType() fleetv1beta1.ClusterResourcePlacementConditionType {
 	return []fleetv1beta1.ClusterResourcePlacementConditionType{
 		fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType,
 		fleetv1beta1.ClusterResourcePlacementOverriddenConditionType,
@@ -182,13 +206,13 @@ func (c resourceCondition) ClusterResourcePlacementConditionType() fleetv1beta1.
 }
 
 // UnknownResourceConditionPerCluster returns the unknown resource condition.
-func (c resourceCondition) UnknownResourceConditionPerCluster(generation int64) metav1.Condition {
+func (c ResourceCondition) UnknownResourceConditionPerCluster(generation int64) metav1.Condition {
 	return []metav1.Condition{
 		{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ResourceRolloutStartedConditionType),
 			Reason:             RolloutStartedUnknownReason,
-			Message:            "In the process of deciding whether to rolling out the latest resources or not",
+			Message:            "In the process of deciding whether to roll out the latest resources or not",
 			ObservedGeneration: generation,
 		},
 		{
@@ -223,13 +247,13 @@ func (c resourceCondition) UnknownResourceConditionPerCluster(generation int64) 
 }
 
 // UnknownClusterResourcePlacementCondition returns the unknown cluster resource placement condition.
-func (c resourceCondition) UnknownClusterResourcePlacementCondition(generation int64, clusterCount int) metav1.Condition {
+func (c ResourceCondition) UnknownClusterResourcePlacementCondition(generation int64, clusterCount int) metav1.Condition {
 	return []metav1.Condition{
 		{
 			Status:             metav1.ConditionUnknown,
 			Type:               string(fleetv1beta1.ClusterResourcePlacementRolloutStartedConditionType),
 			Reason:             RolloutStartedUnknownReason,
-			Message:            fmt.Sprintf("There are still %d cluster(s) in the process of deciding whether to rolling out the latest resources or not", clusterCount),
+			Message:            fmt.Sprintf("There are still %d cluster(s) in the process of deciding whether to roll out the latest resources or not", clusterCount),
 			ObservedGeneration: generation,
 		},
 		{
@@ -264,7 +288,7 @@ func (c resourceCondition) UnknownClusterResourcePlacementCondition(generation i
 }
 
 // FalseClusterResourcePlacementCondition returns the false cluster resource placement condition.
-func (c resourceCondition) FalseClusterResourcePlacementCondition(generation int64, clusterCount int) metav1.Condition {
+func (c ResourceCondition) FalseClusterResourcePlacementCondition(generation int64, clusterCount int) metav1.Condition {
 	return []metav1.Condition{
 		{
 			Status:             metav1.ConditionFalse,
@@ -305,7 +329,7 @@ func (c resourceCondition) FalseClusterResourcePlacementCondition(generation int
 }
 
 // TrueClusterResourcePlacementCondition returns the true cluster resource placement condition.
-func (c resourceCondition) TrueClusterResourcePlacementCondition(generation int64, clusterCount int) metav1.Condition {
+func (c ResourceCondition) TrueClusterResourcePlacementCondition(generation int64, clusterCount int) metav1.Condition {
 	return []metav1.Condition{
 		{
 			Status:             metav1.ConditionTrue,

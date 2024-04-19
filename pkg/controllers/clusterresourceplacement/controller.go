@@ -16,7 +16,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -203,54 +202,26 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 	klog.V(2).InfoS("Updated the clusterResourcePlacement status", "clusterResourcePlacement", crpKObj)
 
-	if !isCRPScheduled(oldCRP) && isCRPScheduled(crp) {
-		klog.V(2).InfoS("Placement has been scheduled", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementScheduleSuccess", "Successfully scheduled the placement")
+	// We skip checking the last resource condition (available) because it will be covered by checking isRolloutCompleted func.
+	for i := condition.RolloutStartedCondition; i < condition.TotalCondition-1; i++ {
+		oldCond := oldCRP.GetCondition(string(i.ClusterResourcePlacementConditionType()))
+		newCond := crp.GetCondition(string(i.ClusterResourcePlacementConditionType()))
+		if !condition.IsConditionStatusTrue(oldCond, oldCRP.Generation) &&
+			condition.IsConditionStatusTrue(newCond, crp.Generation) {
+			klog.V(2).InfoS("Placement resource condition status has been changed to true", "clusterResourcePlacement", crpKObj, "generation", crp.Generation, "condition", i.ClusterResourcePlacementConditionType())
+			r.Recorder.Event(crp, corev1.EventTypeNormal, i.EventReasonForTrue(), i.EventMessageForTrue())
+		}
 	}
 
-	if r.UseNewConditions {
-		// We skip checking the last resource condition (available) because it will be covered by checking isRolloutCompleted func.
-		for i := condition.RolloutStartedCondition; i < condition.TotalCondition-1; i++ {
-			oldCond := oldCRP.GetCondition(string(i.ClusterResourcePlacementConditionType()))
-			newCond := crp.GetCondition(string(i.ClusterResourcePlacementConditionType()))
-			if !condition.IsConditionStatusTrue(oldCond, oldCRP.Generation) &&
-				condition.IsConditionStatusTrue(newCond, crp.Generation) {
-				klog.V(2).InfoS("Placement resource condition status has been changed to true", "clusterResourcePlacement", crpKObj, "generation", crp.Generation, "condition", i.ClusterResourcePlacementConditionType())
-				r.Recorder.Event(crp, corev1.EventTypeNormal, i.EventReasonForTrue(), i.EventMessageForTrue())
-			}
+	// There is no need to check if the CRP is available or not.
+	// If the available condition is true, it means the rollout is completed.
+	if isRolloutCompleted(crp) {
+		if !isRolloutCompleted(oldCRP) {
+			klog.V(2).InfoS("Placement rollout has finished and resources are available", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
+			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Resources are available in the selected clusters")
 		}
-
-		// There is no need to check if the CRP is available or not.
-		// If the available condition is true, it means the rollout is completed.
-		if isRolloutCompleted(r.UseNewConditions, crp) {
-			if !isRolloutCompleted(r.UseNewConditions, oldCRP) {
-				klog.V(2).InfoS("Placement rollout has finished and resources are available", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-				r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Resources are available in the selected clusters")
-			}
-			// We don't need to requeue any request now by watching the binding changes
-			return ctrl.Result{}, nil
-		}
-		klog.V(2).InfoS("Placement rollout has not finished yet or resources are not available yet", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
-		// We don't need to requeue any request now by watching the binding changes.
-		// Once the scheduler makes the decision, the binding will be changed by the scheduler at the same time.
+		// We don't need to requeue any request now by watching the binding changes
 		return ctrl.Result{}, nil
-	}
-
-	if !isCRPSynchronized(oldCRP) && isCRPSynchronized(crp) {
-		klog.V(2).InfoS("Placement has been synchronized", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-		r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementSyncSuccess", "Successfully synchronized the placement")
-	}
-
-	// There is no need to check if the CRP is applied or not.
-	// If the applied condition is true, it means the scheduling is done & works have been synchronized which means the rollout is completed.
-	if isRolloutCompleted(r.UseNewConditions, crp) {
-		if !isRolloutCompleted(r.UseNewConditions, oldCRP) {
-			klog.V(2).InfoS("Placement rollout has finished", "clusterResourcePlacement", crpKObj, "generation", crp.Generation)
-			r.Recorder.Event(crp, corev1.EventTypeNormal, "PlacementRolloutCompleted", "Resources have been applied to the selected clusters")
-		}
-		// We keep a slow reconcile loop here to periodically update the work status in case the applied works change the status.
-		klog.V(2).InfoS("Placement rollout has finished and requeue the request in case of works change", "clusterResourcePlacement", crpKObj)
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	if !isClusterScheduled {
@@ -270,9 +241,10 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 	}
 
 	klog.V(2).InfoS("Placement rollout has not finished yet and requeue the request", "clusterResourcePlacement", crpKObj, "status", crp.Status, "generation", crp.Generation)
-	// we need to requeue the request to update the status of the resources.
-	// TODO: adjust the requeue time based on the rollout status.
-	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	// we need to requeue the request to update the status of the resources eg, failedManifests.
+	// The binding status won't be changed.
+	// TODO: once we move to populate the failedManifests from the binding, no need to requeue.
+	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 
 func (r *Reconciler) getOrCreateClusterSchedulingPolicySnapshot(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, revisionHistoryLimit int) (*fleetv1beta1.ClusterSchedulingPolicySnapshot, error) {
@@ -935,25 +907,6 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 	if scheduledCondition.Status == metav1.ConditionUnknown {
 		// For the new conditions, we no longer populate the remaining otherwise it's too complicated and the default condition
 		// will be unknown.
-		if !r.UseNewConditions {
-			conditions := []metav1.Condition{
-				{
-					Status:             metav1.ConditionUnknown,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-					Reason:             SynchronizePendingReason,
-					Message:            "Scheduling has not completed",
-					ObservedGeneration: crp.Generation,
-				},
-				{
-					Status:             metav1.ConditionUnknown,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-					Reason:             ApplyPendingReason,
-					Message:            "Scheduling has not completed",
-					ObservedGeneration: crp.Generation,
-				},
-			}
-			crp.SetConditions(conditions...)
-		}
 		// skip populating detailed resourcePlacementStatus & work related conditions
 		// reset other status fields
 		// TODO: need to track whether we have deleted the resources for the last decisions.
@@ -963,11 +916,7 @@ func (r *Reconciler) setPlacementStatus(ctx context.Context, crp *fleetv1beta1.C
 		return false, nil
 	}
 
-	if r.UseNewConditions {
-		return r.setResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
-	}
-
-	return r.setResourcePlacementStatusAndResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
+	return r.setResourceConditions(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
 }
 
 func buildScheduledCondition(crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot) metav1.Condition {
@@ -1023,161 +972,19 @@ func buildResourcePlacementStatusMap(crp *fleetv1beta1.ClusterResourcePlacement)
 	return m
 }
 
-func (r *Reconciler) buildClusterResourceBindingMap(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement, latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (map[string]*fleetv1beta1.ClusterResourceBinding, error) {
-	// List all bindings derived from the CRP.
-	bindingList := &fleetv1beta1.ClusterResourceBindingList{}
-	listOptions := client.MatchingLabels{
-		fleetv1beta1.CRPTrackingLabel: crp.Name,
-	}
-	crpKObj := klog.KObj(crp)
-	if err := r.Client.List(ctx, bindingList, listOptions); err != nil {
-		klog.ErrorS(err, "Failed to list all bindings", "clusterResourcePlacement", crpKObj)
-		return nil, controller.NewAPIServerError(true, err)
-	}
-
-	res := make(map[string]*fleetv1beta1.ClusterResourceBinding, len(bindingList.Items))
-	bindings := bindingList.Items
-	// filter out the latest resource bindings
-	for i := range bindings {
-		if !bindings[i].DeletionTimestamp.IsZero() {
-			klog.V(2).InfoS("Filtering out the deleting clusterResourceBinding", "clusterResourceBinding", klog.KObj(&bindings[i]))
-			continue
-		}
-
-		if len(bindings[i].Spec.TargetCluster) == 0 {
-			err := fmt.Errorf("targetCluster is empty on clusterResourceBinding %s", bindings[i].Name)
-			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "Found an invalid clusterResourceBinding and skipping it when building placement status", "clusterResourceBinding", klog.KObj(&bindings[i]), "clusterResourcePlacement", crpKObj)
-			continue
-		}
-		if bindings[i].Spec.ResourceSnapshotName != latestResourceSnapshot.Name ||
-			bindings[i].Spec.SchedulingPolicySnapshotName != latestSchedulingPolicySnapshot.Name {
-			continue
-		}
-		res[bindings[i].Spec.TargetCluster] = &bindings[i]
-	}
-	return res, nil
-}
-
-// setResourcePlacementStatusAndResourceConditions returns whether the scheduler selects any cluster or not.
-func (r *Reconciler) setResourcePlacementStatusAndResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement,
-	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
-	placementStatuses := make([]fleetv1beta1.ResourcePlacementStatus, 0, len(latestSchedulingPolicySnapshot.Status.ClusterDecisions))
-	decisions := latestSchedulingPolicySnapshot.Status.ClusterDecisions
-	selected, unselected := classifyClusterDecisions(decisions)
-
-	// In the pickN case, if the placement cannot be satisfied. For example, pickN deployment requires 5 clusters and
-	// scheduler schedules the resources on 3 clusters. We'll populate why the other two cannot be scheduled.
-	// Here it is calculating how many unscheduled resources there are.
-	unscheduledClusterCount := 0
-	if crp.Spec.Policy != nil {
-		if crp.Spec.Policy.PlacementType == fleetv1beta1.PickNPlacementType && crp.Spec.Policy.NumberOfClusters != nil {
-			unscheduledClusterCount = int(*crp.Spec.Policy.NumberOfClusters) - len(selected)
-		}
-		if crp.Spec.Policy.PlacementType == fleetv1beta1.PickFixedPlacementType {
-			unscheduledClusterCount = len(crp.Spec.Policy.ClusterNames) - len(selected)
-		}
-	}
-
-	// Used to record each selected cluster placement sync status
-	syncPendingCount := 0
-	syncSucceededCount := 0
-
-	// Used to record each selected cluster placement applied status.
-	appliedPendingCount := 0
-	appliedFailedCount := 0
-	appliedSucceededCount := 0
-	oldResourcePlacementStatusMap := buildResourcePlacementStatusMap(crp)
-	resourceBindingMap, err := r.buildClusterResourceBindingMap(ctx, crp, latestSchedulingPolicySnapshot, latestResourceSnapshot)
-	if err != nil {
-		return false, err
-	}
-
-	for _, c := range selected {
-		var rp fleetv1beta1.ResourcePlacementStatus
-		scheduledCondition := metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             ResourceScheduleSucceededReason,
-			Message:            fmt.Sprintf(resourcePlacementConditionScheduleSucceededMessageFormat, c.ClusterName, c.Reason),
-			ObservedGeneration: crp.Generation,
-		}
-		rp.ClusterName = c.ClusterName
-		if c.ClusterScore != nil {
-			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleSucceededWithScoreMessageFormat, c.ClusterName, *c.ClusterScore.AffinityScore, *c.ClusterScore.TopologySpreadScore, c.Reason)
-		}
-		oldConditions, ok := oldResourcePlacementStatusMap[c.ClusterName]
-		if ok {
-			// update the lastTransitionTime considering the existing condition status instead of overwriting
-			rp.Conditions = oldConditions
-		}
-		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		syncCondition, appliedCondition, err := r.setWorkStatusForResourcePlacementStatus(ctx, crp, latestResourceSnapshot, resourceBindingMap[c.ClusterName], &rp)
-		if err != nil {
-			return false, err
-		}
-		if syncCondition == nil || syncCondition.Status != metav1.ConditionTrue {
-			syncPendingCount++
-		} else {
-			syncSucceededCount++
-		}
-		if appliedCondition == nil || appliedCondition.Status == metav1.ConditionUnknown {
-			appliedPendingCount++
-		} else if appliedCondition.Status == metav1.ConditionFalse {
-			appliedFailedCount++
-		} else {
-			appliedSucceededCount++
-		}
-		placementStatuses = append(placementStatuses, rp)
-	}
-	isClusterScheduled := len(placementStatuses) > 0
-
-	for i := 0; i < unscheduledClusterCount && i < len(unselected); i++ {
-		// TODO: we could improve the message by summarizing the failure reasons from all of the unselected clusters.
-		// For now, it starts from adding some sample failures of unselected clusters.
-		var rp fleetv1beta1.ResourcePlacementStatus
-		scheduledCondition := metav1.Condition{
-			Status:             metav1.ConditionFalse,
-			Type:               string(fleetv1beta1.ResourceScheduledConditionType),
-			Reason:             ResourceScheduleFailedReason,
-			Message:            fmt.Sprintf(resourcePlacementConditionScheduleFailedMessageFormat, unselected[i].ClusterName, unselected[i].Reason),
-			ObservedGeneration: crp.Generation,
-		}
-		if unselected[i].ClusterScore != nil {
-			scheduledCondition.Message = fmt.Sprintf(resourcePlacementConditionScheduleFailedWithScoreMessageFormat, unselected[i].ClusterName, unselected[i].ClusterScore, unselected[i].Reason)
-		}
-		meta.SetStatusCondition(&rp.Conditions, scheduledCondition)
-		placementStatuses = append(placementStatuses, rp)
-	}
-	crp.Status.PlacementStatuses = placementStatuses
-	crp.SetConditions(buildClusterResourcePlacementSyncCondition(crp, syncPendingCount, syncSucceededCount))
-	crp.SetConditions(buildClusterResourcePlacementApplyCondition(crp, syncPendingCount == 0, appliedPendingCount, appliedSucceededCount, appliedFailedCount))
-	return isClusterScheduled, nil
-}
-
-func isRolloutCompleted(useNewConditions bool, crp *fleetv1beta1.ClusterResourcePlacement) bool {
+func isRolloutCompleted(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	if !isCRPScheduled(crp) {
 		return false
 	}
 
-	if useNewConditions {
-		for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
-			if !condition.IsConditionStatusTrue(crp.GetCondition(string(i.ClusterResourcePlacementConditionType())), crp.Generation) {
-				return false
-			}
+	for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
+		if !condition.IsConditionStatusTrue(crp.GetCondition(string(i.ClusterResourcePlacementConditionType())), crp.Generation) {
+			return false
 		}
-		return true
 	}
-	return isCRPSynchronized(crp) && isCRPApplied(crp)
+	return true
 }
 
 func isCRPScheduled(crp *fleetv1beta1.ClusterResourcePlacement) bool {
 	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType)), crp.Generation)
-}
-
-func isCRPSynchronized(crp *fleetv1beta1.ClusterResourcePlacement) bool {
-	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType)), crp.Generation)
-}
-
-func isCRPApplied(crp *fleetv1beta1.ClusterResourcePlacement) bool {
-	return condition.IsConditionStatusTrue(crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType)), crp.Generation)
 }

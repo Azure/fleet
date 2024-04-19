@@ -8,6 +8,8 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -758,14 +760,14 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	cleanupWorkResources()
 }
 
-// verifyWorkPropagationAndMarkAsApplied verifies that works derived from a specific CPR have been created
+// verifyWorkPropagationAndMarkAsAvailable verifies that works derived from a specific CPR have been created
 // for a specific cluster, and marks these works in the specific member cluster's
-// reserved namespace as applied.
+// reserved namespace as applied and available.
 //
 // This is mostly used for simulating member agents for virtual clusters.
 //
 // Note that this utility function currently assumes that there is only one work object.
-func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
+func verifyWorkPropagationAndMarkAsAvailable(memberClusterName, crpName string, resourceIdentifiers []placementv1beta1.ResourceIdentifier) {
 	memberClusterReservedNS := fmt.Sprintf(utils.NamespaceNameFormat, memberClusterName)
 	// Wait until the works are created.
 	workList := placementv1beta1.WorkList{}
@@ -784,23 +786,32 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 		return nil
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to list works")
 
-	for _, work := range workList.Items {
-		workName := work.Name
+	for _, item := range workList.Items {
+		workName := item.Name
 		// To be on the safer set, update the status with retries.
 		Eventually(func() error {
-			work := placementv1beta1.Work{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: memberClusterReservedNS}, &work); err != nil {
+			w := placementv1beta1.Work{}
+			if err := hubClient.Get(ctx, types.NamespacedName{Name: workName, Namespace: memberClusterReservedNS}, &w); err != nil {
 				return err
 			}
 
-			// Set the resource applied condition to the work object.
-			meta.SetStatusCondition(&work.Status.Conditions, metav1.Condition{
+			// Set the resource applied condition to the item object.
+			meta.SetStatusCondition(&w.Status.Conditions, metav1.Condition{
 				Type:               placementv1beta1.WorkConditionTypeApplied,
 				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "WorkApplied",
+				Reason:             condition.AllWorkAvailableReason,
 				Message:            "Set to be applied",
-				ObservedGeneration: work.Generation,
+				ObservedGeneration: w.Generation,
+			})
+
+			meta.SetStatusCondition(&w.Status.Conditions, metav1.Condition{
+				Type:               placementv1beta1.WorkConditionTypeAvailable,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.Now(),
+				Reason:             work.WorkNotTrackableReason,
+				Message:            "Set to be available",
+				ObservedGeneration: w.Generation,
 			})
 
 			// Set the manifest conditions.
@@ -810,7 +821,7 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 			// just in case the CRP controller changes its behavior in the future.
 			for idx := range resourceIdentifiers {
 				resourceIdentifier := resourceIdentifiers[idx]
-				work.Status.ManifestConditions = append(work.Status.ManifestConditions, placementv1beta1.ManifestCondition{
+				w.Status.ManifestConditions = append(w.Status.ManifestConditions, placementv1beta1.ManifestCondition{
 					Identifier: placementv1beta1.WorkResourceIdentifier{
 						Group:     resourceIdentifier.Group,
 						Kind:      resourceIdentifier.Kind,
@@ -830,11 +841,22 @@ func verifyWorkPropagationAndMarkAsApplied(memberClusterName, crpName string, re
 							Reason:             "ManifestApplied",
 							Message:            "Set to be applied",
 						},
+						{
+							Type:               placementv1beta1.WorkConditionTypeAvailable,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+							// Typically, this field is set to be the generation number of the
+							// applied object; here a dummy value is used as there is no object
+							// actually being applied in the case.
+							ObservedGeneration: 0,
+							Reason:             "ManifestAvailable",
+							Message:            "Set to be available",
+						},
 					},
 				})
 			}
 
-			return hubClient.Status().Update(ctx, &work)
+			return hubClient.Status().Update(ctx, &w)
 		}, eventuallyDuration, eventuallyInterval).Should(Succeed())
 	}
 }

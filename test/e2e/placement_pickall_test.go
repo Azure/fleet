@@ -48,7 +48,7 @@ var _ = Describe("placing resources using a CRP with no placement policy specifi
 	})
 
 	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+		crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 	})
 
@@ -93,7 +93,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0")
+			crpStatusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), allMemberClusterNames, nil, "0", false)
 			Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -160,7 +160,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -271,7 +271,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster3WestProdName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -346,7 +346,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -414,7 +414,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -495,7 +495,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -567,7 +567,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName, memberCluster3WestProdName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -648,7 +648,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -721,7 +721,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster2EastCanaryName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -797,7 +797,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName, memberCluster2EastCanaryName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -896,7 +896,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), []string{memberCluster1EastProdName}, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 
@@ -972,7 +972,7 @@ var _ = Describe("placing resources using a CRP of PickAll placement type", func
 		})
 
 		It("should update CRP status as expected", func() {
-			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0")
+			statusUpdatedActual := crpStatusUpdatedActual(workResourceIdentifiers(), nil, nil, "0", false)
 			Eventually(statusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP status as expected")
 		})
 

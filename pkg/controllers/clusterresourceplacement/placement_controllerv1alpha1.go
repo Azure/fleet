@@ -58,9 +58,6 @@ type Reconciler struct {
 	Recorder record.EventRecorder
 
 	Scheme *runtime.Scheme
-
-	// Whether to use the new status func to populate the crp status.
-	UseNewConditions bool
 }
 
 // ReconcileV1Alpha1 reconciles v1aplha1 APIs.

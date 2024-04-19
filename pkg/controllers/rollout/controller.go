@@ -141,9 +141,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
-		// There will be a corner case that rollout controller succeeds to update the binding spec to the latest one, but
-		// fail to update the binding conditions.
-		// Here it will reconcile the binding status.
+		// There is a corner case that rollout controller succeeds to update the binding spec to the latest one,
+		// but fails to update the binding conditions when it reconciled it last time.
+		// Here it will correct the binding status just in case this happens last time.
 		return runtime.Result{}, r.checkAndUpdateStaleBindingsStatus(ctx, allBindings)
 	}
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings), "numberOfStaleBindings", len(staleBoundBindings))
