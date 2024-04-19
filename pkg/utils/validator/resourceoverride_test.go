@@ -873,6 +873,10 @@ func TestValidateJSONPatchOverridePath(t *testing.T) {
 			path:       "/spec/clusterNames///member-1",
 			wantErrMsg: errors.New("path cannot contain empty string"),
 		},
+		"invalid json patch override path - metadata field": {
+			path:       "/metadata",
+			wantErrMsg: errors.New("cannot override metadata fields"),
+		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
