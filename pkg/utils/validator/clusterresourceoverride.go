@@ -30,7 +30,6 @@ func ValidateClusterResourceOverride(cro fleetv1alpha1.ClusterResourceOverride, 
 		allErr = append(allErr, err)
 	}
 
-	// Check if override rule is using label selector
 	if cro.Spec.Policy != nil {
 		if err := validateOverridePolicy(cro.Spec.Policy); err != nil {
 			allErr = append(allErr, err)

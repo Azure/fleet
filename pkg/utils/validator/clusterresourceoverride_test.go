@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apiErrors "k8s.io/apimachinery/pkg/util/errors"
+	apierrors "k8s.io/apimachinery/pkg/util/errors"
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
@@ -124,7 +125,7 @@ func TestValidateClusterResourceSelectors(t *testing.T) {
 					},
 				},
 			},
-			wantErrMsg: apiErrors.NewAggregate([]error{fmt.Errorf("label selector is not supported for resource selection %+v", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}}),
+			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("label selector is not supported for resource selection %+v", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}}),
 				fmt.Errorf("resource name is required for resource selection %+v", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: ""}),
 				fmt.Errorf("resource selector %+v already exists, and must be unique", fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "Kind", Name: "example"})}),
 		},
@@ -267,27 +268,38 @@ func TestValidateClusterResourceOverrideResourceLimit(t *testing.T) {
 }
 
 func TestValidateClusterResourceOverride(t *testing.T) {
+	validClusterSelector := &fleetv1beta1.ClusterSelector{
+		ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+			{
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"key": "value",
+					},
+				},
+			},
+			{
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"key1": "value1",
+					},
+				},
+			},
+		},
+	}
+
+	validJSONPatchOverrides := []fleetv1alpha1.JSONPatchOverride{
+		{
+			Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+			Path:     "/metadata/labels/new-label",
+			Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+		},
+	}
+
 	validPolicy := &fleetv1alpha1.OverridePolicy{
 		OverrideRules: []fleetv1alpha1.OverrideRule{
 			{
-				ClusterSelector: &fleetv1beta1.ClusterSelector{
-					ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"key": "value",
-								},
-							},
-						},
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"key1": "value1",
-								},
-							},
-						},
-					},
-				},
+				ClusterSelector:    validClusterSelector,
+				JSONPatchOverrides: validJSONPatchOverrides,
 			},
 		},
 	}
@@ -345,7 +357,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 				},
 			},
 			croList: &fleetv1alpha1.ClusterResourceOverrideList{},
-			wantErrMsg: apiErrors.NewAggregate([]error{fmt.Errorf("resource selector %+v already exists, and must be unique",
+			wantErrMsg: apierrors.NewAggregate([]error{fmt.Errorf("resource selector %+v already exists, and must be unique",
 				fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "kind", Name: "example"}),
 				fmt.Errorf("label selector is not supported for resource selection %+v",
 					fleetv1beta1.ClusterResourceSelector{Group: "group", Version: "v1", Kind: "kind",
@@ -472,7 +484,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 			},
 			wantErrMsg: errors.New("labelSelector is required"),
 		},
-		"invalid cluster resource override - fail validateClusterResourceOverridePolicy with empty terms": {
+		"valid cluster resource override - empty cluster selector terms": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
@@ -481,12 +493,13 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 								ClusterSelector: &fleetv1beta1.ClusterSelector{
 									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{},
 								},
+								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
 					},
 				},
 			},
-			wantErrMsg: errors.New("clusterSelector must have at least one term"),
+			wantErrMsg: nil,
 		},
 		"valid cluster resource override - empty match labels & match expressions": {
 			cro: fleetv1alpha1.ClusterResourceOverride{
@@ -501,6 +514,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 							{
 								ClusterSelector: &fleetv1beta1.ClusterSelector{
@@ -510,6 +524,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
 					},
@@ -549,6 +564,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 							{
 								ClusterSelector: &fleetv1beta1.ClusterSelector{
@@ -569,6 +585,7 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										},
 									},
 								},
+								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
 					},
@@ -609,7 +626,9 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
 					Policy: &fleetv1alpha1.OverridePolicy{
 						OverrideRules: []fleetv1alpha1.OverrideRule{
-							{},
+							{
+								JSONPatchOverrides: validJSONPatchOverrides,
+							},
 						},
 					},
 				},
@@ -674,12 +693,82 @@ func TestValidateClusterResourceOverride(t *testing.T) {
 										{},
 									},
 								},
+								JSONPatchOverrides: validJSONPatchOverrides,
 							},
 						},
 					},
 				},
 			},
 			wantErrMsg: errors.New("labelSelector is required"),
+		},
+		"invalid cluster resource override - multiple invalid override paths, 1 valid": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &fleetv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+										{
+											LabelSelector: &metav1.LabelSelector{
+												MatchLabels: map[string]string{
+													"key": "value",
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []fleetv1alpha1.JSONPatchOverride{
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/Kind",
+									},
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpAdd,
+										Path:     "spec.resourceSelectors/matchExpressions",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+									},
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)},
+									},
+									{
+										Operator: fleetv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/status",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: apierrors.NewAggregate([]error{
+				fmt.Errorf("invalid JSONPatchOverride %s: path must start with /",
+					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpAdd, Path: "spec.resourceSelectors/matchExpressions", Value: apiextensionsv1.JSON{Raw: []byte(`"new-value"`)}}),
+				fmt.Errorf("invalid JSONPatchOverride %s: path cannot be empty",
+					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpReplace, Path: "", Value: apiextensionsv1.JSON{Raw: []byte(`"new-reason"`)}}),
+				fmt.Errorf("invalid JSONPatchOverride %s: cannot override status fields",
+					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpRemove, Path: "/status", Value: apiextensionsv1.JSON{Raw: []byte(`"new-value"`)}}),
+				fmt.Errorf("invalid JSONPatchOverride %s: remove operation cannot have value",
+					fleetv1alpha1.JSONPatchOverride{Operator: fleetv1alpha1.JSONPatchOverrideOpRemove, Path: "/status", Value: apiextensionsv1.JSON{Raw: []byte(`"new-value"`)}}),
+			}),
+		},
+		"valid cluster resource override - empty cluster selector": {
+			cro: fleetv1alpha1.ClusterResourceOverride{
+				Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
+					Policy: &fleetv1alpha1.OverridePolicy{
+						OverrideRules: []fleetv1alpha1.OverrideRule{
+							{
+								ClusterSelector:    &fleetv1beta1.ClusterSelector{},
+								JSONPatchOverrides: validJSONPatchOverrides,
+							},
+						},
+					},
+				},
+			},
+			wantErrMsg: nil,
 		},
 	}
 	for testName, tt := range tests {
