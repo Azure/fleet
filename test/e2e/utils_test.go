@@ -8,8 +8,6 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"go.goms.io/fleet/pkg/controllers/work"
-	"go.goms.io/fleet/pkg/utils/condition"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,9 +29,11 @@ import (
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	imcv1beta1 "go.goms.io/fleet/pkg/controllers/internalmembercluster/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
 	"go.goms.io/fleet/pkg/utils"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/test/e2e/framework"
 )
 

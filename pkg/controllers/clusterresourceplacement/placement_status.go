@@ -188,9 +188,8 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 			crp.SetConditions(i.FalseClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.FalseConditionStatus]))
 			break
 		} else {
-			if i != condition.OverriddenCondition {
-				crp.SetConditions(i.TrueClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.TrueConditionStatus]))
-			} else {
+			cond := i.TrueClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.TrueConditionStatus])
+			if i == condition.OverriddenCondition {
 				hasOverride := false
 				for _, status := range placementStatuses {
 					if len(status.ApplicableResourceOverrides) > 0 || len(status.ApplicableClusterResourceOverrides) > 0 {
@@ -198,13 +197,12 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 						break
 					}
 				}
-				cond := i.TrueClusterResourcePlacementCondition(crp.Generation, clusterConditionStatusRes[i][condition.TrueConditionStatus])
 				if !hasOverride {
 					cond.Reason = condition.OverrideNotSpecifiedReason
 					cond.Message = "No override rules are configured for the selected resources"
 				}
-				crp.SetConditions(cond)
 			}
+			crp.SetConditions(cond)
 		}
 	}
 	// reset the remaining conditions, starting from the next one
