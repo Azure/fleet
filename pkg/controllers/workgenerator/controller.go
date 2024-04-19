@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -284,10 +285,28 @@ func (r *Reconciler) ensureFinalizer(ctx context.Context, resourceBinding client
 	if controllerutil.ContainsFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer) {
 		return nil
 	}
-	controllerutil.AddFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
-	if err := r.Client.Update(ctx, resourceBinding); err != nil {
-		klog.ErrorS(err, "Failed to add the work finalizer to resourceBinding", "resourceBinding", klog.KObj(resourceBinding))
-		return controller.NewUpdateIgnoreConflictError(err)
+
+	// Add retries to the update behavior as the binding object can become a point of heavy
+	// contention under heavy workload; simply requeueing when a write conflict occurs, though
+	// functionally correct, might trigger the work queue rate limiter and eventually lead to
+	// substantial delays in processing.
+	//
+	// Also note that here default backoff strategy (exponetial backoff) rather than the Kubernetes'
+	// recommended on-write-conflict backoff strategy is used, as experimentation suggests that
+	// this backoff strategy yields better performance, especially for the long-tail latencies.
+	//
+	// TO-DO (chenyu1): evaluate if a custom backoff strategy can get an even better result.
+	errAfterRetries := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(resourceBinding), resourceBinding); err != nil {
+			return err
+		}
+
+		controllerutil.AddFinalizer(resourceBinding, fleetv1beta1.WorkFinalizer)
+		return r.Client.Update(ctx, resourceBinding)
+	})
+	if errAfterRetries != nil {
+		klog.ErrorS(errAfterRetries, "Failed to add the work finalizer after retries", "resourceBinding", klog.KObj(resourceBinding))
+		return controller.NewUpdateIgnoreConflictError(errAfterRetries)
 	}
 	klog.V(2).InfoS("Successfully add the work finalizer", "resourceBinding", klog.KObj(resourceBinding))
 	return nil
