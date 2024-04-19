@@ -160,6 +160,8 @@ type PlacementPolicy struct {
 
 	// If specified, the ClusterResourcePlacement's Tolerations.
 	// Tolerations cannot be updated or deleted.
+	//
+	// This field is beta-level and is for the taints and tolerations feature.
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Tolerations []Toleration `json:"tolerations,omitempty"`
@@ -625,14 +627,14 @@ type ResourcePlacementStatus struct {
 	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
 	// resources.
 	//
-	// This field is beta-level and is for the override policy feature.
+	// This field is alpha-level and is for the override policy feature.
 	// +optional
 	ApplicableResourceOverrides []NamespacedName `json:"applicableResourceOverrides,omitempty"`
 
 	// ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
 	// the selected resources.
 	//
-	// This field is beta-level and is for the override policy feature.
+	// This field is alpha-level and is for the override policy feature.
 	// +optional
 	ApplicableClusterResourceOverrides []string `json:"applicableClusterResourceOverrides,omitempty"`
 

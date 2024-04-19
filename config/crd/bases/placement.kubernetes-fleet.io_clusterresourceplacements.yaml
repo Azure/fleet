@@ -450,8 +450,9 @@ spec:
                     - PickFixed
                     type: string
                   tolerations:
-                    description: If specified, the ClusterResourcePlacement's Tolerations.
-                      Tolerations cannot be updated or deleted.
+                    description: "If specified, the ClusterResourcePlacement's Tolerations.
+                      Tolerations cannot be updated or deleted. \n This field is beta-level
+                      and is for the taints and tolerations feature."
                     items:
                       description: Toleration allows ClusterResourcePlacement to tolerate
                         any taint that matches the triple <key,value,effect> using
@@ -839,15 +840,15 @@ spec:
                     applicableClusterResourceOverrides:
                       description: "ApplicableClusterResourceOverrides contains a
                         list of applicable ClusterResourceOverride snapshots associated
-                        with the selected resources. \n This field is beta-level and
-                        is for the override policy feature."
+                        with the selected resources. \n This field is alpha-level
+                        and is for the override policy feature."
                       items:
                         type: string
                       type: array
                     applicableResourceOverrides:
                       description: "ApplicableResourceOverrides contains a list of
                         applicable ResourceOverride snapshots associated with the
-                        selected resources. \n This field is beta-level and is for
+                        selected resources. \n This field is alpha-level and is for
                         the override policy feature."
                       items:
                         description: NamespacedName comprises a resource name, with
@@ -1945,15 +1946,15 @@ spec:
                     applicableClusterResourceOverrides:
                       description: "ApplicableClusterResourceOverrides contains a
                         list of applicable ClusterResourceOverride snapshots associated
-                        with the selected resources. \n This field is beta-level and
-                        is for the override policy feature."
+                        with the selected resources. \n This field is alpha-level
+                        and is for the override policy feature."
                       items:
                         type: string
                       type: array
                     applicableResourceOverrides:
                       description: "ApplicableResourceOverrides contains a list of
                         applicable ResourceOverride snapshots associated with the
-                        selected resources. \n This field is beta-level and is for
+                        selected resources. \n This field is alpha-level and is for
                         the override policy feature."
                       items:
                         description: NamespacedName comprises a resource name, with
