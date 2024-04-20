@@ -1,8 +1,6 @@
 module go.goms.io/fleet
 
-go 1.21
-
-toolchain go1.21.3
+go 1.20
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.0

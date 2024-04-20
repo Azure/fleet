@@ -76,8 +76,7 @@ const (
 	resourcePlacementConditionScheduleSucceededWithScoreMessageFormat = "Successfully scheduled resources for placement in %s (affinity score: %d, topology spread score: %d): %s"
 )
 
-// setResourceConditions sets the resource related conditions by looking at the bindings and work, excluding the scheduled
-// condition.
+// setResourceConditions sets the resource related conditions by looking at the bindings and work, excluding the scheduled condition.
 // It returns whether there is a cluster scheduled or not.
 func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement,
 	latestSchedulingPolicySnapshot *fleetv1beta1.ClusterSchedulingPolicySnapshot, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot) (bool, error) {
@@ -173,7 +172,7 @@ func (r *Reconciler) setResourceConditions(ctx context.Context, crp *fleetv1beta
 	if !isClusterScheduled {
 		// It covers one special case: CRP selects a cluster which joins (resource are applied) and then leaves.
 		// In this case, CRP generation has not been changed.
-		// And we cannot reply on the generation to filter out the stale conditions.
+		// And we cannot rely on the generation to filter out the stale conditions.
 		// But the resource related conditions are set before. So that, we reset them.
 		crp.Status.Conditions = []metav1.Condition{*crp.GetCondition(string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType))}
 		return false, nil
