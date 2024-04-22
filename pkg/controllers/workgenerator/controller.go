@@ -158,14 +158,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
-			// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceBindingBound),
-				Reason:             condition.SyncWorkFailedReason,
-				Message:            errorMessage,
-				ObservedGeneration: resourceBinding.Generation,
-			})
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
@@ -175,13 +167,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			})
 		}
 	} else {
-		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-		resourceBinding.SetConditions(metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceBindingBound),
-			Reason:             condition.AllWorkSyncedReason,
-			ObservedGeneration: resourceBinding.Generation,
-		})
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),

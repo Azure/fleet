@@ -1208,12 +1208,6 @@ func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResour
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
-					Type:               string(placementv1beta1.ResourceBindingBound),
-					Status:             metav1.ConditionTrue,
-					Reason:             condition.AllWorkSyncedReason,
-					ObservedGeneration: binding.GetGeneration(),
-				},
-				{
 					Type:               string(placementv1beta1.ResourceBindingWorkSynchronized),
 					Status:             metav1.ConditionTrue,
 					Reason:             condition.AllWorkSyncedReason,
@@ -1244,12 +1238,6 @@ func verifyBindStatusAppliedNotAvailable(binding *placementv1beta1.ClusterResour
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
 					Reason:             overrideReason,
-					ObservedGeneration: binding.GetGeneration(),
-				},
-				{
-					Type:               string(placementv1beta1.ResourceBindingBound),
-					Status:             metav1.ConditionTrue,
-					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
@@ -1289,12 +1277,6 @@ func verifyBindStatusAvail(binding *placementv1beta1.ClusterResourceBinding, has
 					Type:               string(placementv1beta1.ResourceBindingOverridden),
 					Status:             metav1.ConditionTrue,
 					Reason:             overrideReason,
-					ObservedGeneration: binding.GetGeneration(),
-				},
-				{
-					Type:               string(placementv1beta1.ResourceBindingBound),
-					Status:             metav1.ConditionTrue,
-					Reason:             condition.AllWorkSyncedReason,
 					ObservedGeneration: binding.GetGeneration(),
 				},
 				{
