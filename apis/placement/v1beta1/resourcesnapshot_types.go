@@ -40,6 +40,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=rss,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

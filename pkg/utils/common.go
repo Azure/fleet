@@ -290,6 +290,12 @@ var (
 		Resource: "deployments",
 	}
 
+	DeploymentGVK = schema.GroupVersionKind{
+		Group:   appv1.GroupName,
+		Version: appv1.SchemeGroupVersion.Version,
+		Kind:    "Deployment",
+	}
+
 	DaemonSettGVR = schema.GroupVersionResource{
 		Group:    appv1.GroupName,
 		Version:  appv1.SchemeGroupVersion.Version,

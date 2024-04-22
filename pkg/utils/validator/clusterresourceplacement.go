@@ -11,18 +11,23 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiErrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/klog/v2"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils/controller"
 	"go.goms.io/fleet/pkg/utils/informer"
 )
 
 var ResourceInformer informer.Manager
+var RestMapper meta.RESTMapper
 
 var (
 	invalidTolerationErrFmt      = "invalid toleration %+v: %s"
@@ -83,12 +88,35 @@ func ValidateClusterResourcePlacement(clusterResourcePlacement *placementv1beta1
 	}
 
 	for _, selector := range clusterResourcePlacement.Spec.ResourceSelectors {
-		//TODO: make sure the selector's gvk is valid
 		if selector.LabelSelector != nil {
 			if len(selector.Name) != 0 {
 				allErr = append(allErr, fmt.Errorf("the labelSelector and name fields are mutually exclusive in selector %+v", selector))
 			}
 			allErr = append(allErr, validateLabelSelector(selector.LabelSelector, "resource selector"))
+		}
+
+		gk := schema.GroupKind{
+			Group: selector.Group,
+			Kind:  selector.Kind,
+		}
+		if _, err := RestMapper.RESTMapping(gk, selector.Version); err != nil {
+			allErr = append(allErr, fmt.Errorf("failed to get GVR of the selector: %w", err))
+			return apiErrors.NewAggregate(allErr) // skip next check if we cannot get GVR
+		}
+
+		if ResourceInformer != nil {
+			gvk := schema.GroupVersionKind{
+				Group:   selector.Group,
+				Version: selector.Version,
+				Kind:    selector.Kind,
+			}
+			if !ResourceInformer.IsClusterScopedResources(gvk) {
+				allErr = append(allErr, fmt.Errorf("the resource is not found in schema (please retry) or it is not a cluster scoped resource: %v", gvk))
+			}
+		} else {
+			err := fmt.Errorf("cannot perform resource scope check for now, please retry")
+			klog.ErrorS(controller.NewUnexpectedBehaviorError(err), "resource informer is nil")
+			allErr = append(allErr, fmt.Errorf("cannot perform resource scope check for now, please retry"))
 		}
 	}
 
@@ -286,6 +314,16 @@ func validateClusterSelector(clusterSelector *placementv1beta1.ClusterSelector) 
 	for _, clusterSelectorTerm := range clusterSelector.ClusterSelectorTerms {
 		// Since label selector is a required field in ClusterSelectorTerm, not checking to see if it's an empty object.
 		allErr = append(allErr, validateLabelSelector(clusterSelectorTerm.LabelSelector, "cluster selector"))
+
+		// Affinity is RequiredDuringSchedulingIgnoredDuringExecution, so check that PropertySorter is nil.
+		if clusterSelectorTerm.PropertySorter != nil {
+			allErr = append(allErr, fmt.Errorf("PropertySorter is not allowed for RequiredDuringSchedulingIgnoredDuringExecution affinity"))
+		}
+
+		// Affinity is RequiredDuringSchedulingIgnoredDuringExecution, so validate PropertySelector if exists
+		if clusterSelectorTerm.PropertySelector != nil {
+			allErr = append(allErr, validatePropertySelector(clusterSelectorTerm.PropertySelector))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -295,6 +333,11 @@ func validatePreferredClusterSelectors(preferredClusterSelectors []placementv1be
 	for _, preferredClusterSelector := range preferredClusterSelectors {
 		// API server validation on object occurs before webhook is triggered hence not validating weight.
 		allErr = append(allErr, validateLabelSelector(preferredClusterSelector.Preference.LabelSelector, "preferred cluster selector"))
+
+		// Affinity is PreferredDuringSchedulingIgnoredDuringExecution, so check that PropertySelector is nil.
+		if preferredClusterSelector.Preference.PropertySelector != nil {
+			allErr = append(allErr, fmt.Errorf("PropertySelector is not allowed for PreferredDuringSchedulingIgnoredDuringExecution affinity"))
+		}
 	}
 	return apiErrors.NewAggregate(allErr)
 }
@@ -345,4 +388,61 @@ func validateRolloutStrategy(rolloutStrategy placementv1beta1.RolloutStrategy) e
 	}
 
 	return apiErrors.NewAggregate(allErr)
+}
+
+// validatePropertySelector validates the property selector
+func validatePropertySelector(propertySelector *placementv1beta1.PropertySelector) error {
+	return validatePropertySelectorRequirements(propertySelector.MatchExpressions)
+}
+
+func validatePropertySelectorRequirements(propertySelectorRequirements []placementv1beta1.PropertySelectorRequirement) error {
+	var allErr []error
+	for _, req := range propertySelectorRequirements {
+		if err := validateName(req.Name); err != nil {
+			allErr = append(allErr, fmt.Errorf("invalid property name %s: %w", req.Name, err))
+		}
+		if err := validateOperator(req.Operator, req.Values); err != nil {
+			allErr = append(allErr, err)
+		}
+		if err := validateValues(req.Values); err != nil {
+			allErr = append(allErr, fmt.Errorf("invalid values for property %s: %w", req.Name, err))
+		}
+		// TODO: Check for logical contradictions
+	}
+	if len(allErr) > 0 {
+		return apiErrors.NewAggregate(allErr)
+	}
+	return nil
+}
+
+func validateName(name string) error {
+	if err := validation.IsQualifiedName(name); err != nil {
+		return fmt.Errorf("name is not a valid Kubernetes label name: %v", err)
+	}
+	return nil
+}
+
+func validateOperator(op placementv1beta1.PropertySelectorOperator, values []string) error {
+	// TODO: Restructure for Eq (bundle operator and value validation logic)
+	validOperators := map[placementv1beta1.PropertySelectorOperator]bool{
+		placementv1beta1.PropertySelectorGreaterThan:          true,
+		placementv1beta1.PropertySelectorGreaterThanOrEqualTo: true,
+		placementv1beta1.PropertySelectorLessThan:             true,
+		placementv1beta1.PropertySelectorLessThanOrEqualTo:    true,
+		placementv1beta1.PropertySelectorEqualTo:              true,
+		placementv1beta1.PropertySelectorNotEqualTo:           true,
+	}
+	if validOperators[op] && len(values) != 1 {
+		return fmt.Errorf("operator %s requires exactly one value, got %d", op, len(values))
+	}
+	return nil
+}
+
+func validateValues(values []string) error {
+	for _, value := range values {
+		if _, err := resource.ParseQuantity(value); err != nil {
+			return fmt.Errorf("value %s is not a valid resource.Quantity: %w", value, err)
+		}
+	}
+	return nil
 }

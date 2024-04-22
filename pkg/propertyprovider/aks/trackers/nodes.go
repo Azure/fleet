@@ -444,7 +444,8 @@ func (nt *NodeTracker) TotalCapacity() corev1.ResourceList {
 	nt.mu.RLock()
 	defer nt.mu.RUnlock()
 
-	return nt.totalCapacity
+	// Return a deep copy to avoid leaks and consequent potential data race.
+	return nt.totalCapacity.DeepCopy()
 }
 
 // TotalAllocatable returns the total allocatable capacity of all resources that
@@ -453,7 +454,8 @@ func (nt *NodeTracker) TotalAllocatable() corev1.ResourceList {
 	nt.mu.RLock()
 	defer nt.mu.RUnlock()
 
-	return nt.totalAllocatable
+	// Return a deep copy to avoid leaks and consequent potential data race.
+	return nt.totalAllocatable.DeepCopy()
 }
 
 // Costs returns the per CPU core and per GB memory costs in the cluster.

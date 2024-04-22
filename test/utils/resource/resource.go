@@ -13,14 +13,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
+// ServiceResourceContentForTest creates a service for testing.
 func ServiceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	svc := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -49,9 +49,10 @@ func ServiceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 			},
 		},
 	}
-	return createResourceContentForTest(t, svc)
+	return CreateResourceContentForTest(t, svc)
 }
 
+// DeploymentResourceContentForTest creates a deployment for testing.
 func DeploymentResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	d := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -93,9 +94,10 @@ func DeploymentResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceConten
 			},
 		},
 	}
-	return createResourceContentForTest(t, d)
+	return CreateResourceContentForTest(t, d)
 }
 
+// SecretResourceContentForTest creates a secret for testing.
 func SecretResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	s := corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
@@ -110,9 +112,10 @@ func SecretResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 			".secret-file": []byte("dmFsdWUtMg0KDQo="),
 		},
 	}
-	return createResourceContentForTest(t, s)
+	return CreateResourceContentForTest(t, s)
 }
 
+// NamespaceResourceContentForTest creates a namespace for testing.
 func NamespaceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	n := corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
@@ -123,9 +126,10 @@ func NamespaceResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent
 			Name: "namespace-name",
 		},
 	}
-	return createResourceContentForTest(t, n)
+	return CreateResourceContentForTest(t, n)
 }
 
+// ClusterRoleResourceContentForTest creates a clusterRole for testing.
 func ClusterRoleResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceContent {
 	role := rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{
@@ -136,10 +140,11 @@ func ClusterRoleResourceContentForTest(t *testing.T) *fleetv1beta1.ResourceConte
 			Name: "clusterrole-name",
 		},
 	}
-	return createResourceContentForTest(t, role)
+	return CreateResourceContentForTest(t, role)
 }
 
-func createResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.ResourceContent {
+// CreateResourceContentForTest creates a ResourceContent for testing.
+func CreateResourceContentForTest(t *testing.T, obj interface{}) *fleetv1beta1.ResourceContent {
 	t.Helper()
 
 	want, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)

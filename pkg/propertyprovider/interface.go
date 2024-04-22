@@ -21,11 +21,14 @@ import (
 type PropertyCollectionResponse struct {
 	// Properties is an array of non-resource properties and their values. The key should be the
 	// name of the property, which is a Kubernetes label name; the value is the property data.
-	Properties map[string]clusterv1beta1.PropertyValue
+	Properties map[clusterv1beta1.PropertyName]clusterv1beta1.PropertyValue
 	// Resources is a group of resources, described by their allocatable capacity and
 	// available capacity.
 	Resources clusterv1beta1.ResourceUsage
 	// Conditions is an array of conditions that explains the property collection status.
+	//
+	// Last transition time of each added condition is omitted if set and will instead be added
+	// by the Fleet member agent.
 	Conditions []metav1.Condition
 }
 

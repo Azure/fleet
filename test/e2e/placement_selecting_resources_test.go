@@ -430,8 +430,8 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
 	BeforeAll(func() {
-		By("creating namespace")
 		ns := appNamespace()
+		By(fmt.Sprintf("creating namespace %s", ns.Name))
 		Expect(hubClient.Create(ctx, &ns)).To(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -610,80 +610,6 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 })
 
 // TODO should be blocked by the validation webhook
-var _ = Describe("validating CRP when resource selector is not valid", Ordered, func() {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
-	BeforeAll(func() {
-		// Create the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-				// Add a custom finalizer; this would allow us to better observe
-				// the behavior of the controllers.
-				Finalizers: []string{customDeletionBlockerFinalizer},
-			},
-			Spec: placementv1beta1.ClusterResourcePlacementSpec{
-				ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-					{
-						Group:   "",
-						Kind:    "InvalidNamespace",
-						Version: "v1",
-						Name:    "invalid",
-					},
-				},
-			},
-		}
-		By(fmt.Sprintf("creating placement %s", crpName))
-		Expect(hubClient.Create(ctx, crp)).To(Succeed(), "Failed to create CRP %s", crpName)
-	})
-
-	AfterAll(func() {
-		By(fmt.Sprintf("deleting placement %s", crpName))
-		cleanupCRP(crpName)
-	})
-
-	It("should update CRP status as expected", func() {
-		crpStatusUpdatedActual := func() error {
-			crp := &placementv1beta1.ClusterResourcePlacement{}
-			if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
-				return err
-			}
-
-			wantStatus := placementv1beta1.ClusterResourcePlacementStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:               string(placementv1beta1.ClusterResourcePlacementScheduledConditionType),
-						Status:             metav1.ConditionFalse,
-						Reason:             clusterresourceplacement.InvalidResourceSelectorsReason,
-						ObservedGeneration: crp.Generation,
-					},
-				},
-			}
-			if diff := cmp.Diff(crp.Status, wantStatus, crpStatusCmpOptions...); diff != "" {
-				return fmt.Errorf("CRP status diff (-got, +want): %s", diff)
-			}
-			return nil
-		}
-		Eventually(crpStatusUpdatedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to update CRP %s status as expected", crpName)
-	})
-
-	It("can delete the CRP", func() {
-		// Delete the CRP.
-		crp := &placementv1beta1.ClusterResourcePlacement{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: crpName,
-			},
-		}
-		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
-	})
-
-	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
-		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
-	})
-})
-
-// TODO should be blocked by the validation webhook
 var _ = Describe("validating CRP when selecting a reserved resource", Ordered, func() {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
 
@@ -769,9 +695,8 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 		By("creating work resources on hub cluster")
 		createWorkResources()
 
-		By("creating work namespace on member cluster")
 		ns := appNamespace()
-
+		By(fmt.Sprintf("creating namespace %s on member cluster", ns.Name))
 		Expect(memberCluster1EastProdClient.Create(ctx, &ns)).Should(Succeed(), "Failed to create namespace %s", ns.Name)
 
 		// Create the CRP.
@@ -844,7 +769,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 								Condition: metav1.Condition{
 									Type:               placementv1beta1.WorkConditionTypeApplied,
 									Status:             metav1.ConditionFalse,
-									Reason:             work.ManifestApplyFailedReason,
+									Reason:             work.ManifestsAlreadyOwnedByOthersReason,
 									ObservedGeneration: 0,
 								},
 							},
@@ -1421,7 +1346,7 @@ func checkIfPlacedLargeSecretResourcesOnTargetMemberClusters(targetMemberCluster
 		memberCluster := targetMemberClusters[idx]
 
 		secretsPlacedActual := secretsPlacedOnClusterActual(memberCluster)
-		Eventually(secretsPlacedActual(), largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
+		Eventually(secretsPlacedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to place large secrets on member cluster %s", memberCluster.ClusterName)
 	}
 }
 

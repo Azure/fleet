@@ -17,21 +17,9 @@ const (
 	// that the CRP controller can react to CRP deletions if necessary.
 	ClusterResourcePlacementCleanupFinalizer = fleetPrefix + "crp-cleanup"
 
-	// RevisionHistoryLimitDefaultValue is the default value of RevisionHistoryLimit.
-	RevisionHistoryLimitDefaultValue = int32(10)
-
 	// SchedulerCRPCleanupFinalizer is a finalizer addd by the scheduler to CRPs, to make sure
 	// that all bindings derived from a CRP can be cleaned up after the CRP is deleted.
 	SchedulerCRPCleanupFinalizer = fleetPrefix + "scheduler-cleanup"
-
-	// DefaultMaxUnavailableValue is the default value of MaxUnavailable in the rolling update config.
-	DefaultMaxUnavailableValue = "25%"
-
-	// 	DefaultMaxSurgeValue is the default value of MaxSurge in the rolling update config.
-	DefaultMaxSurgeValue = "25%"
-
-	// DefaultUnavailablePeriodSeconds is the default period of time we consider a newly applied workload as unavailable.
-	DefaultUnavailablePeriodSeconds = 60
 )
 
 // +genclient
@@ -39,6 +27,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope="Cluster",shortName=crp,categories={fleet,fleet-placement}
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:JSONPath=`.metadata.generation`,name="Gen",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].status`,name="Scheduled",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.conditions[?(@.type=="ClusterResourcePlacementScheduled")].observedGeneration`,name="ScheduledGen",type=string
@@ -172,6 +161,8 @@ type PlacementPolicy struct {
 
 	// If specified, the ClusterResourcePlacement's Tolerations.
 	// Tolerations cannot be updated or deleted.
+	//
+	// This field is beta-level and is for the taints and tolerations feature.
 	// +kubebuilder:validation:MaxItems=100
 	// +optional
 	Tolerations []Toleration `json:"tolerations,omitempty"`
@@ -350,6 +341,9 @@ type ClusterSelectorTerm struct {
 	//
 	// At this moment, PropertySelector can only be used with
 	// `RequiredDuringSchedulingIgnoredDuringExecution` affinity terms.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// functional when a property provider is enabled in the deployment.
 	// +optional
 	PropertySelector *PropertySelector `json:"propertySelector,omitempty"`
 
@@ -358,6 +352,9 @@ type ClusterSelectorTerm struct {
 	//
 	// At this moment, PropertySorter can only be used with
 	// `PreferredDuringSchedulingIgnoredDuringExecution` affinity terms.
+	//
+	// This field is beta-level; it is for the property-based scheduling feature and is only
+	// functional when a property provider is enabled in the deployment.
 	// +optional
 	PropertySorter *PropertySorter `json:"propertySorter,omitempty"`
 }
@@ -427,15 +424,23 @@ type RolloutStrategy struct {
 }
 
 // ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
-// and is owned by other appliers.
+// and whether it's allowed to be co-owned by other non-fleet appliers.
 // Note: If multiple CRPs try to place the same resource with different apply strategy, the later ones will fail with the
 // reason ApplyConflictBetweenPlacements.
 type ApplyStrategy struct {
-	// Type defines the type of strategy to use. Default to FailIfExists.
-	// +kubebuilder:default=FailIfExists
-	// +kubebuilder:validation:Enum=FailIfExists;ServerSideApply
+	// Type defines the type of strategy to use. Default to ClientSideApply.
+	// Server-side apply is a safer choice. Read more about the differences between server-side apply and client-side
+	// apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/#comparison-with-client-side-apply.
+	// +kubebuilder:default=ClientSideApply
+	// +kubebuilder:validation:Enum=ClientSideApply;ServerSideApply
 	// +optional
 	Type ApplyStrategyType `json:"type,omitempty"`
+
+	// AllowCoOwnership defines whether to apply the resource if it already exists in the target cluster and is not
+	// solely owned by fleet (i.e., metadata.ownerReferences contains only fleet custom resources).
+	// If true, apply the resource and add fleet as a co-owner.
+	// If false, leave the resource unchanged and fail the apply.
+	AllowCoOwnership bool `json:"allowCoOwnership,omitempty"`
 
 	// ServerSideApplyConfig defines the configuration for server side apply. It is honored only when type is ServerSideApply.
 	// +optional
@@ -448,9 +453,10 @@ type ApplyStrategy struct {
 type ApplyStrategyType string
 
 const (
-	// ApplyStrategyTypeFailIfExists will fail to apply a resource if it already exists in the target cluster and is owned
-	// by other appliers.
-	ApplyStrategyTypeFailIfExists ApplyStrategyType = "FailIfExists"
+	// ApplyStrategyTypeClientSideApply will use three-way merge patch similar to how `kubectl apply` does by storing
+	// last applied state in the `last-applied-configuration` annotation.
+	// When the `last-applied-configuration` annotation size is greater than 256kB, it falls back to the server-side apply.
+	ApplyStrategyTypeClientSideApply ApplyStrategyType = "ClientSideApply"
 
 	// ApplyStrategyTypeServerSideApply will use server-side apply to resolve conflicts between the resource to be placed
 	// and the existing resource in the target cluster.
@@ -621,11 +627,15 @@ type ResourcePlacementStatus struct {
 
 	// ApplicableResourceOverrides contains a list of applicable ResourceOverride snapshots associated with the selected
 	// resources.
+	//
+	// This field is alpha-level and is for the override policy feature.
 	// +optional
 	ApplicableResourceOverrides []NamespacedName `json:"applicableResourceOverrides,omitempty"`
 
 	// ApplicableClusterResourceOverrides contains a list of applicable ClusterResourceOverride snapshots associated with
 	// the selected resources.
+	//
+	// This field is alpha-level and is for the override policy feature.
 	// +optional
 	ApplicableClusterResourceOverrides []string `json:"applicableClusterResourceOverrides,omitempty"`
 
@@ -702,7 +712,7 @@ const (
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
 	// - "False" means all the selected resources have not been synchronized under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
-	// To be deprecated, it will be replaced by ClusterResourcePlacementRolloutStarted and ClusterResourcePlacementWorkCreated
+	// To be deprecated, it will be replaced by ClusterResourcePlacementRolloutStarted and ClusterResourcePlacementWorkSynchronized
 	// conditions.
 	ClusterResourcePlacementSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementSynchronized"
 
@@ -723,15 +733,15 @@ const (
 	// - "Unknown" means we haven't finished the override yet.
 	ClusterResourcePlacementOverriddenConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementOverridden"
 
-	// ClusterResourcePlacementWorkCreatedConditionType indicates whether the selected resources are created under
-	// the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
+	// ClusterResourcePlacementWorkSynchronizedConditionType indicates whether the selected resources are created or updated
+	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) on the hub cluster.
 	// Its condition status can be one of the following:
-	// - "True" means all the selected resources are successfully created under the per-cluster namespaces
+	// - "True" means all the selected resources are successfully created or updated under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster.
-	// - "False" means all the selected resources have not been created under the per-cluster namespaces
+	// - "False" means all the selected resources have not been created or updated under the per-cluster namespaces
 	// (i.e., fleet-member-<member-name>) on the hub cluster yet.
 	// - "Unknown" means we haven't started processing the work yet.
-	ClusterResourcePlacementWorkCreatedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkCreated"
+	ClusterResourcePlacementWorkSynchronizedConditionType ClusterResourcePlacementConditionType = "ClusterResourcePlacementWorkSynchronized"
 
 	// ClusterResourcePlacementAppliedConditionType indicates whether all the selected member clusters have applied
 	// the selected resources locally.
@@ -761,24 +771,7 @@ const (
 	// Its condition status can be one of the following:
 	// - "True" means we have successfully scheduled the resources to satisfy the placement requirement.
 	// - "False" means we didn't fully satisfy the placement requirement. We will fill the Message field.
-	// TODO, use "Scheduled" instead.
-	ResourceScheduledConditionType ResourcePlacementConditionType = "ResourceScheduled"
-
-	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
-	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
-	// the placement.
-	// Its condition status can be one of the following:
-	// - "True" means we have successfully created the latest corresponding work(s) or updated the existing work(s) to
-	// the latest.
-	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
-	// yet.
-	// There are few possibilities:
-	// - In the processing state
-	// - Rollout controller has decided not to create or update the resources in this cluster for now to honor the
-	// rollout strategy configurations specified in the placement.
-	// - Work is not created/updated because of the unknown reasons.
-	// To be deprecated, it will be replaced by RolloutStarted and WorkCreated conditions.
-	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
+	ResourceScheduledConditionType ResourcePlacementConditionType = "Scheduled"
 
 	// ResourceRolloutStartedConditionType indicates whether the selected resources start rolling out or
 	// not.
@@ -798,7 +791,7 @@ const (
 	// - "Unknown" means we haven't finished the override yet.
 	ResourceOverriddenConditionType ResourcePlacementConditionType = "Overridden"
 
-	// ResourceWorkCreatedConditionType indicates whether we have created or updated the corresponding work object(s)
+	// ResourceWorkSynchronizedConditionType indicates whether we have created or updated the corresponding work object(s)
 	// under the per-cluster namespaces (i.e., fleet-member-<member-name>) which have the latest resources selected by
 	// the placement.
 	// Its condition status can be one of the following:
@@ -807,15 +800,14 @@ const (
 	// - "False" means we have not created the latest corresponding work(s) or updated the existing work(s) to the latest
 	// yet.
 	// - "Unknown" means we haven't finished creating work yet.
-	ResourceWorkCreatedConditionType ResourcePlacementConditionType = "WorkCreated"
+	ResourceWorkSynchronizedConditionType ResourcePlacementConditionType = "WorkSynchronized"
 
 	// ResourcesAppliedConditionType indicates whether the selected member cluster has applied the selected resources locally.
 	// Its condition status can be one of the following:
 	// - "True" means all the selected resources are successfully applied to the target cluster.
 	// - "False" means some of them have failed.
 	// - "Unknown" means we haven't finished the apply yet.
-	// TODO: use "Applied" instead.
-	ResourcesAppliedConditionType ResourcePlacementConditionType = "ResourceApplied"
+	ResourcesAppliedConditionType ResourcePlacementConditionType = "Applied"
 
 	// ResourcesAvailableConditionType indicates whether the selected resources are available on the selected member cluster.
 	// Its condition status can be one of the following:

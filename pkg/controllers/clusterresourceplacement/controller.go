@@ -29,6 +29,7 @@ import (
 	"go.goms.io/fleet/pkg/utils/annotations"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/labels"
 	"go.goms.io/fleet/pkg/utils/resource"
 )
@@ -141,7 +142,7 @@ func (r *Reconciler) deleteClusterResourceSnapshots(ctx context.Context, crp *fl
 // clusterSchedulingPolicySnapshot status and work status.
 // If the error type is ErrUnexpectedBehavior, the controller will skip the reconciling.
 func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.ClusterResourcePlacement) (ctrl.Result, error) {
-	revisionLimit := fleetv1beta1.RevisionHistoryLimitDefaultValue
+	revisionLimit := int32(defaulter.DefaultRevisionHistoryLimitValue)
 	crpKObj := klog.KObj(crp)
 	oldCRP := crp.DeepCopy()
 	if crp.Spec.RevisionHistoryLimit != nil {
@@ -209,7 +210,7 @@ func (r *Reconciler) handleUpdate(ctx context.Context, crp *fleetv1beta1.Cluster
 
 	if r.UseNewConditions {
 		// We skip checking the last resource condition (available) because it will be covered by checking isRolloutCompleted func.
-		for i := RolloutStartedCondition; i < TotalCondition-1; i++ {
+		for i := condition.RolloutStartedCondition; i < condition.TotalCondition-1; i++ {
 			oldCond := oldCRP.GetCondition(string(i.ClusterResourcePlacementConditionType()))
 			newCond := crp.GetCondition(string(i.ClusterResourcePlacementConditionType()))
 			if !condition.IsConditionStatusTrue(oldCond, oldCRP.Generation) &&
@@ -1159,7 +1160,7 @@ func isRolloutCompleted(useNewConditions bool, crp *fleetv1beta1.ClusterResource
 	}
 
 	if useNewConditions {
-		for i := RolloutStartedCondition; i < TotalCondition; i++ {
+		for i := condition.RolloutStartedCondition; i < condition.TotalCondition; i++ {
 			if !condition.IsConditionStatusTrue(crp.GetCondition(string(i.ClusterResourcePlacementConditionType())), crp.Generation) {
 				return false
 			}

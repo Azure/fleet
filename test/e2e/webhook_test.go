@@ -113,6 +113,66 @@ var _ = Describe("webhook tests for CRP CREATE operations", func() {
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
+
+	It("should deny create CRP with invalid GVK", func() {
+		Eventually(func(g Gomega) error {
+			// Create the CRP.
+			crp := placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "",
+							Kind:    "InvalidNamespace",
+							Version: "v1",
+							Name:    "invalid",
+						},
+					},
+				},
+			}
+			By(fmt.Sprintf("creating placement %s", crpName))
+			err := hubClient.Create(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta("failed to get GVR of the selector")))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+
+	It("should deny create CRP with namespaced resource selected", func() {
+		Eventually(func(g Gomega) error {
+			// Create the CRP.
+			crp := placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: crpName,
+					// Add a custom finalizer; this would allow us to better observe
+					// the behavior of the controllers.
+					Finalizers: []string{customDeletionBlockerFinalizer},
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "apps",
+							Kind:    "Deployment",
+							Version: "v1",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			}
+			By(fmt.Sprintf("creating placement %s", crpName))
+			err := hubClient.Create(ctx, &crp)
+			var statusErr *k8sErrors.StatusError
+			g.Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRP call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.ErrStatus.Message).Should(MatchRegexp(regexp.QuoteMeta("the resource is not found in schema (please retry) or it is not a cluster scoped resource")))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
 })
 
 var _ = Describe("webhook tests for CRP UPDATE operations", Ordered, func() {

@@ -116,3 +116,10 @@ jobs:
         env:
           KUBECONFIG: '/home/runner/.kube/config'
           HUB_SERVER_URL: 'https://172.19.0.2:6443'
+          # Temporarily enable the AKS property provider for the E2E tests, in order
+          # to verify the property-based scheduling experience.
+          #
+          # TO-DO (chenyu1): to ensure a vendor-neutral experience, switch to a dummy
+          # property provider once the AKS one is split out.
+          PROPERTY_PROVIDER: 'azure'
+

@@ -32,10 +32,11 @@ import (
 
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/informer"
-	"go.goms.io/fleet/pkg/utils/validator"
 )
 
 // Reconciler recomputes the cluster resource binding.
@@ -122,12 +123,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	klog.V(2).InfoS("Found the latest resourceSnapshot for the clusterResourcePlacement", "clusterResourcePlacement", crpName, "latestResourceSnapshot", klog.KObj(latestResourceSnapshot))
 
 	// fill out all the default values for CRP just in case the mutation webhook is not enabled.
-	fleetv1beta1.SetDefaultsClusterResourcePlacement(&crp)
-	// validate the clusterResourcePlacement just in case the validation webhook is not enabled
-	if err = validator.ValidateClusterResourcePlacement(&crp); err != nil {
-		klog.ErrorS(err, "Encountered an invalid clusterResourcePlacement", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, controller.NewUnexpectedBehaviorError(err)
-	}
+	defaulter.SetDefaultsClusterResourcePlacement(&crp)
 
 	matchedCRO, matchedRO, err := r.fetchAllMatchingOverridesForResourceSnapshot(ctx, crp.Name, latestResourceSnapshot)
 	if err != nil {
@@ -145,7 +141,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 
 	if !needRoll {
 		klog.V(2).InfoS("No bindings are out of date, stop rolling", "clusterResourcePlacement", crpName)
-		return runtime.Result{}, nil
+		// There will be a corner case that rollout controller succeeds to update the binding spec to the latest one, but
+		// fail to update the binding conditions.
+		// Here it will reconcile the binding status.
+		return runtime.Result{}, r.checkAndUpdateStaleBindingsStatus(ctx, allBindings)
 	}
 	klog.V(2).InfoS("Picked the bindings to be updated", "clusterResourcePlacement", crpName, "numberOfBindings", len(toBeUpdatedBindings), "numberOfStaleBindings", len(staleBoundBindings))
 
@@ -164,6 +163,29 @@ func (r *Reconciler) Reconcile(ctx context.Context, req runtime.Request) (runtim
 	// TODO: only wait the time we need to wait for the first applied but not ready binding to be ready
 	return runtime.Result{RequeueAfter: time.Duration(*crp.Spec.Strategy.RollingUpdate.UnavailablePeriodSeconds) * time.Second / 5},
 		r.updateBindings(ctx, toBeUpdatedBindings)
+}
+
+func (r *Reconciler) checkAndUpdateStaleBindingsStatus(ctx context.Context, bindings []*fleetv1beta1.ClusterResourceBinding) error {
+	if len(bindings) == 0 {
+		return nil
+	}
+	// issue all the update requests in parallel
+	errs, cctx := errgroup.WithContext(ctx)
+	for i := 0; i < len(bindings); i++ {
+		binding := bindings[i]
+		if binding.Spec.State != fleetv1beta1.BindingStateScheduled && binding.Spec.State != fleetv1beta1.BindingStateBound {
+			continue
+		}
+		rolloutStartedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingRolloutStarted))
+		if condition.IsConditionStatusTrue(rolloutStartedCondition, binding.Generation) {
+			continue
+		}
+		klog.V(2).InfoS("Found a stale binding status and set rolloutStartedCondition to true", "binding", klog.KObj(binding))
+		errs.Go(func() error {
+			return r.updateBindingStatus(cctx, binding, true)
+		})
+	}
+	return errs.Wait()
 }
 
 // fetchLatestResourceSnapshot lists all the latest clusterResourceSnapshots associated with a CRP and returns the master clusterResourceSnapshot.
@@ -277,7 +299,7 @@ func createUpdateInfo(binding *fleetv1beta1.ClusterResourceBinding, crp *fleetv1
 // Thus, it also returns a bool indicating whether there are out of sync bindings to be rolled to differentiate those
 // two cases.
 func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*fleetv1beta1.ClusterResourceBinding, latestResourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, crp *fleetv1beta1.ClusterResourcePlacement,
-	matchedCROs []*fleetv1alpha1.ClusterResourceOverride, matchedROs []*fleetv1alpha1.ResourceOverride) ([]toBeUpdatedBinding, []toBeUpdatedBinding, bool, error) {
+	matchedCROs []*fleetv1alpha1.ClusterResourceOverrideSnapshot, matchedROs []*fleetv1alpha1.ResourceOverrideSnapshot) ([]toBeUpdatedBinding, []toBeUpdatedBinding, bool, error) {
 	// Those are the bindings that are chosen by the scheduler to be applied to selected clusters.
 	// They include the bindings that are already applied to the clusters and the bindings that are newly selected by the scheduler.
 	schedulerTargetedBinds := make([]*fleetv1beta1.ClusterResourceBinding, 0)
@@ -412,7 +434,7 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 
 	// the list of bindings that are to be updated by this rolling phase
 	toBeUpdatedBindingList := make([]toBeUpdatedBinding, 0)
-	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates) == 0 {
+	if len(removeCandidates)+len(updateCandidates)+len(boundingCandidates)+len(applyFailedUpdateCandidates) == 0 {
 		return toBeUpdatedBindingList, nil, false, nil
 	}
 
@@ -478,19 +500,26 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 }
 
 // isBindingReady checks if a binding is considered ready.
-// A binding is considered ready if the binding's current spec has been applied before the ready cutoff time.
+// A binding with not trackable resources is considered ready if the binding's current spec has been available before
+// the ready cutoff time.
 func isBindingReady(binding *fleetv1beta1.ClusterResourceBinding, readyTimeCutOff time.Time) (time.Duration, bool) {
 	// find the latest applied condition that has the same generation as the binding
-	appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-	if condition.IsConditionStatusTrue(appliedCondition, binding.GetGeneration()) {
-		waitTime := appliedCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
+	availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+	if condition.IsConditionStatusTrue(availableCondition, binding.GetGeneration()) {
+		if availableCondition.Reason != work.WorkNotTrackableReason {
+			return 0, true
+		}
+
+		// For the not trackable work, the available condition should be set to true when the work has been applied.
+		// So here we check the available condition transition time.
+		waitTime := availableCondition.LastTransitionTime.Time.Sub(readyTimeCutOff)
 		if waitTime < 0 {
 			return 0, true
 		}
 		// return the time we need to wait for it to be ready in this case
 		return waitTime, false
 	}
-	// we don't know when the current spec is applied yet, return a negative wait time
+	// we don't know when the current spec is available yet, return a negative wait time
 	return -1, false
 }
 

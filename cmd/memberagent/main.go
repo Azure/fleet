@@ -45,9 +45,16 @@ import (
 	"go.goms.io/fleet/pkg/controllers/work"
 	workv1alpha1controller "go.goms.io/fleet/pkg/controllers/workv1alpha1"
 	fleetmetrics "go.goms.io/fleet/pkg/metrics"
+	"go.goms.io/fleet/pkg/propertyprovider"
+	"go.goms.io/fleet/pkg/propertyprovider/aks"
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/httpclient"
 	//+kubebuilder:scaffold:imports
+)
+
+const (
+	// The list of available property provider names.
+	aksPropertyProvider = "azure"
 )
 
 var (
@@ -63,6 +70,8 @@ var (
 	leaderElectionNamespace = flag.String("leader-election-namespace", "kube-system", "The namespace in which the leader election resource will be created.")
 	enableV1Alpha1APIs      = flag.Bool("enable-v1alpha1-apis", true, "If set, the agents will watch for the v1alpha1 APIs.")
 	enableV1Beta1APIs       = flag.Bool("enable-v1beta1-apis", false, "If set, the agents will watch for the v1beta1 APIs.")
+	propertyProvider        = flag.String("property-provider", "none", "The property provider to use for the agent.")
+	region                  = flag.String("region", "", "The region where the member cluster resides.")
 )
 
 func init() {
@@ -89,25 +98,25 @@ func main() {
 
 	// Validate flags
 	if !*enableV1Alpha1APIs && !*enableV1Beta1APIs {
-		klog.ErrorS(errors.New("either enable-v1alpha1-apis or enable-v1beta1-apis is required"), "invalid APIs flags")
+		klog.ErrorS(errors.New("either enable-v1alpha1-apis or enable-v1beta1-apis is required"), "Invalid APIs flags")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	hubURL := os.Getenv("HUB_SERVER_URL")
 
 	if hubURL == "" {
-		klog.ErrorS(errors.New("hub server api cannot be empty"), "error has occurred retrieving HUB_SERVER_URL")
+		klog.ErrorS(errors.New("hub server api cannot be empty"), "Failed to read URL for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 	hubConfig, err := buildHubConfig(hubURL, *useCertificateAuth, *tlsClientInsecure)
 	if err != nil {
-		klog.ErrorS(err, "error has occurred building kubernetes client configuration for hub")
+		klog.ErrorS(err, "Failed to build Kubernetes client configuration for the hub cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
 	mcName := os.Getenv("MEMBER_CLUSTER_NAME")
 	if mcName == "" {
-		klog.ErrorS(errors.New("member cluster name cannot be empty"), "error has occurred retrieving MEMBER_CLUSTER_NAME")
+		klog.ErrorS(errors.New("member cluster name cannot be empty"), "Failed to read name for the member cluster")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
@@ -151,7 +160,7 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	if err := Start(ctrl.SetupSignalHandler(), hubConfig, memberConfig, hubOpts, memberOpts); err != nil {
-		klog.ErrorS(err, "problem running controllers")
+		klog.ErrorS(err, "Failed to start the controllers for the member agent")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 }
@@ -165,13 +174,13 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		certFilePath := os.Getenv("IDENTITY_CERT")
 		if keyFilePath == "" {
 			err := errors.New("identity key file path cannot be empty")
-			klog.ErrorS(err, "error has occurred retrieving IDENTITY_KEY")
+			klog.ErrorS(err, "Failed to retrieve identity key")
 			return nil, err
 		}
 
 		if certFilePath == "" {
 			err := errors.New("identity certificate file path cannot be empty")
-			klog.ErrorS(err, "error has occurred retrieving IDENTITY_CERT")
+			klog.ErrorS(err, "Failed to retrieve identity certificate")
 			return nil, err
 		}
 		hubConfig.TLSClientConfig.CertFile = certFilePath
@@ -180,7 +189,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		tokenFilePath := os.Getenv("CONFIG_PATH")
 		if tokenFilePath == "" {
 			err := errors.New("hub token file path cannot be empty if CA auth not used")
-			klog.ErrorS(err, "error has occurred retrieving CONFIG_PATH")
+			klog.ErrorS(err, "Failed to retrieve token file")
 			return nil, err
 		}
 		err := retry.OnError(retry.DefaultRetry, func(e error) bool {
@@ -192,7 +201,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 			return err
 		})
 		if err != nil {
-			klog.ErrorS(err, "cannot retrieve token file from the path %s", tokenFilePath)
+			klog.ErrorS(err, "Failed to retrieve token file from the path %s", tokenFilePath)
 			return nil, err
 		}
 		hubConfig.BearerTokenFile = tokenFilePath
@@ -203,18 +212,18 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		caBundle, ok := os.LookupEnv("CA_BUNDLE")
 		if ok && caBundle == "" {
 			err := errors.New("environment variable CA_BUNDLE should not be empty")
-			klog.ErrorS(err, "failed to validate system variables")
+			klog.ErrorS(err, "Failed to validate system variables")
 			return nil, err
 		}
 		hubCA, ok := os.LookupEnv("HUB_CERTIFICATE_AUTHORITY")
 		if ok && hubCA == "" {
 			err := errors.New("environment variable HUB_CERTIFICATE_AUTHORITY should not be empty")
-			klog.ErrorS(err, "failed to validate system variables")
+			klog.ErrorS(err, "Failed to validate system variables")
 			return nil, err
 		}
 		if caBundle != "" && hubCA != "" {
 			err := errors.New("environment variables CA_BUNDLE and HUB_CERTIFICATE_AUTHORITY should not be set at same time")
-			klog.ErrorS(err, "failed to validate system variables")
+			klog.ErrorS(err, "Failed to validate system variables")
 			return nil, err
 		}
 
@@ -223,7 +232,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		} else if hubCA != "" {
 			caData, err := base64.StdEncoding.DecodeString(hubCA)
 			if err != nil {
-				klog.ErrorS(err, "cannot decode hub cluster certificate authority data")
+				klog.ErrorS(err, "Failed to decode hub cluster certificate authority data")
 				return nil, err
 			}
 			hubConfig.TLSClientConfig.CAData = caData
@@ -236,7 +245,7 @@ func buildHubConfig(hubURL string, useCertificateAuth bool, tlsClientInsecure bo
 		r := textproto.NewReader(bufio.NewReader(strings.NewReader(header)))
 		h, err := r.ReadMIMEHeader()
 		if err != nil && !errors.Is(err, io.EOF) {
-			klog.ErrorS(err, "failed to parse HUB_KUBE_HEADER %q", header)
+			klog.ErrorS(err, "Failed to parse HUB_KUBE_HEADER %q", header)
 			return nil, err
 		}
 		hubConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
@@ -259,37 +268,37 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	}
 
 	if err := hubMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up health check for hub manager")
+		klog.ErrorS(err, "Failed to set up health check for hub manager")
 		return err
 	}
 	if err := hubMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up ready check for hub manager")
+		klog.ErrorS(err, "Failed to set up ready check for hub manager")
 		return err
 	}
 
 	if err := memberMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up health check for member manager")
+		klog.ErrorS(err, "Failed to set up health check for member manager")
 		return err
 	}
 	if err := memberMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		klog.ErrorS(err, "unable to set up ready check for member manager")
+		klog.ErrorS(err, "Failed to set up ready check for member manager")
 		return err
 	}
 
 	spokeDynamicClient, err := dynamic.NewForConfig(memberConfig)
 	if err != nil {
-		klog.ErrorS(err, "unable to create spoke dynamic client")
+		klog.ErrorS(err, "Failed to create spoke dynamic client")
 		return err
 	}
 
 	httpClient, err := rest.HTTPClientFor(memberConfig)
 	if err != nil {
-		klog.ErrorS(err, "unable to create spoke HTTP client")
+		klog.ErrorS(err, "Failed to create spoke HTTP client")
 		return err
 	}
 	restMapper, err := apiutil.NewDynamicRESTMapper(memberConfig, httpClient)
 	if err != nil {
-		klog.ErrorS(err, "unable to create spoke rest mapper")
+		klog.ErrorS(err, "Failed to create spoke rest mapper")
 		return err
 	}
 
@@ -314,13 +323,13 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, targetNS)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "work")
+			klog.ErrorS(err, "Failed to create v1alpha1 controller", "controller", "work")
 			return err
 		}
 
 		klog.Info("Setting up the internalMemberCluster v1alpha1 controller")
 		if err = imcv1alpha1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "unable to create v1alpha1 controller", "controller", "internalMemberCluster")
+			klog.ErrorS(err, "Failed to create v1alpha1 controller", "controller", "internalMemberCluster")
 			return fmt.Errorf("unable to create internalMemberCluster v1alpha1 controller: %w", err)
 		}
 	}
@@ -334,14 +343,40 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 			restMapper, hubMgr.GetEventRecorderFor("work_controller"), 5, targetNS)
 
 		if err = workController.SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "work")
+			klog.ErrorS(err, "Failed to create v1beta1 controller", "controller", "work")
 			return err
 		}
 
 		klog.Info("Setting up the internalMemberCluster v1beta1 controller")
-		if err = imcv1beta1.NewReconciler(hubMgr.GetClient(), memberMgr.GetClient(), workController).SetupWithManager(hubMgr); err != nil {
-			klog.ErrorS(err, "unable to create v1beta1 controller", "controller", "internalMemberCluster")
-			return fmt.Errorf("unable to create internalMemberCluster v1beta1 controller: %w", err)
+		// Set up a provider provider (if applicable).
+		var pp propertyprovider.PropertyProvider
+		switch {
+		case propertyProvider != nil && *propertyProvider == aksPropertyProvider:
+			klog.V(2).Info("setting up the AKS property provider")
+			// Note that the property provider, though initialized here, is not started until
+			// the specific instance wins the leader election.
+			pp = aks.New(region)
+		default:
+			// Fall back to not using any property provider if the provided type is none or
+			// not recognizable.
+			klog.V(2).Info("no property provider is specified, or the given type is not recognizable; start with no property provider")
+			pp = nil
+		}
+
+		// Set up the IMC controller.
+		imcReconciler, err := imcv1beta1.NewReconciler(
+			ctx,
+			hubMgr.GetClient(),
+			memberMgr.GetConfig(), memberMgr.GetClient(),
+			workController,
+			pp)
+		if err != nil {
+			klog.ErrorS(err, "Failed to create InternalMemberCluster v1beta1 reconciler")
+			return fmt.Errorf("failed to create InternalMemberCluster v1beta1 reconciler: %w", err)
+		}
+		if err := imcReconciler.SetupWithManager(hubMgr); err != nil {
+			klog.ErrorS(err, "Failed to set up InternalMemberCluster v1beta1 controller with the controller manager")
+			return fmt.Errorf("failed to set up InternalMemberCluster v1beta1 controller with the controller manager: %w", err)
 		}
 	}
 
@@ -349,7 +384,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	go func() {
 		defer klog.InfoS("shutting down hub manager")
 		if err := hubMgr.Start(ctx); err != nil {
-			klog.ErrorS(err, "problem starting hub manager")
+			klog.ErrorS(err, "Failed to start controller manager for the hub cluster")
 			return
 		}
 	}()
@@ -357,6 +392,7 @@ func Start(ctx context.Context, hubCfg, memberConfig *rest.Config, hubOpts, memb
 	klog.InfoS("starting member manager")
 	defer klog.InfoS("shutting down member manager")
 	if err := memberMgr.Start(ctx); err != nil {
+		klog.ErrorS(err, "Failed to start controller manager for the member cluster")
 		return fmt.Errorf("problem starting member manager: %w", err)
 	}
 

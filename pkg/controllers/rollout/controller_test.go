@@ -22,11 +22,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllertest"
 
-	"go.goms.io/fleet/pkg/utils/condition"
-
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
+	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -614,7 +614,7 @@ func TestIsBindingReady(t *testing.T) {
 		wantReady       bool
 		wantWaitTime    time.Duration
 	}{
-		"binding applied before the ready time cut off should return ready": {
+		"binding available (trackable) is ready": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -622,12 +622,10 @@ func TestIsBindingReady(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 10,
-							LastTransitionTime: metav1.Time{
-								Time: now.Add(-time.Millisecond),
-							},
+							Reason:             "any",
 						},
 					},
 				},
@@ -636,7 +634,7 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       true,
 			wantWaitTime:    0,
 		},
-		"binding applied after the ready time cut off should return not ready with a wait time": {
+		"binding available (not trackable) before the ready time cut off should return ready": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -644,12 +642,36 @@ func TestIsBindingReady(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
+							Status:             metav1.ConditionTrue,
+							ObservedGeneration: 10,
+							LastTransitionTime: metav1.Time{
+								Time: now.Add(-time.Millisecond),
+							},
+							Reason: work.WorkNotTrackableReason,
+						},
+					},
+				},
+			},
+			readyTimeCutOff: now,
+			wantReady:       true,
+			wantWaitTime:    0,
+		},
+		"binding available (not trackable) after the ready time cut off should return not ready with a wait time": {
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 10,
+				},
+				Status: fleetv1beta1.ResourceBindingStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 10,
 							LastTransitionTime: metav1.Time{
 								Time: now.Add(time.Millisecond),
 							},
+							Reason: work.WorkNotTrackableReason,
 						},
 					},
 				},
@@ -658,7 +680,7 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    time.Millisecond,
 		},
-		"binding not applied should return not ready with a negative wait time": {
+		"binding not available should return not ready with a negative wait time": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -668,7 +690,7 @@ func TestIsBindingReady(t *testing.T) {
 			wantReady:       false,
 			wantWaitTime:    -1,
 		},
-		"binding applied for a previous generation should return not ready with a negative wait time": {
+		"binding available for a previous generation should return not ready with a negative wait time": {
 			binding: &fleetv1beta1.ClusterResourceBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Generation: 10,
@@ -676,7 +698,7 @@ func TestIsBindingReady(t *testing.T) {
 				Status: fleetv1beta1.ResourceBindingStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:               string(fleetv1beta1.ResourceBindingApplied),
+							Type:               string(fleetv1beta1.ResourceBindingAvailable),
 							Status:             metav1.ConditionTrue,
 							ObservedGeneration: 9, //not the current generation
 							LastTransitionTime: metav1.Time{
@@ -738,8 +760,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 		allBindings                 []*fleetv1beta1.ClusterResourceBinding
 		latestResourceSnapshotName  string
 		crp                         *fleetv1beta1.ClusterResourcePlacement
-		matchedCROs                 []*fleetv1alpha1.ClusterResourceOverride
-		matchedROs                  []*fleetv1alpha1.ResourceOverride
+		matchedCROs                 []*fleetv1alpha1.ClusterResourceOverrideSnapshot
+		matchedROs                  []*fleetv1alpha1.ResourceOverrideSnapshot
 		clusters                    []clusterv1beta1.MemberCluster
 		wantTobeUpdatedBindings     []int
 		wantDesiredBindingsSpec     []fleetv1beta1.ResourceBindingSpec // used to construct the want toBeUpdatedBindings
@@ -791,8 +813,8 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedROs:              []*fleetv1alpha1.ResourceOverride{},
-			matchedCROs:             []*fleetv1alpha1.ClusterResourceOverride{},
+			matchedROs:              []*fleetv1alpha1.ResourceOverrideSnapshot{},
+			matchedCROs:             []*fleetv1alpha1.ClusterResourceOverrideSnapshot{},
 			wantTobeUpdatedBindings: []int{0},
 			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
 				{
@@ -810,21 +832,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -836,22 +860,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 				},
 			},
-			matchedROs: []*fleetv1alpha1.ResourceOverride{
+			matchedROs: []*fleetv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -898,21 +924,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-2",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -924,22 +952,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 				},
 			},
-			matchedROs: []*fleetv1alpha1.ResourceOverride{
+			matchedROs: []*fleetv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -975,21 +1005,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 			latestResourceSnapshotName: "snapshot-1",
 			crp: clusterResourcePlacementForTest("test",
 				createPlacementPolicyForTest(fleetv1beta1.PickAllPlacementType, 0)),
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -1001,22 +1033,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 					},
 				},
 			},
-			matchedROs: []*fleetv1alpha1.ResourceOverride{
+			matchedROs: []*fleetv1alpha1.ResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ro-2",
 						Namespace: "test",
 					},
-					Spec: fleetv1alpha1.ResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key2": "value2",
+					Spec: fleetv1alpha1.ResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key2": "value2",
+														},
 													},
 												},
 											},
@@ -1067,7 +1101,24 @@ func TestPickBindingsToRoll(t *testing.T) {
 			wantStaleUnselectedBindings: []int{},
 			wantNeedRoll:                false,
 		},
-		"test bound with failed to apply bindings": {
+		"test bound with only failed to apply binding": {
+			allBindings: []*fleetv1beta1.ClusterResourceBinding{
+				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
+			},
+			latestResourceSnapshotName: "snapshot-2",
+			crp: clusterResourcePlacementForTest("test",
+				createPlacementPolicyForTest(fleetv1beta1.PickNPlacementType, 5)),
+			wantTobeUpdatedBindings: []int{0},
+			wantDesiredBindingsSpec: []fleetv1beta1.ResourceBindingSpec{
+				{
+					State:                fleetv1beta1.BindingStateBound,
+					TargetCluster:        cluster1,
+					ResourceSnapshotName: "snapshot-2",
+				},
+			},
+			wantNeedRoll: true,
+		},
+		"test bound with failed to apply binding, unselected bound bindings": {
 			allBindings: []*fleetv1beta1.ClusterResourceBinding{
 				generateFailedToApplyClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster2),
@@ -1282,21 +1333,23 @@ func TestPickBindingsToRoll(t *testing.T) {
 				generateClusterResourceBinding(fleetv1beta1.BindingStateBound, "snapshot-1", cluster1),
 			},
 			latestResourceSnapshotName: "snapshot-1",
-			matchedCROs: []*fleetv1alpha1.ClusterResourceOverride{
+			matchedCROs: []*fleetv1alpha1.ClusterResourceOverrideSnapshot{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "cro-1",
 					},
-					Spec: fleetv1alpha1.ClusterResourceOverrideSpec{
-						Policy: &fleetv1alpha1.OverridePolicy{
-							OverrideRules: []fleetv1alpha1.OverrideRule{
-								{
-									ClusterSelector: &fleetv1beta1.ClusterSelector{
-										ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
-											{
-												LabelSelector: &metav1.LabelSelector{
-													MatchLabels: map[string]string{
-														"key1": "value1",
+					Spec: fleetv1alpha1.ClusterResourceOverrideSnapshotSpec{
+						OverrideSpec: fleetv1alpha1.ClusterResourceOverrideSpec{
+							Policy: &fleetv1alpha1.OverridePolicy{
+								OverrideRules: []fleetv1alpha1.OverrideRule{
+									{
+										ClusterSelector: &fleetv1beta1.ClusterSelector{
+											ClusterSelectorTerms: []fleetv1beta1.ClusterSelectorTerm{
+												{
+													LabelSelector: &metav1.LabelSelector{
+														MatchLabels: map[string]string{
+															"key1": "value1",
+														},
 													},
 												},
 											},
@@ -1399,7 +1452,7 @@ func clusterResourcePlacementForTest(crpName string, policy *fleetv1beta1.Placem
 				{
 					Group:   corev1.GroupName,
 					Version: "v1",
-					Kind:    "Service",
+					Kind:    "Namespace",
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{"region": "east"},
 					},
@@ -1658,6 +1711,196 @@ func TestUpdateStaleBindingsStatus(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantBindings, bindingList.Items, cmpOptions...); diff != "" {
 				t.Errorf("updateStaleBindingsStatus List() mismatch (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCheckAndUpdateStaleBindingsStatus(t *testing.T) {
+	generation := int64(15)
+	latestBindings := []*fleetv1beta1.ClusterResourceBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "binding-1",
+				Generation: generation,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				State: fleetv1beta1.BindingStateBound,
+			},
+			Status: fleetv1beta1.ResourceBindingStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: generation,
+						Reason:             condition.RolloutStartedReason,
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "binding-2",
+				Generation: generation,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				State: fleetv1beta1.BindingStateScheduled,
+			},
+			Status: fleetv1beta1.ResourceBindingStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+						Status:             metav1.ConditionTrue,
+						ObservedGeneration: generation,
+						Reason:             condition.RolloutStartedReason,
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "binding-3",
+				Generation: generation,
+			},
+			Spec: fleetv1beta1.ResourceBindingSpec{
+				State: fleetv1beta1.BindingStateUnscheduled,
+			},
+		},
+	}
+
+	tests := map[string]struct {
+		bindings     []*fleetv1beta1.ClusterResourceBinding
+		wantBindings []fleetv1beta1.ClusterResourceBinding
+	}{
+		"update bindings with nil": {
+			bindings:     nil,
+			wantBindings: nil,
+		},
+		"update bindings with empty": {
+			bindings:     []*fleetv1beta1.ClusterResourceBinding{},
+			wantBindings: nil,
+		},
+		"bindings with rollout started condition": {
+			bindings: latestBindings,
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[0],
+				*latestBindings[1],
+				*latestBindings[2],
+			},
+		},
+		"update stale bounded binding": {
+			bindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+				},
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[0],
+			},
+		},
+		"update stale scheduled bindings": {
+			bindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-2",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: generation,
+							},
+						},
+					},
+				},
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[1],
+			},
+		},
+		"update multiple stale bindings": {
+			bindings: []*fleetv1beta1.ClusterResourceBinding{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-1",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateBound,
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionTrue,
+								ObservedGeneration: generation - 1,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "binding-2",
+						Generation: generation,
+					},
+					Spec: fleetv1beta1.ResourceBindingSpec{
+						State: fleetv1beta1.BindingStateScheduled,
+					},
+					Status: fleetv1beta1.ResourceBindingStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:               string(fleetv1beta1.ResourceBindingRolloutStarted),
+								Status:             metav1.ConditionFalse,
+								ObservedGeneration: generation,
+							},
+						},
+					},
+				},
+				latestBindings[2],
+			},
+			wantBindings: []fleetv1beta1.ClusterResourceBinding{
+				*latestBindings[0],
+				*latestBindings[1],
+				*latestBindings[2],
+			},
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			var objects []client.Object
+			for i := range tt.bindings {
+				objects = append(objects, tt.bindings[i])
+			}
+			scheme := serviceScheme(t)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				WithStatusSubresource(objects...).
+				Build()
+			r := Reconciler{
+				Client: fakeClient,
+			}
+			ctx := context.Background()
+			if err := r.checkAndUpdateStaleBindingsStatus(ctx, tt.bindings); err != nil {
+				t.Fatalf("checkAndUpdateStaleBindingsStatus() got error %v, want no err", err)
+			}
+			bindingList := &fleetv1beta1.ClusterResourceBindingList{}
+			if err := fakeClient.List(ctx, bindingList); err != nil {
+				t.Fatalf("checkAndUpdateStaleBindingsStatus List() got error %v, want no err", err)
+			}
+			if diff := cmp.Diff(tt.wantBindings, bindingList.Items, cmpOptions...); diff != "" {
+				t.Errorf("checkAndUpdateStaleBindingsStatus List() mismatch (-want, +got):\n%s", diff)
 			}
 		})
 	}

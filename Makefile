@@ -46,7 +46,7 @@ GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT
 # ENVTEST_K8S_VERSION refers to the version of k8s binary assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.28.0
 # ENVTEST_VER is the version of the ENVTEST binary
-ENVTEST_VER = latest
+ENVTEST_VER = v0.0.0-20240317073005-bd9ea79e8d18
 ENVTEST_BIN := setup-envtest
 ENVTEST :=  $(abspath $(TOOLS_BIN_DIR)/$(ENVTEST_BIN)-$(ENVTEST_VER))
 
@@ -227,7 +227,7 @@ reviewable: fmt vet lint staticcheck
 ## --------------------------------------
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:crdVersions=v1"
+CRD_OPTIONS ?= "crd"
 
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests

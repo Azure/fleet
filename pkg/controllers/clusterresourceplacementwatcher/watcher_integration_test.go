@@ -42,7 +42,8 @@ func clusterResourcePlacementForTest() *fleetv1beta1.ClusterResourcePlacement {
 	}
 }
 
-var _ = Describe("Test ClusterResourcePlacement Watcher", func() {
+// This container cannot be run in parallel with other ITs because it uses a shared fakePlacementController.
+var _ = Describe("Test ClusterResourcePlacement Watcher", Serial, func() {
 	const (
 		eventuallyTimeout    = time.Second * 10
 		consistentlyDuration = time.Second * 10

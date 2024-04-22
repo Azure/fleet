@@ -6,15 +6,20 @@ Licensed under the MIT license.
 package validator
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	fleetv1alpha1 "go.goms.io/fleet/apis/v1alpha1"
+	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/informer"
 	testinformer "go.goms.io/fleet/test/utils/informer"
 )
@@ -29,7 +34,40 @@ var (
 		Kind:    "ClusterRole",
 		Name:    "test-cluster-role",
 	}
+	ClusterRoleGVK = schema.GroupVersionKind{
+		Group:   rbacv1.GroupName,
+		Version: rbacv1.SchemeGroupVersion.Version,
+		Kind:    "ClusterRole",
+	}
+	ClusterRoleGVR = schema.GroupVersionResource{
+		Group:    rbacv1.GroupName,
+		Version:  rbacv1.SchemeGroupVersion.Version,
+		Resource: "clusterroles",
+	}
 )
+
+// This interface is needed for testMapper abstract class.
+type testMapper struct {
+	meta.RESTMapper
+}
+
+func (m testMapper) RESTMapping(gk schema.GroupKind, _ ...string) (*meta.RESTMapping, error) {
+	if gk.Kind == "ClusterRole" {
+		return &meta.RESTMapping{
+			Resource:         ClusterRoleGVR,
+			GroupVersionKind: ClusterRoleGVK,
+			Scope:            nil,
+		}, nil
+	}
+	if gk.Kind == "Deployment" {
+		return &meta.RESTMapping{
+			Resource:         utils.DeploymentGVR,
+			GroupVersionKind: utils.DeploymentGVK,
+			Scope:            nil,
+		}, nil
+	}
+	return nil, errors.New("test error: mapping does not exist")
+}
 
 func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 	tests := map[string]struct {
@@ -199,9 +237,10 @@ func TestValidateClusterResourcePlacementAlpha(t *testing.T) {
 
 func TestValidateClusterResourcePlacement(t *testing.T) {
 	tests := map[string]struct {
-		crp        *placementv1beta1.ClusterResourcePlacement
-		wantErr    bool
-		wantErrMsg string
+		crp              *placementv1beta1.ClusterResourcePlacement
+		resourceInformer informer.Manager
+		wantErr          bool
+		wantErrMsg       string
 	}{
 		"valid CRP": {
 			crp: &placementv1beta1.ClusterResourcePlacement{
@@ -215,6 +254,9 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				IsClusterScopedResource: true},
 			wantErr: false,
 		},
 		"CRP with invalid name": {
@@ -229,7 +271,10 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
-			wantErr:    true,
+			wantErr: true,
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				IsClusterScopedResource: true},
 			wantErrMsg: "the name field cannot have length exceeding 63",
 		},
 		"invalid Resource Selector with name & label selector": {
@@ -254,12 +299,72 @@ func TestValidateClusterResourcePlacement(t *testing.T) {
 					},
 				},
 			},
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{ClusterRoleGVK: true},
+				IsClusterScopedResource: true},
 			wantErr:    true,
 			wantErrMsg: "the labelSelector and name fields are mutually exclusive in selector",
+		},
+		"invalid Resource Selector with invalid GVK": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "rbac.authorization.k8s.io",
+							Version: "v1",
+							Kind:    "invalidKind",
+							Name:    "test-invalidKind",
+						},
+					},
+				},
+			},
+			resourceInformer: &testinformer.FakeManager{IsClusterScopedResource: false},
+			wantErr:          true,
+			wantErrMsg:       "failed to get GVR of the selector",
+		},
+		"invalid Resource Selector with not ClusterScopedResource": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						{
+							Group:   "apps",
+							Kind:    "Deployment",
+							Version: "v1",
+							Name:    "test-deployment",
+						},
+					},
+				},
+			},
+			wantErr: true,
+			resourceInformer: &testinformer.FakeManager{
+				APIResources:            map[schema.GroupVersionKind]bool{utils.DeploymentGVK: true},
+				IsClusterScopedResource: false},
+			wantErrMsg: "resource is not found in schema (please retry) or it is not a cluster scoped resource",
+		},
+		"nil resource informer": {
+			crp: &placementv1beta1.ClusterResourcePlacement{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-crp",
+				},
+				Spec: placementv1beta1.ClusterResourcePlacementSpec{
+					ResourceSelectors: []placementv1beta1.ClusterResourceSelector{resourceSelector},
+				},
+			},
+			resourceInformer: nil,
+			wantErr:          true,
+			wantErrMsg:       "cannot perform resource scope check for now, please retry",
 		},
 	}
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
+			RestMapper = testMapper{}
+			ResourceInformer = testCase.resourceInformer
 			gotErr := ValidateClusterResourcePlacement(testCase.crp)
 			if (gotErr != nil) != testCase.wantErr {
 				t.Errorf("ValidateClusterResourcePlacement() error = %v, wantErr %v", gotErr, testCase.wantErr)
@@ -353,7 +458,7 @@ func TestValidateClusterResourcePlacement_RolloutStrategy(t *testing.T) {
 			strategy: placementv1beta1.RolloutStrategy{
 				Type: placementv1beta1.RollingUpdateRolloutStrategyType,
 				ApplyStrategy: &placementv1beta1.ApplyStrategy{
-					Type: placementv1beta1.ApplyStrategyTypeFailIfExists,
+					Type: placementv1beta1.ApplyStrategyTypeClientSideApply,
 					ServerSideApplyConfig: &placementv1beta1.ServerSideApplyConfig{
 						ForceConflicts: false,
 					},
@@ -605,8 +710,69 @@ func TestValidateClusterResourcePlacement_PickAllPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "toleration value needs to be empty, when operator is Exists",
 		},
+		"valid placement policy - PickAll with property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+												Values:   []string{"1"},
+											},
+											{
+												Name:     "cpu",
+												Operator: placementv1beta1.PropertySelectorGreaterThan,
+												Values:   []string{"500m"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		"invalid placement policy - PickAll with invalid property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType: placementv1beta1.PickAllPlacementType,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"1", "2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "operator Eq requires exactly one value, got 2",
+		},
 	}
-
 	for testName, testCase := range tests {
 		t.Run(testName, func(t *testing.T) {
 			gotErr := validatePlacementPolicy(testCase.policy)
@@ -676,6 +842,95 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			wantErr:    true,
 			wantErrMsg: "for 'in', 'notin' operators, values set can't be empty",
 		},
+		"invalid placement policy - PickN with non-nil property sorter in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySorter: &placementv1beta1.PropertySorter{
+										Name:      "Name",
+										SortOrder: placementv1beta1.Descending,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "PropertySorter is not allowed for RequiredDuringSchedulingIgnoredDuringExecution affinity",
+		},
+		"invalid placement policy - PickN with invalid property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"1", "2"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "operator Eq requires exactly one value, got 2",
+		},
+		"valid placement policy - PickN with property selector in RequiredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &placementv1beta1.ClusterSelector{
+							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+								{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+												Values:   []string{"1"},
+											},
+											{
+												Name:     "cpu",
+												Operator: placementv1beta1.PropertySelectorGreaterThan,
+												Values:   []string{"500m"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 		"invalid placement policy - PickN with invalid label selector terms in PreferredDuringSchedulingIgnoredDuringExecution affinity": {
 			policy: &placementv1beta1.PlacementPolicy{
 				PlacementType:    placementv1beta1.PickNPlacementType,
@@ -701,6 +956,36 @@ func TestValidateClusterResourcePlacement_PickNPlacementPolicy(t *testing.T) {
 			},
 			wantErr:    true,
 			wantErrMsg: "for 'in', 'notin' operators, values set can't be empty",
+		},
+		"invalid placement policy - PickN with non-nil property selector in PreferredDuringSchedulingIgnoredDuringExecution affinity": {
+			policy: &placementv1beta1.PlacementPolicy{
+				PlacementType:    placementv1beta1.PickNPlacementType,
+				NumberOfClusters: &positiveNumberOfClusters,
+				Affinity: &placementv1beta1.Affinity{
+					ClusterAffinity: &placementv1beta1.ClusterAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []placementv1beta1.PreferredClusterSelector{
+							{
+								Preference: placementv1beta1.ClusterSelectorTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"test-key1": "test-value1"},
+									},
+									PropertySelector: &placementv1beta1.PropertySelector{
+										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+											{
+												Name:     "version",
+												Operator: placementv1beta1.PropertySelectorEqualTo,
+												Values:   []string{"1"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "PropertySelector is not allowed for PreferredDuringSchedulingIgnoredDuringExecution affinity",
 		},
 		"invalid placement policy - PickN with invalid topology constraint with unknown unsatisfiable type": {
 			policy: &placementv1beta1.PlacementPolicy{

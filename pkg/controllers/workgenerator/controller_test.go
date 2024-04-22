@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	fleetv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
+	"go.goms.io/fleet/pkg/controllers/work"
 	"go.goms.io/fleet/pkg/utils/controller"
 )
 
@@ -295,6 +295,182 @@ func TestBuildAllWorkAppliedCondition(t *testing.T) {
 			got := buildAllWorkAppliedCondition(tt.works, binding)
 			if diff := cmp.Diff(got, tt.want, ignoreConditionOption); diff != "" {
 				t.Errorf("buildAllWorkAppliedCondition test `%s` mismatch (-got +want):\n%s", name, diff)
+			}
+		})
+	}
+}
+
+func TestBuildAllWorkAvailableCondition(t *testing.T) {
+	tests := map[string]struct {
+		works   map[string]*fleetv1beta1.Work
+		binding *fleetv1beta1.ClusterResourceBinding
+		want    metav1.Condition
+	}{
+		"All works are available": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Reason: "any",
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work2",
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Reason: "any",
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			want: metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceBindingAvailable),
+				Reason:             allWorkAvailableReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"All works are available but one of them is not trackable": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work1",
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Reason: work.WorkNotTrackableReason,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "work2",
+					},
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Reason: "any",
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			want: metav1.Condition{
+				Status:             metav1.ConditionTrue,
+				Type:               string(fleetv1beta1.ResourceBindingAvailable),
+				Reason:             work.WorkNotTrackableReason,
+				ObservedGeneration: 1,
+			},
+		},
+		"Not all works are available": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionFalse,
+							},
+						},
+					},
+				},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			want: metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingAvailable),
+				Reason:             workNotAvailableReason,
+				Message:            "work object work2 is not available",
+				ObservedGeneration: 1,
+			},
+		},
+		"Available condition of one work is unknown": {
+			works: map[string]*fleetv1beta1.Work{
+				"work1": {
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				"work2": {
+					Status: fleetv1beta1.WorkStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   fleetv1beta1.WorkConditionTypeAvailable,
+								Status: metav1.ConditionUnknown,
+							},
+						},
+					},
+				},
+			},
+			binding: &fleetv1beta1.ClusterResourceBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			want: metav1.Condition{
+				Status:             metav1.ConditionFalse,
+				Type:               string(fleetv1beta1.ResourceBindingAvailable),
+				Reason:             workNotAvailableReason,
+				Message:            "work object work2 is not available",
+				ObservedGeneration: 1,
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := buildAllWorkAvailableCondition(tt.works, tt.binding)
+			if diff := cmp.Diff(got, tt.want, ignoreConditionOption); diff != "" {
+				t.Errorf("buildAllWorkAvailableCondition test `%s` mismatch (-got +want):\n%s", name, diff)
 			}
 		})
 	}

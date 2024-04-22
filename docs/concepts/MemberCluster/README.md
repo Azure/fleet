@@ -48,6 +48,24 @@ reserved namespace of the member cluster. It awaits completion of the "leave" pr
 controller of member agents, and then deletes role and role bindings and other resources including the member cluster reserved
 namespaces on the hub cluster.
 
+## Taints
+
+The `MemberCluster` CR supports the specification of list of taints, which are applied to the `MemberCluster`. Each Taint object comprises
+the following fields:
+- `key`: The key of the taint.
+- `value`: The value of the taint.
+- `effect`: The effect of the taint, which can be `NoSchedule` for now.
+
+Once a `MemberCluster` is tainted with a specific taint, it lets the Fleet Scheduler know that the `MemberCluster` should not receive resources 
+as part of the workload propagation from the hub cluster.
+
+The `NoSchedule` taint is a signal to the Fleet Scheduler to avoid scheduling resources from a `ClusterResourcePlacement` to the `MemberCluster`.
+Any `MemberCluster` already selected for resource propagation will continue to receive resources even if a new taint is added.
+
+Taints are only honored by `ClusterResourcePlacement` with **PickAll**, **PickN** placement policies. In the case of **PickFixed** placement policy
+the taints are ignored because the user has explicitly specify the `MemberClusters` where the resources should be placed.
+
+For detailed instructions, please refer to this [document](../../howtos/taint-toleration.md).
 
 ## What's next
 * Get hands-on experience [how to add a member cluster to a fleet](../../howtos/clusters.md).

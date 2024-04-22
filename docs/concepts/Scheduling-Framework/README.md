@@ -15,6 +15,7 @@ The fleet scheduler integrates three fundamental built-in plugin types:
 * **Same Placement Affinity Plugin**: Uniquely designed for the fleet, preventing multiple replicas (selected resources) from 
 being placed within the same cluster. This distinguishes it from Kubernetes, which allows multiple pods on a node.
 * **Cluster Eligibility Plugin**: Enables cluster selection based on specific status criteria.
+* ** Taint & Toleration Plugin**: Enables cluster selection based on taints on the cluster & tolerations on the ClusterResourcePlacement.
 
 
 Compared to the Kubernetes scheduling framework, the fleet framework introduces additional stages for the pickN placement type:
@@ -39,6 +40,7 @@ The scheduler includes default plugins, each associated with distinct extension 
 | Same Placement Anti-affinity | ❌         | ✅      | ❌     |
 | Topology Spread Constraints  | ✅         | ✅      | ✅     |
 | Cluster Eligibility          | ❌         | ✅      | ❌     |
+| Taint & Toleration           | ❌         | ✅      | ❌     |
 
 
 The Cluster Affinity Plugin serves as an illustrative example and operates within the following extension points:

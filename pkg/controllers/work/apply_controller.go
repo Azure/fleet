@@ -54,6 +54,7 @@ import (
 	"go.goms.io/fleet/pkg/utils"
 	"go.goms.io/fleet/pkg/utils/condition"
 	"go.goms.io/fleet/pkg/utils/controller"
+	"go.goms.io/fleet/pkg/utils/defaulter"
 	"go.goms.io/fleet/pkg/utils/resource"
 )
 
@@ -68,9 +69,17 @@ const (
 	workNotAvailableYetReason     = "WorkNotAvailableYet"
 	workAvailabilityUnknownReason = "WorkAvailabilityUnknown"
 	workAvailableReason           = "WorkAvailable"
-	workNotTrackableReason        = "WorkNotTrackable"
+	// WorkNotTrackableReason is the reason string of condition when the manifest is already up to date but we don't have
+	// a way to track its availabilities.
+	WorkNotTrackableReason = "WorkNotTrackable"
 	// ManifestApplyFailedReason is the reason string of condition when it failed to apply manifest.
 	ManifestApplyFailedReason = "ManifestApplyFailed"
+	// ApplyConflictBetweenPlacementsReason is the reason string of condition when the manifest is owned by multiple placements,
+	// and they have conflicts.
+	ApplyConflictBetweenPlacementsReason = "ApplyConflictBetweenPlacements"
+	// ManifestsAlreadyOwnedByOthersReason is the reason string of condition when the manifest is already owned by other
+	// non-fleet appliers.
+	ManifestsAlreadyOwnedByOthersReason = "ManifestsAlreadyOwnedByOthers"
 	// ManifestAlreadyUpToDateReason is the reason string of condition when the manifest is already up to date.
 	ManifestAlreadyUpToDateReason  = "ManifestAlreadyUpToDate"
 	manifestAlreadyUpToDateMessage = "Manifest is already up to date"
@@ -89,6 +98,7 @@ type ApplyWorkReconciler struct {
 	concurrency        int
 	workNameSpace      string
 	joined             *atomic.Bool
+	appliers           map[fleetv1beta1.ApplyStrategyType]Applier
 }
 
 func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.Interface, spokeClient client.Client,
@@ -105,39 +115,46 @@ func NewApplyWorkReconciler(hubClient client.Client, spokeDynamicClient dynamic.
 	}
 }
 
-// applyAction represents the action we take to apply the manifest.
+// ApplyAction represents the action we take to apply the manifest.
 // It is used only internally to track the result of the apply function.
 // +enum
-type applyAction string
+type ApplyAction string
 
 const (
 	// manifestCreatedAction indicates that we created the manifest for the first time.
-	manifestCreatedAction applyAction = "ManifestCreated"
+	manifestCreatedAction ApplyAction = "ManifestCreated"
 
 	// manifestThreeWayMergePatchAction indicates that we updated the manifest using three-way merge patch.
-	manifestThreeWayMergePatchAction applyAction = "ManifestThreeWayMergePatched"
+	manifestThreeWayMergePatchAction ApplyAction = "ManifestThreeWayMergePatched"
 
 	// manifestServerSideAppliedAction indicates that we updated the manifest using server side apply.
-	manifestServerSideAppliedAction applyAction = "ManifestServerSideApplied"
+	manifestServerSideAppliedAction ApplyAction = "ManifestServerSideApplied"
 
 	// errorApplyAction indicates that there was an error during the apply action.
-	errorApplyAction applyAction = "ErrorApply"
+	errorApplyAction ApplyAction = "ErrorApply"
+
+	// applyConflictBetweenPlacements indicates that it fails to apply the manifest as it's owned by multiple placements,
+	// and they have conflict apply strategy.
+	applyConflictBetweenPlacements ApplyAction = "ApplyConflictBetweenPlacements"
+
+	// manifestAlreadyOwnedByOthers indicates that the manifest is already owned by other non-fleet applier.
+	manifestAlreadyOwnedByOthers ApplyAction = "ManifestAlreadyOwnedByOthers"
 
 	// manifestNotAvailableYetAction indicates that we still need to wait for the manifest to be available.
-	manifestNotAvailableYetAction applyAction = "ManifestNotAvailableYet"
+	manifestNotAvailableYetAction ApplyAction = "ManifestNotAvailableYet"
 
 	// manifestNotTrackableAction indicates that the manifest is already up to date but we don't have a way to track its availabilities.
-	manifestNotTrackableAction applyAction = "ManifestNotTrackable"
+	manifestNotTrackableAction ApplyAction = "ManifestNotTrackable"
 
 	// manifestAvailableAction indicates that the manifest is available.
-	manifestAvailableAction applyAction = "ManifestAvailable"
+	manifestAvailableAction ApplyAction = "ManifestAvailable"
 )
 
 // applyResult contains the result of a manifest being applied.
 type applyResult struct {
 	identifier fleetv1beta1.WorkResourceIdentifier
 	generation int64
-	action     applyAction
+	action     ApplyAction
 	applyErr   error
 }
 
@@ -172,6 +189,13 @@ func (r *ApplyWorkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		klog.V(2).InfoS("Resource is in the process of being deleted", work.Kind, logObjRef)
 		return r.garbageCollectAppliedWork(ctx, work)
 	}
+
+	// set default value so that the following call can skip checking nil
+	// TODO, could be removed once we have the defaulting webhook with fail policy.
+	// Make sure these conditions are met before moving
+	// * the defaulting webhook failure policy is configured as "fail".
+	// * user cannot update/delete the webhook.
+	defaulter.SetDefaultsWork(work)
 
 	// ensure that the appliedWork and the finalizer exist
 	appliedWork, err := r.ensureAppliedWork(ctx, work)
@@ -348,7 +372,7 @@ func (r *ApplyWorkReconciler) applyManifests(ctx context.Context, manifests []fl
 
 		default:
 			addOwnerRef(owner, rawObj)
-			appliedObj, result.action, result.applyErr = r.applyUnstructured(ctx, gvr, rawObj)
+			appliedObj, result.action, result.applyErr = r.applyUnstructuredAndTrackAvailability(ctx, gvr, rawObj, applyStrategy)
 			result.identifier = buildResourceIdentifier(index, rawObj, gvr)
 			logObjRef := klog.ObjectRef{
 				Name:      result.identifier.Name,
@@ -383,82 +407,32 @@ func (r *ApplyWorkReconciler) decodeManifest(manifest fleetv1beta1.Manifest) (sc
 	return mapping.Resource, unstructuredObj, nil
 }
 
-// applyUnstructured determines if an unstructured manifest object can & should be applied. It first validates
+// applyUnstructuredAndTrackAvailability determines if an unstructured manifest object can & should be applied. It first validates
 // the size of the last modified annotation of the manifest, it removes the annotation if the size crosses the annotation size threshold
 // and then creates/updates the resource on the cluster using server side apply instead of three-way merge patch.
-func (r *ApplyWorkReconciler) applyUnstructured(ctx context.Context, gvr schema.GroupVersionResource,
-	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
-	manifestRef := klog.ObjectRef{
-		Name:      manifestObj.GetName(),
-		Namespace: manifestObj.GetNamespace(),
+func (r *ApplyWorkReconciler) applyUnstructuredAndTrackAvailability(ctx context.Context, gvr schema.GroupVersionResource,
+	manifestObj *unstructured.Unstructured, applyStrategy *fleetv1beta1.ApplyStrategy) (*unstructured.Unstructured, ApplyAction, error) {
+	objManifest := klog.KObj(manifestObj)
+	applier := r.appliers[applyStrategy.Type]
+	if applier == nil {
+		err := fmt.Errorf("unknown apply strategy type %s", applyStrategy.Type)
+		klog.ErrorS(err, "Apply strategy type is unsupported", "gvr", gvr, "manifest", objManifest, "applyStrategyType", applyStrategy.Type)
+		return nil, errorApplyAction, controller.NewUserError(err)
 	}
 
-	// compute the hash without taking into consider the last applied annotation
-	if err := setManifestHashAnnotation(manifestObj); err != nil {
-		return nil, errorApplyAction, err
+	curObj, applyActionRes, err := applier.ApplyUnstructured(ctx, applyStrategy, gvr, manifestObj)
+	if err != nil {
+		klog.ErrorS(err, "Failed to apply the manifest", "gvr", gvr, "manifest", objManifest, "applyStrategyType", applyStrategy.Type)
+		return nil, applyActionRes, err // do not overwrite the applyActionRes
 	}
+	klog.V(2).InfoS("Applied the manifest", "gvr", gvr, "manifest", objManifest, "applyStrategyType", applyStrategy.Type)
 
-	// extract the common create procedure to reuse
-	var createFunc = func() (*unstructured.Unstructured, applyAction, error) {
-		// record the raw manifest with the hash annotation in the manifest
-		if _, err := setModifiedConfigurationAnnotation(manifestObj); err != nil {
-			return nil, errorApplyAction, err
-		}
-		actual, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Create(
-			ctx, manifestObj, metav1.CreateOptions{FieldManager: workFieldManagerName})
-		if err == nil {
-			klog.V(2).InfoS("Successfully created the manifest", "gvr", gvr, "manifest", manifestRef)
-			return actual, manifestCreatedAction, nil
-		}
-		return nil, errorApplyAction, err
-	}
-
-	// support resources with generated name
-	if manifestObj.GetName() == "" && manifestObj.GetGenerateName() != "" {
-		klog.InfoS("Create the resource with generated name regardless", "gvr", gvr, "manifest", manifestRef)
-		return createFunc()
-	}
-
-	// get the current object and create one if not found
-	curObj, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Get(ctx, manifestObj.GetName(), metav1.GetOptions{})
-	switch {
-	case apierrors.IsNotFound(err):
-		return createFunc()
-	case err != nil:
-		return nil, errorApplyAction, controller.NewAPIServerError(false, err)
-	}
-
-	// check if the existing manifest is managed by the work
-	if !isManifestManagedByWork(curObj.GetOwnerReferences()) {
-		// TODO: honer the applyStrategy to decide if we should overwrite the existing resource
-		err = fmt.Errorf("resource is not managed by the work controller")
-		klog.ErrorS(err, "Skip applying a not managed manifest", "gvr", gvr, "obj", manifestRef)
-		return nil, errorApplyAction, controller.NewExpectedBehaviorError(err)
-	}
-
-	// We only try to update the object if its spec hash value has changed.
-	if manifestObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation] != curObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation] {
-		// we need to merge the owner reference between the current and the manifest since we support one manifest
-		// belong to multiple work, so it contains the union of all the appliedWork.
-		manifestObj.SetOwnerReferences(mergeOwnerReference(curObj.GetOwnerReferences(), manifestObj.GetOwnerReferences()))
-		// record the raw manifest with the hash annotation in the manifest.
-		isModifiedConfigAnnotationNotEmpty, err := setModifiedConfigurationAnnotation(manifestObj)
-		if err != nil {
-			return nil, errorApplyAction, err
-		}
-		if !isModifiedConfigAnnotationNotEmpty {
-			klog.V(2).InfoS("Using server side apply for manifest", "gvr", gvr, "manifest", manifestRef)
-			return r.serversideApplyObject(ctx, gvr, manifestObj)
-		}
-		klog.V(2).InfoS("Using three way merge for manifest", "gvr", gvr, "manifest", manifestRef)
-		return r.patchCurrentResource(ctx, gvr, manifestObj, curObj)
-	}
 	// the manifest is already up to date, we just need to track its availability
-	applyAction, err := trackResourceAvailability(gvr, curObj)
-	return curObj, applyAction, err
+	applyActionRes, err = trackResourceAvailability(gvr, curObj)
+	return curObj, applyActionRes, err
 }
 
-func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstructured.Unstructured) (applyAction, error) {
+func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstructured.Unstructured) (ApplyAction, error) {
 	switch gvr {
 	case utils.DeploymentGVR:
 		return trackDeploymentAvailability(curObj)
@@ -478,7 +452,7 @@ func trackResourceAvailability(gvr schema.GroupVersionResource, curObj *unstruct
 	}
 }
 
-func trackDeploymentAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+func trackDeploymentAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
 	var deployment appv1.Deployment
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &deployment); err != nil {
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
@@ -500,7 +474,7 @@ func trackDeploymentAvailability(curObj *unstructured.Unstructured) (applyAction
 	return manifestNotAvailableYetAction, nil
 }
 
-func trackStatefulSetAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+func trackStatefulSetAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
 	var statefulSet appv1.StatefulSet
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &statefulSet); err != nil {
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
@@ -522,7 +496,7 @@ func trackStatefulSetAvailability(curObj *unstructured.Unstructured) (applyActio
 	return manifestNotAvailableYetAction, nil
 }
 
-func trackDaemonSetAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+func trackDaemonSetAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
 	var daemonSet appv1.DaemonSet
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &daemonSet); err != nil {
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
@@ -539,7 +513,7 @@ func trackDaemonSetAvailability(curObj *unstructured.Unstructured) (applyAction,
 	return manifestNotAvailableYetAction, nil
 }
 
-func trackJobAvailability(curObj *unstructured.Unstructured) (applyAction, error) {
+func trackJobAvailability(curObj *unstructured.Unstructured) (ApplyAction, error) {
 	var job batchv1.Job
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(curObj.Object, &job); err != nil {
 		return errorApplyAction, controller.NewUnexpectedBehaviorError(err)
@@ -560,58 +534,6 @@ func trackJobAvailability(curObj *unstructured.Unstructured) (applyAction, error
 	// this field only exists in k8s 1.24+ by default, so we can't track the availability of the job without it
 	klog.V(2).InfoS("Job does not have ready status, we can't track its availability", "job", klog.KObj(curObj))
 	return manifestNotTrackableAction, nil
-}
-
-// serversideApplyObject uses server side apply to apply the manifest.
-func (r *ApplyWorkReconciler) serversideApplyObject(ctx context.Context, gvr schema.GroupVersionResource,
-	manifestObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
-	manifestRef := klog.ObjectRef{
-		Name:      manifestObj.GetName(),
-		Namespace: manifestObj.GetNamespace(),
-	}
-	options := metav1.ApplyOptions{
-		FieldManager: workFieldManagerName,
-		Force:        true,
-	}
-	manifestObj, err := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).Apply(ctx, manifestObj.GetName(), manifestObj, options)
-	if err != nil {
-		klog.ErrorS(err, "Failed to apply object", "gvr", gvr, "manifest", manifestRef)
-		return nil, errorApplyAction, err
-	}
-	klog.V(2).InfoS("Manifest apply succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, manifestServerSideAppliedAction, nil
-}
-
-// patchCurrentResource uses three-way merge to patch the current resource with the new manifest we get from the work.
-func (r *ApplyWorkReconciler) patchCurrentResource(ctx context.Context, gvr schema.GroupVersionResource,
-	manifestObj, curObj *unstructured.Unstructured) (*unstructured.Unstructured, applyAction, error) {
-	manifestRef := klog.ObjectRef{
-		Name:      manifestObj.GetName(),
-		Namespace: manifestObj.GetNamespace(),
-	}
-	klog.V(2).InfoS("Manifest is modified", "gvr", gvr, "manifest", manifestRef,
-		"new hash", manifestObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation],
-		"existing hash", curObj.GetAnnotations()[fleetv1beta1.ManifestHashAnnotation])
-	// create the three-way merge patch between the current, original and manifest similar to how kubectl apply does
-	patch, err := threeWayMergePatch(curObj, manifestObj)
-	if err != nil {
-		klog.ErrorS(err, "Failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, errorApplyAction, err
-	}
-	data, err := patch.Data(manifestObj)
-	if err != nil {
-		klog.ErrorS(err, "Failed to generate the three way patch", "gvr", gvr, "manifest", manifestRef)
-		return nil, errorApplyAction, err
-	}
-	// Use client side apply the patch to the member cluster
-	manifestObj, patchErr := r.spokeDynamicClient.Resource(gvr).Namespace(manifestObj.GetNamespace()).
-		Patch(ctx, manifestObj.GetName(), patch.Type(), data, metav1.PatchOptions{FieldManager: workFieldManagerName})
-	if patchErr != nil {
-		klog.ErrorS(patchErr, "Failed to patch the manifest", "gvr", gvr, "manifest", manifestRef)
-		return nil, errorApplyAction, patchErr
-	}
-	klog.V(2).InfoS("Manifest patch succeeded", "gvr", gvr, "manifest", manifestRef)
-	return manifestObj, manifestThreeWayMergePatchAction, nil
 }
 
 // constructWorkCondition constructs the work condition based on the apply result
@@ -691,6 +613,18 @@ func (r *ApplyWorkReconciler) Leave(ctx context.Context) error {
 
 // SetupWithManager wires up the controller.
 func (r *ApplyWorkReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.appliers = map[fleetv1beta1.ApplyStrategyType]Applier{
+		fleetv1beta1.ApplyStrategyTypeServerSideApply: &ServerSideApplier{
+			HubClient:          r.client,
+			WorkNamespace:      r.workNameSpace,
+			SpokeDynamicClient: r.spokeDynamicClient,
+		},
+		fleetv1beta1.ApplyStrategyTypeClientSideApply: &ClientSideApplier{
+			HubClient:          r.client,
+			WorkNamespace:      r.workNameSpace,
+			SpokeDynamicClient: r.spokeDynamicClient,
+		},
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(ctrloption.Options{
 			MaxConcurrentReconciles: r.concurrency,
@@ -729,13 +663,19 @@ func computeManifestHash(obj *unstructured.Unstructured) (string, error) {
 
 // isManifestManagedByWork determines if an object is managed by the work controller.
 func isManifestManagedByWork(ownerRefs []metav1.OwnerReference) bool {
-	// an object is managed by the work if any of its owner reference is of type appliedWork
+	if len(ownerRefs) == 0 {
+		return false
+	}
+
+	// an object is NOT managed by the work if any of its owner reference is not of type appliedWork
+	// We'll fail the operation if the resource is owned by other applier (non-fleet agent) and placement does not allow
+	// co-ownership.
 	for _, ownerRef := range ownerRefs {
-		if ownerRef.APIVersion == fleetv1beta1.GroupVersion.String() && ownerRef.Kind == fleetv1beta1.AppliedWorkKind {
-			return true
+		if ownerRef.APIVersion != fleetv1beta1.GroupVersion.String() || ownerRef.Kind != fleetv1beta1.AppliedWorkKind {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // findManifestConditionByIdentifier return a ManifestCondition by identifier
@@ -793,7 +733,7 @@ func buildResourceIdentifier(index int, object *unstructured.Unstructured, gvr s
 	}
 }
 
-func buildManifestCondition(err error, action applyAction, observedGeneration int64) []metav1.Condition {
+func buildManifestCondition(err error, action ApplyAction, observedGeneration int64) []metav1.Condition {
 	applyCondition := metav1.Condition{
 		Type:               fleetv1beta1.WorkConditionTypeApplied,
 		LastTransitionTime: metav1.Now(),
@@ -808,7 +748,14 @@ func buildManifestCondition(err error, action applyAction, observedGeneration in
 
 	if err != nil {
 		applyCondition.Status = metav1.ConditionFalse
-		applyCondition.Reason = ManifestApplyFailedReason
+		switch action {
+		case applyConflictBetweenPlacements:
+			applyCondition.Reason = ApplyConflictBetweenPlacementsReason
+		case manifestAlreadyOwnedByOthers:
+			applyCondition.Reason = ManifestsAlreadyOwnedByOthersReason
+		default:
+			applyCondition.Reason = ManifestApplyFailedReason
+		}
 		applyCondition.Message = fmt.Sprintf("Failed to apply manifest: %v", err)
 		availableCondition.Status = metav1.ConditionUnknown
 		availableCondition.Reason = ManifestApplyFailedReason
@@ -934,7 +881,7 @@ func buildWorkCondition(manifestConditions []fleetv1beta1.ManifestCondition, obs
 		availableCondition.Reason = workAvailableReason
 		availableCondition.Message = "Work is available now"
 	} else {
-		availableCondition.Reason = workNotTrackableReason
+		availableCondition.Reason = WorkNotTrackableReason
 		availableCondition.Message = "Work's availability is not trackable"
 	}
 	return []metav1.Condition{applyCondition, availableCondition}

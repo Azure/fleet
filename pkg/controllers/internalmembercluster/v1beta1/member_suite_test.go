@@ -6,6 +6,7 @@ package v1beta1
 
 import (
 	"flag"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -33,6 +34,16 @@ var (
 	testEnv   *envtest.Environment
 )
 
+func TestMain(m *testing.M) {
+	// Normally the GinkgoWriter is configured as part of the BeforeSuite routine; however,
+	// since the unit tests in this package is not using the Ginkgo framework, and some of the
+	// tests might emit error logs, here the configuration happens at the test entrypoint to
+	// avoid R/W data races on the logger.
+	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+
+	os.Exit(m.Run())
+}
+
 func TestInternalMemberCluster(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Internal Member Cluster Controller Integration Test Suite")
@@ -46,8 +57,6 @@ var _ = BeforeSuite(func() {
 		// to Gomega.
 		// Source: https://pkg.go.dev/github.com/onsi/ginkgo#GinkgoRecover
 		defer GinkgoRecover()
-
-		klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("bootstrapping test environment")
 		testEnv = &envtest.Environment{
