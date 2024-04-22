@@ -327,6 +327,8 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
+	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
@@ -420,6 +422,8 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
 
+	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
+
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
@@ -508,6 +512,8 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 		}
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
+
+	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
@@ -602,6 +608,8 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 		}
 		Expect(hubClient.Delete(ctx, crp)).To(Succeed(), "Failed to delete CRP %s", crpName)
 	})
+
+	It("should remove the selected resources on member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
 		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()

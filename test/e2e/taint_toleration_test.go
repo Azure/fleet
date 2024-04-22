@@ -279,7 +279,7 @@ var _ = Describe("picking N clusters with affinities and topology spread constra
 	AfterAll(func() {
 		// Remove taint from member cluster 1, 2.
 		removeTaintsFromMemberClusters(taintClusterNames)
-		ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster2EastCanary})
+		ensureCRPAndRelatedResourcesDeletion(crpName, []*framework.Cluster{memberCluster1EastProd})
 	})
 })
 
