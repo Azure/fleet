@@ -3089,117 +3089,6 @@ func TestIsRolloutComplete(t *testing.T) {
 				},
 				{
 					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-			},
-			want: true,
-		},
-		{
-			name: "schedule has not completed",
-			conditions: []metav1.Condition{
-				{
-					Status:             metav1.ConditionUnknown,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-			},
-			want: false,
-		},
-		{
-			name: "sync has not completed",
-			conditions: []metav1.Condition{
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-					ObservedGeneration: crpGeneration - 1,
-				},
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-			},
-			want: false,
-		},
-		{
-			name: "apply has not completed",
-			conditions: []metav1.Condition{
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementScheduledConditionType),
-					ObservedGeneration: crpGeneration - 1,
-				},
-				{
-					Status:             metav1.ConditionFalse,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementSynchronizedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-			},
-			want: false,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			crp := &fleetv1beta1.ClusterResourcePlacement{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       testName,
-					Generation: crpGeneration,
-				},
-				Status: fleetv1beta1.ClusterResourcePlacementStatus{
-					Conditions: tc.conditions,
-				},
-			}
-			got := isRolloutCompleted(false, crp)
-			if got != tc.want {
-				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestIsRolloutComplete_withNewConditions(t *testing.T) {
-	crpGeneration := int64(25)
-	tests := []struct {
-		name       string
-		conditions []metav1.Condition
-		want       bool
-	}{
-		{
-			name: "rollout is completed",
-			conditions: []metav1.Condition{
-				{
-					Status:             metav1.ConditionTrue,
-					Type:               string(fleetv1beta1.ClusterResourcePlacementAppliedConditionType),
-					ObservedGeneration: crpGeneration,
-				},
-				{
-					Status:             metav1.ConditionTrue,
 					Type:               string(fleetv1beta1.ClusterResourcePlacementAvailableConditionType),
 					ObservedGeneration: crpGeneration,
 				},
@@ -3369,7 +3258,7 @@ func TestIsRolloutComplete_withNewConditions(t *testing.T) {
 					Conditions: tc.conditions,
 				},
 			}
-			got := isRolloutCompleted(true, crp)
+			got := isRolloutCompleted(crp)
 			if got != tc.want {
 				t.Errorf("isRolloutCompleted() got %v, want %v", got, tc.want)
 			}
