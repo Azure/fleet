@@ -17,7 +17,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
-
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 )
 
@@ -26,6 +26,8 @@ const (
 	appConfigMapNameTemplate          = "app-config-%d"
 	appSecretNameTemplate             = "app-secret-%d" // #nosec G101
 	crpNameTemplate                   = "crp-%d"
+	croNameTemplate                   = "cro-%d"
+	roNameTemplate                    = "ro-%d"
 	mcNameTemplate                    = "mc-%d"
 	internalServiceExportNameTemplate = "ise-%d"
 	internalServiceImportNameTemplate = "isi-%d"
@@ -42,6 +44,17 @@ func workResourceSelector() []placementv1beta1.ClusterResourceSelector {
 			Kind:    "Namespace",
 			Version: "v1",
 			Name:    fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess()),
+		},
+	}
+}
+
+func configMapSelector() []placementv1alpha1.ResourceSelector {
+	return []placementv1alpha1.ResourceSelector{
+		{
+			Group:   "",
+			Kind:    "ConfigMap",
+			Version: "v1",
+			Name:    fmt.Sprintf(appConfigMapNameTemplate, GinkgoParallelProcess()),
 		},
 	}
 }

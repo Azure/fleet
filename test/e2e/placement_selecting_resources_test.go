@@ -759,11 +759,11 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 					},
 					{
 						ClusterName: memberCluster2EastCanaryName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false),
+						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false, false),
 					},
 					{
 						ClusterName: memberCluster3WestProdName,
-						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false),
+						Conditions:  resourcePlacementRolloutCompletedConditions(crp.Generation, false, false),
 					},
 				},
 				SelectedResources: []placementv1beta1.ResourceIdentifier{
