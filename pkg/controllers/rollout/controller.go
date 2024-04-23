@@ -342,8 +342,9 @@ func (r *Reconciler) pickBindingsToRoll(ctx context.Context, allBindings []*flee
 		switch binding.Spec.State {
 		case fleetv1beta1.BindingStateUnscheduled:
 			appliedCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingApplied))
-			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) {
-				klog.V(3).InfoS("Found an failed to apply unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
+			availableCondition := binding.GetCondition(string(fleetv1beta1.ResourceBindingAvailable))
+			if condition.IsConditionStatusFalse(appliedCondition, binding.Generation) || condition.IsConditionStatusFalse(availableCondition, binding.Generation) {
+				klog.V(3).InfoS("Found a failed to be ready unscheduled binding", "clusterResourcePlacement", crpKObj, "binding", bindingKObj)
 			} else {
 				canBeReadyBindings = append(canBeReadyBindings, binding)
 			}
