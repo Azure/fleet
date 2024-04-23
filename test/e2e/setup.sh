@@ -117,7 +117,6 @@ helm install hub-agent ../../charts/hub-agent/ \
     --set image.pullPolicy=Never \
     --set image.repository=$REGISTRY/$HUB_AGENT_IMAGE \
     --set image.tag=$TAG \
-    --set logVerbosity=2 \
     --set namespace=fleet-system \
     --set enableWebhook=true \
     --set webhookClientConnectionType=service \

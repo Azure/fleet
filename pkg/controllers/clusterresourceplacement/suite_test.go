@@ -23,12 +23,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/cmd/hubagent/options"
+	"go.goms.io/fleet/pkg/controllers/clusterresourcebindingwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterresourceplacementwatcher"
 	"go.goms.io/fleet/pkg/controllers/clusterschedulingpolicysnapshot"
 	"go.goms.io/fleet/pkg/utils"
@@ -56,9 +56,13 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	klog.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-
 	ctx, cancel = context.WithCancel(context.TODO())
+
+	By("Setup klog")
+	var err error
+	fs := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(fs)
+	Expect(fs.Parse([]string{"--v", "5", "-add_dir_header", "true"})).Should(Succeed())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -66,7 +70,6 @@ var _ = BeforeSuite(func() {
 		ErrorIfCRDPathMissing: true,
 	}
 
-	var err error
 	cfg, err = testEnv.Start()
 	Expect(err).Should(Succeed())
 	Expect(cfg).NotTo(BeNil())
@@ -129,6 +132,12 @@ var _ = BeforeSuite(func() {
 		PlacementController: crpController,
 	}).SetupWithManager(mgr)
 	Expect(err).Should(Succeed(), "failed to create clusterResourcePlacement watcher")
+
+	err = (&clusterresourcebindingwatcher.Reconciler{
+		Client:              mgr.GetClient(),
+		PlacementController: crpController,
+	}).SetupWithManager(mgr)
+	Expect(err).Should(Succeed(), "failed to create clusterResourceBinding watcher")
 
 	ctx, cancel = context.WithCancel(context.TODO())
 	// Run the controller manager
