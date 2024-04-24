@@ -466,8 +466,8 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 		},
 	}
 
-	It("should deny create CRO with label selector", func() {
-		Eventually(func(g Gomega) error {
+	It("should deny create CRO with invalid resource selection ", func() {
+		Consistently(func(g Gomega) error {
 			invalidSelector := placementv1beta1.ClusterResourceSelector{
 				Group:   "rbac.authorization.k8s.io/v1",
 				Kind:    "ClusterRole",
@@ -476,7 +476,11 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 					MatchLabels: map[string]string{"test-key": "test-value"},
 				},
 			}
-
+			invalidSelector1 := placementv1beta1.ClusterResourceSelector{
+				Group:   "rbac.authorization.k8s.io/v1",
+				Kind:    "ClusterRole",
+				Version: "v1",
+			}
 			// Create the CRO.
 			cro := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -484,7 +488,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 				},
 				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						invalidSelector,
+						invalidSelector, selector, selector, invalidSelector1,
 					},
 					Policy: policy,
 				},
@@ -494,164 +498,8 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("label selector is not supported for resource selection %+v", invalidSelector))))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny create CRO with duplicate selector", func() {
-		Eventually(func(g Gomega) error {
-			// Create the CRO.
-			cro := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: croName,
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						selector, selector,
-					},
-					Policy: policy,
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", croName))
-			err := hubClient.Create(ctx, cro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", selector)))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny create CRO with selector name empty", func() {
-		Eventually(func(g Gomega) error {
-			invalidSelector := placementv1beta1.ClusterResourceSelector{
-				Group:   "rbac.authorization.k8s.io/v1",
-				Kind:    "ClusterRole",
-				Version: "v1",
-			}
-			// Create the CRO.
-			cro := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: croName,
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						invalidSelector,
-					},
-					Policy: policy,
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", croName))
-			err := hubClient.Create(ctx, cro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("resource name is required for resource selection %+v", invalidSelector))))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny create CRO with invalid cluster selector term", func() {
-		Eventually(func(g Gomega) error {
-			cro := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: croName,
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io/v1",
-							Kind:    "ClusterRole",
-							Version: "v1",
-							Name:    "test-clusterrole",
-						},
-					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
-							{
-								ClusterSelector: &placementv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-										{
-											PropertySelector: &placementv1beta1.PropertySelector{
-												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-													{
-														Name:     "example",
-														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-														Values:   []string{"1"},
-													},
-												},
-											},
-										},
-									},
-								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-										Path:     "/meta/labels/test-key",
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", cro.Name))
-			err := hubClient.Create(ctx, cro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("only labelSelector is supported"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny create CRO with invalid JSON patch override", func() {
-		Eventually(func(g Gomega) error {
-			cro := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: croName,
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io/v1",
-							Kind:    "ClusterRole",
-							Version: "v1",
-							Name:    "test-cluster-role",
-						},
-					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
-							{
-								ClusterSelector: &placementv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
-								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-										Path:     "/meta/labels/test-key",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
-									},
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-										Path:     "/kind",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
-									},
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-										Path:     "////",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", cro.Name))
-			err := hubClient.Create(ctx, cro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("remove operation cannot have value"))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource name is required for resource selection %+v", invalidSelector1)))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
@@ -671,7 +519,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 	})
 
 	It("should deny create CRO with 100 existing CROs", func() {
-		Eventually(func(g Gomega) error {
+		Consistently(func(g Gomega) error {
 			cro101 := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cro-101",
@@ -735,37 +583,6 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 		Version: "v1",
 		Name:    fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
 	}
-	policy := &placementv1alpha1.OverridePolicy{
-		OverrideRules: []placementv1alpha1.OverrideRule{
-			{
-				ClusterSelector: &placementv1beta1.ClusterSelector{
-					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"key": "value",
-								},
-							},
-						},
-						{
-							LabelSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"key1": "value1",
-								},
-							},
-						},
-					},
-				},
-				JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-					{
-						Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-						Path:     "/meta/labels/test-key",
-					},
-				},
-			},
-		},
-	}
-
 	BeforeAll(func() {
 		By("create clusterResourceOverride")
 		cro := &placementv1alpha1.ClusterResourceOverride{
@@ -776,7 +593,36 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 					selector,
 				},
-				Policy: policy,
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key": "value",
+											},
+										},
+									},
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key1": "value1",
+											},
+										},
+									},
+								},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Path:     "/meta/labels/test-key",
+								},
+							},
+						},
+					},
+				},
 			},
 		}
 		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create CRO %s", croName)
@@ -787,8 +633,8 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 		cleanupClusterResourceOverride(croName)
 	})
 
-	It("should deny create CRO for a resource already selected by another CRO", func() {
-		Eventually(func(g Gomega) error {
+	It("should deny create for invalid cluster resource override", func() {
+		Consistently(func(g Gomega) error {
 			cro1 := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
@@ -797,7 +643,48 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
 						selector,
 					},
-					Policy: policy,
+					Policy: &placementv1alpha1.OverridePolicy{
+						OverrideRules: []placementv1alpha1.OverrideRule{
+							{
+								ClusterSelector: &placementv1beta1.ClusterSelector{
+									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+										{
+											PropertySelector: &placementv1beta1.PropertySelector{
+												MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+													{
+														Name:     "example",
+														Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+														Values:   []string{"1"},
+													},
+												},
+											},
+										},
+									},
+								},
+								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/meta/labels/test-key",
+									},
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/meta/annotations/test-key",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "/kind",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
+									},
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "////",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
+									},
+								},
+							},
+						},
+					},
 				},
 			}
 			By(fmt.Sprintf("expecting denial of CREATE override %s with the same resource selected", cro1.Name))
@@ -805,6 +692,10 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations re
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, cro1.Name, croName)))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("only labelSelector is supported"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("remove operation cannot have value"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
@@ -855,7 +746,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 		cleanupClusterResourceOverride(cro1Name)
 	})
 
-	It("should deny update CRO with label selector", func() {
+	It("should deny update CRO with invalid cluster resource selections", func() {
 		Eventually(func(g Gomega) error {
 			var cro placementv1alpha1.ClusterResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
@@ -867,7 +758,14 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 					MatchLabels: map[string]string{"test-key": "test-value"},
 				},
 			}
+			invalidSelector1 := placementv1beta1.ClusterResourceSelector{
+				Group:   "rbac.authorization.k8s.io/v1",
+				Kind:    "ClusterRole",
+				Version: "v1",
+			}
 			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, invalidSelector)
+			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, cro.Spec.ClusterResourceSelectors[0])
+			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, invalidSelector1)
 
 			By(fmt.Sprintf("expecting denial of UPDATE override %s", croName))
 			err := hubClient.Update(ctx, &cro)
@@ -877,78 +775,13 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("label selector is not supported for resource selection %+v", invalidSelector))))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update CRO with duplicate selector", func() {
-		Eventually(func(g Gomega) error {
-			var cro placementv1alpha1.ClusterResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
-			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, cro.Spec.ClusterResourceSelectors[0])
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", croName))
-			err := hubClient.Update(ctx, &cro)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", cro.Spec.ClusterResourceSelectors[0])))
+			Expect(statusErr.Status().Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("resource name is required for resource selection %+v", invalidSelector1))))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 
-	It("should deny update CRO with selector name empty", func() {
-		Eventually(func(g Gomega) error {
-			var cro placementv1alpha1.ClusterResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
-			invalidSelector := placementv1beta1.ClusterResourceSelector{
-				Group:   "rbac.authorization.k8s.io/v1",
-				Kind:    "ClusterRole",
-				Version: "v1",
-			}
-			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, invalidSelector)
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", croName))
-			err := hubClient.Update(ctx, &cro)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp(regexp.QuoteMeta(fmt.Sprintf("resource name is required for resource selection %+v", invalidSelector))))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update CRO with invalid cluster selector term", func() {
-		Eventually(func(g Gomega) error {
-			var cro placementv1alpha1.ClusterResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
-			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
-				PropertySelector: &placementv1beta1.PropertySelector{
-					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-						{
-							Name:     "example",
-							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-							Values:   []string{"1"},
-						},
-					},
-				},
-			}
-			cro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms = append(cro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms, clusterSelectorTerm)
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", cro.Name))
-			err := hubClient.Update(ctx, &cro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("only labelSelector is supported"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update CRO for a resource already selected by another CRO", func() {
+	It("should deny update CRO for invalid cluster resource override", func() {
 		Eventually(func(g Gomega) error {
 			cro1 := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -990,23 +823,18 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 				Name:    "test-clusterrole",
 			}
 			cro.Spec.ClusterResourceSelectors = append(cro.Spec.ClusterResourceSelectors, selector)
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", croName))
-			err := hubClient.Update(ctx, &cro)
-			if k8sErrors.IsConflict(err) {
-				return err
+			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     "example",
+							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+							Values:   []string{"1"},
+						},
+					},
+				},
 			}
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, cro.Name, cro1.Name)))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update CRO with invalid JSONPatchOverride", func() {
-		Eventually(func(g Gomega) error {
-			var cro placementv1alpha1.ClusterResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: croName}, &cro)).Should(Succeed())
+			cro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms = append(cro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms, clusterSelectorTerm)
 			cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(cro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
 				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
 				Path:     "/kind",
@@ -1016,11 +844,15 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 				Path:     "",
 				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
 			})
-
 			By(fmt.Sprintf("expecting denial of UPDATE override %s", croName))
 			err := hubClient.Update(ctx, &cro)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, cro.Name, cro1.Name)))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("only labelSelector is supported"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot be empty"))
 			return nil
@@ -1078,8 +910,8 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() 
 		cleanupWorkResources()
 	})
 
-	It("should deny create RO with duplicate selector", func() {
-		Eventually(func(g Gomega) error {
+	It("should deny create RO with invalid resource selection", func() {
+		Consistently(func(g Gomega) error {
 			ro := &placementv1alpha1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      roName,
@@ -1097,54 +929,6 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() 
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("resource selector %+v already exists, and must be unique", selector)))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny create RO with invalid JSON patch override", func() {
-		Eventually(func(g Gomega) error {
-			ro := &placementv1alpha1.ResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      roName,
-					Namespace: roNamespace,
-				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
-						selector,
-					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
-							{
-								ClusterSelector: nil,
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-										Path:     "/meta/labels/test-key",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
-									},
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-										Path:     "/kind",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
-									},
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
-										Path:     "////",
-										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", ro.Name))
-			err := hubClient.Create(ctx, ro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("remove operation cannot have value"))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
@@ -1171,7 +955,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 	})
 
 	It("should deny create RO with 100 existing ROs", func() {
-		Eventually(func(g Gomega) error {
+		Consistently(func(g Gomega) error {
 			By("Try to create the 101st ResourceOverride")
 			ro101 := &placementv1alpha1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1296,9 +1080,8 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 		cleanupWorkResources()
 	})
 
-	It("should deny create RO for a resource already selected by another RO", func() {
-		Eventually(func(g Gomega) error {
-
+	It("should deny create RO with invalid resource override", func() {
+		Consistently(func(g Gomega) error {
 			By("create 2nd resourceOverride with same resource selection")
 			ro1 := &placementv1alpha1.ResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1309,13 +1092,39 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations resource 
 					ResourceSelectors: []placementv1alpha1.ResourceSelector{
 						selector,
 					},
-					Policy: policy,
+					Policy: &placementv1alpha1.OverridePolicy{
+						OverrideRules: []placementv1alpha1.OverrideRule{
+							{
+								ClusterSelector: nil,
+								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+										Path:     "/meta/labels/test-key",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"test-value"`)},
+									},
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "/kind",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
+									},
+									{
+										Operator: placementv1alpha1.JSONPatchOverrideOpReplace,
+										Path:     "////",
+										Value:    apiextensionsv1.JSON{Raw: []byte(`"new-kind"`)},
+									},
+								},
+							},
+						},
+					},
 				},
 			}
 			err := hubClient.Create(ctx, ro1)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, ro1.Name, roName)))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("remove operation cannot have value"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override typeMeta fields"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
@@ -1375,7 +1184,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 		cleanupWorkResources()
 	})
 
-	It("should deny update RO with duplicate selector", func() {
+	It("should deny update RO with invalid resource selection", func() {
 		Eventually(func(g Gomega) error {
 			var ro placementv1alpha1.ResourceOverride
 			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
@@ -1393,7 +1202,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
 
-	It("should deny update RO for a resource already selected by another RO", func() {
+	It("should deny update RO with invalid resource override", func() {
 		Eventually(func(g Gomega) error {
 			By("creating a new resource override")
 			ro1 := &placementv1alpha1.ResourceOverride{
@@ -1413,9 +1222,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 					Policy: &placementv1alpha1.OverridePolicy{
 						OverrideRules: []placementv1alpha1.OverrideRule{
 							{
-								ClusterSelector: &placementv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{},
-								},
+								ClusterSelector: nil,
 								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
 									{
 										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
@@ -1438,65 +1245,23 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 				Name:    fmt.Sprintf("test-deployment-%d", 1),
 			}
 			ro.Spec.ResourceSelectors = append(ro.Spec.ResourceSelectors, newSelector)
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", roName))
-			err := hubClient.Update(ctx, &ro)
-			if k8sErrors.IsConflict(err) {
-				return err
-			}
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", newSelector, roName, ro1.Name)))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update RO with invalid cluster selector term", func() {
-		Eventually(func(g Gomega) error {
-			var ro placementv1alpha1.ResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
-			policy := &placementv1alpha1.OverridePolicy{
-				OverrideRules: []placementv1alpha1.OverrideRule{
-					{
-						ClusterSelector: &placementv1beta1.ClusterSelector{
-							ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-								{
-									PropertySelector: &placementv1beta1.PropertySelector{
-										MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
-											{
-												Name:     "example",
-												Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
-												Values:   []string{"1"},
-											},
-										},
-									},
-								},
-							},
-						},
-						JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-							{
-								Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-								Path:     "/meta/labels/test-key",
-							},
+			clusterSelectorTerm := placementv1beta1.ClusterSelectorTerm{
+				PropertySelector: &placementv1beta1.PropertySelector{
+					MatchExpressions: []placementv1beta1.PropertySelectorRequirement{
+						{
+							Name:     "example",
+							Operator: placementv1beta1.PropertySelectorGreaterThanOrEqualTo,
+							Values:   []string{"1"},
 						},
 					},
 				},
 			}
-			ro.Spec.Policy = policy
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", ro.Name))
-			err := hubClient.Update(ctx, &ro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("only labelSelector is supported"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update RO with invalid paths in JSONPatchOverride", func() {
-		Eventually(func(g Gomega) error {
-			var ro placementv1alpha1.ResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
+			ro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms = append(ro.Spec.Policy.OverrideRules[0].ClusterSelector.ClusterSelectorTerms, clusterSelectorTerm)
+			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
+				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+				Path:     "/status/conditions/0",
+				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
+			})
 			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
 				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
 				Path:     "/status/conditions/0",
@@ -1514,30 +1279,17 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 
 			By(fmt.Sprintf("expecting denial of UPDATE override %s", roName))
 			err := hubClient.Update(ctx, &ro)
+			if k8sErrors.IsConflict(err) {
+				return err
+			}
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", newSelector, roName, ro1.Name)))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("only labelSelector is supported"))
+			Expect(statusErr.Status().Message).Should(MatchRegexp("remove operation cannot have value"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override status fields"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("path cannot contain empty string"))
 			Expect(statusErr.Status().Message).Should(MatchRegexp("cannot override metadata fields except annotations and labels"))
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
-
-	It("should deny update RO with invalid JSONPatchOverride", func() {
-		Eventually(func(g Gomega) error {
-			var ro placementv1alpha1.ResourceOverride
-			g.Expect(hubClient.Get(ctx, types.NamespacedName{Name: roName, Namespace: roNamespace}, &ro)).Should(Succeed())
-			ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides = append(ro.Spec.Policy.OverrideRules[0].JSONPatchOverrides, placementv1alpha1.JSONPatchOverride{
-				Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-				Path:     "/status/conditions/0",
-				Value:    apiextensionsv1.JSON{Raw: []byte(`"new-value"`)},
-			})
-
-			By(fmt.Sprintf("expecting denial of UPDATE override %s", roName))
-			err := hubClient.Update(ctx, &ro)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp("remove operation cannot have value"))
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
