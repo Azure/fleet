@@ -736,7 +736,7 @@ func cleanupCRP(name string) {
 	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to delete CRP %s", name)
 
 	// Wait until the CRP is removed.
-	removedActual := crpRemovedActual()
+	removedActual := crpRemovedActual(name)
 	Eventually(removedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove CRP %s", name)
 }
 
@@ -758,7 +758,7 @@ func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*fram
 	}
 
 	// Verify that related finalizers have been removed from the CRP.
-	finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+	finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 	Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 
 	// Remove the custom deletion blocker finalizer from the CRP.
@@ -976,7 +976,7 @@ func checkIfOverrideAnnotationsOnAllMemberClusters(includeNamespace bool, wantAn
 	for idx := range allMemberClusters {
 		memberCluster := allMemberClusters[idx]
 		if includeNamespace {
-			Expect(validateOverrideAnnotationOfWorkNamespaceOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", memberCluster.ClusterName)
+			Expect(validateAnnotationOfWorkNamespaceOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of work namespace on %s", memberCluster.ClusterName)
 		}
 		Expect(validateOverrideAnnotationOfConfigMapOnCluster(memberCluster, wantAnnotations)).Should(Succeed(), "Failed to override the annotation of config map on %s", memberCluster.ClusterName)
 	}

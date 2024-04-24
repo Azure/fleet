@@ -445,7 +445,6 @@ func (r *Reconciler) fetchAllResourceSnapshots(ctx context.Context, resourceBind
 
 // getConfigMapEnvelopWorkObj first try to locate a work object for the corresponding envelopObj of type configMap.
 // we create a new one if the work object doesn't exist. We do this to avoid repeatedly delete and create the same work object.
-// TODO: take into consider the override policy in the future
 func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePrefix string, resourceBinding *fleetv1beta1.ClusterResourceBinding,
 	resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, envelopeObj *unstructured.Unstructured) (*fleetv1beta1.Work, error) {
 	// we group all the resources in one configMap to one work
@@ -501,6 +500,7 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 				Workload: fleetv1beta1.WorkloadTemplate{
 					Manifests: manifest,
 				},
+				ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
 			},
 		}, nil
 	}
@@ -513,13 +513,13 @@ func (r *Reconciler) getConfigMapEnvelopWorkObj(ctx context.Context, workNamePre
 	work := workList.Items[0]
 	work.Labels[fleetv1beta1.ParentResourceSnapshotIndexLabel] = resourceSnapshot.Labels[fleetv1beta1.ResourceIndexLabel]
 	work.Spec.Workload.Manifests = manifest
+	work.Spec.ApplyStrategy = resourceBinding.Spec.ApplyStrategy
 	return &work, nil
 }
 
 // generateSnapshotWorkObj generates the work object for the corresponding snapshot
-// TODO: take into consider the override policy in the future
 func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.ClusterResourceBinding, resourceSnapshot *fleetv1beta1.ClusterResourceSnapshot, manifest []fleetv1beta1.Manifest) *fleetv1beta1.Work {
-	work := &fleetv1beta1.Work{
+	return &fleetv1beta1.Work{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workName,
 			Namespace: fmt.Sprintf(utils.NamespaceNameFormat, resourceBinding.Spec.TargetCluster),
@@ -538,9 +538,13 @@ func generateSnapshotWorkObj(workName string, resourceBinding *fleetv1beta1.Clus
 				},
 			},
 		},
+		Spec: fleetv1beta1.WorkSpec{
+			Workload: fleetv1beta1.WorkloadTemplate{
+				Manifests: manifest,
+			},
+			ApplyStrategy: resourceBinding.Spec.ApplyStrategy,
+		},
 	}
-	work.Spec.Workload.Manifests = append(work.Spec.Workload.Manifests, manifest...)
-	return work
 }
 
 // upsertWork creates or updates the new work for the corresponding resource snapshot.
