@@ -742,117 +742,107 @@ func cleanupCRP(name string) {
 
 // createResourceOverrides creates a number of resource overrides.
 func createResourceOverrides(namespace string, number int) {
-	Eventually(func() error {
-		for i := 0; i < number; i++ {
-			ro := &placementv1alpha1.ResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf(roNameTemplate, i),
-					Namespace: namespace,
-				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
-						{
-							Group:   "apps",
-							Kind:    "Deployment",
-							Version: "v1",
-							Name:    fmt.Sprintf("test-deployment-%d", i),
-						},
+	for i := 0; i < number; i++ {
+		ro := &placementv1alpha1.ResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf(roNameTemplate, i),
+				Namespace: namespace,
+			},
+			Spec: placementv1alpha1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+					{
+						Group:   "apps",
+						Kind:    "Deployment",
+						Version: "v1",
+						Name:    fmt.Sprintf("test-deployment-%d", i),
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
-							{
-								ClusterSelector: &placementv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-										{
-											LabelSelector: &metav1.LabelSelector{
-												MatchLabels: map[string]string{
-													"key": "value",
-												},
+				},
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key": "value",
 											},
 										},
-										{
-											LabelSelector: &metav1.LabelSelector{
-												MatchLabels: map[string]string{
-													"key1": "value1",
-												},
+									},
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key1": "value1",
 											},
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-										Path:     "/meta/labels/test-key",
-									},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Path:     "/meta/labels/test-key",
 								},
 							},
 						},
 					},
 				},
-			}
-			if err := hubClient.Create(ctx, ro); err != nil {
-				return err
-			}
+			},
 		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create ResourceOverride")
+		Expect(hubClient.Create(ctx, ro)).Should(Succeed(), "Failed to create ResourceOverride %s", ro.Name)
+	}
 }
 
 // createClusterResourceOverrides creates a number of cluster resource overrides.
 func createClusterResourceOverrides(number int) {
-	Eventually(func() error {
-		for i := 0; i < number; i++ {
-			cro := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf(croNameTemplate, i),
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						{
-							Group:   "rbac.authorization.k8s.io/v1",
-							Kind:    "ClusterRole",
-							Version: "v1",
-							Name:    fmt.Sprintf("test-cluster-role-%d", i),
-						},
+	for i := 0; i < number; i++ {
+		cro := &placementv1alpha1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf(croNameTemplate, i),
+			},
+			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					{
+						Group:   "rbac.authorization.k8s.io/v1",
+						Kind:    "ClusterRole",
+						Version: "v1",
+						Name:    fmt.Sprintf("test-cluster-role-%d", i),
 					},
-					Policy: &placementv1alpha1.OverridePolicy{
-						OverrideRules: []placementv1alpha1.OverrideRule{
-							{
-								ClusterSelector: &placementv1beta1.ClusterSelector{
-									ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
-										{
-											LabelSelector: &metav1.LabelSelector{
-												MatchLabels: map[string]string{
-													"key": "value",
-												},
+				},
+				Policy: &placementv1alpha1.OverridePolicy{
+					OverrideRules: []placementv1alpha1.OverrideRule{
+						{
+							ClusterSelector: &placementv1beta1.ClusterSelector{
+								ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key": "value",
 											},
 										},
-										{
-											LabelSelector: &metav1.LabelSelector{
-												MatchLabels: map[string]string{
-													"key1": "value1",
-												},
+									},
+									{
+										LabelSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"key1": "value1",
 											},
 										},
 									},
 								},
-								JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
-									{
-										Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
-										Path:     "/meta/labels/test-key",
-									},
+							},
+							JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+								{
+									Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+									Path:     "/meta/labels/test-key",
 								},
 							},
 						},
 					},
 				},
-			}
-			if err := hubClient.Create(ctx, cro); err != nil {
-				return err
-			}
+			},
 		}
-		return nil
-	}, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to create ClusterResourceOverride")
+		Expect(hubClient.Create(ctx, cro)).Should(Succeed(), "Failed to create ClusterResourceOverride %s", cro.Name)
+	}
 }
 
 func ensureCRPAndRelatedResourcesDeletion(crpName string, memberClusters []*framework.Cluster) {

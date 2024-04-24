@@ -655,45 +655,6 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations", 
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
-
-	It("should deny create CRO for a resource already selected by another CRO", func() {
-		Eventually(func(g Gomega) error {
-			By("Create the 1st ClusterResourceOverride")
-			cro := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: croName,
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						selector,
-					},
-					Policy: policy,
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", cro.Name))
-			err := hubClient.Create(ctx, cro)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create CRO %s", cro.Name)
-
-			By("Try to create the 2nd ClusterResourceOverride")
-			cro2 := &placementv1alpha1.ClusterResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
-				},
-				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
-					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
-						selector,
-					},
-					Policy: policy,
-				},
-			}
-			err = hubClient.Create(ctx, cro2)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, cro2.Name, cro.Name)))
-			cleanupClusterResourceOverride(croName)
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
 })
 
 var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation limitations", Ordered, Serial, func() {
@@ -711,7 +672,6 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 
 	It("should deny create CRO with 100 existing CROs", func() {
 		Eventually(func(g Gomega) error {
-			By("Try to create the 101st ClusterResourceOverride")
 			cro101 := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cro-101",
@@ -757,6 +717,7 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 					},
 				},
 			}
+			By(fmt.Sprintf("expecting denial of CREATE 101st override %s", cro101.Name))
 			err := hubClient.Create(ctx, cro101)
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
@@ -766,8 +727,92 @@ var _ = Describe("webhook tests for ClusterResourceOverride CREATE operation lim
 	})
 })
 
+var _ = Describe("webhook tests for ClusterResourceOverride CREATE operations resource selection limitations", Ordered, Serial, func() {
+	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	selector := placementv1beta1.ClusterResourceSelector{
+		Group:   "rbac.authorization.k8s.io/v1",
+		Kind:    "ClusterRole",
+		Version: "v1",
+		Name:    fmt.Sprintf("test-clusterrole-%d", GinkgoParallelProcess()),
+	}
+	policy := &placementv1alpha1.OverridePolicy{
+		OverrideRules: []placementv1alpha1.OverrideRule{
+			{
+				ClusterSelector: &placementv1beta1.ClusterSelector{
+					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key": "value",
+								},
+							},
+						},
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key1": "value1",
+								},
+							},
+						},
+					},
+				},
+				JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+					{
+						Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+						Path:     "/meta/labels/test-key",
+					},
+				},
+			},
+		},
+	}
+
+	BeforeAll(func() {
+		By("create clusterResourceOverride")
+		cro := &placementv1alpha1.ClusterResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: croName,
+			},
+			Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+				ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+					selector,
+				},
+				Policy: policy,
+			},
+		}
+		Expect(hubClient.Create(ctx, cro)).To(Succeed(), "Failed to create CRO %s", croName)
+	})
+
+	AfterAll(func() {
+		By("deleting clusterResourceOverride")
+		cleanupClusterResourceOverride(croName)
+	})
+
+	It("should deny create CRO for a resource already selected by another CRO", func() {
+		Eventually(func(g Gomega) error {
+			cro1 := &placementv1alpha1.ClusterResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
+				},
+				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
+					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
+						selector,
+					},
+					Policy: policy,
+				},
+			}
+			By(fmt.Sprintf("expecting denial of CREATE override %s with the same resource selected", cro1.Name))
+			err := hubClient.Create(ctx, cro1)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, cro1.Name, croName)))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+})
+
 var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 	croName := fmt.Sprintf(croNameTemplate, GinkgoParallelProcess())
+	cro1Name := fmt.Sprintf("test-cro-%d", GinkgoParallelProcess())
 	cro := &placementv1alpha1.ClusterResourceOverride{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: croName,
@@ -807,6 +852,7 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 	AfterAll(func() {
 		By("deleting clusterResourceOverride")
 		cleanupClusterResourceOverride(croName)
+		cleanupClusterResourceOverride(cro1Name)
 	})
 
 	It("should deny update CRO with label selector", func() {
@@ -904,10 +950,9 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 
 	It("should deny update CRO for a resource already selected by another CRO", func() {
 		Eventually(func(g Gomega) error {
-			By("Create another cluster resource override")
 			cro1 := &placementv1alpha1.ClusterResourceOverride{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: fmt.Sprintf("test-cro-%d", GinkgoParallelProcess()),
+					Name: cro1Name,
 				},
 				Spec: placementv1alpha1.ClusterResourceOverrideSpec{
 					ClusterResourceSelectors: []placementv1beta1.ClusterResourceSelector{
@@ -954,7 +999,6 @@ var _ = Describe("webhook tests for CRO UPDATE operations", Ordered, func() {
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update CRO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, cro.Name, cro1.Name)))
-			cleanupClusterResourceOverride(cro1.Name)
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
@@ -1104,47 +1148,6 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operations", func() 
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
-
-	It("should deny create RO for a resource already selected by another RO", func() {
-		Eventually(func(g Gomega) error {
-			By("Create the 1st ResourceOverride")
-			ro := &placementv1alpha1.ResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      roName,
-					Namespace: roNamespace,
-				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
-						selector,
-					},
-					Policy: policy,
-				},
-			}
-			err := hubClient.Create(ctx, ro)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create RO %s", ro.Name)
-
-			By("Try to create the 2nd ResourceOverride")
-			ro1 := &placementv1alpha1.ResourceOverride{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
-					Namespace: roNamespace,
-				},
-				Spec: placementv1alpha1.ResourceOverrideSpec{
-					ResourceSelectors: []placementv1alpha1.ResourceSelector{
-						selector,
-					},
-					Policy: policy,
-				},
-			}
-			By(fmt.Sprintf("expecting denial of CREATE override %s", ro1.Name))
-			err = hubClient.Create(ctx, ro1)
-			var statusErr *k8sErrors.StatusError
-			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
-			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, ro1.Name, ro.Name)))
-			cleanupResourceOverride(roName, roNamespace)
-			return nil
-		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
-	})
 })
 
 var _ = Describe("webhook tests for ResourceOverride CREATE operation limitations", Ordered, Serial, func() {
@@ -1153,12 +1156,12 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 		By("creating work resources")
 		createWorkResources()
 
-		By("Create 100 ResourceOverrides")
+		By("create 100 resourceOverrides")
 		createResourceOverrides(roNamespace, 100)
 	})
 
 	AfterAll(func() {
-		By("deleting ResourceOverrides")
+		By("deleting resourceOverrides")
 		for i := 0; i < 100; i++ {
 			cleanupResourceOverride(fmt.Sprintf(roNameTemplate, i), roNamespace)
 		}
@@ -1166,6 +1169,7 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 		By("deleting created work resources")
 		cleanupWorkResources()
 	})
+
 	It("should deny create RO with 100 existing ROs", func() {
 		Eventually(func(g Gomega) error {
 			By("Try to create the 101st ResourceOverride")
@@ -1224,8 +1228,102 @@ var _ = Describe("webhook tests for ResourceOverride CREATE operation limitation
 	})
 })
 
+var _ = Describe("webhook tests for ResourceOverride CREATE operations resource selection limitations", Ordered, Serial, func() {
+	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
+	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
+	selector := placementv1alpha1.ResourceSelector{
+		Group:   "apps",
+		Kind:    "Deployment",
+		Version: "v1",
+		Name:    fmt.Sprintf("deployment-test-%d", GinkgoParallelProcess()),
+	}
+	policy := &placementv1alpha1.OverridePolicy{
+		OverrideRules: []placementv1alpha1.OverrideRule{
+			{
+				ClusterSelector: &placementv1beta1.ClusterSelector{
+					ClusterSelectorTerms: []placementv1beta1.ClusterSelectorTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key": "value",
+								},
+							},
+						},
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"key1": "value1",
+								},
+							},
+						},
+					},
+				},
+				JSONPatchOverrides: []placementv1alpha1.JSONPatchOverride{
+					{
+						Operator: placementv1alpha1.JSONPatchOverrideOpRemove,
+						Path:     "/meta/labels/test-key",
+					},
+				},
+			},
+		},
+	}
+
+	BeforeAll(func() {
+		By("creating work resources")
+		createWorkResources()
+
+		By("create resourceOverride")
+		ro := &placementv1alpha1.ResourceOverride{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      roName,
+				Namespace: roNamespace,
+			},
+			Spec: placementv1alpha1.ResourceOverrideSpec{
+				ResourceSelectors: []placementv1alpha1.ResourceSelector{
+					selector,
+				},
+				Policy: policy,
+			},
+		}
+		Expect(hubClient.Create(ctx, ro)).To(Succeed(), "Failed to create RO %s", roName)
+	})
+
+	AfterAll(func() {
+		By("deleting ResourceOverride")
+		cleanupResourceOverride(roName, roNamespace)
+
+		By("deleting created work resources")
+		cleanupWorkResources()
+	})
+
+	It("should deny create RO for a resource already selected by another RO", func() {
+		Eventually(func(g Gomega) error {
+
+			By("create 2nd resourceOverride with same resource selection")
+			ro1 := &placementv1alpha1.ResourceOverride{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("test-ro-%d", GinkgoParallelProcess()),
+					Namespace: roNamespace,
+				},
+				Spec: placementv1alpha1.ResourceOverrideSpec{
+					ResourceSelectors: []placementv1alpha1.ResourceSelector{
+						selector,
+					},
+					Policy: policy,
+				},
+			}
+			err := hubClient.Create(ctx, ro1)
+			var statusErr *k8sErrors.StatusError
+			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Create RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
+			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", selector, ro1.Name, roName)))
+			return nil
+		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
+	})
+})
+
 var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered, func() {
 	roName := fmt.Sprintf(roNameTemplate, GinkgoParallelProcess())
+	ro1Name := fmt.Sprintf("test-ro-%d", GinkgoParallelProcess())
 	roNamespace := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	selector := placementv1alpha1.ResourceSelector{
 		Group:   "apps",
@@ -1271,6 +1369,7 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 	AfterAll(func() {
 		By("deleting ResourceOverride")
 		cleanupResourceOverride(roName, roNamespace)
+		cleanupResourceOverride(ro1Name, roNamespace)
 
 		By("deleting created work resources")
 		cleanupWorkResources()
@@ -1348,7 +1447,6 @@ var _ = Describe("webhook tests for ResourceOverride UPDATE operations", Ordered
 			var statusErr *k8sErrors.StatusError
 			Expect(errors.As(err, &statusErr)).To(BeTrue(), fmt.Sprintf("Update RO call produced error %s. Error type wanted is %s.", reflect.TypeOf(err), reflect.TypeOf(&k8sErrors.StatusError{})))
 			Expect(statusErr.Status().Message).Should(MatchRegexp(fmt.Sprintf("invalid resource selector %+v: the resource has been selected by both %v and %v, which is not supported", newSelector, roName, ro1.Name)))
-			cleanupResourceOverride(ro1.Name, roNamespace)
 			return nil
 		}, testutils.PollTimeout, testutils.PollInterval).Should(Succeed())
 	})
