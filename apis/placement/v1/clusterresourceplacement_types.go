@@ -418,6 +418,7 @@ type RolloutStrategy struct {
 
 	// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
 	// and is owned by other appliers.
+	// This field is a beta-level feature.
 	// +optional
 	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
 }

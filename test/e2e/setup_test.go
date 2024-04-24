@@ -31,6 +31,7 @@ import (
 
 	fleetnetworkingv1alpha1 "go.goms.io/fleet-networking/api/v1alpha1"
 	clusterv1beta1 "go.goms.io/fleet/apis/cluster/v1beta1"
+	placementv1alpha1 "go.goms.io/fleet/apis/placement/v1alpha1"
 	placementv1beta1 "go.goms.io/fleet/apis/placement/v1beta1"
 	"go.goms.io/fleet/pkg/propertyprovider/aks/trackers"
 	"go.goms.io/fleet/test/e2e/framework"
@@ -191,6 +192,9 @@ func TestMain(m *testing.M) {
 	// Add custom APIs to the scheme.
 	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (cluster) to the runtime scheme: %v", err)
+	}
+	if err := placementv1alpha1.AddToScheme(scheme); err != nil {
+		log.Fatalf("failed to add custom APIs (placement v1alpha1) to the runtime scheme: %v", err)
 	}
 	if err := placementv1beta1.AddToScheme(scheme); err != nil {
 		log.Fatalf("failed to add custom APIs (placement) to the runtime scheme: %v", err)

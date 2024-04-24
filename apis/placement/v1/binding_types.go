@@ -63,6 +63,7 @@ type ResourceBindingSpec struct {
 
 	// ApplyStrategy describes how to resolve the conflict if the resource to be placed already exists in the target cluster
 	// and is owned by other appliers.
+	// This field is a beta-level feature.
 	// +optional
 	ApplyStrategy *ApplyStrategy `json:"applyStrategy,omitempty"`
 }
@@ -122,14 +123,6 @@ const (
 	// - "False" means the resources fail to be overridden before applying to the target cluster.
 	// - "Unknown" means it is unknown.
 	ResourceBindingOverridden ResourceBindingConditionType = "Overridden"
-
-	// ResourceBindingBound indicates the bound condition of the given resources.
-	// Its condition status can be one of the following:
-	// - "True" means the corresponding work CR is created in the target cluster's namespace.
-	// - "False" means the corresponding work CR is not created yet.
-	// - "Unknown" means it is unknown.
-	// TODO, will be replaced by "WorkSynchronized"
-	ResourceBindingBound ResourceBindingConditionType = "Bound"
 
 	// ResourceBindingWorkSynchronized indicates the work synchronized condition of the given resources.
 	// Its condition status can be one of the following:

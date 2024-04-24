@@ -51,16 +51,6 @@ import (
 	"go.goms.io/fleet/pkg/utils/labels"
 )
 
-const (
-	allWorkSyncedReason    = "AllWorkSynced"
-	syncWorkFailedReason   = "SyncWorkFailed"
-	workNeedSyncedReason   = "StillNeedToSyncWork"
-	workNotAppliedReason   = "NotAllWorkHaveBeenApplied"
-	allWorkAppliedReason   = "AllWorkHaveBeenApplied"
-	workNotAvailableReason = "NotAllWorkAreAvailable"
-	allWorkAvailableReason = "AllWorkAreAvailable"
-)
-
 var (
 	errResourceSnapshotNotFound = errors.New("the master resource snapshot is not found")
 )
@@ -136,15 +126,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 
 	if overrideSucceeded {
 		overrideReason := condition.OverriddenSucceededReason
+		overrideMessage := "Successfully applied the override rules on the resources"
 		if len(resourceBinding.Spec.ClusterResourceOverrideSnapshots) == 0 &&
 			len(resourceBinding.Spec.ResourceOverrideSnapshots) == 0 {
 			overrideReason = condition.OverrideNotSpecifiedReason
+			overrideMessage = "No override rules are configured for the selected resources"
 		}
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingOverridden),
 			Reason:             overrideReason,
-			Message:            "Successfully applied the override rules on the resources",
+			Message:            overrideMessage,
 			ObservedGeneration: resourceBinding.Generation,
 		})
 	}
@@ -167,34 +159,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		} else {
-			// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-			resourceBinding.SetConditions(metav1.Condition{
-				Status:             metav1.ConditionFalse,
-				Type:               string(fleetv1beta1.ResourceBindingBound),
-				Reason:             syncWorkFailedReason,
-				Message:            errorMessage,
-				ObservedGeneration: resourceBinding.Generation,
-			})
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
-				Reason:             syncWorkFailedReason,
+				Reason:             condition.SyncWorkFailedReason,
 				Message:            fmt.Sprintf("Failed to sychronize the work to the latest: %s", errorMessage),
 				ObservedGeneration: resourceBinding.Generation,
 			})
 		}
 	} else {
-		// TODO: remove the deprecated "resourceBound" condition when we switch to the new condition model
-		resourceBinding.SetConditions(metav1.Condition{
-			Status:             metav1.ConditionTrue,
-			Type:               string(fleetv1beta1.ResourceBindingBound),
-			Reason:             allWorkSyncedReason,
-			ObservedGeneration: resourceBinding.Generation,
-		})
 		resourceBinding.SetConditions(metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingWorkSynchronized),
-			Reason:             allWorkSyncedReason,
+			Reason:             condition.AllWorkSyncedReason,
 			ObservedGeneration: resourceBinding.Generation,
 			Message:            "All of the works are synchronized to the latest",
 		})
@@ -203,7 +180,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req controllerruntime.Reques
 			resourceBinding.SetConditions(metav1.Condition{
 				Status:             metav1.ConditionFalse,
 				Type:               string(fleetv1beta1.ResourceBindingApplied),
-				Reason:             workNeedSyncedReason,
+				Reason:             condition.WorkNeedSyncedReason,
 				Message:            "In the processing of synchronizing the work to the member cluster",
 				ObservedGeneration: resourceBinding.Generation,
 			})
@@ -642,7 +619,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 		return metav1.Condition{
 			Status:             metav1.ConditionTrue,
 			Type:               string(fleetv1beta1.ResourceBindingApplied),
-			Reason:             allWorkAppliedReason,
+			Reason:             condition.AllWorkAppliedReason,
 			Message:            "All corresponding work objects are applied",
 			ObservedGeneration: binding.GetGeneration(),
 		}
@@ -650,7 +627,7 @@ func buildAllWorkAppliedCondition(works map[string]*fleetv1beta1.Work, binding *
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingApplied),
-		Reason:             workNotAppliedReason,
+		Reason:             condition.WorkNotAppliedReason,
 		Message:            fmt.Sprintf("Work object %s is not applied", notAppliedWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
@@ -673,7 +650,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 	}
 	if allAvailable {
 		klog.V(2).InfoS("All works associated with the binding are available", "binding", klog.KObj(binding))
-		reason := allWorkAvailableReason
+		reason := condition.AllWorkAvailableReason
 		message := "All corresponding work objects are available"
 		if len(notTrackableWork) > 0 {
 			reason = work.WorkNotTrackableReason
@@ -691,7 +668,7 @@ func buildAllWorkAvailableCondition(works map[string]*fleetv1beta1.Work, binding
 	return metav1.Condition{
 		Status:             metav1.ConditionFalse,
 		Type:               string(fleetv1beta1.ResourceBindingAvailable),
-		Reason:             workNotAvailableReason,
+		Reason:             condition.WorkNotAvailableReason,
 		Message:            fmt.Sprintf("Work object %s is not available", notAvailableWork),
 		ObservedGeneration: binding.GetGeneration(),
 	}
