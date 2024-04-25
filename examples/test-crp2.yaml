@@ -1,0 +1,19 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-2
+spec:
+  resourceSelectors:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: clonesets.apps.kruise.io
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 3
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: color
+        whenUnsatisfiable: DoNotSchedule
+  strategy:
+    type: RollingUpdate
