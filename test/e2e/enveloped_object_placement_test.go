@@ -157,7 +157,7 @@ var _ = Describe("placing wrapped resources using a CRP", Ordered, func() {
 		It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 		It("should remove controller finalizers from CRP", func() {
-			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+			finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 			Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP")
 		})
 	})

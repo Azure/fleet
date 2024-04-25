@@ -84,7 +84,7 @@ var _ = Describe("creating CRP and selecting resources by name", Ordered, func()
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -151,7 +151,7 @@ var _ = Describe("creating CRP and selecting resources by label", Ordered, func(
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -240,7 +240,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become selected a
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -328,7 +328,7 @@ var _ = Describe("validating CRP when cluster-scoped resources become unselected
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -421,7 +421,7 @@ var _ = Describe("validating CRP when cluster-scoped and namespace-scoped resour
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -510,7 +510,7 @@ var _ = Describe("validating CRP when adding resources in a matching namespace",
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -604,7 +604,7 @@ var _ = Describe("validating CRP when deleting resources in a matching namespace
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -683,7 +683,7 @@ var _ = Describe("validating CRP when selecting a reserved resource", Ordered, f
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -802,7 +802,7 @@ var _ = Describe("validating CRP when failed to apply resources", Ordered, func(
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 
@@ -926,7 +926,7 @@ var _ = Describe("validating CRP when placing cluster scope resource (other than
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1023,7 +1023,7 @@ var _ = Describe("validating CRP revision history allowing single revision when 
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1119,7 +1119,7 @@ var _ = Describe("validating CRP revision history allowing multiple revisions wh
 	It("should remove placed resources from all member clusters", checkIfRemovedWorkResourcesFromAllMemberClusters)
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, eventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })
@@ -1197,7 +1197,7 @@ var _ = Describe("validating CRP when selected resources cross the 1MB limit", O
 	})
 
 	It("should remove controller finalizers from CRP", func() {
-		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual()
+		finalizerRemovedActual := allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName)
 		Eventually(finalizerRemovedActual, largeEventuallyDuration, eventuallyInterval).Should(Succeed(), "Failed to remove controller finalizers from CRP %s", crpName)
 	})
 })

@@ -1185,6 +1185,8 @@ var _ = Describe("Test Work Generator Controller", func() {
 			Expect(len(binding.Finalizers)).Should(Equal(0))
 		})
 	})
+
+	// TODO: add a test for the apply strategy
 })
 
 func verifyBindingStatusSyncedNotApplied(binding *placementv1beta1.ClusterResourceBinding, hasOverride, workSync bool) {
