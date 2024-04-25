@@ -26,6 +26,7 @@ const (
 	appConfigMapNameTemplate          = "app-config-%d"
 	appSecretNameTemplate             = "app-secret-%d" // #nosec G101
 	crpNameTemplate                   = "crp-%d"
+	crpNameWithSubIndexTemplate       = "crp-%d-%d"
 	croNameTemplate                   = "cro-%d"
 	roNameTemplate                    = "ro-%d"
 	mcNameTemplate                    = "mc-%d"

@@ -48,7 +48,7 @@ func validateWorkNamespaceOnCluster(cluster *framework.Cluster, name types.Names
 	return nil
 }
 
-func validateOverrideAnnotationOfWorkNamespaceOnCluster(cluster *framework.Cluster, wantAnnotations map[string]string) error {
+func validateAnnotationOfWorkNamespaceOnCluster(cluster *framework.Cluster, wantAnnotations map[string]string) error {
 	workNamespaceName := fmt.Sprintf(workNamespaceNameTemplate, GinkgoParallelProcess())
 	ns := &corev1.Namespace{}
 	if err := cluster.KubeClient.Get(ctx, types.NamespacedName{Name: workNamespaceName}, ns); err != nil {
@@ -449,7 +449,14 @@ func crpStatusUpdatedActual(
 	resourceIsTrackable bool,
 ) func() error {
 	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
+	return customizedCRPStatusUpdatedActual(crpName, wantSelectedResourceIdentifiers, wantSelectedClusters, wantUnselectedClusters, wantObservedResourceIndex, resourceIsTrackable)
+}
 
+func customizedCRPStatusUpdatedActual(crpName string,
+	wantSelectedResourceIdentifiers []placementv1beta1.ResourceIdentifier,
+	wantSelectedClusters, wantUnselectedClusters []string,
+	wantObservedResourceIndex string,
+	resourceIsTrackable bool) func() error {
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -522,9 +529,7 @@ func workNamespaceRemovedFromClusterActual(cluster *framework.Cluster) func() er
 	}
 }
 
-func allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual() func() error {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
+func allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual(crpName string) func() error {
 	return func() error {
 		crp := &placementv1beta1.ClusterResourcePlacement{}
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, crp); err != nil {
@@ -544,9 +549,7 @@ func allFinalizersExceptForCustomDeletionBlockerRemovedFromCRPActual() func() er
 	}
 }
 
-func crpRemovedActual() func() error {
-	crpName := fmt.Sprintf(crpNameTemplate, GinkgoParallelProcess())
-
+func crpRemovedActual(crpName string) func() error {
 	return func() error {
 		if err := hubClient.Get(ctx, types.NamespacedName{Name: crpName}, &placementv1beta1.ClusterResourcePlacement{}); !errors.IsNotFound(err) {
 			return fmt.Errorf("CRP still exists or an unexpected error occurred: %w", err)
