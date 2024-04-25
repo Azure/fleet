@@ -1,0 +1,28 @@
+apiVersion: placement.kubernetes-fleet.io/v1beta1
+kind: ClusterResourcePlacement
+metadata:
+  name: crp-4
+spec:
+  resourceSelectors:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      name: clonesets.apps.kruise.io
+      version: v1
+  policy:
+    placementType: PickN
+    numberOfClusters: 2
+    affinity:
+      clusterAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 20
+            preference:
+              propertySorter:
+                name: kubernetes.azure.com/per-gb-memory-core-cost
+                sortOrder: Descending
+          - weight: 20
+            preference:
+              propertySorter:
+                name: kubernetes.azure.com/per-cpu-core-cost
+                sortOrder: Descending
+  strategy:
+    type: RollingUpdate
