@@ -7,6 +7,7 @@ import (
 	"go.goms.io/fleet/pkg/webhook/membercluster"
 	"go.goms.io/fleet/pkg/webhook/pod"
 	"go.goms.io/fleet/pkg/webhook/replicaset"
+	"go.goms.io/fleet/pkg/webhook/resourceoverride"
 )
 
 func init() {
@@ -19,4 +20,5 @@ func init() {
 	AddToManagerFuncs = append(AddToManagerFuncs, replicaset.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, membercluster.Add)
 	AddToManagerFuncs = append(AddToManagerFuncs, clusterresourceoverride.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, resourceoverride.Add)
 }
