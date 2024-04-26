@@ -111,8 +111,9 @@ var (
 	sideEffortsNone     = admv1.SideEffectClassNone
 	namespacedScope     = admv1.NamespacedScope
 	clusterScope        = admv1.ClusterScope
-	shortWebhookTimeout = ptr.To(int32(1))
-	longWebhookTimeout  = ptr.To(int32(5))
+	// Experimental change.
+	shortWebhookTimeout = ptr.To(int32(10))
+	longWebhookTimeout  = ptr.To(int32(10))
 )
 
 var AddToManagerFuncs []func(manager.Manager) error
